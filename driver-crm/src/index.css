@@ -1,21 +1,20 @@
 @import "tailwindcss";
 
 @theme {
-  --color-neon-green: #39ff14;
-  --color-neon-green-dim: #2bcc0f;
-  --color-neon-glow: rgba(57, 255, 20, 0.3);
-  --color-neon-glow-strong: rgba(57, 255, 20, 0.6);
-  --color-dark-bg: #0a0e17;
-  --color-dark-card: #111827;
-  --color-dark-surface: #1a2332;
-  --color-dark-border: #1e3a2f;
-  --color-dark-border-glow: rgba(57, 255, 20, 0.2);
+  --color-brand: #22c55e;
+  --color-brand-dark: #16a34a;
+  --color-brand-light: #f0fdf4;
+  --color-bg: #f5f5f5;
+  --color-card: #ffffff;
+  --color-text: #1a1a1a;
+  --color-text-secondary: #6b7280;
+  --color-border: #e5e7eb;
   --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
 }
 
 @layer base {
   body {
-    @apply bg-dark-bg text-white font-sans antialiased;
+    @apply bg-bg text-text font-sans antialiased;
     margin: 0;
     min-height: 100dvh;
   }

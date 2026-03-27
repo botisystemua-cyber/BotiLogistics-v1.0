@@ -1,16 +1,14 @@
-export function BotiLogo({ size = 'lg' }: { size?: 'sm' | 'md' | 'lg' }) {
+export function BotiLogo({ size = 'lg', onDark = false }: { size?: 'sm' | 'md' | 'lg'; onDark?: boolean }) {
   const sizes = {
-    sm: 'text-lg',
-    md: 'text-2xl',
-    lg: 'text-4xl',
+    sm: 'text-xl',
+    md: 'text-3xl',
+    lg: 'text-5xl',
   };
 
   return (
-    <h1 className={`${sizes[size]} font-black tracking-wider select-none`}>
-      <span className="text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.5)]">Boti</span>
-      <span className="text-neon-green drop-shadow-[0_0_15px_rgba(57,255,20,0.6)]">
-        Logistics
-      </span>
+    <h1 className={`${sizes[size]} font-black tracking-tight select-none`}>
+      <span className={onDark ? 'text-white' : 'text-text'}>Boti</span>
+      <span className="text-brand">Logistics</span>
     </h1>
   );
 }

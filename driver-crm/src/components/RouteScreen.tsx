@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
-  Package, Users, RefreshCw, User, BarChart3, Lock, ChevronRight,
+  Package, Users, RefreshCw, ChevronRight, BarChart3,
 } from 'lucide-react';
 import { BotiLogo } from './BotiLogo';
 import { useApp } from '../store/useAppStore';
@@ -57,52 +57,51 @@ export function RouteScreen() {
   const totalPassengers = passengerRoutes.reduce((sum, r) => sum + (r.count || 0), 0);
 
   return (
-    <div className="flex-1 flex flex-col items-center px-5 py-8 bg-gradient-to-br from-dark-bg via-[#0d1a12] to-dark-bg overflow-y-auto relative">
-      {/* Glow */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-neon-green/5 blur-[120px] pointer-events-none" />
-
-      <BotiLogo size="md" />
-      <p className="text-neon-green/50 text-[10px] tracking-[3px] uppercase font-semibold mt-1">
-        Driver App
-      </p>
-
-      {/* Driver info */}
-      <div className="mt-5 mb-8 flex items-center gap-2 px-4 py-2.5 bg-neon-green/10 border border-neon-green/20 rounded-xl">
-        <User className="w-4 h-4 text-neon-green" />
-        <span className="text-sm text-white/90 font-medium">Водій: {driverName}</span>
+    <div className="flex-1 flex flex-col bg-bg overflow-y-auto">
+      {/* Header */}
+      <div className="bg-white px-6 pt-8 pb-6 border-b border-border">
+        <BotiLogo size="md" />
+        <div className="mt-3 flex items-center gap-2">
+          <div className="w-10 h-10 rounded-full bg-brand-light flex items-center justify-center">
+            <span className="text-brand font-bold text-sm">
+              {driverName.charAt(0).toUpperCase()}
+            </span>
+          </div>
+          <div>
+            <p className="text-sm text-text-secondary">Водій</p>
+            <p className="text-base font-bold text-text">{driverName}</p>
+          </div>
+        </div>
       </div>
 
-      <div className="w-full max-w-lg space-y-8">
+      <div className="px-5 py-6 space-y-8">
         {/* Delivery routes */}
         <section>
-          <div className="flex items-center gap-2 mb-4 px-1">
-            <Package className="w-4 h-4 text-neon-green" />
-            <h2 className="text-sm font-bold text-white/90 tracking-wider uppercase">Посилки</h2>
+          <div className="flex items-center gap-2 mb-4">
+            <Package className="w-5 h-5 text-brand" />
+            <h2 className="text-lg font-bold text-text">Посилки</h2>
           </div>
-          <div className="grid gap-3">
+          <div className="space-y-3">
             {CONFIG.DELIVERY_ROUTES.map((route) => (
               <button
                 key={route.name}
                 onClick={() => handleDeliveryRoute(route.name, route.password)}
-                className="group w-full flex items-center justify-between p-4 bg-dark-card border border-dark-border rounded-xl hover:border-neon-green/30 hover:shadow-[0_0_20px_rgba(57,255,20,0.08)] transition-all cursor-pointer text-left"
+                className="w-full flex items-center justify-between p-5 bg-card rounded-2xl shadow-sm border border-border hover:shadow-md hover:border-brand/30 transition-all cursor-pointer text-left active:scale-[0.98]"
               >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-neon-green/10 flex items-center justify-center">
-                    <Package className="w-5 h-5 text-neon-green" />
+                <div className="flex items-center gap-4">
+                  <div className="w-14 h-14 rounded-2xl bg-amber-50 flex items-center justify-center">
+                    <Package className="w-7 h-7 text-amber-500" strokeWidth={1.5} />
                   </div>
                   <div>
-                    <div className="font-bold text-white text-sm">
+                    <div className="font-bold text-text text-lg">
                       {route.name.replace(' марш.', '')}
                     </div>
-                    <div className="flex items-center gap-1 mt-0.5">
-                      <Lock className="w-3 h-3 text-white/30" />
-                      <span className="text-[10px] text-white/30 uppercase tracking-wider">
-                        Пароль
-                      </span>
+                    <div className="text-sm text-text-secondary mt-0.5">
+                      Натисни для входу
                     </div>
                   </div>
                 </div>
-                <ChevronRight className="w-5 h-5 text-white/20 group-hover:text-neon-green transition-colors" />
+                <ChevronRight className="w-6 h-6 text-border" />
               </button>
             ))}
           </div>
@@ -110,18 +109,16 @@ export function RouteScreen() {
 
         {/* Passenger routes */}
         <section>
-          <div className="flex items-center justify-between mb-4 px-1">
+          <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <Users className="w-4 h-4 text-neon-green" />
-              <h2 className="text-sm font-bold text-white/90 tracking-wider uppercase">
-                Пасажири
-              </h2>
+              <Users className="w-5 h-5 text-brand" />
+              <h2 className="text-lg font-bold text-text">Пасажири</h2>
             </div>
             <button
               onClick={loadRoutes}
-              className="p-1.5 rounded-lg hover:bg-white/5 transition-colors cursor-pointer"
+              className="p-2 rounded-xl hover:bg-bg transition-colors cursor-pointer"
             >
-              <RefreshCw className={`w-4 h-4 text-white/40 ${loading ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`w-5 h-5 text-text-secondary ${loading ? 'animate-spin' : ''}`} />
             </button>
           </div>
 
@@ -129,54 +126,53 @@ export function RouteScreen() {
           {passengerRoutes.length > 0 && (
             <button
               onClick={handleUnified}
-              className="w-full mb-3 p-5 bg-gradient-to-r from-neon-green/20 via-neon-green/10 to-neon-green/5 border border-neon-green/30 rounded-xl hover:shadow-[0_0_30px_rgba(57,255,20,0.15)] transition-all cursor-pointer text-center group"
+              className="w-full mb-4 p-6 bg-brand rounded-2xl shadow-lg shadow-brand/20 cursor-pointer text-left active:scale-[0.98] transition-transform"
             >
-              <div className="flex items-center justify-center gap-2 mb-1">
-                <BarChart3 className="w-5 h-5 text-neon-green" />
-                <span className="font-bold text-neon-green text-sm tracking-wider">ЗВЕДЕНИЙ</span>
+              <div className="flex items-center gap-3 mb-2">
+                <BarChart3 className="w-6 h-6 text-white/80" />
+                <span className="font-bold text-white text-lg">Зведений</span>
               </div>
-              <div className="text-3xl font-black text-white mt-1 drop-shadow-[0_0_10px_rgba(57,255,20,0.3)]">
-                {totalPassengers}
-              </div>
-              <div className="text-[10px] text-white/50 uppercase tracking-widest mt-1">
+              <div className="text-5xl font-black text-white">{totalPassengers}</div>
+              <div className="text-sm text-white/70 mt-1 font-medium">
                 Пасажирів у всіх маршрутах
               </div>
             </button>
           )}
 
-          <div className="grid gap-3">
+          <div className="space-y-3">
             {loading && passengerRoutes.length === 0 ? (
-              <div className="text-center py-8">
-                <RefreshCw className="w-6 h-6 text-neon-green/50 animate-spin mx-auto mb-2" />
-                <p className="text-white/40 text-sm">Завантаження...</p>
+              <div className="text-center py-12">
+                <RefreshCw className="w-8 h-8 text-text-secondary animate-spin mx-auto mb-3" />
+                <p className="text-text-secondary text-base">Завантаження...</p>
               </div>
             ) : (
               passengerRoutes.map((route) => (
                 <button
                   key={route.name}
                   onClick={() => handlePassengerRoute(route.name)}
-                  className="group w-full flex items-center justify-between p-4 bg-dark-card border border-dark-border rounded-xl hover:border-neon-green/30 hover:shadow-[0_0_20px_rgba(57,255,20,0.08)] transition-all cursor-pointer text-left"
+                  className="w-full flex items-center justify-between p-5 bg-card rounded-2xl shadow-sm border border-border hover:shadow-md hover:border-brand/30 transition-all cursor-pointer text-left active:scale-[0.98]"
                 >
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center">
-                      <Users className="w-5 h-5 text-blue-400" />
+                  <div className="flex items-center gap-4">
+                    <div className="w-14 h-14 rounded-2xl bg-blue-50 flex items-center justify-center">
+                      <Users className="w-7 h-7 text-blue-500" strokeWidth={1.5} />
                     </div>
                     <div>
-                      <div className="font-bold text-white text-sm">{route.name}</div>
-                      <span className="text-[10px] text-blue-400/70 uppercase tracking-wider">
-                        Пасажири
-                      </span>
+                      <div className="font-bold text-text text-lg">{route.name}</div>
+                      <div className="text-sm text-text-secondary mt-0.5">Пасажири</div>
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className="text-xl font-black text-neon-green">{route.count}</span>
-                    <ChevronRight className="w-5 h-5 text-white/20 group-hover:text-neon-green transition-colors" />
+                    <span className="text-2xl font-black text-brand">{route.count}</span>
+                    <ChevronRight className="w-6 h-6 text-border" />
                   </div>
                 </button>
               ))
             )}
           </div>
         </section>
+
+        {/* spacer for bottom */}
+        <div className="h-4" />
       </div>
 
       {passwordModal && (

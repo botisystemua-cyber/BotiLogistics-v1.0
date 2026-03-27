@@ -18,65 +18,40 @@ export function AddLeadModal({ onClose, onAdded }: Props) {
 
   const handleSubmit = async () => {
     if (isDelivery) {
-      if (!form.phone && !form.address) {
-        showToast('Введіть телефон або адресу');
-        return;
-      }
+      if (!form.phone && !form.address) { showToast('Введіть телефон або адресу'); return; }
     } else {
-      if (!form.name && !form.phone) {
-        showToast("Введіть ім'я або телефон");
-        return;
-      }
+      if (!form.name && !form.phone) { showToast("Введіть ім'я або телефон"); return; }
     }
-
     setLoading(true);
     try {
-      let result;
-      if (isDelivery) {
-        result = await addDeliveryToRoute(currentSheet, form);
-      } else {
-        result = await addPassengerToRoute(currentSheet, {
-          ...form,
-          seats: form.seats || '1',
-        });
-      }
-      if (result.success) {
-        showToast('Додано!');
-        onClose();
-        onAdded();
-      } else {
-        showToast(result.error || 'Помилка');
-      }
-    } catch (err) {
-      showToast('Помилка: ' + (err as Error).message);
-    } finally {
-      setLoading(false);
-    }
+      const result = isDelivery
+        ? await addDeliveryToRoute(currentSheet, form)
+        : await addPassengerToRoute(currentSheet, { ...form, seats: form.seats || '1' });
+      if (result.success) { showToast('Додано!'); onClose(); onAdded(); }
+      else { showToast(result.error || 'Помилка'); }
+    } catch (err) { showToast('Помилка: ' + (err as Error).message); }
+    finally { setLoading(false); }
   };
 
   return (
-    <div
-      className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end justify-center"
-      onClick={onClose}
-    >
-      <div
-        className="bg-dark-card border-t border-dark-border-glow rounded-t-2xl w-full max-w-lg max-h-[85vh] overflow-y-auto shadow-[0_-10px_40px_rgba(57,255,20,0.1)]"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-end justify-center" onClick={onClose}>
+      <div className="bg-card rounded-t-3xl w-full max-w-lg max-h-[85vh] overflow-y-auto shadow-2xl" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
-        <div className="sticky top-0 bg-dark-card px-5 pt-5 pb-3 flex items-center justify-between border-b border-dark-border">
-          <div className="flex items-center gap-2">
-            <Plus className="w-5 h-5 text-neon-green" />
-            <h2 className="text-base font-bold text-white">
+        <div className="sticky top-0 bg-card px-6 pt-6 pb-4 flex items-center justify-between border-b border-border">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-2xl bg-brand-light flex items-center justify-center">
+              <Plus className="w-6 h-6 text-brand" />
+            </div>
+            <h2 className="text-lg font-bold text-text">
               Додати {isDelivery ? 'посилку' : 'пасажира'}
             </h2>
           </div>
-          <button onClick={onClose} className="p-1 rounded-lg hover:bg-white/5 cursor-pointer">
-            <X className="w-5 h-5 text-white/40" />
+          <button onClick={onClose} className="p-2 rounded-xl hover:bg-bg cursor-pointer">
+            <X className="w-6 h-6 text-text-secondary" />
           </button>
         </div>
 
-        <div className="p-5 space-y-4">
+        <div className="p-6 space-y-5">
           {isDelivery ? (
             <>
               <Field label="Телефон" type="tel" placeholder="+380..." value={form.phone} onChange={(v) => set('phone', v)} />
@@ -99,18 +74,13 @@ export function AddLeadModal({ onClose, onAdded }: Props) {
             </>
           )}
 
-          <button
-            onClick={handleSubmit}
-            disabled={loading}
-            className="w-full py-3 bg-neon-green text-dark-bg font-bold rounded-xl text-sm hover:shadow-[0_0_20px_rgba(57,255,20,0.3)] transition-all cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
-          >
-            <Plus className="w-4 h-4" />
+          <button onClick={handleSubmit} disabled={loading}
+            className="w-full py-4.5 bg-brand text-white font-bold rounded-2xl text-base hover:bg-brand-dark transition-all cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-brand/20">
+            <Plus className="w-5 h-5" />
             {loading ? 'Збереження...' : 'Додати'}
           </button>
-          <button
-            onClick={onClose}
-            className="w-full py-2.5 bg-dark-surface text-white/60 font-semibold rounded-xl text-sm hover:bg-white/5 transition-all cursor-pointer"
-          >
+          <button onClick={onClose}
+            className="w-full py-3.5 bg-bg text-text-secondary font-bold rounded-2xl text-base cursor-pointer hover:bg-border/50 transition-all">
             Скасувати
           </button>
         </div>
@@ -119,31 +89,14 @@ export function AddLeadModal({ onClose, onAdded }: Props) {
   );
 }
 
-function Field({
-  label,
-  type = 'text',
-  placeholder,
-  value,
-  onChange,
-}: {
-  label: string;
-  type?: string;
-  placeholder?: string;
-  value?: string;
-  onChange: (v: string) => void;
+function Field({ label, type = 'text', placeholder, value, onChange }: {
+  label: string; type?: string; placeholder?: string; value?: string; onChange: (v: string) => void;
 }) {
   return (
     <div>
-      <label className="block text-[11px] font-bold text-neon-green/60 uppercase tracking-wider mb-1.5">
-        {label}
-      </label>
-      <input
-        type={type}
-        value={value || ''}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        className="w-full px-4 py-2.5 bg-dark-surface border border-dark-border rounded-xl text-white text-sm placeholder-white/20 focus:outline-none focus:border-neon-green/40 transition-all"
-      />
+      <label className="block text-sm font-semibold text-text mb-2">{label}</label>
+      <input type={type} value={value || ''} onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
+        className="w-full px-5 py-4 bg-bg border-2 border-border rounded-2xl text-text text-base placeholder-text-secondary/40 focus:outline-none focus:border-brand transition-colors" />
     </div>
   );
 }

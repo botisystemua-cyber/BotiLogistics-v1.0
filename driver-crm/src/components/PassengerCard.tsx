@@ -4,7 +4,7 @@ import {
   Users, Calendar, Clock, Car, FileText, ArrowRight, Repeat,
 } from 'lucide-react';
 import type { Passenger, ItemStatus } from '../types';
-import { StatusIcon } from './StatusBadge';
+import { StatusBadge } from './StatusBadge';
 import { useApp } from '../store/useAppStore';
 import { updatePassengerStatus } from '../api';
 
@@ -14,20 +14,6 @@ interface Props {
   onTransfer?: () => void;
 }
 
-const statusBorderColors: Record<ItemStatus, string> = {
-  pending: 'border-l-amber-400',
-  'in-progress': 'border-l-blue-400',
-  completed: 'border-l-emerald-400',
-  cancelled: 'border-l-red-400',
-};
-
-const statusBgColors: Record<ItemStatus, string> = {
-  pending: 'bg-dark-card',
-  'in-progress': 'bg-blue-950/30',
-  completed: 'bg-emerald-950/20',
-  cancelled: 'bg-red-950/20',
-};
-
 export function PassengerCard({ passenger, index, onTransfer }: Props) {
   const { getStatus, setStatus, driverName, currentSheet, isUnifiedView, showToast } = useApp();
   const [expanded, setExpanded] = useState(false);
@@ -36,37 +22,25 @@ export function PassengerCard({ passenger, index, onTransfer }: Props) {
 
   const status = getStatus(passenger._statusKey);
   const canUndo = status === 'completed' || status === 'cancelled';
-  const routeName =
-    isUnifiedView && passenger._sourceRoute ? passenger._sourceRoute : currentSheet;
+  const routeName = isUnifiedView && passenger._sourceRoute ? passenger._sourceRoute : currentSheet;
 
   const handleStatus = async (newStatus: ItemStatus) => {
     setStatus(passenger._statusKey, newStatus);
     try {
       await updatePassengerStatus(driverName, routeName, passenger, newStatus);
-      const labels: Record<string, string> = {
-        'in-progress': 'В процесі',
-        completed: 'Готово!',
-        pending: 'Очікує',
-      };
+      const labels: Record<string, string> = { 'in-progress': 'В процесі', completed: 'Готово!', pending: 'Очікує' };
       showToast(labels[newStatus] || newStatus);
-    } catch (err) {
-      showToast('Помилка: ' + (err as Error).message);
-    }
+    } catch (err) { showToast('Помилка: ' + (err as Error).message); }
   };
 
   const handleCancel = async () => {
-    if (!cancelReason.trim()) {
-      showToast('Введи причину скасування');
-      return;
-    }
+    if (!cancelReason.trim()) { showToast('Введи причину скасування'); return; }
     setStatus(passenger._statusKey, 'cancelled');
     setShowCancel(false);
     try {
       await updatePassengerStatus(driverName, routeName, passenger, 'cancelled', cancelReason);
       showToast('Скасовано');
-    } catch (err) {
-      showToast('Помилка: ' + (err as Error).message);
-    }
+    } catch (err) { showToast('Помилка: ' + (err as Error).message); }
   };
 
   const handleUndo = async () => {
@@ -85,92 +59,73 @@ export function PassengerCard({ passenger, index, onTransfer }: Props) {
   const navigateTo = (addr: string) => {
     if (addr) {
       window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(addr)}&travelmode=driving`, '_blank');
-    } else {
-      showToast('Немає адреси');
-    }
+    } else { showToast('Немає адреси'); }
   };
 
   return (
-    <div
-      className={`${statusBgColors[status]} ${statusBorderColors[status]} border-l-4 border border-dark-border rounded-xl p-3 transition-all hover:shadow-[0_0_15px_rgba(57,255,20,0.05)]`}
-    >
-      {/* Header */}
-      <div className="flex items-start gap-3">
-        <div className="w-9 h-9 rounded-full bg-blue-400/20 text-blue-400 flex items-center justify-center text-xs font-bold shrink-0">
-          {index + 1}
-        </div>
-        <div className="flex-1 min-w-0">
-          {isUnifiedView && passenger._sourceRoute && (
-            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold text-blue-300 bg-blue-400/10 mb-1">
-              <MapPin className="w-2.5 h-2.5" />
-              {passenger._sourceRoute}
-            </span>
-          )}
-          <div className="font-semibold text-white text-xs">{passenger.name}</div>
-          <div className="flex items-center gap-1 mt-0.5 text-[11px] text-white/40">
-            <Car className="w-3 h-3" />
-            {passenger.from}
-            <ArrowRight className="w-3 h-3 text-neon-green/50" />
-            {passenger.to}
+    <div className="bg-card rounded-2xl shadow-sm border border-border overflow-hidden">
+      <div className="p-5">
+        {/* Header */}
+        <div className="flex items-start gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center text-base font-black shrink-0">
+            {index + 1}
           </div>
+          <div className="flex-1 min-w-0">
+            {isUnifiedView && passenger._sourceRoute && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold text-blue-600 bg-blue-50 mb-1.5">
+                <MapPin className="w-3 h-3" />
+                {passenger._sourceRoute}
+              </span>
+            )}
+            <div className="font-bold text-text text-base">{passenger.name}</div>
+            <div className="flex items-center gap-1.5 mt-1 text-sm text-text-secondary">
+              <Car className="w-4 h-4" />
+              {passenger.from}
+              <ArrowRight className="w-4 h-4 text-brand" />
+              {passenger.to}
+            </div>
+          </div>
+          <StatusBadge status={status} />
         </div>
-        <StatusIcon status={status} />
-      </div>
 
-      {/* Badges */}
-      <div className="flex flex-wrap gap-1.5 mt-2">
-        {passenger.date && (
-          <Badge icon={Calendar} color="text-white/60 bg-white/5">{passenger.date}</Badge>
-        )}
-        {passenger.timing && (
-          <Badge icon={Clock} color="text-white/60 bg-white/5">{passenger.timing}</Badge>
-        )}
-        {passenger.seats && (
-          <Badge icon={Users} color="text-blue-400 bg-blue-400/10">{passenger.seats} місць</Badge>
-        )}
-      </div>
+        {/* Info chips */}
+        <div className="flex flex-wrap gap-2 mt-4">
+          <InfoChip icon={Phone} color="green">{passenger.phone}</InfoChip>
+          {passenger.date && <InfoChip icon={Calendar} color="gray">{passenger.date}</InfoChip>}
+          {passenger.timing && <InfoChip icon={Clock} color="gray">{passenger.timing}</InfoChip>}
+          {passenger.seats && <InfoChip icon={Users} color="blue">{passenger.seats} місць</InfoChip>}
+          {passenger.payment && <InfoChip icon={FileText} color="green" bold>€{passenger.payment}</InfoChip>}
+        </div>
 
-      <div className="flex flex-wrap gap-1.5 mt-1.5">
-        <Badge icon={Phone} color="text-neon-green bg-neon-green/10" bold>{passenger.phone}</Badge>
-        {passenger.payment && (
-          <Badge icon={FileText} color="text-emerald-400 bg-emerald-400/10" bold>€{passenger.payment}</Badge>
-        )}
-      </div>
+        {/* Action buttons */}
+        <div className="grid grid-cols-3 gap-3 mt-5">
+          <BigButton icon={Phone} label="Дзвонити" color="green" onClick={() => { window.location.href = `tel:${passenger.phone}`; }} />
+          <BigButton icon={Car} label="Відправка" color="blue" onClick={() => navigateTo(passenger.from)} />
+          <BigButton icon={MapPin} label="Прибуття" color="blue" onClick={() => navigateTo(passenger.to)} />
+        </div>
 
-      {/* Action buttons */}
-      <div className="grid grid-cols-3 gap-2 mt-3">
-        <ActionBtn icon={Phone} label="Дзвонити" onClick={() => { window.location.href = `tel:${passenger.phone}`; }} />
-        <ActionBtn icon={Car} label="Відправка" onClick={() => navigateTo(passenger.from)} />
-        <ActionBtn icon={MapPin} label="Прибуття" onClick={() => navigateTo(passenger.to)} />
-      </div>
+        <div className={`grid ${onTransfer ? 'grid-cols-2' : 'grid-cols-1'} gap-3 mt-3`}>
+          <BigButton icon={expanded ? ChevronUp : ChevronDown} label="Деталі" color="gray" onClick={() => setExpanded(!expanded)} />
+          {onTransfer && (
+            <button onClick={onTransfer}
+              className="flex flex-col items-center justify-center gap-1 py-3.5 rounded-2xl font-semibold text-xs bg-amber-50 text-amber-700 active:bg-amber-100 transition-all cursor-pointer active:scale-95">
+              <Repeat className="w-5 h-5" /> Перенести
+            </button>
+          )}
+        </div>
 
-      <div className={`grid ${onTransfer ? 'grid-cols-2' : 'grid-cols-1'} gap-2 mt-2`}>
-        <ActionBtn
-          icon={expanded ? ChevronUp : ChevronDown}
-          label="Деталі"
-          onClick={() => setExpanded(!expanded)}
-        />
-        {onTransfer && (
-          <button
-            onClick={onTransfer}
-            className="flex items-center justify-center gap-1 py-2 bg-orange-500/10 border border-orange-500/30 rounded-lg text-[10px] font-semibold text-orange-400 hover:bg-orange-500/20 transition-all cursor-pointer"
-          >
-            <Repeat className="w-3 h-3" /> Перенести
-          </button>
-        )}
-      </div>
-
-      {/* Status buttons */}
-      <div className="flex gap-1.5 mt-2">
-        <StatusBtn icon={RotateCw} color="blue" onClick={() => handleStatus('in-progress')} />
-        <StatusBtn icon={CheckCircle2} color="green" onClick={() => handleStatus('completed')} />
-        <StatusBtn icon={XCircle} color="red" onClick={() => { setShowCancel(true); setExpanded(true); }} />
-        <StatusBtn icon={Undo2} color="purple" onClick={handleUndo} disabled={!canUndo} />
+        {/* Status buttons */}
+        <div className="grid grid-cols-4 gap-2 mt-3">
+          <StatusBtn icon={RotateCw} label="В роботу" color="blue" onClick={() => handleStatus('in-progress')} />
+          <StatusBtn icon={CheckCircle2} label="Готово" color="green" onClick={() => handleStatus('completed')} />
+          <StatusBtn icon={XCircle} label="Скасувати" color="red" onClick={() => { setShowCancel(true); setExpanded(true); }} />
+          <StatusBtn icon={Undo2} label="Відміна" color="gray" onClick={handleUndo} disabled={!canUndo} />
+        </div>
       </div>
 
       {/* Expanded */}
       {expanded && (
-        <div className="mt-3 pt-3 border-t border-dark-border space-y-2 animate-in slide-in-from-top-2">
+        <div className="border-t border-border bg-bg/50 p-5 space-y-3">
           <Detail label="ПІБ" value={passenger.name} />
           <Detail label="ІД" value={passenger.id} />
           <Detail label="Дата виїзду" value={passenger.date} />
@@ -185,18 +140,12 @@ export function PassengerCard({ passenger, index, onTransfer }: Props) {
 
       {/* Cancel */}
       {showCancel && (
-        <div className="mt-3 pt-3 border-t border-red-400/20 animate-in slide-in-from-top-2">
-          <textarea
-            value={cancelReason}
-            onChange={(e) => setCancelReason(e.target.value)}
-            placeholder="Причина скасування..."
-            autoFocus
-            className="w-full px-3 py-2 bg-dark-surface border border-red-400/30 rounded-lg text-white text-xs resize-y min-h-[60px] focus:outline-none focus:border-red-400/50 placeholder-white/30"
-          />
-          <button
-            onClick={handleCancel}
-            className="w-full mt-2 py-2 bg-red-500 text-white font-semibold rounded-lg text-xs hover:bg-red-600 transition-colors cursor-pointer"
-          >
+        <div className="border-t border-red-200 bg-red-50 p-5">
+          <textarea value={cancelReason} onChange={(e) => setCancelReason(e.target.value)}
+            placeholder="Причина скасування..." autoFocus
+            className="w-full px-4 py-3 bg-white border-2 border-red-200 rounded-2xl text-text text-sm resize-y min-h-[80px] focus:outline-none focus:border-red-400 placeholder-text-secondary/40" />
+          <button onClick={handleCancel}
+            className="w-full mt-3 py-3.5 bg-red-500 text-white font-bold rounded-2xl text-sm hover:bg-red-600 transition-colors cursor-pointer">
             Підтвердити скасування
           </button>
         </div>
@@ -207,32 +156,37 @@ export function PassengerCard({ passenger, index, onTransfer }: Props) {
 
 // ---- Shared sub-components ----
 
-function Badge({ icon: Icon, color, bold, children }: { icon: typeof Phone; color: string; bold?: boolean; children: React.ReactNode }) {
+function InfoChip({ icon: Icon, color, bold, children }: { icon: typeof Phone; color: string; bold?: boolean; children: React.ReactNode }) {
+  const colors: Record<string, string> = {
+    green: 'bg-green-50 text-green-700', blue: 'bg-blue-50 text-blue-700', gray: 'bg-gray-100 text-gray-600',
+  };
   return (
-    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] ${bold ? 'font-bold' : 'font-medium'} ${color}`}>
-      <Icon className="w-2.5 h-2.5" />{children}
+    <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs ${bold ? 'font-bold' : 'font-semibold'} ${colors[color]}`}>
+      <Icon className="w-3.5 h-3.5" />{children}
     </span>
   );
 }
 
-function ActionBtn({ icon: Icon, label, onClick }: { icon: typeof Phone; label: string; onClick: () => void }) {
+function BigButton({ icon: Icon, label, color, onClick }: { icon: typeof Phone; label: string; color: string; onClick: () => void }) {
+  const colors: Record<string, string> = {
+    green: 'bg-green-50 text-green-700 active:bg-green-100', blue: 'bg-blue-50 text-blue-700 active:bg-blue-100', gray: 'bg-gray-100 text-gray-600 active:bg-gray-200',
+  };
   return (
-    <button onClick={onClick} className="flex items-center justify-center gap-1 py-2 bg-dark-surface border border-dark-border rounded-lg text-[10px] font-semibold text-white/60 hover:text-neon-green hover:border-neon-green/20 transition-all cursor-pointer">
-      <Icon className="w-3 h-3" />{label}
+    <button onClick={onClick} className={`flex flex-col items-center justify-center gap-1 py-3.5 rounded-2xl font-semibold text-xs transition-all cursor-pointer active:scale-95 ${colors[color]}`}>
+      <Icon className="w-5 h-5" />{label}
     </button>
   );
 }
 
-function StatusBtn({ icon: Icon, color, onClick, disabled }: { icon: typeof RotateCw; color: string; onClick: () => void; disabled?: boolean }) {
+function StatusBtn({ icon: Icon, label, color, onClick, disabled }: { icon: typeof RotateCw; label: string; color: string; onClick: () => void; disabled?: boolean }) {
   const colors: Record<string, string> = {
-    blue: 'text-blue-400 border-blue-400/30 hover:bg-blue-400/10',
-    green: 'text-emerald-400 border-emerald-400/30 hover:bg-emerald-400/10',
-    red: 'text-red-400 border-red-400/30 hover:bg-red-400/10',
-    purple: 'text-purple-400 border-purple-400/30 hover:bg-purple-400/10',
+    blue: 'border-blue-200 text-blue-600 hover:bg-blue-50', green: 'border-green-200 text-green-600 hover:bg-green-50',
+    red: 'border-red-200 text-red-600 hover:bg-red-50', gray: 'border-gray-200 text-gray-500 hover:bg-gray-50',
   };
   return (
-    <button onClick={onClick} disabled={disabled} className={`flex-1 py-2 border rounded-lg flex items-center justify-center transition-all cursor-pointer ${colors[color]} ${disabled ? 'opacity-30 cursor-not-allowed' : ''}`}>
-      <Icon className="w-4 h-4" />
+    <button onClick={onClick} disabled={disabled}
+      className={`flex flex-col items-center justify-center gap-0.5 py-2.5 border-2 rounded-xl transition-all cursor-pointer text-[10px] font-semibold active:scale-95 ${colors[color]} ${disabled ? 'opacity-30 cursor-not-allowed' : ''}`}>
+      <Icon className="w-5 h-5" />{label}
     </button>
   );
 }
@@ -240,9 +194,9 @@ function StatusBtn({ icon: Icon, color, onClick, disabled }: { icon: typeof Rota
 function Detail({ label, value }: { label: string; value?: string }) {
   if (!value) return null;
   return (
-    <div className="bg-dark-surface/50 border-l-2 border-neon-green/30 rounded-r-lg px-3 py-2">
-      <div className="text-[9px] text-neon-green/60 font-bold uppercase tracking-wider">{label}</div>
-      <div className="text-xs text-white/80 mt-0.5 break-words">{value}</div>
+    <div className="bg-white rounded-xl px-4 py-3 border border-border">
+      <div className="text-[11px] text-text-secondary font-semibold uppercase tracking-wider">{label}</div>
+      <div className="text-sm text-text mt-0.5 break-words">{value}</div>
     </div>
   );
 }
