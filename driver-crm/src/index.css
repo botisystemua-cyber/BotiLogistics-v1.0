@@ -1,0 +1,28 @@
+@import "tailwindcss";
+
+@theme {
+  --color-neon-green: #39ff14;
+  --color-neon-green-dim: #2bcc0f;
+  --color-neon-glow: rgba(57, 255, 20, 0.3);
+  --color-neon-glow-strong: rgba(57, 255, 20, 0.6);
+  --color-dark-bg: #0a0e17;
+  --color-dark-card: #111827;
+  --color-dark-surface: #1a2332;
+  --color-dark-border: #1e3a2f;
+  --color-dark-border-glow: rgba(57, 255, 20, 0.2);
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+@layer base {
+  body {
+    @apply bg-dark-bg text-white font-sans antialiased;
+    margin: 0;
+    min-height: 100dvh;
+  }
+
+  #root {
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+  }
+}
