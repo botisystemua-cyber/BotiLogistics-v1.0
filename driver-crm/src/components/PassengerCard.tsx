@@ -1,39 +1,43 @@
 import { useState } from 'react';
 import {
-  Phone, MapPin, ChevronDown, ChevronUp, RotateCw, CheckCircle2, XCircle, Undo2,
-  Users, Calendar, Clock, Car, FileText, ArrowRight, Repeat, User, Scale, Hash,
+  Phone, MapPin, RotateCw, CheckCircle2, XCircle, Undo2,
+  Users, Calendar, Clock, Car, FileText, ArrowRight, Repeat, Info,
 } from 'lucide-react';
 import type { Passenger, ItemStatus } from '../types';
 import { useApp } from '../store/useAppStore';
 import { updatePassengerStatus } from '../api';
 
-interface Props { passenger: Passenger; index: number; onTransfer?: () => void; }
+interface Props {
+  passenger: Passenger;
+  index: number;
+  onTransfer?: () => void;
+  onShowDetail: () => void;
+}
 
 const borderColor: Record<ItemStatus, string> = {
   pending: 'border-l-amber-400', 'in-progress': 'border-l-blue-500',
   completed: 'border-l-emerald-500', cancelled: 'border-l-red-400',
 };
-const statusLabel: Record<ItemStatus, { t: string; c: string }> = {
-  pending: { t: 'Очікує', c: 'text-amber-600 bg-amber-50' },
-  'in-progress': { t: 'В роботі', c: 'text-blue-600 bg-blue-50' },
-  completed: { t: 'Готово', c: 'text-emerald-600 bg-emerald-50' },
-  cancelled: { t: 'Скасов.', c: 'text-red-600 bg-red-50' },
+const stLabel: Record<ItemStatus, { t: string; c: string }> = {
+  pending: { t: 'Очікує', c: 'text-amber-700 bg-amber-50' },
+  'in-progress': { t: 'В роботі', c: 'text-blue-700 bg-blue-50' },
+  completed: { t: 'Готово', c: 'text-emerald-700 bg-emerald-50' },
+  cancelled: { t: 'Скасов.', c: 'text-red-700 bg-red-50' },
 };
 
-export function PassengerCard({ passenger, index, onTransfer }: Props) {
+export function PassengerCard({ passenger, index, onTransfer, onShowDetail }: Props) {
   const { getStatus, setStatus, driverName, currentSheet, isUnifiedView, showToast } = useApp();
-  const [expanded, setExpanded] = useState(false);
   const [showCancel, setShowCancel] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
 
   const status = getStatus(passenger._statusKey);
   const canUndo = status === 'completed' || status === 'cancelled';
   const routeName = isUnifiedView && passenger._sourceRoute ? passenger._sourceRoute : currentSheet;
-  const sl = statusLabel[status];
+  const sl = stLabel[status];
 
   const doStatus = async (ns: ItemStatus) => {
     setStatus(passenger._statusKey, ns);
-    try { await updatePassengerStatus(driverName, routeName, passenger, ns); showToast(statusLabel[ns].t + '!'); }
+    try { await updatePassengerStatus(driverName, routeName, passenger, ns); showToast(stLabel[ns].t + '!'); }
     catch (e) { showToast('Помилка: ' + (e as Error).message); }
   };
   const doCancel = async () => {
@@ -43,8 +47,7 @@ export function PassengerCard({ passenger, index, onTransfer }: Props) {
     catch (e) { showToast('Помилка: ' + (e as Error).message); }
   };
   const doUndo = async () => {
-    if (!canUndo) return;
-    const prev = status; setStatus(passenger._statusKey, 'pending');
+    if (!canUndo) return; const prev = status; setStatus(passenger._statusKey, 'pending');
     try { await updatePassengerStatus(driverName, routeName, passenger, 'pending', 'Відміна'); showToast('Відмінено'); }
     catch (e) { showToast('Помилка: ' + (e as Error).message); setStatus(passenger._statusKey, prev); }
   };
@@ -54,19 +57,19 @@ export function PassengerCard({ passenger, index, onTransfer }: Props) {
   };
 
   return (
-    <div className={`bg-card rounded-2xl border-2 border-gray-300 ${borderColor[status]} border-l-4 overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.06)]`}>
+    <div className={`bg-card rounded-2xl border-2 border-gray-300 ${borderColor[status]} border-l-4 shadow-[0_2px_8px_rgba(0,0,0,0.06)] overflow-hidden`}>
       <div className="p-3.5">
-        {/* Top row */}
+        {/* Header */}
         <div className="flex items-center gap-2.5 mb-2">
-          <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center text-xs font-black shrink-0">
+          <span className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center text-xs font-black shrink-0">
             {index + 1}
-          </div>
+          </span>
           <div className="flex-1 min-w-0">
             {isUnifiedView && passenger._sourceRoute && (
               <span className="inline-block px-2 py-0.5 rounded-full text-[9px] font-bold text-blue-600 bg-blue-50 mb-0.5">{passenger._sourceRoute}</span>
             )}
-            <div className="font-semibold text-text text-[13px] leading-snug truncate">{passenger.name}</div>
-            <div className="flex items-center gap-1 text-[11px] text-muted mt-0.5">
+            <div className="font-bold text-text text-[13px] leading-snug truncate">{passenger.name}</div>
+            <div className="flex items-center gap-1 text-xs text-secondary truncate">
               <Car className="w-3 h-3 shrink-0" /><span className="truncate">{passenger.from}</span>
               <ArrowRight className="w-3 h-3 shrink-0 text-brand" /><span className="truncate">{passenger.to}</span>
             </div>
@@ -75,7 +78,7 @@ export function PassengerCard({ passenger, index, onTransfer }: Props) {
         </div>
 
         {/* Chips */}
-        <div className="flex flex-wrap gap-1.5 mb-3">
+        <div className="flex flex-wrap gap-1.5 mb-2">
           <C icon={Phone} c="green">{passenger.phone}</C>
           {passenger.date && <C icon={Calendar} c="gray">{passenger.date}</C>}
           {passenger.timing && <C icon={Clock} c="gray">{passenger.timing}</C>}
@@ -89,8 +92,8 @@ export function PassengerCard({ passenger, index, onTransfer }: Props) {
           <Btn icon={Car} label="Звідки" color="bg-blue-50 text-blue-700" onClick={() => nav(passenger.from)} />
           <Btn icon={MapPin} label="Куди" color="bg-blue-50 text-blue-700" onClick={() => nav(passenger.to)} />
         </div>
-        <div className={`flex gap-2 mb-2`}>
-          <Btn icon={expanded ? ChevronUp : ChevronDown} label={expanded ? 'Згорнути' : 'Деталі'} color="bg-gray-50 text-gray-600" onClick={() => setExpanded(!expanded)} />
+        <div className="flex gap-2 mb-2">
+          <Btn icon={Info} label="Деталі" color="bg-gray-50 text-gray-600" onClick={onShowDetail} />
           {onTransfer && <Btn icon={Repeat} label="Перенести" color="bg-amber-50 text-amber-700" onClick={onTransfer} />}
         </div>
 
@@ -98,64 +101,10 @@ export function PassengerCard({ passenger, index, onTransfer }: Props) {
         <div className="flex gap-1.5">
           <SB icon={RotateCw} c="border-blue-200 text-blue-600 hover:bg-blue-50" onClick={() => doStatus('in-progress')} />
           <SB icon={CheckCircle2} c="border-emerald-200 text-emerald-600 hover:bg-emerald-50" onClick={() => doStatus('completed')} />
-          <SB icon={XCircle} c="border-red-200 text-red-500 hover:bg-red-50" onClick={() => { setShowCancel(true); setExpanded(true); }} />
+          <SB icon={XCircle} c="border-red-200 text-red-500 hover:bg-red-50" onClick={() => setShowCancel(true)} />
           <SB icon={Undo2} c="border-gray-300 text-gray-500 hover:bg-gray-100" onClick={canUndo ? doUndo : () => {}} disabled={!canUndo} />
         </div>
       </div>
-
-      {expanded && (
-        <div className="border-t border-border bg-gray-50/80 px-3.5 py-3 space-y-2.5">
-          {/* Contact */}
-          <DetailGroup icon={User} title="Контакт" color="text-blue-600 bg-blue-50">
-            <div className="space-y-1.5">
-              {passenger.name && <DRow icon={User} value={passenger.name} />}
-              {passenger.id && <DRow icon={Hash} value={passenger.id} label="ІД" />}
-              {passenger.phone && (
-                <div className="flex items-center justify-between">
-                  <DRow icon={Phone} value={passenger.phone} />
-                  <a href={`tel:${passenger.phone}`} className="px-2.5 py-1 rounded-lg bg-green-50 text-green-700 text-[10px] font-bold flex items-center gap-1">
-                    <Phone className="w-3 h-3" />Дзвонити
-                  </a>
-                </div>
-              )}
-            </div>
-          </DetailGroup>
-
-          {/* Trip info */}
-          <DetailGroup icon={Car} title="Поїздка" color="text-amber-600 bg-amber-50">
-            <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
-              <DRow icon={MapPin} value={passenger.from} label="Звідки" />
-              <DRow icon={MapPin} value={passenger.to} label="Куди" />
-              {passenger.date && <DRow icon={Calendar} value={passenger.date} label="Дата" />}
-              {passenger.timing && <DRow icon={Clock} value={passenger.timing} label="Час" />}
-              {passenger.seats && <DRow icon={Users} value={passenger.seats.toString() + ' місць'} />}
-              {passenger.weight && <DRow icon={Scale} value={passenger.weight + ' кг'} />}
-              {passenger.vehicle && <DRow icon={Car} value={passenger.vehicle} label="Авто" />}
-            </div>
-          </DetailGroup>
-
-          {/* Payment */}
-          {passenger.payment && (
-            <DetailGroup icon={FileText} title="Оплата" color="text-emerald-600 bg-emerald-50">
-              <span className="px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 text-xs font-bold">€{passenger.payment}</span>
-            </DetailGroup>
-          )}
-
-          {/* Other */}
-          {(passenger._sourceRoute || passenger.note?.trim()) && (
-            <DetailGroup icon={FileText} title="Інше" color="text-gray-600 bg-gray-100">
-              <div className="space-y-1.5">
-                {passenger._sourceRoute && <DRow icon={MapPin} value={passenger._sourceRoute} label="Маршрут" />}
-                {passenger.note?.trim() && (
-                  <div className="text-xs text-text px-2.5 py-1.5 rounded-lg bg-amber-50">
-                    <span className="text-amber-700 font-semibold">Примітка: </span>{passenger.note}
-                  </div>
-                )}
-              </div>
-            </DetailGroup>
-          )}
-        </div>
-      )}
 
       {showCancel && (
         <div className="border-t border-red-100 bg-red-50/60 p-3.5">
@@ -177,25 +126,4 @@ function Btn({ icon: I, label, color, onClick }: { icon: typeof Phone; label: st
 }
 function SB({ icon: I, c, onClick, disabled }: { icon: typeof RotateCw; c: string; onClick: () => void; disabled?: boolean }) {
   return <button onClick={onClick} disabled={disabled} className={`flex-1 py-2 border rounded-xl flex items-center justify-center transition-all ${c} ${disabled ? 'opacity-50' : 'cursor-pointer active:scale-95'}`}><I className="w-4 h-4" /></button>;
-}
-function DetailGroup({ icon: I, title, color, children }: { icon: typeof Phone; title: string; color: string; children: React.ReactNode }) {
-  return (
-    <div className="bg-card rounded-xl border border-border overflow-hidden">
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-border">
-        <span className={`w-6 h-6 rounded-md ${color} flex items-center justify-center`}><I className="w-3.5 h-3.5" /></span>
-        <span className="text-xs font-bold text-text">{title}</span>
-      </div>
-      <div className="px-3 py-2.5">{children}</div>
-    </div>
-  );
-}
-
-function DRow({ icon: I, value, label }: { icon: typeof Phone; value: string; label?: string }) {
-  return (
-    <div className="flex items-center gap-2 text-xs">
-      <I className="w-3.5 h-3.5 text-muted shrink-0" />
-      {label && <span className="text-muted">{label}:</span>}
-      <span className="text-text font-medium truncate">{value}</span>
-    </div>
-  );
 }
