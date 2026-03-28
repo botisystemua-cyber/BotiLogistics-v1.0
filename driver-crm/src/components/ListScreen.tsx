@@ -122,7 +122,7 @@ export function ListScreen() {
   };
 
   const HeaderIcon = isUnifiedView ? BarChart3 : isDelivery ? Package : Users;
-  const headerTitle = isUnifiedView ? 'Зведений' : isDelivery ? 'Посилки' : 'Пасажири';
+  const headerTitle = isUnifiedView ? 'Усі маршрути' : isDelivery ? 'Посилки' : 'Пасажири';
 
   const filters: { key: StatusFilter; label: string; count: number; pill: string; pillActive: string }[] = [
     { key: 'all', label: 'Усі', count: stats.total, pill: 'bg-gray-100 text-gray-600', pillActive: 'bg-gray-800 text-white' },

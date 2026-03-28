@@ -46,15 +46,15 @@ export function RouteScreen() {
           <SectionTitle icon={Package} label="Посилки" />
 
           {/* Unified delivery */}
-          <button onClick={() => { openRoute('Зведений посилки', 'delivery', true); }}
+          <button onClick={() => { openRoute('Усі маршрути', 'delivery', true); }}
             className="w-full mb-2 p-3.5 bg-card border-2 border-gray-300 rounded-2xl cursor-pointer text-left active:scale-[0.98] transition-transform flex items-center justify-between">
             <div className="flex items-center gap-2.5">
               <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center">
                 <BarChart3 className="w-5 h-5 text-amber-500" />
               </div>
               <div>
-                <div className="text-sm font-bold text-text">Зведений</div>
-                <div className="text-xs text-muted">Усі маршрути посилок</div>
+                <div className="text-sm font-bold text-text">Усі маршрути</div>
+                <div className="text-xs text-muted">Посилки</div>
               </div>
             </div>
             <ChevronRight className="w-4 h-4 text-muted/40" />
@@ -82,15 +82,15 @@ export function RouteScreen() {
 
           {/* Unified */}
           {passengerRoutes.length > 0 && (
-            <button onClick={() => { openRoute('Зведений', 'passenger', true); }}
+            <button onClick={() => { openRoute('Усі маршрути', 'passenger', true); }}
               className="w-full mb-2 p-3.5 bg-card border-2 border-gray-300 rounded-2xl cursor-pointer text-left active:scale-[0.98] transition-transform flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center">
                   <BarChart3 className="w-5 h-5 text-blue-500" />
                 </div>
                 <div>
-                  <div className="text-sm font-bold text-text">Зведений</div>
-                  <div className="text-xs text-muted">Усі маршрути</div>
+                  <div className="text-sm font-bold text-text">Усі маршрути</div>
+                  <div className="text-xs text-muted">Пасажири</div>
                 </div>
               </div>
               <div className="flex items-center gap-2">

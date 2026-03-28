@@ -2,6 +2,7 @@ import { useState } from 'react';
 import {
   Phone, MapPin, ChevronDown, ChevronUp, RotateCw, CheckCircle2, XCircle, Undo2,
   FileText, Scale, Clock, MessageSquare, Image, CreditCard, Hash, Navigation,
+  User, Calendar, ExternalLink,
 } from 'lucide-react';
 import type { Delivery, ItemStatus } from '../types';
 import { useApp } from '../store/useAppStore';
@@ -109,16 +110,90 @@ export function DeliveryCard({ delivery, globalIndex }: Props) {
       </div>
 
       {expanded && (
-        <div className="border-t border-border bg-gray-50/80 px-3.5 py-3 space-y-1.5">
-          <D l="ПІБ" v={delivery.name} /><D l="Номер" v={`${delivery.internalNumber}${delivery.id ? ' / ' + delivery.id : ''}`} />
-          {delivery.vo && <D l="ВО" v={delivery.vo} />}<D l="Адреса" v={delivery.address} /><D l="ТТН" v={delivery.ttn} />
-          <D l="Вага" v={delivery.weight} />{delivery.direction && <D l="Напрямок" v={delivery.direction} />}
-          <D l="Телефон" v={delivery.phone} />{delivery.registrarPhone && <D l="Тел. реєстр." v={delivery.registrarPhone} />}
-          {priceVal && <D l="Сума" v={`€${priceVal}`} />}{paymentVal && <D l="Оплата" v={paymentVal} />}
-          {payStatusVal && <D l="Оплата статус" v={payStatusVal} />}
-          {delivery.timing && <D l="Таймінг" v={delivery.timing} />}{delivery.createdAt && <D l="Оформлено" v={delivery.createdAt} />}
-          {delivery.receiveDate && <D l="Отримано" v={delivery.receiveDate} />}{delivery.smsNote?.trim() && <D l="SMS" v={delivery.smsNote} />}
-          {delivery.photo?.startsWith('http') && <a href={delivery.photo} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-xs text-blue-600 font-semibold pt-1"><Image className="w-3.5 h-3.5" />Фото</a>}
+        <div className="border-t border-border bg-gray-50/80 px-3.5 py-3 space-y-2.5">
+          {/* Contact */}
+          <DetailGroup icon={User} title="Контакт" color="text-blue-600 bg-blue-50">
+            <div className="space-y-1.5">
+              {delivery.name && <DRow icon={User} value={delivery.name} />}
+              {delivery.phone && (
+                <div className="flex items-center justify-between">
+                  <DRow icon={Phone} value={delivery.phone} />
+                  <a href={`tel:${delivery.phone}`} className="px-2.5 py-1 rounded-lg bg-green-50 text-green-700 text-[10px] font-bold flex items-center gap-1">
+                    <Phone className="w-3 h-3" />Дзвонити
+                  </a>
+                </div>
+              )}
+              {delivery.registrarPhone && (
+                <div className="flex items-center justify-between">
+                  <DRow icon={Phone} value={delivery.registrarPhone} label="Реєстр." />
+                  <a href={`tel:${delivery.registrarPhone}`} className="px-2.5 py-1 rounded-lg bg-gray-100 text-secondary text-[10px] font-bold flex items-center gap-1">
+                    <Phone className="w-3 h-3" />Дзвонити
+                  </a>
+                </div>
+              )}
+            </div>
+          </DetailGroup>
+
+          {/* Delivery info */}
+          <DetailGroup icon={MapPin} title="Доставка" color="text-amber-600 bg-amber-50">
+            <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+              <DRow icon={Hash} value={delivery.internalNumber} label="Номер" />
+              {delivery.id && <DRow icon={Hash} value={delivery.id} label="ІД" />}
+              {delivery.vo && <DRow icon={FileText} value={delivery.vo} label="ВО" />}
+              {delivery.ttn && <DRow icon={FileText} value={delivery.ttn} label="ТТН" />}
+              {delivery.weight && <DRow icon={Scale} value={delivery.weight + ' кг'} label="Вага" />}
+              {delivery.direction && <DRow icon={Navigation} value={delivery.direction} label="Напрямок" />}
+              {delivery.timing && <DRow icon={Clock} value={delivery.timing} label="Таймінг" />}
+            </div>
+            {delivery.address && (
+              <div className="mt-1.5 text-xs text-text leading-snug">
+                <span className="text-muted">Адреса: </span>{delivery.address}
+              </div>
+            )}
+          </DetailGroup>
+
+          {/* Payment */}
+          {(priceVal || paymentVal || payStatusVal) && (
+            <DetailGroup icon={CreditCard} title="Оплата" color="text-emerald-600 bg-emerald-50">
+              <div className="flex flex-wrap gap-2">
+                {priceVal && (
+                  <span className="px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 text-xs font-bold">€{priceVal}</span>
+                )}
+                {paymentVal && (
+                  <span className="px-2.5 py-1 rounded-lg bg-gray-100 text-secondary text-xs font-medium">{paymentVal}</span>
+                )}
+                {payStatusVal && (
+                  <span className={`px-2.5 py-1 rounded-lg text-xs font-bold ${payStatusVal === 'Оплачено' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'}`}>{payStatusVal}</span>
+                )}
+              </div>
+            </DetailGroup>
+          )}
+
+          {/* Dates & notes */}
+          {(delivery.createdAt || delivery.receiveDate || delivery.smsNote?.trim() || delivery.note?.trim() || delivery.photo?.startsWith('http')) && (
+            <DetailGroup icon={Calendar} title="Інше" color="text-gray-600 bg-gray-100">
+              <div className="space-y-1.5">
+                {delivery.createdAt && <DRow icon={Calendar} value={delivery.createdAt} label="Оформлено" />}
+                {delivery.receiveDate && <DRow icon={Calendar} value={delivery.receiveDate} label="Отримано" />}
+                {delivery.smsNote?.trim() && (
+                  <div className="text-xs text-text mt-1 px-2.5 py-1.5 rounded-lg bg-blue-50">
+                    <span className="text-blue-600 font-semibold">SMS: </span>{delivery.smsNote}
+                  </div>
+                )}
+                {delivery.note?.trim() && (
+                  <div className="text-xs text-text mt-1 px-2.5 py-1.5 rounded-lg bg-amber-50">
+                    <span className="text-amber-700 font-semibold">Примітка: </span>{delivery.note}
+                  </div>
+                )}
+                {delivery.photo?.startsWith('http') && (
+                  <a href={delivery.photo} target="_blank" rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-50 text-blue-600 text-xs font-semibold mt-1">
+                    <Image className="w-3.5 h-3.5" />Відкрити фото <ExternalLink className="w-3 h-3" />
+                  </a>
+                )}
+              </div>
+            </DetailGroup>
+          )}
         </div>
       )}
 
@@ -143,7 +218,24 @@ function Btn({ icon: I, label, color, onClick }: { icon: typeof Phone; label: st
 function SB({ icon: I, c, onClick, disabled }: { icon: typeof RotateCw; c: string; onClick: () => void; disabled?: boolean }) {
   return <button onClick={onClick} disabled={disabled} className={`flex-1 py-2 border rounded-xl flex items-center justify-center transition-all ${c} ${disabled ? 'opacity-50' : 'cursor-pointer active:scale-95'}`}><I className="w-4 h-4" /></button>;
 }
-function D({ l, v }: { l: string; v?: string }) {
-  if (!v) return null;
-  return <div className="flex gap-2 text-xs"><span className="text-muted font-medium shrink-0 w-[90px]">{l}</span><span className="text-text break-words">{v}</span></div>;
+function DetailGroup({ icon: I, title, color, children }: { icon: typeof Phone; title: string; color: string; children: React.ReactNode }) {
+  return (
+    <div className="bg-card rounded-xl border border-border overflow-hidden">
+      <div className={`flex items-center gap-2 px-3 py-2 border-b border-border`}>
+        <span className={`w-6 h-6 rounded-md ${color} flex items-center justify-center`}><I className="w-3.5 h-3.5" /></span>
+        <span className="text-xs font-bold text-text">{title}</span>
+      </div>
+      <div className="px-3 py-2.5">{children}</div>
+    </div>
+  );
+}
+
+function DRow({ icon: I, value, label }: { icon: typeof Phone; value: string; label?: string }) {
+  return (
+    <div className="flex items-center gap-2 text-xs">
+      <I className="w-3.5 h-3.5 text-muted shrink-0" />
+      {label && <span className="text-muted">{label}:</span>}
+      <span className="text-text font-medium truncate">{value}</span>
+    </div>
+  );
 }

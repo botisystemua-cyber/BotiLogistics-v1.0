@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
   Phone, MapPin, ChevronDown, ChevronUp, RotateCw, CheckCircle2, XCircle, Undo2,
-  Users, Calendar, Clock, Car, FileText, ArrowRight, Repeat,
+  Users, Calendar, Clock, Car, FileText, ArrowRight, Repeat, User, Scale, Hash,
 } from 'lucide-react';
 import type { Passenger, ItemStatus } from '../types';
 import { useApp } from '../store/useAppStore';
@@ -104,12 +104,56 @@ export function PassengerCard({ passenger, index, onTransfer }: Props) {
       </div>
 
       {expanded && (
-        <div className="border-t border-border bg-gray-50/80 px-3.5 py-3 space-y-1.5">
-          <D l="ПІБ" v={passenger.name} /><D l="ІД" v={passenger.id} /><D l="Дата" v={passenger.date} />
-          <D l="Маршрут" v={`${passenger.from} → ${passenger.to}`} /><D l="Місць" v={passenger.seats?.toString()} />
-          <D l="Вага" v={passenger.weight} /><D l="Автомобіль" v={passenger.vehicle} />
-          {passenger._sourceRoute && <D l="Маршрут. лист" v={passenger._sourceRoute} />}
-          {passenger.note?.trim() && <D l="Примітка" v={passenger.note} />}
+        <div className="border-t border-border bg-gray-50/80 px-3.5 py-3 space-y-2.5">
+          {/* Contact */}
+          <DetailGroup icon={User} title="Контакт" color="text-blue-600 bg-blue-50">
+            <div className="space-y-1.5">
+              {passenger.name && <DRow icon={User} value={passenger.name} />}
+              {passenger.id && <DRow icon={Hash} value={passenger.id} label="ІД" />}
+              {passenger.phone && (
+                <div className="flex items-center justify-between">
+                  <DRow icon={Phone} value={passenger.phone} />
+                  <a href={`tel:${passenger.phone}`} className="px-2.5 py-1 rounded-lg bg-green-50 text-green-700 text-[10px] font-bold flex items-center gap-1">
+                    <Phone className="w-3 h-3" />Дзвонити
+                  </a>
+                </div>
+              )}
+            </div>
+          </DetailGroup>
+
+          {/* Trip info */}
+          <DetailGroup icon={Car} title="Поїздка" color="text-amber-600 bg-amber-50">
+            <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+              <DRow icon={MapPin} value={passenger.from} label="Звідки" />
+              <DRow icon={MapPin} value={passenger.to} label="Куди" />
+              {passenger.date && <DRow icon={Calendar} value={passenger.date} label="Дата" />}
+              {passenger.timing && <DRow icon={Clock} value={passenger.timing} label="Час" />}
+              {passenger.seats && <DRow icon={Users} value={passenger.seats.toString() + ' місць'} />}
+              {passenger.weight && <DRow icon={Scale} value={passenger.weight + ' кг'} />}
+              {passenger.vehicle && <DRow icon={Car} value={passenger.vehicle} label="Авто" />}
+            </div>
+          </DetailGroup>
+
+          {/* Payment */}
+          {passenger.payment && (
+            <DetailGroup icon={FileText} title="Оплата" color="text-emerald-600 bg-emerald-50">
+              <span className="px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 text-xs font-bold">€{passenger.payment}</span>
+            </DetailGroup>
+          )}
+
+          {/* Other */}
+          {(passenger._sourceRoute || passenger.note?.trim()) && (
+            <DetailGroup icon={FileText} title="Інше" color="text-gray-600 bg-gray-100">
+              <div className="space-y-1.5">
+                {passenger._sourceRoute && <DRow icon={MapPin} value={passenger._sourceRoute} label="Маршрут" />}
+                {passenger.note?.trim() && (
+                  <div className="text-xs text-text px-2.5 py-1.5 rounded-lg bg-amber-50">
+                    <span className="text-amber-700 font-semibold">Примітка: </span>{passenger.note}
+                  </div>
+                )}
+              </div>
+            </DetailGroup>
+          )}
         </div>
       )}
 
@@ -134,7 +178,24 @@ function Btn({ icon: I, label, color, onClick }: { icon: typeof Phone; label: st
 function SB({ icon: I, c, onClick, disabled }: { icon: typeof RotateCw; c: string; onClick: () => void; disabled?: boolean }) {
   return <button onClick={onClick} disabled={disabled} className={`flex-1 py-2 border rounded-xl flex items-center justify-center transition-all ${c} ${disabled ? 'opacity-50' : 'cursor-pointer active:scale-95'}`}><I className="w-4 h-4" /></button>;
 }
-function D({ l, v }: { l: string; v?: string }) {
-  if (!v) return null;
-  return <div className="flex gap-2 text-xs"><span className="text-muted font-medium shrink-0 w-[90px]">{l}</span><span className="text-text break-words">{v}</span></div>;
+function DetailGroup({ icon: I, title, color, children }: { icon: typeof Phone; title: string; color: string; children: React.ReactNode }) {
+  return (
+    <div className="bg-card rounded-xl border border-border overflow-hidden">
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-border">
+        <span className={`w-6 h-6 rounded-md ${color} flex items-center justify-center`}><I className="w-3.5 h-3.5" /></span>
+        <span className="text-xs font-bold text-text">{title}</span>
+      </div>
+      <div className="px-3 py-2.5">{children}</div>
+    </div>
+  );
+}
+
+function DRow({ icon: I, value, label }: { icon: typeof Phone; value: string; label?: string }) {
+  return (
+    <div className="flex items-center gap-2 text-xs">
+      <I className="w-3.5 h-3.5 text-muted shrink-0" />
+      {label && <span className="text-muted">{label}:</span>}
+      <span className="text-text font-medium truncate">{value}</span>
+    </div>
+  );
 }
