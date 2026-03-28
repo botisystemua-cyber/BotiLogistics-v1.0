@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
   Phone, MapPin, RotateCw, CheckCircle2, XCircle, Undo2,
-  FileText, Scale, Clock, MessageSquare, CreditCard, Navigation, Info,
+  CreditCard, Info,
 } from 'lucide-react';
 import type { Delivery, ItemStatus } from '../types';
 import { useApp } from '../store/useAppStore';
@@ -60,47 +60,47 @@ export function DeliveryCard({ delivery, globalIndex, onShowDetail }: Props) {
 
   return (
     <div className={`bg-card rounded-2xl border-2 border-gray-300 ${borderColor[status]} border-l-4 shadow-[0_2px_8px_rgba(0,0,0,0.06)] overflow-hidden`}>
-      <div className="p-3.5">
-        {/* Top row */}
-        <div className="flex items-center gap-2.5 mb-2">
-          <span className="w-8 h-8 rounded-lg bg-gray-100 text-secondary flex items-center justify-center text-xs font-black shrink-0">
+      <div className="px-3 py-2.5">
+        {/* Top row: number + address + status */}
+        <div className="flex items-center gap-2 mb-1">
+          <span className="w-7 h-7 rounded-lg bg-gray-100 text-secondary flex items-center justify-center text-[11px] font-black shrink-0">
             {globalIndex + 1}
           </span>
           <div className="flex-1 min-w-0">
             <div className="font-bold text-text text-[13px] leading-snug truncate">
-              {show('id') && <span className="text-secondary">#{delivery.internalNumber} </span>}
-              {show('address') && delivery.address}
+              {show('address') && (delivery.address || '—')}
             </div>
-            {show('name') && delivery.name && <div className="text-xs text-secondary truncate mt-0.5">{delivery.name}</div>}
+            {show('name') && delivery.name && <div className="text-xs text-secondary truncate">{delivery.name}</div>}
           </div>
-          <span className={`shrink-0 px-2.5 py-1 rounded-full text-[10px] font-bold ${sl.c}`}>{sl.t}</span>
+          <span className={`shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold ${sl.c}`}>{sl.t}</span>
         </div>
 
-        {/* Chips */}
-        <div className="flex flex-wrap gap-1.5 mb-2">
-          {show('phone') && delivery.phone && <C icon={Phone} c="green">{delivery.phone}</C>}
-          {show('price') && priceVal && <C icon={CreditCard} c="green" b>€{priceVal}</C>}
-          {show('ttn') && delivery.ttn && <C icon={FileText} c="red">ТТН: {delivery.ttn}</C>}
-          {show('weight') && delivery.weight && <C icon={Scale} c="gray">{delivery.weight}кг</C>}
-          {show('direction') && delivery.direction && <C icon={Navigation} c="purple">{delivery.direction}</C>}
-          {show('timing') && delivery.timing && <C icon={Clock} c="gray">{delivery.timing}</C>}
+        {/* Key info only: phone + price */}
+        <div className="flex items-center gap-2 ml-9 mb-2">
+          {show('phone') && delivery.phone && (
+            <span className="text-xs font-semibold text-text flex items-center gap-1">
+              <Phone className="w-3 h-3 text-brand" />{delivery.phone}
+            </span>
+          )}
+          {show('price') && priceVal && (
+            <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full flex items-center gap-1">
+              <CreditCard className="w-3 h-3" />€{priceVal}
+            </span>
+          )}
           {show('payStatus') && payStatusVal && (
-            <C icon={CreditCard} c={payStatusVal === 'Оплачено' ? 'green' : 'red'} b>{payStatusVal}</C>
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${payStatusVal === 'Оплачено' ? 'text-emerald-700 bg-emerald-50' : 'text-red-600 bg-red-50'}`}>{payStatusVal}</span>
           )}
         </div>
-        {show('note') && delivery.note?.trim() && (
-          <p className="text-[11px] text-secondary leading-snug mb-2 flex gap-1"><MessageSquare className="w-3 h-3 mt-0.5 shrink-0" /><span className="line-clamp-2">{delivery.note}</span></p>
-        )}
 
-        {/* Actions */}
-        <div className="flex gap-2 mb-2">
+        {/* Actions — compact */}
+        <div className="flex gap-1.5 ml-9 mb-1.5">
           <Btn icon={Phone} label="Дзвонити" color="bg-green-50 text-green-700" onClick={() => { window.location.href = `tel:${delivery.phone}`; }} />
           <Btn icon={MapPin} label="Карта" color="bg-blue-50 text-blue-700" onClick={navigate} />
           <Btn icon={Info} label="Деталі" color="bg-gray-50 text-gray-600" onClick={onShowDetail} />
         </div>
 
         {/* Status row */}
-        <div className="flex gap-1.5">
+        <div className="flex gap-1 ml-9">
           <SB icon={RotateCw} c="border-blue-200 text-blue-600 hover:bg-blue-50" onClick={() => doStatus('in-progress')} />
           <SB icon={CheckCircle2} c="border-emerald-200 text-emerald-600 hover:bg-emerald-50" onClick={() => doStatus('completed')} />
           <SB icon={XCircle} c="border-red-200 text-red-500 hover:bg-red-50" onClick={() => setShowCancel(true)} />
@@ -119,10 +119,6 @@ export function DeliveryCard({ delivery, globalIndex, onShowDetail }: Props) {
   );
 }
 
-function C({ icon: I, c, b, children }: { icon: typeof Phone; c: string; b?: boolean; children: React.ReactNode }) {
-  const m: Record<string, string> = { green: 'bg-green-50 text-green-700', red: 'bg-red-50 text-red-700', blue: 'bg-blue-50 text-blue-700', purple: 'bg-purple-50 text-purple-700', gray: 'bg-gray-100 text-gray-500' };
-  return <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] ${b ? 'font-bold' : 'font-medium'} ${m[c]}`}><I className="w-3 h-3" />{children}</span>;
-}
 function Btn({ icon: I, label, color, onClick }: { icon: typeof Phone; label: string; color: string; onClick: () => void }) {
   return <button onClick={onClick} className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-semibold cursor-pointer active:scale-95 transition-transform ${color}`}><I className="w-4 h-4" />{label}</button>;
 }
