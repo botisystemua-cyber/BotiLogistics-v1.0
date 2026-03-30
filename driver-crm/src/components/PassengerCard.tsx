@@ -108,23 +108,23 @@ export function PassengerCard({ passenger, index, onTransfer }: Props) {
       </div>
 
       {expanded && (
-        <div className="border-t border-gray-100 bg-gray-50/50 px-3 py-3">
-          <div className="space-y-0.5">
-            <PRow icon={User} label="ПІБ" value={passenger.name} />
-            {passenger.id && <PRow icon={Hash} label="ІД" value={passenger.id} />}
-            <PRow icon={Phone} label="Телефон" value={passenger.phone} phone />
-            <PRow icon={MapPin} label="Звідки" value={passenger.from} />
-            <PRow icon={MapPin} label="Куди" value={passenger.to} />
-            {passenger.date && <PRow icon={Calendar} label="Дата" value={passenger.date} />}
-            {passenger.timing && <PRow icon={Clock} label="Час" value={passenger.timing} />}
-            {passenger.seats && <PRow icon={Users} label="Місць" value={String(passenger.seats)} />}
-            {passenger.weight && <PRow icon={Scale} label="Вага" value={passenger.weight + ' кг'} />}
-            {passenger.vehicle && <PRow icon={Car} label="Автомобіль" value={passenger.vehicle} />}
-            {passenger.payment && <PRow icon={CreditCard} label="Оплата" value={'€' + passenger.payment} bold accent="green" />}
-            {passenger._sourceRoute && <PRow icon={MapPin} label="Маршрут" value={passenger._sourceRoute} />}
+        <div className="border-t border-gray-100 bg-gray-50/50 px-3 py-2.5">
+          <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+            <PCell label="ПІБ" value={passenger.name} full />
+            {passenger.id && <PCell label="ІД" value={passenger.id} />}
+            <PCell label="Телефон" value={passenger.phone} phone />
+            <PCell label="Звідки" value={passenger.from} />
+            <PCell label="Куди" value={passenger.to} />
+            {passenger.date && <PCell label="Дата" value={passenger.date} />}
+            {passenger.timing && <PCell label="Час" value={passenger.timing} />}
+            {passenger.seats && <PCell label="Місць" value={String(passenger.seats)} />}
+            {passenger.weight && <PCell label="Вага" value={passenger.weight + ' кг'} />}
+            {passenger.vehicle && <PCell label="Автомобіль" value={passenger.vehicle} />}
+            {passenger.payment && <PCell label="Оплата" value={'€' + passenger.payment} bold accent="green" />}
+            {passenger._sourceRoute && <PCell label="Маршрут" value={passenger._sourceRoute} />}
           </div>
           {passenger.note?.trim() && (
-            <div className="mt-3 px-3 py-2 rounded-xl bg-amber-50 text-xs text-text">
+            <div className="mt-2 px-2.5 py-1.5 rounded-lg bg-amber-50 text-[11px] text-text">
               <span className="text-amber-700 font-bold">Примітка: </span>{passenger.note}
             </div>
           )}
@@ -142,21 +142,22 @@ export function PassengerCard({ passenger, index, onTransfer }: Props) {
   );
 }
 
-function PRow({ icon: I, label, value, bold, accent, phone }: {
-  icon: typeof Phone; label: string; value?: string; bold?: boolean; accent?: 'green' | 'red'; phone?: boolean;
+function PCell({ label, value, bold, accent, phone, full }: {
+  label: string; value?: string; bold?: boolean; accent?: 'green' | 'red'; phone?: boolean; full?: boolean;
 }) {
   if (!value) return null;
   const valColor = accent === 'green' ? 'text-emerald-700' : accent === 'red' ? 'text-red-600' : 'text-text';
   return (
-    <div className="flex items-center py-2 border-b border-gray-100 last:border-0">
-      <I className="w-3.5 h-3.5 text-muted shrink-0 mr-2.5" />
-      <span className="text-[11px] text-secondary w-20 shrink-0">{label}</span>
-      <span className={`text-xs ${bold ? 'font-bold' : 'font-medium'} ${valColor} flex-1 text-right break-words`}>{value}</span>
-      {phone && (
-        <a href={`tel:${value}`} className="ml-2 p-1 rounded-lg bg-green-50 text-green-700 shrink-0">
-          <Phone className="w-3 h-3" />
-        </a>
-      )}
+    <div className={`py-1 min-w-0 ${full ? 'col-span-2' : ''}`}>
+      <div className="text-[9px] text-muted font-semibold uppercase tracking-wide">{label}</div>
+      <div className={`text-[11px] ${bold ? 'font-bold' : 'font-medium'} ${valColor} truncate flex items-center gap-1`}>
+        {value}
+        {phone && (
+          <a href={`tel:${value}`} className="p-0.5 rounded bg-green-50 text-green-700 shrink-0">
+            <Phone className="w-2.5 h-2.5" />
+          </a>
+        )}
+      </div>
     </div>
   );
 }

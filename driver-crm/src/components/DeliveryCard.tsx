@@ -110,39 +110,39 @@ export function DeliveryCard({ delivery, globalIndex }: Props) {
       </div>
 
       {expanded && (
-        <div className="border-t border-gray-100 bg-gray-50/50 px-3 py-3">
-          <div className="space-y-0.5">
-            <DRow icon={Hash} label="Номер" value={delivery.internalNumber} />
-            {delivery.id && <DRow icon={Hash} label="ІД" value={delivery.id} />}
-            {delivery.vo && <DRow icon={FileText} label="ВО" value={delivery.vo} />}
-            <DRow icon={MapPin} label="Адреса" value={delivery.address} />
-            {delivery.ttn && <DRow icon={FileText} label="ТТН" value={delivery.ttn} bold />}
-            <DRow icon={User} label="Отримувач" value={delivery.name} />
-            {delivery.phone && <DRow icon={Phone} label="Телефон" value={delivery.phone} phone />}
-            {delivery.registrarPhone && <DRow icon={Phone} label="Тел. реєстр." value={delivery.registrarPhone} phone />}
-            {delivery.weight && <DRow icon={Scale} label="Вага" value={delivery.weight + ' кг'} />}
-            {delivery.direction && <DRow icon={Navigation} label="Напрямок" value={delivery.direction} />}
-            {delivery.timing && <DRow icon={Clock} label="Таймінг" value={delivery.timing} />}
-            {priceVal && <DRow icon={CreditCard} label="Сума" value={'€' + priceVal} bold accent="green" />}
-            {delivery.payment && <DRow icon={CreditCard} label="Оплата" value={delivery.payment} />}
-            {payStatusVal && <DRow icon={CreditCard} label="Статус оплати" value={payStatusVal} bold accent={payStatusVal === 'Оплачено' ? 'green' : 'red'} />}
-            {delivery.createdAt && <DRow icon={Calendar} label="Оформлено" value={delivery.createdAt} />}
-            {delivery.receiveDate && <DRow icon={Calendar} label="Отримано" value={delivery.receiveDate} />}
+        <div className="border-t border-gray-100 bg-gray-50/50 px-3 py-2.5">
+          <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+            <DCell label="Номер" value={delivery.internalNumber} />
+            {delivery.id && <DCell label="ІД" value={delivery.id} />}
+            <DCell label="Адреса" value={delivery.address} full />
+            {delivery.ttn && <DCell label="ТТН" value={delivery.ttn} bold />}
+            <DCell label="Отримувач" value={delivery.name} />
+            {delivery.phone && <DCell label="Телефон" value={delivery.phone} phone />}
+            {delivery.registrarPhone && <DCell label="Тел. реєстр." value={delivery.registrarPhone} phone />}
+            {delivery.vo && <DCell label="ВО" value={delivery.vo} />}
+            {delivery.weight && <DCell label="Вага" value={delivery.weight + ' кг'} />}
+            {delivery.direction && <DCell label="Напрямок" value={delivery.direction} />}
+            {delivery.timing && <DCell label="Таймінг" value={delivery.timing} />}
+            {priceVal && <DCell label="Сума" value={'€' + priceVal} bold accent="green" />}
+            {delivery.payment && <DCell label="Оплата" value={delivery.payment} />}
+            {payStatusVal && <DCell label="Ст. оплати" value={payStatusVal} bold accent={payStatusVal === 'Оплачено' ? 'green' : 'red'} />}
+            {delivery.createdAt && <DCell label="Оформлено" value={delivery.createdAt} />}
+            {delivery.receiveDate && <DCell label="Отримано" value={delivery.receiveDate} />}
           </div>
           {delivery.smsNote?.trim() && (
-            <div className="mt-3 px-3 py-2 rounded-xl bg-blue-50 text-xs text-text">
+            <div className="mt-2 px-2.5 py-1.5 rounded-lg bg-blue-50 text-[11px] text-text">
               <span className="text-blue-600 font-bold">SMS: </span>{delivery.smsNote}
             </div>
           )}
           {delivery.note?.trim() && (
-            <div className="mt-2 px-3 py-2 rounded-xl bg-amber-50 text-xs text-text">
+            <div className="mt-1.5 px-2.5 py-1.5 rounded-lg bg-amber-50 text-[11px] text-text">
               <span className="text-amber-700 font-bold">Примітка: </span>{delivery.note}
             </div>
           )}
           {delivery.photo?.startsWith('http') && (
             <a href={delivery.photo} target="_blank" rel="noopener noreferrer"
-              className="mt-2 inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-gray-100 text-sm text-blue-600 font-semibold">
-              <Image className="w-4 h-4" />Фото<ExternalLink className="w-3 h-3" />
+              className="mt-1.5 inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-gray-100 text-xs text-blue-600 font-semibold">
+              <Image className="w-3.5 h-3.5" />Фото<ExternalLink className="w-3 h-3" />
             </a>
           )}
         </div>
@@ -159,21 +159,22 @@ export function DeliveryCard({ delivery, globalIndex }: Props) {
   );
 }
 
-function DRow({ icon: I, label, value, bold, accent, phone }: {
-  icon: typeof Phone; label: string; value?: string; bold?: boolean; accent?: 'green' | 'red'; phone?: boolean;
+function DCell({ label, value, bold, accent, phone, full }: {
+  label: string; value?: string; bold?: boolean; accent?: 'green' | 'red'; phone?: boolean; full?: boolean;
 }) {
   if (!value) return null;
   const valColor = accent === 'green' ? 'text-emerald-700' : accent === 'red' ? 'text-red-600' : 'text-text';
   return (
-    <div className="flex items-center py-2 border-b border-gray-100 last:border-0">
-      <I className="w-3.5 h-3.5 text-muted shrink-0 mr-2.5" />
-      <span className="text-[11px] text-secondary w-20 shrink-0">{label}</span>
-      <span className={`text-xs ${bold ? 'font-bold' : 'font-medium'} ${valColor} flex-1 text-right break-words`}>{value}</span>
-      {phone && (
-        <a href={`tel:${value}`} className="ml-2 p-1 rounded-lg bg-green-50 text-green-700 shrink-0">
-          <Phone className="w-3 h-3" />
-        </a>
-      )}
+    <div className={`py-1 min-w-0 ${full ? 'col-span-2' : ''}`}>
+      <div className="text-[9px] text-muted font-semibold uppercase tracking-wide">{label}</div>
+      <div className={`text-[11px] ${bold ? 'font-bold' : 'font-medium'} ${valColor} truncate flex items-center gap-1`}>
+        {value}
+        {phone && (
+          <a href={`tel:${value}`} className="p-0.5 rounded bg-green-50 text-green-700 shrink-0">
+            <Phone className="w-2.5 h-2.5" />
+          </a>
+        )}
+      </div>
     </div>
   );
 }
