@@ -53,11 +53,8 @@ export function RouteScreen() {
       <div className="bg-white border-b border-border px-4 pt-6 pb-4">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2.5">
-            <BotiLogo />
-            <div>
-              <div className="text-sm font-bold text-text">BotiLogistics</div>
-              <div className="text-[11px] text-muted">{driverName}</div>
-            </div>
+            <BotiLogo size="md" />
+            <div className="text-[11px] text-muted">{driverName}</div>
           </div>
           <div className="flex gap-2">
             <button onClick={loadRoutes}

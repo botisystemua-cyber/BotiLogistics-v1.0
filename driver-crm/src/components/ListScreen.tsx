@@ -264,7 +264,7 @@ export function ListScreen() {
             <Plus className="w-6 h-6 text-white" />
           </button>
         )}
-        {isDelivery && !showShippingTab && (
+        {!showShippingTab && (
           <NB icon={Settings} label="Колонки" onClick={() => setShowColumnEditor(true)} />
         )}
         <NB icon={ArrowLeft} label="Назад" onClick={goBack} />
