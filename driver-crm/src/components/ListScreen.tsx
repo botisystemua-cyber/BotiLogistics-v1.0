@@ -8,7 +8,6 @@ import { CONFIG } from '../config';
 import { fetchDeliveries, fetchPassengers, fetchPassengerRoutes, transferPassenger } from '../api';
 import { DeliveryCard } from './DeliveryCard';
 import { PassengerCard } from './PassengerCard';
-import { DetailSheet } from './DetailSheet';
 import { TransferModal } from './TransferModal';
 import { AddLeadModal } from './AddLeadModal';
 import { ColumnEditor } from './ColumnEditor';
@@ -26,7 +25,6 @@ export function ListScreen() {
   const [allRoutePassengers, setAllRoutePassengers] = useState<Passenger[]>([]);
   const [loading, setLoading] = useState(true);
   const [transferTarget, setTransferTarget] = useState<Passenger | null>(null);
-  const [detailItem, setDetailItem] = useState<{ item: Delivery | Passenger; type: 'delivery' | 'passenger' } | null>(null);
   const [showAddLead, setShowAddLead] = useState(false);
   const [showColumnEditor, setShowColumnEditor] = useState(false);
 
@@ -201,9 +199,9 @@ export function ListScreen() {
             <p className="text-muted text-sm">Нічого не знайдено</p>
           </div>
         ) : isDelivery ? (
-          (items as Delivery[]).map((d) => <DeliveryCard key={d._statusKey} delivery={d} globalIndex={deliveries.indexOf(d)} onShowDetail={() => setDetailItem({ item: d, type: 'delivery' })} />)
+          (items as Delivery[]).map((d) => <DeliveryCard key={d._statusKey} delivery={d} globalIndex={deliveries.indexOf(d)} />)
         ) : (
-          (items as Passenger[]).map((p, i) => <PassengerCard key={p._statusKey} passenger={p} index={i} onTransfer={isUnifiedView ? () => setTransferTarget(p) : undefined} onShowDetail={() => setDetailItem({ item: p, type: 'passenger' })} />)
+          (items as Passenger[]).map((p, i) => <PassengerCard key={p._statusKey} passenger={p} index={i} onTransfer={isUnifiedView ? () => setTransferTarget(p) : undefined} />)
         )}
       </div>
 
@@ -225,7 +223,6 @@ export function ListScreen() {
         <NB icon={ArrowLeft} label="Назад" onClick={goBack} />
       </div>
 
-      {detailItem && <DetailSheet item={detailItem.item} type={detailItem.type} status={getStatus(detailItem.item._statusKey)} onClose={() => setDetailItem(null)} />}
       {transferTarget && <TransferModal passenger={transferTarget} routes={passengerRoutes} onTransfer={handleTransfer} onClose={() => setTransferTarget(null)} />}
       {showAddLead && <AddLeadModal onClose={() => setShowAddLead(false)} onAdded={loadData} />}
       {showColumnEditor && <ColumnEditor onClose={() => setShowColumnEditor(false)} />}

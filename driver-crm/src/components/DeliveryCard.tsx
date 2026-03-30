@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import {
   Phone, MapPin, RotateCw, CheckCircle2, XCircle, Undo2,
-  CreditCard, Info,
+  CreditCard, Info, ChevronUp, Hash, FileText, Scale, Clock,
+  Navigation, Calendar, Image, ExternalLink, User,
 } from 'lucide-react';
 import type { Delivery, ItemStatus } from '../types';
 import { useApp } from '../store/useAppStore';
@@ -10,7 +11,6 @@ import { updateDeliveryStatus } from '../api';
 interface Props {
   delivery: Delivery;
   globalIndex: number;
-  onShowDetail: () => void;
 }
 
 const borderColor: Record<ItemStatus, string> = {
@@ -24,10 +24,11 @@ const stLabel: Record<ItemStatus, { t: string; c: string }> = {
   cancelled: { t: 'Скасов.', c: 'text-red-700 bg-red-50' },
 };
 
-export function DeliveryCard({ delivery, globalIndex, onShowDetail }: Props) {
+export function DeliveryCard({ delivery, globalIndex }: Props) {
   const { getStatus, setStatus, hiddenCols, driverName, currentSheet, showToast } = useApp();
   const [showCancel, setShowCancel] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
+  const [expanded, setExpanded] = useState(false);
 
   const status = getStatus(delivery._statusKey);
   const show = (col: string) => !hiddenCols.has(col);
@@ -96,7 +97,7 @@ export function DeliveryCard({ delivery, globalIndex, onShowDetail }: Props) {
         <div className="flex gap-1.5 ml-9 mb-1.5">
           <Btn icon={Phone} label="Дзвонити" color="bg-green-50 text-green-700" onClick={() => { window.location.href = `tel:${delivery.phone}`; }} />
           <Btn icon={MapPin} label="Карта" color="bg-blue-50 text-blue-700" onClick={navigate} />
-          <Btn icon={Info} label="Деталі" color="bg-gray-50 text-gray-600" onClick={onShowDetail} />
+          <Btn icon={expanded ? ChevronUp : Info} label={expanded ? 'Згорнути' : 'Деталі'} color={expanded ? 'bg-brand/10 text-brand' : 'bg-gray-50 text-gray-600'} onClick={() => setExpanded(!expanded)} />
         </div>
 
         {/* Status row */}
@@ -108,12 +109,70 @@ export function DeliveryCard({ delivery, globalIndex, onShowDetail }: Props) {
         </div>
       </div>
 
+      {expanded && (
+        <div className="border-t border-gray-100 bg-gray-50/50 px-3 py-3">
+          <div className="space-y-0.5">
+            <DRow icon={Hash} label="Номер" value={delivery.internalNumber} />
+            {delivery.id && <DRow icon={Hash} label="ІД" value={delivery.id} />}
+            {delivery.vo && <DRow icon={FileText} label="ВО" value={delivery.vo} />}
+            <DRow icon={MapPin} label="Адреса" value={delivery.address} />
+            {delivery.ttn && <DRow icon={FileText} label="ТТН" value={delivery.ttn} bold />}
+            <DRow icon={User} label="Отримувач" value={delivery.name} />
+            {delivery.phone && <DRow icon={Phone} label="Телефон" value={delivery.phone} phone />}
+            {delivery.registrarPhone && <DRow icon={Phone} label="Тел. реєстр." value={delivery.registrarPhone} phone />}
+            {delivery.weight && <DRow icon={Scale} label="Вага" value={delivery.weight + ' кг'} />}
+            {delivery.direction && <DRow icon={Navigation} label="Напрямок" value={delivery.direction} />}
+            {delivery.timing && <DRow icon={Clock} label="Таймінг" value={delivery.timing} />}
+            {priceVal && <DRow icon={CreditCard} label="Сума" value={'€' + priceVal} bold accent="green" />}
+            {delivery.payment && <DRow icon={CreditCard} label="Оплата" value={delivery.payment} />}
+            {payStatusVal && <DRow icon={CreditCard} label="Статус оплати" value={payStatusVal} bold accent={payStatusVal === 'Оплачено' ? 'green' : 'red'} />}
+            {delivery.createdAt && <DRow icon={Calendar} label="Оформлено" value={delivery.createdAt} />}
+            {delivery.receiveDate && <DRow icon={Calendar} label="Отримано" value={delivery.receiveDate} />}
+          </div>
+          {delivery.smsNote?.trim() && (
+            <div className="mt-3 px-3 py-2 rounded-xl bg-blue-50 text-xs text-text">
+              <span className="text-blue-600 font-bold">SMS: </span>{delivery.smsNote}
+            </div>
+          )}
+          {delivery.note?.trim() && (
+            <div className="mt-2 px-3 py-2 rounded-xl bg-amber-50 text-xs text-text">
+              <span className="text-amber-700 font-bold">Примітка: </span>{delivery.note}
+            </div>
+          )}
+          {delivery.photo?.startsWith('http') && (
+            <a href={delivery.photo} target="_blank" rel="noopener noreferrer"
+              className="mt-2 inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-gray-100 text-sm text-blue-600 font-semibold">
+              <Image className="w-4 h-4" />Фото<ExternalLink className="w-3 h-3" />
+            </a>
+          )}
+        </div>
+      )}
+
       {showCancel && (
         <div className="border-t border-red-100 bg-red-50/60 p-3.5">
           <textarea value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} placeholder="Причина скасування..." autoFocus
             className="w-full px-3 py-2.5 bg-white border border-red-200 rounded-xl text-text text-sm resize-none h-16 focus:outline-none focus:border-red-400" />
           <button onClick={doCancel} className="w-full mt-2 py-2.5 bg-red-500 text-white font-bold rounded-xl text-sm cursor-pointer active:scale-[0.98]">Підтвердити</button>
         </div>
+      )}
+    </div>
+  );
+}
+
+function DRow({ icon: I, label, value, bold, accent, phone }: {
+  icon: typeof Phone; label: string; value?: string; bold?: boolean; accent?: 'green' | 'red'; phone?: boolean;
+}) {
+  if (!value) return null;
+  const valColor = accent === 'green' ? 'text-emerald-700' : accent === 'red' ? 'text-red-600' : 'text-text';
+  return (
+    <div className="flex items-center py-2 border-b border-gray-100 last:border-0">
+      <I className="w-3.5 h-3.5 text-muted shrink-0 mr-2.5" />
+      <span className="text-[11px] text-secondary w-20 shrink-0">{label}</span>
+      <span className={`text-xs ${bold ? 'font-bold' : 'font-medium'} ${valColor} flex-1 text-right break-words`}>{value}</span>
+      {phone && (
+        <a href={`tel:${value}`} className="ml-2 p-1 rounded-lg bg-green-50 text-green-700 shrink-0">
+          <Phone className="w-3 h-3" />
+        </a>
       )}
     </div>
   );
