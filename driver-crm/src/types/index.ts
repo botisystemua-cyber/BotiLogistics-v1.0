@@ -56,7 +56,7 @@ export interface ShippingItem {
 
 export type ItemStatus = 'pending' | 'in-progress' | 'completed' | 'cancelled';
 
-export type RouteType = 'delivery' | 'shipping';
+export type RouteType = 'delivery';
 
 export type StatusFilter = 'all' | ItemStatus;
 

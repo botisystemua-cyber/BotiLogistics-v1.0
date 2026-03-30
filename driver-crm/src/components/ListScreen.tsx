@@ -11,11 +11,13 @@ import { AddLeadModal } from './AddLeadModal';
 import { ColumnEditor } from './ColumnEditor';
 import type { Delivery, ShippingItem, ItemStatus, StatusFilter } from '../types';
 
+type ViewTab = 'receiving' | 'shipping';
+
 export function ListScreen() {
   const {
-    currentSheet, currentRouteType, isUnifiedView, goBack, showToast,
+    currentSheet, isUnifiedView, goBack, showToast,
     statusFilter, setStatusFilter, getStatus, setStatus,
-    routeFilter, setRouteFilter, receivingRoutes,
+    routeFilter, setRouteFilter, receivingRoutes, shippingRoutes,
   } = useApp();
 
   const [deliveries, setDeliveries] = useState<Delivery[]>([]);
@@ -23,19 +25,22 @@ export function ListScreen() {
   const [loading, setLoading] = useState(true);
   const [showAddLead, setShowAddLead] = useState(false);
   const [showColumnEditor, setShowColumnEditor] = useState(false);
+  const [viewTab, setViewTab] = useState<ViewTab>('receiving');
 
-  const isDelivery = currentRouteType === 'delivery';
-  const isShipping = currentRouteType === 'shipping';
+  // Find matching shipping sheet for current route
+  const shippingSheetName = shippingRoutes.find(
+    (s) => s.label === currentSheet || s.name === currentSheet + ' (відпр)'
+  )?.name || '';
+  const hasShipping = !!shippingSheetName && !isUnifiedView;
 
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      if (isShipping) {
-        const items = await fetchShippingItems(currentSheet);
+      if (viewTab === 'shipping' && shippingSheetName) {
+        const items = await fetchShippingItems(shippingSheetName);
         setShippingItems(items);
         showToast(`${items.length} записів`);
       } else if (isUnifiedView) {
-        // Unified delivery — fetch all receiving routes in parallel
         const routes = receivingRoutes;
         const results = await Promise.all(routes.map(async (route) => {
           try {
@@ -63,11 +68,11 @@ export function ListScreen() {
       }
     } catch (err) { showToast('Помилка: ' + (err as Error).message); }
     finally { setLoading(false); }
-  }, [currentSheet, currentRouteType, isUnifiedView]);
+  }, [currentSheet, isUnifiedView, viewTab, shippingSheetName]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  // Filtered items for delivery
+  // Filtered deliveries
   const getFilteredDeliveries = (): Delivery[] => {
     let items = deliveries;
     if (isUnifiedView && routeFilter !== 'all') {
@@ -78,10 +83,9 @@ export function ListScreen() {
     }
     return items;
   };
+  const filteredDeliveries = viewTab === 'receiving' ? getFilteredDeliveries() : [];
 
-  const filteredDeliveries = isDelivery ? getFilteredDeliveries() : [];
-
-  // Stats for delivery
+  // Stats
   const allDeliveries = isUnifiedView && routeFilter !== 'all'
     ? deliveries.filter((d) => d._sourceRoute === routeFilter)
     : deliveries;
@@ -92,7 +96,7 @@ export function ListScreen() {
     cancelled: allDeliveries.filter((i) => getStatus(i._statusKey) === 'cancelled').length,
   };
 
-  // Route tabs for unified view
+  // Route tabs for unified
   const routeTabs = isUnifiedView
     ? [
         { name: 'all', label: 'Усі', count: deliveries.length },
@@ -103,8 +107,8 @@ export function ListScreen() {
       ]
     : [];
 
-  const HeaderIcon = isShipping ? Truck : isUnifiedView ? BarChart3 : Package;
-  const headerTitle = isShipping ? 'Відправлення' : isUnifiedView ? 'Усі маршрути' : 'Посилки';
+  const HeaderIcon = isUnifiedView ? BarChart3 : Package;
+  const headerTitle = isUnifiedView ? 'Усі маршрути' : currentSheet;
 
   const filters: { key: StatusFilter; label: string; count: number; pill: string; pillActive: string }[] = [
     { key: 'all', label: 'Усі', count: stats.total, pill: 'bg-gray-100 text-gray-600', pillActive: 'bg-gray-800 text-white' },
@@ -126,9 +130,9 @@ export function ListScreen() {
               <HeaderIcon className="w-5 h-5 text-brand" />
               <div>
                 <span className="text-sm font-bold text-text">{headerTitle}</span>
-                <span className="text-xs text-muted ml-2">
-                  {isUnifiedView && routeFilter !== 'all' ? routeFilter : currentSheet}
-                </span>
+                {isUnifiedView && routeFilter !== 'all' && (
+                  <span className="text-xs text-muted ml-2">{routeFilter}</span>
+                )}
               </div>
             </div>
           </div>
@@ -138,8 +142,30 @@ export function ListScreen() {
           </button>
         </div>
 
-        {/* Status pills — only for deliveries */}
-        {isDelivery && (
+        {/* Отримання / Відправка tabs — inside a route */}
+        {hasShipping && (
+          <div className="flex gap-2 mb-3">
+            <button
+              onClick={() => setViewTab('receiving')}
+              className={`flex-1 py-2 rounded-xl text-xs font-bold text-center cursor-pointer transition-all ${
+                viewTab === 'receiving' ? 'bg-brand text-white shadow-sm' : 'bg-gray-100 text-gray-500'
+              }`}
+            >
+              <Package className="w-3.5 h-3.5 inline mr-1 -mt-0.5" />Отримання
+            </button>
+            <button
+              onClick={() => setViewTab('shipping')}
+              className={`flex-1 py-2 rounded-xl text-xs font-bold text-center cursor-pointer transition-all ${
+                viewTab === 'shipping' ? 'bg-blue-500 text-white shadow-sm' : 'bg-gray-100 text-gray-500'
+              }`}
+            >
+              <Truck className="w-3.5 h-3.5 inline mr-1 -mt-0.5" />Відправка
+            </button>
+          </div>
+        )}
+
+        {/* Status pills — only for receiving deliveries */}
+        {viewTab === 'receiving' && (
           <div className="flex gap-2">
             {filters.map((f) => {
               const active = statusFilter === f.key;
@@ -154,15 +180,15 @@ export function ListScreen() {
           </div>
         )}
 
-        {/* Shipping header count */}
-        {isShipping && (
+        {/* Shipping count */}
+        {viewTab === 'shipping' && (
           <div className="text-center text-sm text-muted">
             {shippingItems.length} записів
           </div>
         )}
 
         {/* Route tabs for unified */}
-        {isUnifiedView && routeTabs.length > 0 && (
+        {isUnifiedView && viewTab === 'receiving' && routeTabs.length > 0 && (
           <div className="flex gap-1.5 mt-2.5 overflow-x-auto pb-0.5 -mx-1 px-1">
             {routeTabs.map((tab) => (
               <button key={tab.name} onClick={() => setRouteFilter(tab.name)}
@@ -183,7 +209,7 @@ export function ListScreen() {
             <RefreshCw className="w-7 h-7 text-brand animate-spin mb-3" />
             <p className="text-muted text-sm">Завантаження...</p>
           </div>
-        ) : isShipping ? (
+        ) : viewTab === 'shipping' ? (
           shippingItems.length === 0 ? (
             <Empty />
           ) : (
@@ -202,16 +228,16 @@ export function ListScreen() {
 
       {/* Bottom nav */}
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-border flex justify-around items-center py-1.5 pb-[calc(6px+env(safe-area-inset-bottom))] z-40">
-        <NB icon={isShipping ? Truck : Package} label="Список" active
+        <NB icon={Package} label="Список" active
           onClick={() => { document.querySelector('.overflow-y-auto')?.scrollTo({ top: 0, behavior: 'smooth' }); }} />
         <NB icon={RefreshCw} label="Оновити" onClick={() => loadData()} />
-        {isDelivery && (
+        {viewTab === 'receiving' && (
           <button onClick={() => setShowAddLead(true)}
             className="w-12 h-12 -mt-6 rounded-full bg-brand flex items-center justify-center shadow-lg shadow-brand/30 cursor-pointer active:scale-90 transition-transform">
             <Plus className="w-6 h-6 text-white" />
           </button>
         )}
-        {isDelivery && (
+        {viewTab === 'receiving' && (
           <NB icon={Settings} label="Колонки" onClick={() => setShowColumnEditor(true)} />
         )}
         <NB icon={ArrowLeft} label="Назад" onClick={goBack} />
