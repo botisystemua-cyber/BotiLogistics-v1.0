@@ -1,79 +1,65 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
-  ArrowLeft, RefreshCw, Package, Users, BarChart3,
+  ArrowLeft, RefreshCw, Package, Truck, BarChart3,
   Plus, Settings, ListFilter,
 } from 'lucide-react';
 import { useApp } from '../store/useAppStore';
-import { CONFIG } from '../config';
-import { fetchDeliveries, fetchPassengers, fetchPassengerRoutes, transferPassenger } from '../api';
+import { fetchDeliveries, fetchShippingItems } from '../api';
 import { DeliveryCard } from './DeliveryCard';
-import { PassengerCard } from './PassengerCard';
-import { TransferModal } from './TransferModal';
+import { ShippingCard } from './ShippingCard';
 import { AddLeadModal } from './AddLeadModal';
 import { ColumnEditor } from './ColumnEditor';
-import type { Delivery, Passenger, ItemStatus, StatusFilter } from '../types';
+import type { Delivery, ShippingItem, ItemStatus, StatusFilter } from '../types';
 
 export function ListScreen() {
   const {
     currentSheet, currentRouteType, isUnifiedView, goBack, showToast,
     statusFilter, setStatusFilter, getStatus, setStatus,
-    routeFilter, setRouteFilter, passengerRoutes, setPassengerRoutes,
+    routeFilter, setRouteFilter, receivingRoutes,
   } = useApp();
 
   const [deliveries, setDeliveries] = useState<Delivery[]>([]);
-  const [passengers, setPassengers] = useState<Passenger[]>([]);
-  const [allRoutePassengers, setAllRoutePassengers] = useState<Passenger[]>([]);
+  const [shippingItems, setShippingItems] = useState<ShippingItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [transferTarget, setTransferTarget] = useState<Passenger | null>(null);
   const [showAddLead, setShowAddLead] = useState(false);
   const [showColumnEditor, setShowColumnEditor] = useState(false);
 
   const isDelivery = currentRouteType === 'delivery';
+  const isShipping = currentRouteType === 'shipping';
 
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      if (isUnifiedView && isDelivery) {
-        // Unified delivery — fetch all delivery routes in parallel
-        const delRoutes = CONFIG.DELIVERY_ROUTES;
-        const results = await Promise.all(delRoutes.map(async (route) => {
+      if (isShipping) {
+        const items = await fetchShippingItems(currentSheet);
+        setShippingItems(items);
+        showToast(`${items.length} записів`);
+      } else if (isUnifiedView) {
+        // Unified delivery — fetch all receiving routes in parallel
+        const routes = receivingRoutes;
+        const results = await Promise.all(routes.map(async (route) => {
           try {
             const items = await fetchDeliveries(route.name);
             return items.map((d) => ({ ...d, _sourceRoute: route.name }));
-          } catch { return [] as (Delivery & { _sourceRoute: string })[]; }
+          } catch { return [] as Delivery[]; }
         }));
         const all = results.flat();
         all.forEach((d, idx) => {
-          d._statusKey = `del_${d.internalNumber}_${d._sourceRoute}_${idx}`;
-          const s = d.status || d.driverStatus;
+          d._statusKey = `del_${d.id || d.internalNumber}_${d._sourceRoute}_${idx}`;
+          const s = d.parcelStatus || d.driverStatus;
           if (s && s !== 'pending') setStatus(d._statusKey, s as ItemStatus);
         });
         setDeliveries(all);
         showToast(`${all.length} посилок`);
-      } else if (isUnifiedView && !isDelivery) {
-        // Unified passenger — fetch all passenger routes in parallel
-        let routes = passengerRoutes;
-        if (routes.length === 0) { routes = await fetchPassengerRoutes(); setPassengerRoutes(routes); }
-        const results = await Promise.all(routes.map(async (route) => {
-          const pax = await fetchPassengers(route.name);
-          return pax.map((p) => ({ ...p, _sourceRoute: route.name }));
-        }));
-        const all = results.flat();
-        all.forEach((p, idx) => {
-          p._statusKey = `pas_${p.rowNum}_${p._sourceRoute}_${idx}`;
-          if (p.driverStatus && p.driverStatus !== 'pending') setStatus(p._statusKey, p.driverStatus as ItemStatus);
-        });
-        setAllRoutePassengers(all);
-        setPassengerRoutes(routes.map((r) => ({ ...r, count: all.filter((p) => p._sourceRoute === r.name).length })));
-        showToast(`${all.length} пасажирів`);
-      } else if (isDelivery) {
-        const items = await fetchDeliveries(currentSheet);
-        items.forEach((d, idx) => { d._statusKey = `del_${d.internalNumber}_${idx}`; const s = d.status || d.driverStatus; if (s && s !== 'pending') setStatus(d._statusKey, s as ItemStatus); });
-        setDeliveries(items); showToast(`${items.length} записів`);
       } else {
-        const items = await fetchPassengers(currentSheet);
-        items.forEach((p, idx) => { p._statusKey = `pas_${p.rowNum}_${idx}`; if (p.driverStatus && p.driverStatus !== 'pending') setStatus(p._statusKey, p.driverStatus as ItemStatus); });
-        setPassengers(items); showToast(`${items.length} записів`);
+        const items = await fetchDeliveries(currentSheet);
+        items.forEach((d, idx) => {
+          d._statusKey = `del_${d.id || d.internalNumber}_${idx}`;
+          const s = d.parcelStatus || d.driverStatus;
+          if (s && s !== 'pending') setStatus(d._statusKey, s as ItemStatus);
+        });
+        setDeliveries(items);
+        showToast(`${items.length} записів`);
       }
     } catch (err) { showToast('Помилка: ' + (err as Error).message); }
     finally { setLoading(false); }
@@ -81,48 +67,44 @@ export function ListScreen() {
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  const getItems = (): (Delivery | Passenger)[] => {
-    let items: (Delivery | Passenger)[];
-    if (isUnifiedView && isDelivery) {
-      items = routeFilter === 'all' ? deliveries : deliveries.filter((d) => d._sourceRoute === routeFilter);
-    } else if (isUnifiedView) {
-      items = routeFilter === 'all' ? allRoutePassengers : allRoutePassengers.filter((p) => p._sourceRoute === routeFilter);
-    } else if (isDelivery) { items = deliveries; }
-    else { items = passengers; }
-    if (statusFilter !== 'all') items = items.filter((i) => getStatus(i._statusKey) === statusFilter);
+  // Filtered items for delivery
+  const getFilteredDeliveries = (): Delivery[] => {
+    let items = deliveries;
+    if (isUnifiedView && routeFilter !== 'all') {
+      items = items.filter((d) => d._sourceRoute === routeFilter);
+    }
+    if (statusFilter !== 'all') {
+      items = items.filter((i) => getStatus(i._statusKey) === statusFilter);
+    }
     return items;
   };
-  const items = getItems();
 
-  const allItems = isUnifiedView && isDelivery
-    ? (routeFilter === 'all' ? deliveries : deliveries.filter((d) => d._sourceRoute === routeFilter))
-    : isUnifiedView
-      ? (routeFilter === 'all' ? allRoutePassengers : allRoutePassengers.filter((p) => (p as Passenger)._sourceRoute === routeFilter))
-      : isDelivery ? deliveries : passengers;
+  const filteredDeliveries = isDelivery ? getFilteredDeliveries() : [];
+
+  // Stats for delivery
+  const allDeliveries = isUnifiedView && routeFilter !== 'all'
+    ? deliveries.filter((d) => d._sourceRoute === routeFilter)
+    : deliveries;
   const stats = {
-    total: allItems.length,
-    inProgress: allItems.filter((i) => getStatus(i._statusKey) === 'in-progress').length,
-    completed: allItems.filter((i) => getStatus(i._statusKey) === 'completed').length,
-    cancelled: allItems.filter((i) => getStatus(i._statusKey) === 'cancelled').length,
+    total: allDeliveries.length,
+    inProgress: allDeliveries.filter((i) => getStatus(i._statusKey) === 'in-progress').length,
+    completed: allDeliveries.filter((i) => getStatus(i._statusKey) === 'completed').length,
+    cancelled: allDeliveries.filter((i) => getStatus(i._statusKey) === 'cancelled').length,
   };
 
-  const routeTabs = isUnifiedView && isDelivery
-    ? [{ name: 'all', label: 'Усі', count: deliveries.length }, ...CONFIG.DELIVERY_ROUTES.map((r) => ({
-        name: r.name, label: r.name.replace(' марш.', ''),
-        count: deliveries.filter((d) => d._sourceRoute === r.name).length,
-      }))]
-    : isUnifiedView
-      ? [{ name: 'all', label: 'Усі', count: allRoutePassengers.length }, ...passengerRoutes.map((r) => ({ name: r.name, label: r.name, count: r.count }))]
-      : [];
+  // Route tabs for unified view
+  const routeTabs = isUnifiedView
+    ? [
+        { name: 'all', label: 'Усі', count: deliveries.length },
+        ...receivingRoutes.map((r) => ({
+          name: r.name, label: r.name,
+          count: deliveries.filter((d) => d._sourceRoute === r.name).length,
+        })),
+      ]
+    : [];
 
-  const handleTransfer = async (targetRoute: string) => {
-    if (!transferTarget) return; showToast('Переносимо...');
-    try { await transferPassenger(transferTarget, transferTarget._sourceRoute || currentSheet, targetRoute); showToast(`Перенесено`); setTransferTarget(null); loadData(); }
-    catch (err) { showToast('Помилка: ' + (err as Error).message); }
-  };
-
-  const HeaderIcon = isUnifiedView ? BarChart3 : isDelivery ? Package : Users;
-  const headerTitle = isUnifiedView ? 'Усі маршрути' : isDelivery ? 'Посилки' : 'Пасажири';
+  const HeaderIcon = isShipping ? Truck : isUnifiedView ? BarChart3 : Package;
+  const headerTitle = isShipping ? 'Відправлення' : isUnifiedView ? 'Усі маршрути' : 'Посилки';
 
   const filters: { key: StatusFilter; label: string; count: number; pill: string; pillActive: string }[] = [
     { key: 'all', label: 'Усі', count: stats.total, pill: 'bg-gray-100 text-gray-600', pillActive: 'bg-gray-800 text-white' },
@@ -133,9 +115,8 @@ export function ListScreen() {
 
   return (
     <div className="flex-1 flex flex-col bg-bg max-h-dvh overflow-hidden">
-      {/* Header — white */}
+      {/* Header */}
       <div className="bg-white border-b border-border px-4 pt-4 pb-3 shrink-0">
-        {/* Top bar */}
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2.5">
             <button onClick={goBack} className="p-2 -ml-2 rounded-xl hover:bg-bg cursor-pointer active:scale-95 transition-all">
@@ -157,21 +138,30 @@ export function ListScreen() {
           </button>
         </div>
 
-        {/* Status pills */}
-        <div className="flex gap-2">
-          {filters.map((f) => {
-            const active = statusFilter === f.key;
-            return (
-              <button key={f.key} onClick={() => setStatusFilter(f.key)}
-                className={`flex-1 py-2 rounded-full text-center cursor-pointer active:scale-95 transition-all ${active ? f.pillActive + ' shadow-sm' : f.pill}`}>
-                <div className="text-sm font-black leading-tight">{f.count}</div>
-                <div className="text-[9px] font-semibold leading-tight">{f.label}</div>
-              </button>
-            );
-          })}
-        </div>
+        {/* Status pills — only for deliveries */}
+        {isDelivery && (
+          <div className="flex gap-2">
+            {filters.map((f) => {
+              const active = statusFilter === f.key;
+              return (
+                <button key={f.key} onClick={() => setStatusFilter(f.key)}
+                  className={`flex-1 py-2 rounded-full text-center cursor-pointer active:scale-95 transition-all ${active ? f.pillActive + ' shadow-sm' : f.pill}`}>
+                  <div className="text-sm font-black leading-tight">{f.count}</div>
+                  <div className="text-[9px] font-semibold leading-tight">{f.label}</div>
+                </button>
+              );
+            })}
+          </div>
+        )}
 
-        {/* Route tabs */}
+        {/* Shipping header count */}
+        {isShipping && (
+          <div className="text-center text-sm text-muted">
+            {shippingItems.length} записів
+          </div>
+        )}
+
+        {/* Route tabs for unified */}
         {isUnifiedView && routeTabs.length > 0 && (
           <div className="flex gap-1.5 mt-2.5 overflow-x-auto pb-0.5 -mx-1 px-1">
             {routeTabs.map((tab) => (
@@ -193,39 +183,51 @@ export function ListScreen() {
             <RefreshCw className="w-7 h-7 text-brand animate-spin mb-3" />
             <p className="text-muted text-sm">Завантаження...</p>
           </div>
-        ) : items.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16">
-            <ListFilter className="w-10 h-10 text-border mb-3" strokeWidth={1} />
-            <p className="text-muted text-sm">Нічого не знайдено</p>
-          </div>
-        ) : isDelivery ? (
-          (items as Delivery[]).map((d) => <DeliveryCard key={d._statusKey} delivery={d} globalIndex={deliveries.indexOf(d)} />)
+        ) : isShipping ? (
+          shippingItems.length === 0 ? (
+            <Empty />
+          ) : (
+            shippingItems.map((item, i) => (
+              <ShippingCard key={`ship_${item.rowNum}_${i}`} item={item} index={i} />
+            ))
+          )
+        ) : filteredDeliveries.length === 0 ? (
+          <Empty />
         ) : (
-          (items as Passenger[]).map((p, i) => <PassengerCard key={p._statusKey} passenger={p} index={i} onTransfer={isUnifiedView ? () => setTransferTarget(p) : undefined} />)
+          filteredDeliveries.map((d) => (
+            <DeliveryCard key={d._statusKey} delivery={d} globalIndex={deliveries.indexOf(d)} />
+          ))
         )}
       </div>
 
-      {/* Bottom nav — white, clean */}
+      {/* Bottom nav */}
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-border flex justify-around items-center py-1.5 pb-[calc(6px+env(safe-area-inset-bottom))] z-40">
-        <NB icon={isDelivery ? Package : Users} label={isDelivery ? 'Список' : 'Список'} active
+        <NB icon={isShipping ? Truck : Package} label="Список" active
           onClick={() => { document.querySelector('.overflow-y-auto')?.scrollTo({ top: 0, behavior: 'smooth' }); }} />
         <NB icon={RefreshCw} label="Оновити" onClick={() => loadData()} />
-        {/* FAB */}
-        <button onClick={() => setShowAddLead(true)}
-          className="w-12 h-12 -mt-6 rounded-full bg-brand flex items-center justify-center shadow-lg shadow-brand/30 cursor-pointer active:scale-90 transition-transform">
-          <Plus className="w-6 h-6 text-white" />
-        </button>
-        {isDelivery ? (
+        {isDelivery && (
+          <button onClick={() => setShowAddLead(true)}
+            className="w-12 h-12 -mt-6 rounded-full bg-brand flex items-center justify-center shadow-lg shadow-brand/30 cursor-pointer active:scale-90 transition-transform">
+            <Plus className="w-6 h-6 text-white" />
+          </button>
+        )}
+        {isDelivery && (
           <NB icon={Settings} label="Колонки" onClick={() => setShowColumnEditor(true)} />
-        ) : (
-          <NB icon={ListFilter} label="Фільтр" onClick={() => {}} />
         )}
         <NB icon={ArrowLeft} label="Назад" onClick={goBack} />
       </div>
 
-      {transferTarget && <TransferModal passenger={transferTarget} routes={passengerRoutes} onTransfer={handleTransfer} onClose={() => setTransferTarget(null)} />}
       {showAddLead && <AddLeadModal onClose={() => setShowAddLead(false)} onAdded={loadData} />}
       {showColumnEditor && <ColumnEditor onClose={() => setShowColumnEditor(false)} />}
+    </div>
+  );
+}
+
+function Empty() {
+  return (
+    <div className="flex flex-col items-center justify-center py-16">
+      <ListFilter className="w-10 h-10 text-border mb-3" strokeWidth={1} />
+      <p className="text-muted text-sm">Нічого не знайдено</p>
     </div>
   );
 }

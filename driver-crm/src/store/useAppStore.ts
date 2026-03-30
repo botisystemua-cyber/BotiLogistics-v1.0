@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react';
-import type { ItemStatus, RouteType, StatusFilter, PassengerRoute } from '../types';
+import type { ItemStatus, RouteType, StatusFilter, Route, ShippingRoute } from '../types';
 
 export interface AppStore {
   // Auth
@@ -28,9 +28,11 @@ export interface AppStore {
   routeFilter: string;
   setRouteFilter: (f: string) => void;
 
-  // Passenger routes
-  passengerRoutes: PassengerRoute[];
-  setPassengerRoutes: (routes: PassengerRoute[]) => void;
+  // Routes from API
+  receivingRoutes: Route[];
+  setReceivingRoutes: (routes: Route[]) => void;
+  shippingRoutes: ShippingRoute[];
+  setShippingRoutes: (routes: ShippingRoute[]) => void;
 
   // Actions
   openRoute: (sheet: string, type: RouteType, unified?: boolean) => void;

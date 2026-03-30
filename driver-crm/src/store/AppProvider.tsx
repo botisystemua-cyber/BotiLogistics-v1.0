@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, type ReactNode } from 'react';
 import { AppContext, type AppStore } from './useAppStore';
-import type { ItemStatus, RouteType, StatusFilter, PassengerRoute } from '../types';
+import type { ItemStatus, RouteType, StatusFilter, Route, ShippingRoute } from '../types';
 
 function loadStatuses(sheet: string): Record<string, ItemStatus> {
   try {
@@ -31,7 +31,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [statuses, setStatuses] = useState<Record<string, ItemStatus>>({});
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [routeFilter, setRouteFilter] = useState('all');
-  const [passengerRoutes, setPassengerRoutes] = useState<PassengerRoute[]>([]);
+  const [receivingRoutes, setReceivingRoutes] = useState<Route[]>([]);
+  const [shippingRoutes, setShippingRoutes] = useState<ShippingRoute[]>([]);
   const [toastMessage, setToastMessage] = useState('');
   const [hiddenCols, setHiddenCols] = useState<Set<string>>(loadHiddenCols);
 
@@ -106,8 +107,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setStatusFilter,
       routeFilter,
       setRouteFilter,
-      passengerRoutes,
-      setPassengerRoutes,
+      receivingRoutes,
+      setReceivingRoutes,
+      shippingRoutes,
+      setShippingRoutes,
       openRoute,
       goBack,
       toastMessage,
@@ -118,8 +121,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [
       driverName, setDriverName, currentScreen, currentSheet,
       currentRouteType, isUnifiedView, statuses, setStatus, getStatus,
-      statusFilter, routeFilter, passengerRoutes, openRoute, goBack,
-      toastMessage, showToast, hiddenCols, toggleCol,
+      statusFilter, routeFilter, receivingRoutes, shippingRoutes,
+      openRoute, goBack, toastMessage, showToast, hiddenCols, toggleCol,
     ]
   );
 

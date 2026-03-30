@@ -1,155 +1,175 @@
 import { useEffect, useState } from 'react';
-import { Package, Users, RefreshCw, ChevronRight, BarChart3 } from 'lucide-react';
-import { BotiLogo } from './BotiLogo';
+import {
+  Package, Truck, RefreshCw, LogOut, ChevronRight, Layers,
+} from 'lucide-react';
 import { useApp } from '../store/useAppStore';
-import { CONFIG } from '../config';
-import { fetchPassengerRoutes } from '../api';
-import { PasswordModal } from './PasswordModal';
+import { fetchRoutes } from '../api';
+import { BotiLogo } from './BotiLogo';
+
+type Tab = 'receiving' | 'shipping';
 
 export function RouteScreen() {
-  const { driverName, openRoute, showToast, passengerRoutes, setPassengerRoutes, setCurrentScreen } = useApp();
+  const {
+    driverName, setDriverName, setCurrentScreen, openRoute,
+    receivingRoutes, setReceivingRoutes, shippingRoutes, setShippingRoutes, showToast,
+  } = useApp();
+
   const [loading, setLoading] = useState(false);
-  const [passwordModal, setPasswordModal] = useState<{ route: string; password: string } | null>(null);
+  const [tab, setTab] = useState<Tab>('receiving');
 
   const loadRoutes = async () => {
     setLoading(true);
-    try { setPassengerRoutes(await fetchPassengerRoutes()); }
-    catch { showToast('Помилка завантаження'); }
-    finally { setLoading(false); }
+    try {
+      const data = await fetchRoutes();
+      setReceivingRoutes(data.receiving);
+      setShippingRoutes(data.shipping);
+    } catch (err) {
+      showToast('Помилка: ' + (err as Error).message);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  useEffect(() => { loadRoutes(); }, []);
+  useEffect(() => {
+    if (receivingRoutes.length === 0 && shippingRoutes.length === 0) {
+      loadRoutes();
+    }
+  }, []);
 
-  const totalPassengers = passengerRoutes.reduce((sum, r) => sum + (r.count || 0), 0);
+  const logout = () => {
+    setDriverName('');
+    localStorage.removeItem('driverName');
+    setCurrentScreen('login');
+  };
 
   return (
-    <div className="flex-1 flex flex-col bg-bg overflow-y-auto">
+    <div className="flex-1 flex flex-col bg-bg min-h-dvh">
       {/* Header */}
-      <div className="bg-white px-5 pt-5 pb-4 border-b border-border">
-        <div className="flex items-center justify-between">
-          <BotiLogo size="lg" />
+      <div className="bg-white border-b border-border px-4 pt-6 pb-4">
+        <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2.5">
-            <div className="text-right">
-              <div className="text-xs text-muted">Водій</div>
-              <div className="text-sm font-bold text-text">{driverName}</div>
+            <BotiLogo />
+            <div>
+              <div className="text-sm font-bold text-text">BotiLogistics</div>
+              <div className="text-[11px] text-muted">{driverName}</div>
             </div>
-            <button onClick={() => setCurrentScreen('login')} className="w-10 h-10 rounded-full bg-brand text-white flex items-center justify-center text-sm font-bold cursor-pointer hover:bg-brand-dark transition-colors">
-              {driverName.charAt(0).toUpperCase()}
+          </div>
+          <div className="flex gap-2">
+            <button onClick={loadRoutes}
+              className="p-2 rounded-xl hover:bg-bg cursor-pointer active:scale-95 transition-all">
+              <RefreshCw className={`w-5 h-5 text-muted ${loading ? 'animate-spin' : ''}`} />
+            </button>
+            <button onClick={logout}
+              className="p-2 rounded-xl hover:bg-red-50 cursor-pointer active:scale-95 transition-all">
+              <LogOut className="w-5 h-5 text-red-400" />
             </button>
           </div>
         </div>
-      </div>
 
-      <div className="px-4 py-4 space-y-5 pb-8">
-        {/* Delivery routes */}
-        <section>
-          <SectionTitle icon={Package} label="Посилки" />
-
-          {/* Unified delivery */}
-          <button onClick={() => { openRoute('Усі маршрути', 'delivery', true); }}
-            className="w-full mb-2 p-3.5 bg-card border-2 border-gray-300 rounded-2xl cursor-pointer text-left active:scale-[0.98] transition-transform flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center">
-                <BarChart3 className="w-5 h-5 text-amber-500" />
-              </div>
-              <div>
-                <div className="text-sm font-bold text-text">Усі маршрути</div>
-                <div className="text-xs text-muted">Посилки</div>
-              </div>
-            </div>
-            <ChevronRight className="w-4 h-4 text-muted/40" />
+        {/* Tabs */}
+        <div className="flex gap-2">
+          <button
+            onClick={() => setTab('receiving')}
+            className={`flex-1 py-2.5 rounded-xl text-sm font-bold text-center cursor-pointer transition-all ${
+              tab === 'receiving' ? 'bg-brand text-white shadow-sm' : 'bg-gray-100 text-gray-500'
+            }`}
+          >
+            <Package className="w-4 h-4 inline mr-1.5 -mt-0.5" />
+            Отримання
           </button>
-
-          <div className="space-y-2">
-            {CONFIG.DELIVERY_ROUTES.map((route) => (
-              <RouteCard key={route.name}
-                icon={<Package className="w-5 h-5 text-amber-500" />}
-                iconBg="bg-amber-50"
-                name={route.name.replace(' марш.', '')}
-                onClick={() => setPasswordModal({ route: route.name, password: route.password })} />
-            ))}
-          </div>
-        </section>
-
-        {/* Passenger routes */}
-        <section>
-          <div className="flex items-center justify-between mb-2.5">
-            <SectionTitle icon={Users} label="Пасажири" />
-            <button onClick={loadRoutes} className="p-2 -mr-1 rounded-xl hover:bg-white cursor-pointer">
-              <RefreshCw className={`w-4 h-4 text-muted ${loading ? 'animate-spin' : ''}`} />
-            </button>
-          </div>
-
-          {/* Unified */}
-          {passengerRoutes.length > 0 && (
-            <button onClick={() => { openRoute('Усі маршрути', 'passenger', true); }}
-              className="w-full mb-2 p-3.5 bg-card border-2 border-gray-300 rounded-2xl cursor-pointer text-left active:scale-[0.98] transition-transform flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center">
-                  <BarChart3 className="w-5 h-5 text-blue-500" />
-                </div>
-                <div>
-                  <div className="text-sm font-bold text-text">Усі маршрути</div>
-                  <div className="text-xs text-muted">Пасажири</div>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-xl font-black text-brand">{totalPassengers}</span>
-                <ChevronRight className="w-4 h-4 text-muted/40" />
-              </div>
-            </button>
-          )}
-
-          <div className="space-y-2">
-            {loading && passengerRoutes.length === 0 ? (
-              <div className="text-center py-8">
-                <RefreshCw className="w-5 h-5 text-muted animate-spin mx-auto mb-2" />
-                <p className="text-muted text-sm">Завантаження...</p>
-              </div>
-            ) : passengerRoutes.map((route) => (
-              <RouteCard key={route.name}
-                icon={<Users className="w-5 h-5 text-blue-500" />}
-                iconBg="bg-blue-50"
-                name={route.name}
-                right={<span className="text-lg font-black text-brand">{route.count}</span>}
-                onClick={() => { openRoute(route.name, 'passenger'); }} />
-            ))}
-          </div>
-        </section>
+          <button
+            onClick={() => setTab('shipping')}
+            className={`flex-1 py-2.5 rounded-xl text-sm font-bold text-center cursor-pointer transition-all ${
+              tab === 'shipping' ? 'bg-blue-500 text-white shadow-sm' : 'bg-gray-100 text-gray-500'
+            }`}
+          >
+            <Truck className="w-4 h-4 inline mr-1.5 -mt-0.5" />
+            Відправлення
+          </button>
+        </div>
       </div>
 
-      {passwordModal && (
-        <PasswordModal routeName={passwordModal.route} correctPassword={passwordModal.password}
-          onSuccess={() => { openRoute(passwordModal!.route, 'delivery'); setPasswordModal(null); }}
-          onClose={() => setPasswordModal(null)} />
-      )}
+      {/* Route list */}
+      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-16">
+            <RefreshCw className="w-7 h-7 text-brand animate-spin mb-3" />
+            <p className="text-muted text-sm">Завантаження маршрутів...</p>
+          </div>
+        ) : tab === 'receiving' ? (
+          <>
+            {receivingRoutes.length > 1 && (
+              <button
+                onClick={() => openRoute('__unified__', 'delivery', true)}
+                className="w-full flex items-center gap-3 p-4 bg-white rounded-2xl border-2 border-brand/20 shadow-sm cursor-pointer active:scale-[0.98] transition-transform"
+              >
+                <div className="w-10 h-10 rounded-xl bg-brand/10 flex items-center justify-center">
+                  <Layers className="w-5 h-5 text-brand" />
+                </div>
+                <div className="flex-1 text-left">
+                  <div className="font-bold text-text text-sm">Усі маршрути</div>
+                  <div className="text-xs text-muted">
+                    {receivingRoutes.reduce((s, r) => s + r.count, 0)} посилок
+                  </div>
+                </div>
+                <ChevronRight className="w-5 h-5 text-muted" />
+              </button>
+            )}
+
+            {receivingRoutes.map((route) => (
+              <RouteCard
+                key={route.name}
+                name={route.name}
+                count={route.count}
+                icon={<Package className="w-5 h-5 text-brand" />}
+                iconBg="bg-brand/10"
+                onClick={() => openRoute(route.name, 'delivery')}
+              />
+            ))}
+
+            {receivingRoutes.length === 0 && !loading && (
+              <p className="text-center text-muted text-sm py-10">Маршрутів не знайдено</p>
+            )}
+          </>
+        ) : (
+          <>
+            {shippingRoutes.map((route) => (
+              <RouteCard
+                key={route.name}
+                name={route.label}
+                count={route.count}
+                icon={<Truck className="w-5 h-5 text-blue-500" />}
+                iconBg="bg-blue-50"
+                onClick={() => openRoute(route.name, 'shipping')}
+              />
+            ))}
+
+            {shippingRoutes.length === 0 && !loading && (
+              <p className="text-center text-muted text-sm py-10">Маршрутів відправлення не знайдено</p>
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 }
 
-function SectionTitle({ icon: Icon, label }: { icon: typeof Package; label: string }) {
-  return (
-    <div className="flex items-center gap-2.5 mb-3 px-0.5">
-      <Icon className="w-5 h-5 text-brand" />
-      <h2 className="text-lg font-black text-text">{label}</h2>
-    </div>
-  );
-}
-
-function RouteCard({ icon, iconBg, name, right, onClick }: {
-  icon: React.ReactNode; iconBg: string; name: string; right?: React.ReactNode; onClick: () => void;
+function RouteCard({ name, count, icon, iconBg, onClick }: {
+  name: string; count: number; icon: React.ReactNode; iconBg: string; onClick: () => void;
 }) {
   return (
-    <button onClick={onClick}
-      className="w-full flex items-center justify-between p-3.5 bg-card rounded-xl border border-border hover:border-brand/30 hover:shadow-sm transition-all cursor-pointer text-left active:scale-[0.98]">
-      <div className="flex items-center gap-3">
-        <div className={`w-10 h-10 rounded-xl ${iconBg} flex items-center justify-center shrink-0`}>{icon}</div>
-        <span className="font-semibold text-text text-[15px]">{name}</span>
+    <button
+      onClick={onClick}
+      className="w-full flex items-center gap-3 p-4 bg-white rounded-2xl border border-border shadow-sm cursor-pointer active:scale-[0.98] transition-transform"
+    >
+      <div className={`w-10 h-10 rounded-xl ${iconBg} flex items-center justify-center`}>
+        {icon}
       </div>
-      <div className="flex items-center gap-2">
-        {right}
-        <ChevronRight className="w-4 h-4 text-muted/40" />
+      <div className="flex-1 text-left">
+        <div className="font-bold text-text text-sm">{name}</div>
+        <div className="text-xs text-muted">{count} записів</div>
       </div>
+      <ChevronRight className="w-5 h-5 text-muted" />
     </button>
   );
 }
