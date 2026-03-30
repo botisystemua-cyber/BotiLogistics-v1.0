@@ -1,9 +1,8 @@
 import { Settings, X } from 'lucide-react';
 import { useApp } from '../store/useAppStore';
 
-const ALL_COLUMNS = [
+const DELIVERY_COLUMNS = [
   { key: 'id', label: '# Номер' },
-  { key: 'vo', label: 'ВО' },
   { key: 'name', label: 'ПІБ' },
   { key: 'address', label: 'Адреса' },
   { key: 'ttn', label: 'ТТН' },
@@ -23,17 +22,35 @@ const ALL_COLUMNS = [
   { key: 'photo', label: 'Фото' },
 ];
 
+const PASSENGER_COLUMNS = [
+  { key: 'name', label: 'ПІБ' },
+  { key: 'phone', label: 'Телефон' },
+  { key: 'from', label: 'Звідки' },
+  { key: 'to', label: 'Куди' },
+  { key: 'date', label: 'Дата' },
+  { key: 'timing', label: 'Час' },
+  { key: 'seats', label: 'Місця' },
+  { key: 'weight', label: 'Вага' },
+  { key: 'payment', label: 'Оплата' },
+  { key: 'vehicle', label: 'Автомобіль' },
+  { key: 'dispatcher', label: 'Диспечер' },
+  { key: 'note', label: 'Примітка' },
+  { key: 'percent', label: 'Відсоток' },
+];
+
 interface Props {
   onClose: () => void;
 }
 
 export function ColumnEditor({ onClose }: Props) {
-  const { hiddenCols, toggleCol } = useApp();
+  const { hiddenCols, toggleCol, currentRouteType } = useApp();
+  const columns = currentRouteType === 'passenger' ? PASSENGER_COLUMNS : DELIVERY_COLUMNS;
 
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-end justify-center" onClick={onClose}>
-      <div className="bg-card rounded-t-3xl w-full max-w-lg max-h-[80vh] overflow-y-auto shadow-2xl" onClick={(e) => e.stopPropagation()}>
-        <div className="sticky top-0 bg-card px-6 pt-6 pb-4 flex items-center justify-between border-b border-border">
+      <div className="bg-card rounded-t-3xl w-full max-w-lg max-h-[80vh] flex flex-col shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        {/* Fixed header */}
+        <div className="px-6 pt-6 pb-4 flex items-center justify-between border-b border-border shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-2xl bg-brand-light flex items-center justify-center">
               <Settings className="w-6 h-6 text-brand" />
@@ -45,8 +62,9 @@ export function ColumnEditor({ onClose }: Props) {
           </button>
         </div>
 
-        <div className="px-4 py-2">
-          {ALL_COLUMNS.map((col) => {
+        {/* Scrollable list */}
+        <div className="flex-1 overflow-y-auto px-4 py-2">
+          {columns.map((col) => {
             const isOn = !hiddenCols.has(col.key);
             return (
               <div key={col.key} className="flex items-center justify-between px-4 py-4 border-b border-border/50 last:border-0">
@@ -60,7 +78,8 @@ export function ColumnEditor({ onClose }: Props) {
           })}
         </div>
 
-        <div className="p-6 pt-3">
+        {/* Fixed footer */}
+        <div className="p-6 pt-3 border-t border-border shrink-0">
           <button onClick={onClose}
             className="w-full py-4 bg-brand text-white font-bold rounded-2xl text-base cursor-pointer shadow-lg shadow-brand/20">
             Готово
