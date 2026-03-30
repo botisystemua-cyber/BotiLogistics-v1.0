@@ -6,5 +6,5 @@ export const CONFIG = {
   // Passengers API — Google Apps Script деплой
   // Замініть на URL після деплою Script-passengers-marshrut.gs
   PASSENGER_API_URL:
-    'PASTE_PASSENGER_DEPLOY_URL_HERE',
+    'https://script.google.com/macros/s/AKfycbyji3k9u0j3t89FahuOt-lKbJyNtfUsUOc-AOf6HrxD1XJh0QjsPBPmslv6bUo6O4ku/exec',
 };
