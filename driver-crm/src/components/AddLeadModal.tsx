@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Plus, X } from 'lucide-react';
 import { useApp } from '../store/useAppStore';
-import { addDeliveryToRoute } from '../api';
+import { addDeliveryToRoute, addPassengerToRoute } from '../api';
 
 interface Props {
   onClose: () => void;
@@ -9,17 +9,24 @@ interface Props {
 }
 
 export function AddLeadModal({ onClose, onAdded }: Props) {
-  const { currentSheet, showToast } = useApp();
+  const { currentRouteType, currentSheet, showToast } = useApp();
+  const isDelivery = currentRouteType === 'delivery';
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState<Record<string, string>>({});
 
   const set = (key: string, value: string) => setForm((prev) => ({ ...prev, [key]: value }));
 
   const handleSubmit = async () => {
-    if (!form.phone && !form.address) { showToast('Введіть телефон або адресу'); return; }
+    if (isDelivery) {
+      if (!form.phone && !form.address) { showToast('Введіть телефон або адресу'); return; }
+    } else {
+      if (!form.name && !form.phone) { showToast("Введіть ім'я або телефон"); return; }
+    }
     setLoading(true);
     try {
-      const result = await addDeliveryToRoute(currentSheet, form);
+      const result = isDelivery
+        ? await addDeliveryToRoute(currentSheet, form)
+        : await addPassengerToRoute(currentSheet, { ...form, seats: form.seats || '1' });
       if (result.success) { showToast('Додано!'); onClose(); onAdded(); }
       else { showToast(result.error || 'Помилка'); }
     } catch (err) { showToast('Помилка: ' + (err as Error).message); }
@@ -36,7 +43,7 @@ export function AddLeadModal({ onClose, onAdded }: Props) {
               <Plus className="w-6 h-6 text-brand" />
             </div>
             <h2 className="text-lg font-bold text-text">
-              Додати посилку
+              Додати {isDelivery ? 'посилку' : 'пасажира'}
             </h2>
           </div>
           <button onClick={onClose} className="p-2 rounded-xl hover:bg-bg cursor-pointer">
@@ -45,13 +52,23 @@ export function AddLeadModal({ onClose, onAdded }: Props) {
         </div>
 
         <div className="p-6 space-y-5">
-          <Field label="Телефон" type="tel" placeholder="+380..." value={form.phone} onChange={(v) => set('phone', v)} />
-          <Field label="Адреса" placeholder="Адреса доставки" value={form.address} onChange={(v) => set('address', v)} />
-          <Field label="ПІБ" placeholder="Ім'я отримувача" value={form.name} onChange={(v) => set('name', v)} />
-          <Field label="ТТН" placeholder="Номер ТТН" value={form.ttn} onChange={(v) => set('ttn', v)} />
-          <Field label="Вага (кг)" placeholder="0" value={form.weight} onChange={(v) => set('weight', v)} />
-          <Field label="Сума (€)" placeholder="0" value={form.amount} onChange={(v) => set('amount', v)} />
-          <Field label="Примітка" placeholder="" value={form.note} onChange={(v) => set('note', v)} />
+          {isDelivery ? (<>
+            <Field label="Телефон" type="tel" placeholder="+380..." value={form.phone} onChange={(v) => set('phone', v)} />
+            <Field label="Адреса" placeholder="Адреса доставки" value={form.address} onChange={(v) => set('address', v)} />
+            <Field label="ПІБ" placeholder="Ім'я отримувача" value={form.name} onChange={(v) => set('name', v)} />
+            <Field label="ТТН" placeholder="Номер ТТН" value={form.ttn} onChange={(v) => set('ttn', v)} />
+            <Field label="Вага (кг)" placeholder="0" value={form.weight} onChange={(v) => set('weight', v)} />
+            <Field label="Сума (€)" placeholder="0" value={form.amount} onChange={(v) => set('amount', v)} />
+            <Field label="Примітка" placeholder="" value={form.note} onChange={(v) => set('note', v)} />
+          </>) : (<>
+            <Field label="Ім'я" placeholder="ПІБ пасажира" value={form.name} onChange={(v) => set('name', v)} />
+            <Field label="Телефон" type="tel" placeholder="+380..." value={form.phone} onChange={(v) => set('phone', v)} />
+            <Field label="Звідки" placeholder="Місто відправки" value={form.from} onChange={(v) => set('from', v)} />
+            <Field label="Куди" placeholder="Місто прибуття" value={form.to} onChange={(v) => set('to', v)} />
+            <Field label="Дата" type="date" value={form.date} onChange={(v) => set('date', v)} />
+            <Field label="Місць" type="number" placeholder="1" value={form.seats} onChange={(v) => set('seats', v)} />
+            <Field label="Примітка" placeholder="" value={form.note} onChange={(v) => set('note', v)} />
+          </>)}
 
           <button onClick={handleSubmit} disabled={loading}
             className="w-full py-4.5 bg-brand text-white font-bold rounded-2xl text-base hover:bg-brand-dark transition-all cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-brand/20">

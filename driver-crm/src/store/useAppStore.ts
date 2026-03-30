@@ -33,6 +33,8 @@ export interface AppStore {
   setReceivingRoutes: (routes: Route[]) => void;
   shippingRoutes: ShippingRoute[];
   setShippingRoutes: (routes: ShippingRoute[]) => void;
+  passengerRoutes: Route[];
+  setPassengerRoutes: (routes: Route[]) => void;
 
   // Actions
   openRoute: (sheet: string, type: RouteType, unified?: boolean) => void;

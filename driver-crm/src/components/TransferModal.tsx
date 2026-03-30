@@ -1,9 +1,9 @@
 import { ArrowRight, Repeat, X } from 'lucide-react';
-import type { Passenger, PassengerRoute } from '../types';
+import type { Passenger, Route } from '../types';
 
 interface Props {
   passenger: Passenger;
-  routes: PassengerRoute[];
+  routes: Route[];
   onTransfer: (targetRoute: string) => void;
   onClose: () => void;
 }

@@ -39,6 +39,30 @@ export interface Delivery {
   driverStatus?: string;
 }
 
+export interface Passenger {
+  rowNum: number;
+  id?: string;
+  name: string;
+  phone: string;
+  from: string;
+  to: string;
+  date?: string;
+  seats?: string;
+  weight?: string;
+  mark?: string;
+  payment?: string;
+  percent?: string;
+  dispatcher?: string;
+  phoneReg?: string;
+  timing?: string;
+  dateReg?: string;
+  note?: string;
+  vehicle?: string;
+  driverStatus?: string;
+  _statusKey: string;
+  _sourceRoute?: string;
+}
+
 export interface ShippingItem {
   rowNum: number;
   name: string;
@@ -56,7 +80,7 @@ export interface ShippingItem {
 
 export type ItemStatus = 'pending' | 'in-progress' | 'completed' | 'cancelled';
 
-export type RouteType = 'delivery';
+export type RouteType = 'delivery' | 'passenger';
 
 export type StatusFilter = 'all' | ItemStatus;
 

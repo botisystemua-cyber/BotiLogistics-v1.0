@@ -33,6 +33,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [routeFilter, setRouteFilter] = useState('all');
   const [receivingRoutes, setReceivingRoutes] = useState<Route[]>([]);
   const [shippingRoutes, setShippingRoutes] = useState<ShippingRoute[]>([]);
+  const [passengerRoutes, setPassengerRoutes] = useState<Route[]>([]);
   const [toastMessage, setToastMessage] = useState('');
   const [hiddenCols, setHiddenCols] = useState<Set<string>>(loadHiddenCols);
 
@@ -111,6 +112,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setReceivingRoutes,
       shippingRoutes,
       setShippingRoutes,
+      passengerRoutes,
+      setPassengerRoutes,
       openRoute,
       goBack,
       toastMessage,
@@ -121,7 +124,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [
       driverName, setDriverName, currentScreen, currentSheet,
       currentRouteType, isUnifiedView, statuses, setStatus, getStatus,
-      statusFilter, routeFilter, receivingRoutes, shippingRoutes,
+      statusFilter, routeFilter, receivingRoutes, shippingRoutes, passengerRoutes,
       openRoute, goBack, toastMessage, showToast, hiddenCols, toggleCol,
     ]
   );
