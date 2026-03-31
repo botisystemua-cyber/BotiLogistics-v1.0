@@ -1,24 +1,18 @@
-import { useEffect, useState } from 'react';
-import { Package, RefreshCw, LogOut, ChevronRight, Layers } from 'lucide-react';
+import { useEffect } from 'react';
+import { Package, LogOut, ChevronRight, Layers } from 'lucide-react';
 import { useApp } from '../store/useAppStore';
 import { fetchRoutes } from '../api';
 import { BotiLogo } from './BotiLogo';
 
 export function RouteScreen() {
   const { driverName, setDriverName, setCurrentScreen, openRoute, routes, setRoutes, setShippingRoutes, showToast } = useApp();
-  const [loading, setLoading] = useState(false);
-
-  const loadRoutes = async () => {
-    setLoading(true);
-    try {
-      const data = await fetchRoutes();
+  useEffect(() => {
+    if (routes.length === 0) {
+      const data = fetchRoutes();
       setRoutes(data.routes);
       setShippingRoutes(data.shipping);
-    } catch (err) { console.error('Route load error:', err); showToast('Помилка: ' + (err as Error).message); }
-    finally { setLoading(false); }
-  };
-
-  useEffect(() => { if (routes.length === 0) loadRoutes(); }, []);
+    }
+  }, []);
 
   const logout = () => { setDriverName(''); localStorage.removeItem('driverName'); setCurrentScreen('login'); };
 
@@ -31,9 +25,6 @@ export function RouteScreen() {
             <div className="text-[11px] text-muted">{driverName}</div>
           </div>
           <div className="flex gap-2">
-            <button onClick={loadRoutes} className="p-2 rounded-xl hover:bg-bg cursor-pointer active:scale-95 transition-all">
-              <RefreshCw className={`w-5 h-5 text-muted ${loading ? 'animate-spin' : ''}`} />
-            </button>
             <button onClick={logout} className="p-2 rounded-xl hover:bg-red-50 cursor-pointer active:scale-95 transition-all">
               <LogOut className="w-5 h-5 text-red-400" />
             </button>
@@ -42,12 +33,7 @@ export function RouteScreen() {
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
-        {loading ? (
-          <div className="flex flex-col items-center justify-center py-16">
-            <RefreshCw className="w-7 h-7 text-brand animate-spin mb-3" />
-            <p className="text-muted text-sm">Завантаження...</p>
-          </div>
-        ) : (
+        {routes.length > 0 ? (
           <>
             {routes.length > 1 && (
               <button onClick={() => openRoute('__unified__', true)}
@@ -71,8 +57,9 @@ export function RouteScreen() {
                 <ChevronRight className="w-5 h-5 text-muted" />
               </button>
             ))}
-            {routes.length === 0 && !loading && <p className="text-center text-muted text-sm py-10">Маршрутів не знайдено</p>}
           </>
+        ) : (
+          <p className="text-center text-muted text-sm py-10">Маршрутів не знайдено</p>
         )}
       </div>
     </div>
