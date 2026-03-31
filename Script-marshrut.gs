@@ -134,6 +134,9 @@ function doGet(e) {
       case 'getRouteItems':
         if (!sheet) return respond({ success: false, error: 'Не вказано sheet' });
         return respond(getRouteItems(sheet));
+      case 'getShippingItems':
+        if (!sheet) return respond({ success: false, error: 'Не вказано sheet' });
+        return respond(getShippingItems(sheet));
       default:
         return respond({ success: false, error: 'Невідома GET дія: ' + action });
     }
