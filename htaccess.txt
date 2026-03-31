@@ -1,0 +1,28 @@
+# Правильні MIME типи
+AddType text/html .html
+AddType application/json .json
+AddType application/javascript .js
+AddType image/png .png
+AddType application/manifest+json .json
+
+# Заборонити завантаження HTML як файл
+<FilesMatch "\.html$">
+    Header set Content-Type "text/html; charset=UTF-8"
+    Header unset Content-Disposition
+</FilesMatch>
+
+# Service Worker дозвіл
+<FilesMatch "sw\.js$">
+    Header set Service-Worker-Allowed "/"
+    Header set Cache-Control "no-cache"
+</FilesMatch>
+
+# Manifest
+<FilesMatch "manifest\.json$">
+    Header set Content-Type "application/manifest+json"
+</FilesMatch>
+
+# Кеш для іконок
+<FilesMatch "\.(png|ico)$">
+    Header set Cache-Control "public, max-age=86400"
+</FilesMatch>
