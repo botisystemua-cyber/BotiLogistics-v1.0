@@ -131,9 +131,12 @@ function doGet(e) {
         return respond({ success: true, version: '2.0', service: 'BotiLogistics Drivers CRM', timestamp: new Date().toISOString() });
       case 'getAvailableRoutes':
         return respond(getAvailableRoutes());
-      case 'getRouteItems':
+      case 'getPassengers':
         if (!sheet) return respond({ success: false, error: 'Не вказано sheet' });
-        return respond(getRouteItems(sheet));
+        return respond(getPassengers(sheet));
+      case 'getPackages':
+        if (!sheet) return respond({ success: false, error: 'Не вказано sheet' });
+        return respond(getPackages(sheet));
       case 'getShippingItems':
         if (!sheet) return respond({ success: false, error: 'Не вказано sheet' });
         return respond(getShippingItems(sheet));
@@ -157,8 +160,10 @@ function doPost(e) {
     switch (action) {
       case 'getAvailableRoutes':
         return respond(getAvailableRoutes());
-      case 'getRouteItems':
-        return respond(getRouteItems(payload.sheetName || ''));
+      case 'getPassengers':
+        return respond(getPassengers(payload.sheetName || ''));
+      case 'getPackages':
+        return respond(getPackages(payload.sheetName || ''));
       case 'getShippingItems':
         return respond(getShippingItems(payload.sheetName || ''));
       case 'updateDriverStatus':
@@ -195,105 +200,90 @@ function getAvailableRoutes() {
 }
 
 // ============================================
-// getRouteItems — пасажири + посилки з одного маршрутного листа
-// Фільтрує за "Тип запису"
+// Допоміжна — читає рядки одного типу з маршрутного листа
+// typeFilter: 'пасажир' або 'посилка'
 // ============================================
-function getRouteItems(sheetName) {
-  try {
-    if (!sheetName) return { success: false, error: 'Не вказано маршрут' };
+function readRouteByType_(sheetName, typeFilter) {
+  if (!sheetName) return { success: false, error: 'Не вказано маршрут' };
 
-    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    var sheet = ss.getSheetByName(sheetName);
-    if (!sheet) return { success: false, error: 'Аркуш не знайдено: ' + sheetName };
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var sheet = ss.getSheetByName(sheetName);
+  if (!sheet) return { success: false, error: 'Аркуш не знайдено: ' + sheetName };
 
-    var lastRow = sheet.getLastRow();
-    if (lastRow < 2) return { success: true, passengers: [], packages: [], sheetName: sheetName };
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return { success: true, items: [], sheetName: sheetName };
 
-    // Спочатку читаємо тільки колонку "Тип запису" (B) щоб знайти реальні дані
-    var typeCol = sheet.getRange(2, COL.TYPE + 1, lastRow - 1, 1).getValues();
-    var realLastRow = 0;
-    for (var t = 0; t < typeCol.length; t++) {
-      var tv = String(typeCol[t][0] || '').trim().toLowerCase();
-      if (tv === 'пасажир' || tv === 'посилка') realLastRow = t + 1;
-    }
-    if (realLastRow === 0) return { success: true, passengers: [], packages: [], sheetName: sheetName };
+  var readCols = Math.min(sheet.getLastColumn(), TOTAL_COLS);
+  var data = sheet.getRange(2, 1, lastRow - 1, readCols).getValues();
+  var items = [];
 
-    // Читаємо тільки потрібні рядки (до останнього заповненого)
-    var readCols = Math.min(sheet.getLastColumn(), TOTAL_COLS);
-    var data = sheet.getRange(2, 1, realLastRow, readCols).getValues();
-    var passengers = [];
-    var packages = [];
+  for (var i = 0; i < data.length; i++) {
+    var row = data[i];
+    var type = str(row[COL.TYPE]).toLowerCase();
+    if (type !== typeFilter) continue;
 
-    for (var i = 0; i < data.length; i++) {
-      var row = data[i];
-      var type = str(row[COL.TYPE]).toLowerCase();
-      var itemId = str(row[COL.ITEM_ID]);
-      if (!itemId && !str(row[COL.PAX_NAME]) && !str(row[COL.SENDER_NAME])) continue;
+    var itemId = str(row[COL.ITEM_ID]);
+    if (!itemId) continue;
 
-      // Спільні поля
-      var common = {
-        rowNum: i + 2,
-        rteId: str(row[COL.RTE_ID]),
-        type: str(row[COL.TYPE]),
-        direction: str(row[COL.DIRECTION]),
-        itemId: itemId,
-        dateCreated: str(row[COL.DATE_CREATED]),
-        dateTrip: str(row[COL.DATE_TRIP]),
-        timing: str(row[COL.TIMING]),
-        autoNum: str(row[COL.AUTO_NUM]),
-        driver: str(row[COL.DRIVER]),
-        city: str(row[COL.CITY]),
-        amount: str(row[COL.AMOUNT]),
-        currency: str(row[COL.CURRENCY]),
-        deposit: str(row[COL.DEPOSIT]),
-        depositCurrency: str(row[COL.DEPOSIT_CURRENCY]),
-        payForm: str(row[COL.PAY_FORM]),
-        payStatus: str(row[COL.PAY_STATUS]),
-        debt: str(row[COL.DEBT]),
-        payNote: str(row[COL.PAY_NOTE]),
-        status: str(row[COL.STATUS]) || 'pending',
-        statusCrm: str(row[COL.STATUS_CRM]),
-        tag: str(row[COL.TAG]),
-        note: str(row[COL.NOTE]),
-        smsNote: str(row[COL.SMS_NOTE]),
-        sheet: sheetName
-      };
-
-      if (type === 'пасажир') {
-        passengers.push(Object.assign(common, {
-          name: str(row[COL.PAX_NAME]),
-          phone: str(row[COL.PAX_PHONE]),
-          addrFrom: str(row[COL.ADDR_FROM]),
-          addrTo: str(row[COL.ADDR_TO]),
-          seatsCount: str(row[COL.SEATS_COUNT]),
-          baggageWeight: str(row[COL.BAGGAGE_WEIGHT]),
-          seat: str(row[COL.SEAT]),
-        }));
-      } else if (type === 'посилка') {
-        packages.push(Object.assign(common, {
-          senderName: str(row[COL.SENDER_NAME]),
-          recipientName: str(row[COL.RECIPIENT_NAME]),
-          recipientPhone: str(row[COL.RECIPIENT_PHONE]),
-          recipientAddr: str(row[COL.RECIPIENT_ADDR]),
-          internalNum: str(row[COL.INTERNAL_NUM]),
-          ttn: str(row[COL.TTN]),
-          pkgDesc: str(row[COL.PKG_DESC]),
-          pkgWeight: str(row[COL.PKG_WEIGHT]),
-        }));
-      }
-    }
-
-    return {
-      success: true,
-      passengers: passengers,
-      packages: packages,
-      totalPassengers: passengers.length,
-      totalPackages: packages.length,
-      sheetName: sheetName
+    var item = {
+      rowNum: i + 2,
+      rteId: str(row[COL.RTE_ID]),
+      type: str(row[COL.TYPE]),
+      direction: str(row[COL.DIRECTION]),
+      itemId: itemId,
+      dateCreated: str(row[COL.DATE_CREATED]),
+      dateTrip: str(row[COL.DATE_TRIP]),
+      timing: str(row[COL.TIMING]),
+      autoNum: str(row[COL.AUTO_NUM]),
+      driver: str(row[COL.DRIVER]),
+      city: str(row[COL.CITY]),
+      amount: str(row[COL.AMOUNT]),
+      currency: str(row[COL.CURRENCY]),
+      deposit: str(row[COL.DEPOSIT]),
+      depositCurrency: str(row[COL.DEPOSIT_CURRENCY]),
+      payForm: str(row[COL.PAY_FORM]),
+      payStatus: str(row[COL.PAY_STATUS]),
+      debt: str(row[COL.DEBT]),
+      payNote: str(row[COL.PAY_NOTE]),
+      status: str(row[COL.STATUS]) || 'pending',
+      statusCrm: str(row[COL.STATUS_CRM]),
+      tag: str(row[COL.TAG]),
+      note: str(row[COL.NOTE]),
+      smsNote: str(row[COL.SMS_NOTE]),
+      sheet: sheetName
     };
-  } catch (err) {
-    return { success: false, error: err.toString() };
+
+    if (typeFilter === 'пасажир') {
+      item.name = str(row[COL.PAX_NAME]);
+      item.phone = str(row[COL.PAX_PHONE]);
+      item.addrFrom = str(row[COL.ADDR_FROM]);
+      item.addrTo = str(row[COL.ADDR_TO]);
+      item.seatsCount = str(row[COL.SEATS_COUNT]);
+      item.baggageWeight = str(row[COL.BAGGAGE_WEIGHT]);
+      item.seat = str(row[COL.SEAT]);
+    } else {
+      item.senderName = str(row[COL.SENDER_NAME]);
+      item.recipientName = str(row[COL.RECIPIENT_NAME]);
+      item.recipientPhone = str(row[COL.RECIPIENT_PHONE]);
+      item.recipientAddr = str(row[COL.RECIPIENT_ADDR]);
+      item.internalNum = str(row[COL.INTERNAL_NUM]);
+      item.ttn = str(row[COL.TTN]);
+      item.pkgDesc = str(row[COL.PKG_DESC]);
+      item.pkgWeight = str(row[COL.PKG_WEIGHT]);
+    }
+
+    items.push(item);
   }
+
+  return { success: true, items: items, count: items.length, sheetName: sheetName };
+}
+
+function getPassengers(sheetName) {
+  return readRouteByType_(sheetName, 'пасажир');
+}
+
+function getPackages(sheetName) {
+  return readRouteByType_(sheetName, 'посилка');
 }
 
 // ============================================

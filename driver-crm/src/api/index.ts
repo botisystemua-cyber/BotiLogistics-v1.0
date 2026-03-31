@@ -43,17 +43,28 @@ export async function fetchRoutes(): Promise<{ routes: Route[]; shipping: Shippi
   return { routes: data.routes || [], shipping: data.shipping || [] };
 }
 
-// ---- Route Items (passengers + packages from one sheet) ----
-export async function fetchRouteItems(sheetName: string): Promise<{ passengers: Passenger[]; packages: Package[] }> {
+// ---- Passengers only ----
+export async function fetchPassengers(sheetName: string): Promise<Passenger[]> {
   const data = await callApi<{
     success: boolean;
-    passengers?: Passenger[];
-    packages?: Package[];
+    items?: Passenger[];
     error?: string;
-  }>({ action: 'getRouteItems', sheet: sheetName });
+  }>({ action: 'getPassengers', sheet: sheetName });
 
   if (!data.success) throw new Error(data.error || 'Помилка завантаження');
-  return { passengers: data.passengers || [], packages: data.packages || [] };
+  return data.items || [];
+}
+
+// ---- Packages only ----
+export async function fetchPackages(sheetName: string): Promise<Package[]> {
+  const data = await callApi<{
+    success: boolean;
+    items?: Package[];
+    error?: string;
+  }>({ action: 'getPackages', sheet: sheetName });
+
+  if (!data.success) throw new Error(data.error || 'Помилка завантаження');
+  return data.items || [];
 }
 
 // ---- Shipping (read-only) ----
