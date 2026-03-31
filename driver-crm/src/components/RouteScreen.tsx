@@ -37,13 +37,13 @@ export function RouteScreen() {
           <>
             {routes.length > 1 && (
               <button onClick={() => openRoute('__unified__', true)}
-                className="w-full flex items-center gap-3 p-4 bg-white rounded-2xl border-2 border-brand/20 shadow-sm cursor-pointer active:scale-[0.98] transition-transform">
-                <div className="w-10 h-10 rounded-xl bg-brand/10 flex items-center justify-center"><Layers className="w-5 h-5 text-brand" /></div>
+                className="w-full flex items-center gap-3 p-4 bg-brand/10 rounded-2xl border-2 border-brand/30 shadow-sm cursor-pointer active:scale-[0.98] transition-transform">
+                <div className="w-11 h-11 rounded-xl bg-brand flex items-center justify-center shadow-sm"><Layers className="w-5 h-5 text-white" /></div>
                 <div className="flex-1 text-left">
-                  <div className="font-bold text-text text-sm">Усі маршрути</div>
-                  <div className="text-xs text-muted">{routes.reduce((s, r) => s + r.count, 0)} записів</div>
+                  <div className="font-bold text-brand-dark text-sm">Усі маршрути</div>
+                  <div className="text-xs text-brand/60">{routes.reduce((s, r) => s + r.count, 0)} записів</div>
                 </div>
-                <ChevronRight className="w-5 h-5 text-muted" />
+                <ChevronRight className="w-5 h-5 text-brand" />
               </button>
             )}
             {routes.map((r) => (
