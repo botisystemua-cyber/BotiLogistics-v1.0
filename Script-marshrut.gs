@@ -209,8 +209,18 @@ function getRouteItems(sheetName) {
     var lastRow = sheet.getLastRow();
     if (lastRow < 2) return { success: true, passengers: [], packages: [], sheetName: sheetName };
 
+    // Спочатку читаємо тільки колонку "Тип запису" (B) щоб знайти реальні дані
+    var typeCol = sheet.getRange(2, COL.TYPE + 1, lastRow - 1, 1).getValues();
+    var realLastRow = 0;
+    for (var t = 0; t < typeCol.length; t++) {
+      var tv = String(typeCol[t][0] || '').trim().toLowerCase();
+      if (tv === 'пасажир' || tv === 'посилка') realLastRow = t + 1;
+    }
+    if (realLastRow === 0) return { success: true, passengers: [], packages: [], sheetName: sheetName };
+
+    // Читаємо тільки потрібні рядки (до останнього заповненого)
     var readCols = Math.min(sheet.getLastColumn(), TOTAL_COLS);
-    var data = sheet.getRange(2, 1, lastRow - 1, readCols).getValues();
+    var data = sheet.getRange(2, 1, realLastRow, readCols).getValues();
     var passengers = [];
     var packages = [];
 
@@ -300,8 +310,16 @@ function getShippingItems(sheetName) {
     var lastRow = sheet.getLastRow();
     if (lastRow < 2) return { success: true, items: [], count: 0, sheetName: sheetName };
 
+    // Знаходимо реальний останній рядок через DISPATCH_ID (A)
+    var idCol = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+    var realLast = 0;
+    for (var t = 0; t < idCol.length; t++) {
+      if (String(idCol[t][0] || '').trim()) realLast = t + 1;
+    }
+    if (realLast === 0) return { success: true, items: [], count: 0, sheetName: sheetName };
+
     var readCols = Math.min(sheet.getLastColumn(), TOTAL_COLS_SHIP);
-    var data = sheet.getRange(2, 1, lastRow - 1, readCols).getValues();
+    var data = sheet.getRange(2, 1, realLast, readCols).getValues();
     var items = [];
 
     for (var i = 0; i < data.length; i++) {

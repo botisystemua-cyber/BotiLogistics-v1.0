@@ -101,11 +101,15 @@ export function ListScreen() {
 
   const HeaderIcon = isUnifiedView ? BarChart3 : Package;
 
-  const viewTabs: { key: ViewTab; label: string; icon: typeof Users; count: number }[] = [
+  // Top level tabs: Пасажири | Посилки
+  const mainTabs: { key: ViewTab; label: string; icon: typeof Users; count: number }[] = [
     { key: 'passengers', label: 'Пасажири', icon: Users, count: passengers.length },
     { key: 'packages', label: 'Посилки', icon: Package, count: packages.length },
-    ...(hasShipping ? [{ key: 'shipping' as ViewTab, label: 'Відправка', icon: Truck, count: shippingItems.length }] : []),
   ];
+  // Посилки mode: sub-tabs Отримання | Відправка (only if shipping exists)
+  const isPackagesMode = viewTab === 'packages' || viewTab === 'shipping';
+  const activeMainTab = isPackagesMode ? 'packages' : 'passengers';
+  const handleMainTab = (key: ViewTab) => { setViewTab(key); };
 
   return (
     <div className="flex-1 flex flex-col bg-bg max-h-dvh overflow-hidden">
@@ -131,20 +135,32 @@ export function ListScreen() {
           </div>
         </div>
 
-        {/* View tabs: Пасажири / Посилки / Відправка */}
-        <div className="flex gap-1.5 mb-3">
-          {viewTabs.map((t) => (
-            <button key={t.key} onClick={() => setViewTab(t.key)}
+        {/* Main tabs: Пасажири / Посилки */}
+        <div className="flex gap-1.5 mb-2">
+          {mainTabs.map((t) => (
+            <button key={t.key} onClick={() => handleMainTab(t.key)}
               className={`flex-1 py-2 rounded-xl text-xs font-bold text-center cursor-pointer transition-all ${
-                viewTab === t.key
-                  ? t.key === 'shipping' ? 'bg-blue-500 text-white shadow-sm' : 'bg-brand text-white shadow-sm'
-                  : 'bg-gray-100 text-gray-500'
+                activeMainTab === t.key ? 'bg-brand text-white shadow-sm' : 'bg-gray-100 text-gray-500'
               }`}>
               <t.icon className="w-3.5 h-3.5 inline mr-1 -mt-0.5" />{t.label}
               <span className="ml-1 font-black">{t.count}</span>
             </button>
           ))}
         </div>
+
+        {/* Sub-tabs for packages: Отримання / Відправка */}
+        {isPackagesMode && hasShipping && (
+          <div className="flex gap-1.5 mb-2">
+            <button onClick={() => setViewTab('packages')}
+              className={`flex-1 py-1.5 rounded-lg text-[11px] font-bold text-center cursor-pointer transition-all ${viewTab === 'packages' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-500'}`}>
+              <Package className="w-3 h-3 inline mr-1 -mt-0.5" />Отримання
+            </button>
+            <button onClick={() => setViewTab('shipping')}
+              className={`flex-1 py-1.5 rounded-lg text-[11px] font-bold text-center cursor-pointer transition-all ${viewTab === 'shipping' ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-500'}`}>
+              <Truck className="w-3 h-3 inline mr-1 -mt-0.5" />Відправка
+            </button>
+          </div>
+        )}
 
         {/* Status pills (not for shipping) */}
         {viewTab !== 'shipping' && (
