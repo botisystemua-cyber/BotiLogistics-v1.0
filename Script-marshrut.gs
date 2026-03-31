@@ -191,14 +191,12 @@ function getAvailableRoutes() {
       }
       if (skip) continue;
 
-      var count = Math.max(0, sheets[i].getLastRow() - 1);
-
+      // Не рахуємо рядки тут — це дуже повільно для великих таблиць
       if (nameLower.indexOf('маршрут') !== -1) {
-        routes.push({ name: name, count: count });
+        routes.push({ name: name, count: 0 });
       } else if (nameLower.indexOf('відправка') !== -1) {
-        // label = "Відправка_1" → extract number
         var label = name.replace('Відправка_', 'Відправка ');
-        shipping.push({ name: name, label: label, count: count });
+        shipping.push({ name: name, label: label, count: 0 });
       }
     }
 
