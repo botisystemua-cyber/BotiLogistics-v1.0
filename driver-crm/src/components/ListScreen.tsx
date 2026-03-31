@@ -199,19 +199,14 @@ export function ListScreen() {
 
         {/* Main tabs: Усі | Пасажири | Посилки */}
         <div className="flex gap-2 mb-2.5">
-          {mainTabs.map((t) => {
-            const isAll = t.key === 'all';
-            return (
-              <button key={t.key} onClick={() => setViewTab(t.key === 'all' ? 'all' : t.key)}
-                className={`rounded-xl font-bold text-center cursor-pointer transition-all ${
-                  isAll ? 'flex-[1.3] py-3 text-sm' : 'flex-1 py-2.5 text-[13px]'
-                } ${
-                  activeMainTab === t.key ? 'bg-brand text-white shadow-sm' : 'bg-gray-100 text-gray-400'
-                }`}>
-                <t.icon className={`inline mr-1.5 -mt-0.5 ${isAll ? 'w-4.5 h-4.5' : 'w-4 h-4'}`} />{t.label}
-              </button>
-            );
-          })}
+          {mainTabs.map((t) => (
+            <button key={t.key} onClick={() => setViewTab(t.key === 'all' ? 'all' : t.key)}
+              className={`flex-1 py-2.5 rounded-xl text-[13px] font-bold text-center cursor-pointer transition-all ${
+                activeMainTab === t.key ? 'bg-brand text-white shadow-sm' : 'bg-gray-100 text-gray-400'
+              }`}>
+              <t.icon className="w-4 h-4 inline mr-1.5 -mt-0.5" />{t.label}
+            </button>
+          ))}
         </div>
 
         {/* Sub-tabs: Отримання | Відправка (in packages mode, both unified and single) */}
@@ -233,14 +228,11 @@ export function ListScreen() {
           <div className="flex gap-2">
             {filters.map((f) => {
               const active = statusFilter === f.key;
-              const isAll = f.key === 'all';
               return (
                 <button key={f.key} onClick={() => setStatusFilter(f.key)}
-                  className={`rounded-full text-center cursor-pointer active:scale-95 transition-all ${
-                    isAll ? 'flex-[1.3] py-2.5' : 'flex-1 py-2'
-                  } ${active ? f.pillActive + ' shadow-sm' : f.pill}`}>
-                  <div className={`font-black leading-tight ${isAll ? 'text-base' : 'text-sm'}`}>{f.count}</div>
-                  <div className={`font-semibold leading-tight ${isAll ? 'text-[10px]' : 'text-[9px]'}`}>{f.label}</div>
+                  className={`flex-1 py-2 rounded-full text-center cursor-pointer active:scale-95 transition-all ${active ? f.pillActive + ' shadow-sm' : f.pill}`}>
+                  <div className="text-sm font-black leading-tight">{f.count}</div>
+                  <div className="text-[9px] font-semibold leading-tight">{f.label}</div>
                 </button>
               );
             })}
