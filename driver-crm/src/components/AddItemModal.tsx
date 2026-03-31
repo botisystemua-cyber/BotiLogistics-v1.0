@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { X, UserPlus, Package, Send } from 'lucide-react';
 import { useApp } from '../store/useAppStore';
 import { addRouteItem } from '../api';
-import type { ViewTab } from '../types';
 
 interface Props {
   onClose: () => void;
@@ -17,20 +16,27 @@ export function AddItemModal({ onClose, onAdded }: Props) {
   const [selectedRoute, setSelectedRoute] = useState(isUnifiedView ? routes[0]?.name || '' : currentSheet);
   const [submitting, setSubmitting] = useState(false);
 
-  // Form fields
+  // Common fields
+  const [dateTrip, setDateTrip] = useState('');
+  const [city, setCity] = useState('');
+  const [amount, setAmount] = useState('');
+  const [note, setNote] = useState('');
+
+  // Passenger fields
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [addrFrom, setAddrFrom] = useState('');
   const [addrTo, setAddrTo] = useState('');
   const [seatsCount, setSeatsCount] = useState('1');
+
+  // Package fields
   const [senderName, setSenderName] = useState('');
   const [recipientName, setRecipientName] = useState('');
   const [recipientPhone, setRecipientPhone] = useState('');
   const [recipientAddr, setRecipientAddr] = useState('');
   const [pkgDesc, setPkgDesc] = useState('');
   const [pkgWeight, setPkgWeight] = useState('');
-  const [amount, setAmount] = useState('');
-  const [note, setNote] = useState('');
+  const [ttn, setTtn] = useState('');
 
   const handleSubmit = async () => {
     if (itemType === 'пасажир' && !name.trim()) { showToast('Введи ПІБ'); return; }
@@ -41,8 +47,10 @@ export function AddItemModal({ onClose, onAdded }: Props) {
     try {
       const data: Record<string, string> = {
         routeName: selectedRoute,
-        itemType: itemType === 'пасажир' ? 'Пасажир' : 'Посилка',
+        itemType: itemType === 'пасажир' ? 'пасажир' : 'посилка',
         driverName,
+        dateTrip,
+        city,
         amount,
         note,
       };
@@ -60,6 +68,7 @@ export function AddItemModal({ onClose, onAdded }: Props) {
         data.recipientAddr = recipientAddr;
         data.pkgDesc = pkgDesc;
         data.pkgWeight = pkgWeight;
+        data.ttn = ttn;
       }
 
       const result = await addRouteItem(data);
@@ -118,6 +127,12 @@ export function AddItemModal({ onClose, onAdded }: Props) {
             </div>
           )}
 
+          {/* Common fields */}
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Дата рейсу" value={dateTrip} onChange={setDateTrip} type="date" />
+            <Field label="Місто" value={city} onChange={setCity} placeholder="Київ" />
+          </div>
+
           {/* Passenger fields */}
           {itemType === 'пасажир' && (
             <>
@@ -145,7 +160,10 @@ export function AddItemModal({ onClose, onAdded }: Props) {
                 <Field label="Опис" value={pkgDesc} onChange={setPkgDesc} placeholder="Що відправляється" />
                 <Field label="Вага (кг)" value={pkgWeight} onChange={setPkgWeight} type="number" />
               </div>
-              <Field label="Сума" value={amount} onChange={setAmount} placeholder="0" type="number" />
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="ТТН" value={ttn} onChange={setTtn} placeholder="Номер ТТН" />
+                <Field label="Сума" value={amount} onChange={setAmount} placeholder="0" type="number" />
+              </div>
             </>
           )}
 
