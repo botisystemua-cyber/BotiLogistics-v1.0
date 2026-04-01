@@ -7482,7 +7482,6 @@ async function archiveFromRoute(rteId, sheetName, leadName) {
             }
             await apiPost('deleteFromSheet', { sheet: sheetName, id_col: 'RTE_ID', id_val: rteId });
             // Оновлюємо локальні дані
-            const sheet = routes[activeRouteIdx];
             if (sheet) sheet.rows = (sheet.rows || []).filter(r => r['RTE_ID'] !== rteId);
             passengers = passengers.filter(x => x['PAX_ID'] !== rteId);
             routeSelectedIds.delete(rteId);
