@@ -527,20 +527,64 @@ function handleAddRouteItem(data) {
     }
 
     var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    var sheet = ss.getSheetByName(routeName);
-    if (!sheet) return { success: false, error: 'Аркуш не знайдено: ' + routeName };
 
     var now = new Date();
     var dateStr = Utilities.formatDate(now, 'Europe/Kiev', 'yyyy-MM-dd');
     var timeStr = Utilities.formatDate(now, 'Europe/Kiev', 'HH:mm:ss');
 
-    // Генеруємо ID
+    var direction = (data.direction || '').toLowerCase();
+    var isShipping = itemType === 'посилка' && direction === 'відправка';
+
+    if (isShipping) {
+      // Пишемо у Відправка_N
+      var shipSheetName = routeName.replace('Маршрут_', 'Відправка_');
+      var shipSheet = ss.getSheetByName(shipSheetName);
+      if (!shipSheet) return { success: false, error: 'Аркуш не знайдено: ' + shipSheetName };
+
+      var dispatchId = 'DISP_' + dateStr.replace(/-/g, '') + '_' + timeStr.replace(/:/g, '');
+
+      var shipRow = new Array(TOTAL_COLS_SHIP).fill('');
+      shipRow[COL_SHIP.DISPATCH_ID] = dispatchId;
+      shipRow[COL_SHIP.DATE_CREATED] = dateStr;
+      shipRow[COL_SHIP.DATE_TRIP] = data.dateTrip || '';
+      shipRow[COL_SHIP.DRIVER] = data.driverName || '';
+      shipRow[COL_SHIP.SENDER_PHONE] = data.senderPhone || '';
+      shipRow[COL_SHIP.SENDER_NAME] = data.senderName || '';
+      shipRow[COL_SHIP.RECIPIENT_NAME] = data.recipientName || '';
+      shipRow[COL_SHIP.RECIPIENT_PHONE] = data.recipientPhone || '';
+      shipRow[COL_SHIP.RECIPIENT_ADDR] = data.recipientAddr || '';
+      shipRow[COL_SHIP.WEIGHT] = data.pkgWeight || '';
+      shipRow[COL_SHIP.DESCRIPTION] = data.pkgDesc || '';
+      shipRow[COL_SHIP.AMOUNT] = data.amount || '';
+      shipRow[COL_SHIP.CURRENCY] = data.currency || 'UAH';
+      shipRow[COL_SHIP.PAY_FORM] = data.payForm || '';
+      shipRow[COL_SHIP.STATUS] = 'pending';
+      shipRow[COL_SHIP.NOTE] = data.note || '';
+
+      shipSheet.appendRow(shipRow);
+
+      // Логуємо
+      var logSheet = ss.getSheetByName(SHEET_LOGS);
+      if (logSheet) {
+        logSheet.appendRow([
+          dateStr, timeStr, data.driverName || '', routeName, dispatchId,
+          'відправка', 'added', '', ''
+        ]);
+      }
+
+      return { success: true, message: 'Додано відправку', itemId: dispatchId };
+    }
+
+    // Стандартний запис у Маршрут_N (пасажир або посилка-отримання)
+    var sheet = ss.getSheetByName(routeName);
+    if (!sheet) return { success: false, error: 'Аркуш не знайдено: ' + routeName };
+
     var prefix = itemType === 'пасажир' ? 'PAX' : 'PKG';
     var itemId = prefix + '_' + dateStr.replace(/-/g, '') + '_' + timeStr.replace(/:/g, '');
 
-    // Створюємо рядок (50 колонок)
     var row = new Array(TOTAL_COLS).fill('');
     row[COL.TYPE] = itemType === 'пасажир' ? 'Пасажир' : 'Посилка';
+    row[COL.DIRECTION] = data.direction || '';
     row[COL.ITEM_ID] = itemId;
     row[COL.DATE_CREATED] = dateStr;
     row[COL.DATE_TRIP] = data.dateTrip || '';
@@ -559,6 +603,7 @@ function handleAddRouteItem(data) {
       row[COL.ADDR_TO] = data.addrTo || '';
       row[COL.SEATS_COUNT] = data.seatsCount || '1';
       row[COL.BAGGAGE_WEIGHT] = data.baggageWeight || '';
+      row[COL.TIMING] = data.timing || '';
     } else {
       row[COL.SENDER_NAME] = data.senderName || '';
       row[COL.RECIPIENT_NAME] = data.recipientName || '';
@@ -571,10 +616,9 @@ function handleAddRouteItem(data) {
 
     sheet.appendRow(row);
 
-    // Логуємо
-    var logSheet = ss.getSheetByName(SHEET_LOGS);
-    if (logSheet) {
-      logSheet.appendRow([
+    var logSheet2 = ss.getSheetByName(SHEET_LOGS);
+    if (logSheet2) {
+      logSheet2.appendRow([
         dateStr, timeStr, data.driverName || '', routeName, itemId,
         data.itemType || '', 'added', '', ''
       ]);
