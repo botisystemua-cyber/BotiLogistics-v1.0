@@ -6,8 +6,9 @@ import {
 import type { Package, ItemStatus } from '../types';
 import { useApp } from '../store/useAppStore';
 import { updateItemStatus } from '../api';
+import { Highlight } from './Highlight';
 
-interface Props { pkg: Package; index: number; }
+interface Props { pkg: Package; index: number; searchQuery?: string; }
 
 const borderColor: Record<ItemStatus, string> = {
   pending: 'border-l-amber-400', 'in-progress': 'border-l-blue-500',
@@ -20,7 +21,8 @@ const stLabel: Record<ItemStatus, { t: string; c: string }> = {
   cancelled: { t: 'Скасов.', c: 'text-red-700 bg-red-50' },
 };
 
-export function PackageCard({ pkg: p, index }: Props) {
+export function PackageCard({ pkg: p, index, searchQuery = '' }: Props) {
+  const hl = (text: string) => <Highlight text={text} query={searchQuery} />;
   const { getStatus, setStatus, hiddenCols, driverName, currentSheet, isUnifiedView, showToast } = useApp();
   const [showCancel, setShowCancel] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
@@ -61,14 +63,14 @@ export function PackageCard({ pkg: p, index }: Props) {
           <span className="w-7 h-7 rounded-lg bg-gray-100 text-secondary flex items-center justify-center text-[11px] font-black shrink-0">{index + 1}</span>
           <div className="flex-1 min-w-0">
             {isUnifiedView && p._sourceRoute && <span className="inline-block px-2 py-0.5 rounded-full text-[9px] font-bold text-blue-600 bg-blue-50 mb-0.5">{p._sourceRoute}</span>}
-            {show('recipientAddr') && <div className="font-bold text-text text-[13px] leading-snug truncate">{p.recipientAddr || '—'}</div>}
-            {show('recipientName') && p.recipientName && <div className="text-xs text-secondary truncate">{p.recipientName}</div>}
+            {show('recipientAddr') && <div className="font-bold text-text text-[13px] leading-snug truncate">{hl(p.recipientAddr || '—')}</div>}
+            {show('recipientName') && p.recipientName && <div className="text-xs text-secondary truncate">{hl(p.recipientName)}</div>}
           </div>
           <span className={`shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold ${sl.c}`}>{sl.t}</span>
         </div>
 
         <div className="flex items-center gap-2 ml-9 mb-2 flex-wrap">
-          {show('recipientPhone') && p.recipientPhone && <Chip icon={Phone} c="green">{p.recipientPhone}</Chip>}
+          {show('recipientPhone') && p.recipientPhone && <Chip icon={Phone} c="green">{hl(p.recipientPhone)}</Chip>}
           {show('amount') && p.amount && <Chip icon={CreditCard} c="green" b>{p.amount} {p.currency}</Chip>}
           {show('payStatus') && p.payStatus && <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${p.payStatus === 'Оплачено' ? 'text-emerald-700 bg-emerald-50' : 'text-red-600 bg-red-50'}`}>{p.payStatus}</span>}
           {show('dateTrip') && p.dateTrip && <Chip icon={Calendar} c="gray">{p.dateTrip}</Chip>}

@@ -6,8 +6,9 @@ import {
 import type { Passenger, ItemStatus } from '../types';
 import { useApp } from '../store/useAppStore';
 import { updateItemStatus } from '../api';
+import { Highlight } from './Highlight';
 
-interface Props { passenger: Passenger; index: number; }
+interface Props { passenger: Passenger; index: number; searchQuery?: string; }
 
 const borderColor: Record<ItemStatus, string> = {
   pending: 'border-l-amber-400', 'in-progress': 'border-l-blue-500',
@@ -20,7 +21,8 @@ const stLabel: Record<ItemStatus, { t: string; c: string }> = {
   cancelled: { t: 'Скасов.', c: 'text-red-700 bg-red-50' },
 };
 
-export function PassengerCard({ passenger: p, index }: Props) {
+export function PassengerCard({ passenger: p, index, searchQuery = '' }: Props) {
+  const hl = (text: string) => <Highlight text={text} query={searchQuery} />;
   const { getStatus, setStatus, hiddenCols, driverName, currentSheet, isUnifiedView, showToast } = useApp();
   const [showCancel, setShowCancel] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
@@ -61,12 +63,12 @@ export function PassengerCard({ passenger: p, index }: Props) {
           <span className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center text-xs font-black shrink-0">{index + 1}</span>
           <div className="flex-1 min-w-0">
             {isUnifiedView && p._sourceRoute && <span className="inline-block px-2 py-0.5 rounded-full text-[9px] font-bold text-blue-600 bg-blue-50 mb-0.5">{p._sourceRoute}</span>}
-            {show('name') && <div className="font-bold text-text text-[13px] leading-snug truncate">{p.name}</div>}
+            {show('name') && <div className="font-bold text-text text-[13px] leading-snug truncate">{hl(p.name)}</div>}
             {(show('addrFrom') || show('addrTo')) && (
               <div className="flex items-center gap-1 text-xs text-secondary truncate">
-                {show('addrFrom') && <><Car className="w-3 h-3 shrink-0" /><span className="truncate">{p.addrFrom}</span></>}
+                {show('addrFrom') && <><Car className="w-3 h-3 shrink-0" /><span className="truncate">{hl(p.addrFrom)}</span></>}
                 {show('addrFrom') && show('addrTo') && <ArrowRight className="w-3 h-3 shrink-0 text-brand" />}
-                {show('addrTo') && <span className="truncate">{p.addrTo}</span>}
+                {show('addrTo') && <span className="truncate">{hl(p.addrTo)}</span>}
               </div>
             )}
           </div>
@@ -74,7 +76,7 @@ export function PassengerCard({ passenger: p, index }: Props) {
         </div>
 
         <div className="flex flex-wrap gap-1.5 mb-2">
-          {show('phone') && p.phone && <Chip icon={Phone} c="green">{p.phone}</Chip>}
+          {show('phone') && p.phone && <Chip icon={Phone} c="green">{hl(p.phone)}</Chip>}
           {show('dateTrip') && p.dateTrip && <Chip icon={Calendar} c="gray">{p.dateTrip}</Chip>}
           {show('timing') && p.timing && <Chip icon={Clock} c="gray">{p.timing}</Chip>}
           {show('seatsCount') && p.seatsCount && <Chip icon={Users} c="blue">{p.seatsCount} місць</Chip>}

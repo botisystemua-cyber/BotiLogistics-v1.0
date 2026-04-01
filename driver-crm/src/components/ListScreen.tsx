@@ -290,7 +290,7 @@ export function ListScreen() {
                     <span className="text-[10px] font-bold text-muted bg-gray-100 px-2 py-0.5 rounded-full">{filteredPassengers.length}</span>
                   </div>
                   {filteredPassengers.map((p, i) => (
-                    <PassengerCard key={p._statusKey} passenger={p} index={i} />
+                    <PassengerCard key={p._statusKey} passenger={p} index={i} searchQuery={searchQuery} />
                   ))}
                 </>
               )}
@@ -302,7 +302,7 @@ export function ListScreen() {
                     <span className="text-[10px] font-bold text-muted bg-gray-100 px-2 py-0.5 rounded-full">{filteredPackages.length}</span>
                   </div>
                   {filteredPackages.map((p, i) => (
-                    <PackageCard key={p._statusKey} pkg={p} index={i} />
+                    <PackageCard key={p._statusKey} pkg={p} index={i} searchQuery={searchQuery} />
                   ))}
                 </>
               )}
@@ -310,11 +310,11 @@ export function ListScreen() {
           )
         ) : viewTab === 'passengers' ? (
           currentItems.length === 0 ? <Empty /> : (currentItems as Passenger[]).map((p, i) => (
-            <PassengerCard key={p._statusKey} passenger={p} index={i} />
+            <PassengerCard key={p._statusKey} passenger={p} index={i} searchQuery={searchQuery} />
           ))
         ) : (
           currentItems.length === 0 ? <Empty /> : (currentItems as Pkg[]).map((p, i) => (
-            <PackageCard key={p._statusKey} pkg={p} index={i} />
+            <PackageCard key={p._statusKey} pkg={p} index={i} searchQuery={searchQuery} />
           ))
         )}
       </div>
