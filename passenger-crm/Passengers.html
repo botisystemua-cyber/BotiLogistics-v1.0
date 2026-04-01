@@ -2799,6 +2799,7 @@ function renderRoutes() {
 // ── Рендер картки ліда маршруту (card-style як в CRM) ──
 function renderRouteCard(r, idx, sheetName) {
     const rteId = r['RTE_ID'] || r['PAX_ID / PKG_ID'] || r['PAX_ID/PKG_ID'] || ('row_' + idx);
+    r._resolvedId = rteId; // зберігаємо для пошуку
     const type = r['Тип запису'] || '';
     const name = r['Піб пасажира'] || '—';
     const phone = String(r['Телефон пасажира'] || '—');
@@ -2987,7 +2988,7 @@ function updateRouteBulkToolbar() {
 function startRouteInlineEdit(rteId, colName, sheetName) {
     const sheet = routes[activeRouteIdx];
     if (!sheet) return;
-    const row = (sheet.rows || []).find(r => r['RTE_ID'] === rteId);
+    const row = (sheet.rows || []).find(r => r._resolvedId === rteId || r['RTE_ID'] === rteId);
     if (!row) return;
     const val = row[colName] || '';
     const el = document.getElementById('rdv-' + rteId + '-' + colName);
@@ -3017,7 +3018,7 @@ function startRouteInlineEdit(rteId, colName, sheetName) {
 async function saveRouteInlineEdit(rteId, colName, sheetName, newVal) {
     const sheet = routes[activeRouteIdx];
     if (!sheet) return;
-    const row = (sheet.rows || []).find(r => r['RTE_ID'] === rteId);
+    const row = (sheet.rows || []).find(r => r._resolvedId === rteId || r['RTE_ID'] === rteId);
     if (!row) return;
     const oldVal = row[colName] || '';
     if (String(newVal) === String(oldVal)) { cancelRouteInlineEdit(rteId, colName); return; }
@@ -3039,7 +3040,7 @@ async function saveRouteInlineEdit(rteId, colName, sheetName, newVal) {
 function cancelRouteInlineEdit(rteId, colName) {
     const sheet = routes[activeRouteIdx];
     if (!sheet) return;
-    const row = (sheet.rows || []).find(r => r['RTE_ID'] === rteId);
+    const row = (sheet.rows || []).find(r => r._resolvedId === rteId || r['RTE_ID'] === rteId);
     if (!row) return;
     const el = document.getElementById('rdv-' + rteId + '-' + colName);
     if (el) el.textContent = row[colName] || '—';
@@ -3049,7 +3050,7 @@ function cancelRouteInlineEdit(rteId, colName) {
 function openRouteEditModal(rteId, sheetName) {
     const sheet = routes[activeRouteIdx];
     if (!sheet) return;
-    const r = (sheet.rows || []).find(row => row['RTE_ID'] === rteId);
+    const r = (sheet.rows || []).find(row => row._resolvedId === rteId || row['RTE_ID'] === rteId);
     if (!r) return;
 
     // Використовуємо ту саму модалку пасажира але з route-контекстом
@@ -3109,7 +3110,7 @@ async function deleteFromRoute(rteId, sheetName, leadName) {
         hideLoader();
         if (res.ok) {
             const sheet = routes[activeRouteIdx];
-            if (sheet) sheet.rows = (sheet.rows || []).filter(r => r['RTE_ID'] !== rteId);
+            if (sheet) sheet.rows = (sheet.rows || []).filter(r => r._resolvedId !== rteId);
             routeSelectedIds.delete(rteId);
             showToast('✅ Прибрано з маршруту');
             renderRoutes();
@@ -7475,14 +7476,14 @@ async function archiveFromRoute(rteId, sheetName, leadName) {
         try {
             // Знаходимо PAX_ID з даних маршруту для архівації в CRM
             var sheet = routes[activeRouteIdx];
-            var row = sheet ? (sheet.rows || []).find(function(r) { return r['RTE_ID'] === rteId; }) : null;
+            var row = sheet ? (sheet.rows || []).find(function(r) { return r._resolvedId === rteId || r['RTE_ID'] === rteId; }) : null;
             var paxId = row ? (row['PAX_ID / PKG_ID'] || row['PAX_ID/PKG_ID'] || '') : '';
             if (paxId) {
                 await apiPost('archivePassenger', { pax_ids: [paxId], reason: 'Архівовано з маршруту', archived_by: getManagerName() || 'Менеджер' });
             }
             await apiPost('deleteFromSheet', { sheet: sheetName, id_col: 'RTE_ID', id_val: rteId });
             // Оновлюємо локальні дані
-            if (sheet) sheet.rows = (sheet.rows || []).filter(r => r['RTE_ID'] !== rteId);
+            if (sheet) sheet.rows = (sheet.rows || []).filter(r => r._resolvedId !== rteId);
             passengers = passengers.filter(x => x['PAX_ID'] !== rteId);
             routeSelectedIds.delete(rteId);
             hideLoader();
@@ -7506,7 +7507,7 @@ async function deleteFromRouteFull(rteId, sheetName, leadName) {
             await apiPost('deletePassenger', { pax_ids: [rteId], reason: 'Видалено з маршруту і CRM', archived_by: getManagerName() || 'Менеджер' });
             // Оновлюємо локальні дані
             const sheet = routes[activeRouteIdx];
-            if (sheet) sheet.rows = (sheet.rows || []).filter(r => r['RTE_ID'] !== rteId);
+            if (sheet) sheet.rows = (sheet.rows || []).filter(r => r._resolvedId !== rteId);
             passengers = passengers.filter(x => x['PAX_ID'] !== rteId);
             routeSelectedIds.delete(rteId);
             hideLoader();
