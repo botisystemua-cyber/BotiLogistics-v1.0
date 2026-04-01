@@ -38,7 +38,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const setStatus = useCallback((key: string, status: ItemStatus) => {
     setStatuses((prev) => {
       const next = { ...prev, [key]: status };
-      if (currentSheet && currentSheet !== '__unified__') {
+      if (currentSheet) {
         localStorage.setItem('driverStatuses_' + currentSheet, JSON.stringify(next));
       }
       return next;

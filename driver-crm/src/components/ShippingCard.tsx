@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import type { ShippingItem, ItemStatus } from '../types';
 import { useApp } from '../store/useAppStore';
+import { updateItemStatus } from '../api';
 
 interface Props {
   item: ShippingItem;
@@ -23,19 +24,33 @@ const stLabel: Record<ItemStatus, { t: string; c: string }> = {
 };
 
 export function ShippingCard({ item, index }: Props) {
-  const { getStatus, setStatus, showToast } = useApp();
+  const { getStatus, setStatus, driverName, isUnifiedView, showToast } = useApp();
   const [expanded, setExpanded] = useState(false);
 
   const rawStatus = item._statusKey ? getStatus(item._statusKey) : 'pending';
   const status: ItemStatus = rawStatus in stLabel ? rawStatus : 'pending';
   const canUndo = status === 'completed' || status === 'cancelled';
   const sl = stLabel[status];
+  const sheetName = isUnifiedView && item._sourceRoute
+    ? item._sourceRoute.replace('Маршрут_', 'Відправка_')
+    : item.sheet;
 
-  const doStatus = (ns: ItemStatus) => {
-    if (item._statusKey) { setStatus(item._statusKey, ns); showToast(stLabel[ns].t + '!'); }
+  const doStatus = async (ns: ItemStatus) => {
+    if (!item._statusKey) return;
+    setStatus(item._statusKey, ns);
+    try {
+      await updateItemStatus(driverName, sheetName, { itemId: item.dispatchId, type: 'відправка' } as never, ns);
+      showToast(stLabel[ns].t + '!');
+    } catch (e) { showToast('Помилка: ' + (e as Error).message); }
   };
-  const doUndo = () => {
-    if (canUndo && item._statusKey) { setStatus(item._statusKey, 'pending'); showToast('Відмінено'); }
+  const doUndo = async () => {
+    if (!canUndo || !item._statusKey) return;
+    const prev = status;
+    setStatus(item._statusKey, 'pending');
+    try {
+      await updateItemStatus(driverName, sheetName, { itemId: item.dispatchId, type: 'відправка' } as never, 'pending', 'Відміна');
+      showToast('Відмінено');
+    } catch (e) { showToast('Помилка: ' + (e as Error).message); setStatus(item._statusKey, prev); }
   };
 
   return (

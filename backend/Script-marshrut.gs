@@ -405,6 +405,7 @@ function getShippingItems(sheetName) {
         amount: str(row[COL_SHIP.AMOUNT]),
         currency: str(row[COL_SHIP.CURRENCY]),
         deposit: str(row[COL_SHIP.DEPOSIT]),
+        depositCurrency: str(row[COL_SHIP.DEPOSIT_CURRENCY]),
         payForm: str(row[COL_SHIP.PAY_FORM]),
         payStatus: str(row[COL_SHIP.PAY_STATUS]),
         debt: str(row[COL_SHIP.DEBT]),
@@ -434,9 +435,11 @@ function handleDriverStatusUpdate(data) {
       return { success: false, error: 'Невалідний статус: ' + (data.status || '(пусто)') + '. Допустимі: ' + VALID_STATUSES.join(', ') };
     }
 
-    // Валідація маршруту — дозволяємо тільки Маршрут_*
-    if (!data.routeName || !/^Маршрут_\d+$/.test(data.routeName)) {
-      return { success: false, error: 'Невалідний маршрут: ' + (data.routeName || '(пусто)') };
+    // Валідація маршруту — дозволяємо Маршрут_* та Відправка_*
+    var routeName = data.routeName || '';
+    var isShipping = routeName.indexOf('Відправка_') === 0;
+    if (!routeName || (!isShipping && !/^Маршрут_\d+$/.test(routeName))) {
+      return { success: false, error: 'Невалідний маршрут: ' + (routeName || '(пусто)') };
     }
 
     var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
@@ -459,7 +462,7 @@ function handleDriverStatusUpdate(data) {
       Utilities.formatDate(now, 'Europe/Kiev', 'yyyy-MM-dd'),
       Utilities.formatDate(now, 'Europe/Kiev', 'HH:mm:ss'),
       data.driverId || '',
-      data.routeName || '',
+      routeName,
       data.itemId || '',
       data.itemType || '',
       data.status || '',
@@ -467,34 +470,39 @@ function handleDriverStatusUpdate(data) {
       data.phone || ''
     ]);
 
-    // Оновлюємо
-    var routeSheet = ss.getSheetByName(data.routeName);
-    if (!routeSheet) return { success: true, message: 'Логовано (маршрут не знайдено)' };
+    var targetSheet = ss.getSheetByName(routeName);
+    if (!targetSheet) return { success: true, message: 'Логовано (аркуш не знайдено)' };
 
-    var allData = routeSheet.getDataRange().getValues();
+    var allData = targetSheet.getDataRange().getValues();
     var rowsUpdated = 0;
     var targetId = str(data.itemId);
 
+    // Для Відправка шукаємо по DISPATCH_ID (col A), для Маршрут — по ITEM_ID (col E)
+    var idCol = isShipping ? COL_SHIP.DISPATCH_ID : COL.ITEM_ID;
+    var statusCol = isShipping ? COL_SHIP.STATUS : COL.STATUS;
+    var noteCol = isShipping ? COL_SHIP.NOTE : COL.NOTE;
+    var totalCols = isShipping ? TOTAL_COLS_SHIP : TOTAL_COLS;
+
     for (var i = 1; i < allData.length; i++) {
-      var rowId = str(allData[i][COL.ITEM_ID]);
+      var rowId = str(allData[i][idCol]);
       if (rowId === targetId) {
         var rowNum = i + 1;
 
-        routeSheet.getRange(rowNum, COL.STATUS + 1).setValue(data.status);
+        targetSheet.getRange(rowNum, statusCol + 1).setValue(data.status);
 
         if (data.status === 'cancelled' && data.cancelReason) {
-          var currentNote = str(routeSheet.getRange(rowNum, COL.NOTE + 1).getValue());
+          var currentNote = str(targetSheet.getRange(rowNum, noteCol + 1).getValue());
           var newNote = 'Скасовано: ' + data.cancelReason + (currentNote ? ' | ' + currentNote : '');
-          routeSheet.getRange(rowNum, COL.NOTE + 1).setValue(newNote);
+          targetSheet.getRange(rowNum, noteCol + 1).setValue(newNote);
         }
 
         var colors = STATUS_COLORS[data.status];
         if (colors) {
-          var readCols = Math.min(routeSheet.getLastColumn(), TOTAL_COLS);
-          var rangeToColor = routeSheet.getRange(rowNum, 1, 1, readCols);
+          var readCols = Math.min(targetSheet.getLastColumn(), totalCols);
+          var rangeToColor = targetSheet.getRange(rowNum, 1, 1, readCols);
           rangeToColor.setBackground(colors.bg);
           rangeToColor.setBorder(true, true, true, true, true, true, colors.border, SpreadsheetApp.BorderStyle.SOLID);
-          var statusCell = routeSheet.getRange(rowNum, COL.STATUS + 1);
+          var statusCell = targetSheet.getRange(rowNum, statusCol + 1);
           statusCell.setFontColor(colors.font);
           statusCell.setFontWeight('bold');
         }
