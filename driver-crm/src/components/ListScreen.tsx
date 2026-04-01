@@ -39,7 +39,7 @@ export function ListScreen() {
 
   // Load data for current tab only
   const loadCurrentTab = useCallback(async (tab: ViewTab, force = false) => {
-    const tabsToLoad: ViewTab[] = tab === 'all' ? ['passengers', 'packages'] : tab === 'allPackages' ? ['packages', 'shipping'] : [tab];
+    const tabsToLoad: ViewTab[] = tab === 'all' ? ['passengers', 'packages', 'shipping'] : tab === 'allPackages' ? ['packages', 'shipping'] : [tab];
     const needsLoad = tabsToLoad.some((t) => force || !loadedTabs.has(t));
     if (!needsLoad) return;
 
@@ -142,7 +142,7 @@ export function ListScreen() {
 
   // Stats
   const allStatsItems: { _statusKey: string; _sourceRoute?: string }[] = viewTab === 'all'
-    ? [...passengers, ...packages]
+    ? [...passengers, ...packages, ...shippingItems]
     : viewTab === 'allPackages' ? [...packages, ...shippingItems]
     : viewTab === 'shipping' ? shippingItems
     : viewTab === 'passengers' ? passengers : packages;
@@ -156,7 +156,7 @@ export function ListScreen() {
     cancelled: statsBase.filter((i) => getStatus(i._statusKey) === 'cancelled').length,
   };
 
-  const countSource: { _sourceRoute?: string }[] = viewTab === 'all' ? [...passengers, ...packages] : viewTab === 'allPackages' ? [...packages, ...shippingItems] : viewTab === 'shipping' ? shippingItems : viewTab === 'passengers' ? passengers : packages;
+  const countSource: { _sourceRoute?: string }[] = viewTab === 'all' ? [...passengers, ...packages, ...shippingItems] : viewTab === 'allPackages' ? [...packages, ...shippingItems] : viewTab === 'shipping' ? shippingItems : viewTab === 'passengers' ? passengers : packages;
   const routeTabs = isUnifiedView
     ? [{ name: 'all', label: 'Усі', count: countSource.length },
        ...routes.map((r) => ({ name: r.name, label: r.name.replace('Маршрут_', 'М'), count: countSource.filter((i) => i._sourceRoute === r.name).length }))]
@@ -316,7 +316,7 @@ export function ListScreen() {
             <ShippingCard key={item._statusKey || `ship_${item.rowNum}_${i}`} item={item} index={i} />
           ))
         ) : showAllTab ? (
-          (filteredPassengers.length === 0 && filteredPackages.length === 0) ? <Empty /> : (
+          (filteredPassengers.length === 0 && filteredPackages.length === 0 && filteredShipping.length === 0) ? <Empty /> : (
             <>
               {filteredPassengers.length > 0 && (
                 <>
@@ -339,6 +339,18 @@ export function ListScreen() {
                   </div>
                   {filteredPackages.map((p, i) => (
                     <PackageCard key={p._statusKey} pkg={p} index={i} searchQuery={searchQuery} />
+                  ))}
+                </>
+              )}
+              {filteredShipping.length > 0 && (
+                <>
+                  <div className="flex items-center gap-2 px-1 mt-2">
+                    <Truck className="w-4 h-4 text-blue-500" />
+                    <span className="text-xs font-bold text-text">Відправка</span>
+                    <span className="text-[10px] font-bold text-muted bg-gray-100 px-2 py-0.5 rounded-full">{filteredShipping.length}</span>
+                  </div>
+                  {filteredShipping.map((item, i) => (
+                    <ShippingCard key={item._statusKey || `ship_${item.rowNum}_${i}`} item={item} index={i} />
                   ))}
                 </>
               )}
