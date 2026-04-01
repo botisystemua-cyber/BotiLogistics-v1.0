@@ -2798,7 +2798,7 @@ function renderRoutes() {
 
 // ── Рендер картки ліда маршруту (card-style як в CRM) ──
 function renderRouteCard(r, idx, sheetName) {
-    const rteId = r['RTE_ID'] || '';
+    const rteId = r['RTE_ID'] || r['PAX_ID / PKG_ID'] || r['PAX_ID/PKG_ID'] || ('row_' + idx);
     const type = r['Тип запису'] || '';
     const name = r['Піб пасажира'] || '—';
     const phone = String(r['Телефон пасажира'] || '—');
@@ -3994,6 +3994,7 @@ function openEditPax(id) {
     const p = passengers.find(x => x['PAX_ID'] === id);
     if (!p) return;
     editingPaxId = id; // Запам'ятовуємо який лід редагуємо
+    var sb = document.getElementById('paxSaveBtn'); if (sb) sb.removeAttribute('data-route-sheet');
 
     document.getElementById('paxModalTitle').textContent = '✏️ Редагувати пасажира';
     document.getElementById('smsParserWrap').style.display = 'none'; // Ховаємо SMS парсер при редагуванні
@@ -4502,6 +4503,43 @@ async function savePassenger() {
         currencyWeight: document.getElementById('fCurrencyWeight').value,
         note: document.getElementById('fNote').value.trim()
     };
+
+    // === РЕЖИМ РЕДАГУВАННЯ МАРШРУТУ: оновлюємо поля через updateRouteField ===
+    const routeSheet = saveBtn ? saveBtn.getAttribute('data-route-sheet') : null;
+    if (editingPaxId && routeSheet) {
+        showLoader('Збереження маршруту...');
+        const fieldMap = {
+            'Піб пасажира': name, 'Телефон пасажира': phone,
+            'Телефон реєстратора': formData.phoneReg, 'Кількість місць': formData.seats,
+            'Адреса відправки': formData.from, 'Адреса прибуття': formData.to,
+            'Дата рейсу': formData.date, 'Таймінг': formData.timing,
+            'Сума': formData.price, 'Валюта': formData.currency,
+            'Завдаток': formData.deposit, 'Валюта завдатку': formData.currencyDeposit,
+            'Вага багажу': formData.weight, 'Ціна багажу': formData.weightPrice,
+            'Валюта багажу': formData.currencyWeight, 'Примітка': formData.note
+        };
+        let hasError = false;
+        for (const [col, value] of Object.entries(fieldMap)) {
+            const res = await apiPost('updateRouteField', { sheet: routeSheet, rte_id: editingPaxId, col, value: value || '' });
+            if (!res.ok) { showToast('❌ Помилка: ' + (res.error || col)); hasError = true; break; }
+        }
+        if (!hasError) {
+            // Оновлюємо локальні дані маршруту
+            const rSheet = routes[activeRouteIdx];
+            if (rSheet) {
+                const row = (rSheet.rows || []).find(r => r['RTE_ID'] === editingPaxId);
+                if (row) { for (const [col, value] of Object.entries(fieldMap)) row[col] = value || ''; }
+            }
+            closeModal('passengerModal');
+            editingPaxId = null;
+            if (saveBtn) { saveBtn.removeAttribute('data-route-sheet'); }
+            renderRoutes();
+            showToast('✅ Оновлено');
+        }
+        hideLoader();
+        saveBtn.disabled = false; saveBtn.textContent = origText; saveBtn.style.opacity = '1';
+        return;
+    }
 
     // === РЕЖИМ РЕДАГУВАННЯ: оновлюємо існуючого пасажира через updatePassenger API ===
     // Пропускає перевірку дублікатів, оновлює локальні дані після успіху
@@ -7435,7 +7473,13 @@ async function archiveFromRoute(rteId, sheetName, leadName) {
         if (!yes) return;
         showLoader('Архівування...');
         try {
-            await apiPost('archivePassenger', { pax_ids: [rteId], reason: 'Архівовано з маршруту', archived_by: getManagerName() || 'Менеджер' });
+            // Знаходимо PAX_ID з даних маршруту для архівації в CRM
+            var sheet = routes[activeRouteIdx];
+            var row = sheet ? (sheet.rows || []).find(function(r) { return r['RTE_ID'] === rteId; }) : null;
+            var paxId = row ? (row['PAX_ID / PKG_ID'] || row['PAX_ID/PKG_ID'] || '') : '';
+            if (paxId) {
+                await apiPost('archivePassenger', { pax_ids: [paxId], reason: 'Архівовано з маршруту', archived_by: getManagerName() || 'Менеджер' });
+            }
             await apiPost('deleteFromSheet', { sheet: sheetName, id_col: 'RTE_ID', id_val: rteId });
             // Оновлюємо локальні дані
             const sheet = routes[activeRouteIdx];

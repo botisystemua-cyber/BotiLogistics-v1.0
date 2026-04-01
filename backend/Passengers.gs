@@ -249,6 +249,11 @@ function objToRow(headers, obj) {
 function findRow(sheet, colName, value) {
   var info = getAllData(sheet);
   var colIdx = info.headers.indexOf(colName);
+  // Fallback: шукаємо без пробілів навколо спецсимволів
+  if (colIdx === -1) {
+    var normalized = colName.replace(/\s*\/\s*/g, ' / ');
+    colIdx = info.headers.indexOf(normalized);
+  }
   if (colIdx === -1) return null;
   for (var i = 0; i < info.data.length; i++) {
     if (String(info.data[i][colIdx]) == String(value)) {
@@ -1933,6 +1938,7 @@ function apiUpdateRouteField(params) {
 
   var rteIdCol = headers.indexOf('RTE_ID');
   var paxPkgCol = headers.indexOf('PAX_ID/PKG_ID');
+  if (paxPkgCol === -1) paxPkgCol = headers.indexOf('PAX_ID / PKG_ID');
   var data = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
   var rowNum = -1;
 
