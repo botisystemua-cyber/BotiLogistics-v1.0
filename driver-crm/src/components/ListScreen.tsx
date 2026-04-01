@@ -34,12 +34,12 @@ export function ListScreen() {
   const shippingSheetName = shippingRoutes.find((s) => s.name === 'Відправка_' + routeNum)?.name || '';
   const hasShipping = !!shippingSheetName || isUnifiedView;
 
-  const isPackagesMode = viewTab === 'packages' || viewTab === 'shipping';
+  const isPackagesMode = viewTab === 'packages' || viewTab === 'shipping' || viewTab === 'allPackages';
   const activeMainTab: 'all' | 'passengers' | 'packages' = viewTab === 'all' ? 'all' : isPackagesMode ? 'packages' : 'passengers';
 
   // Load data for current tab only
   const loadCurrentTab = useCallback(async (tab: ViewTab, force = false) => {
-    const tabsToLoad: ViewTab[] = tab === 'all' ? ['passengers', 'packages'] : [tab];
+    const tabsToLoad: ViewTab[] = tab === 'all' ? ['passengers', 'packages'] : tab === 'allPackages' ? ['packages', 'shipping'] : [tab];
     const needsLoad = tabsToLoad.some((t) => force || !loadedTabs.has(t));
     if (!needsLoad) return;
 
@@ -107,6 +107,7 @@ export function ListScreen() {
       else if (tab === 'passengers') showToast('Завантажено пасажирів');
       else if (tab === 'packages') showToast('Завантажено посилок');
       else if (tab === 'shipping') showToast('Відправлення завантажено');
+      else if (tab === 'allPackages') showToast('Завантажено посилки та відправлення');
     } catch (err) { showToast('Помилка: ' + (err as Error).message); }
     finally { setLoading(false); }
   }, [currentSheet, isUnifiedView, shippingSheetName, loadedTabs, routes, shippingRoutes, setStatus, showToast]);
@@ -142,6 +143,7 @@ export function ListScreen() {
   // Stats
   const allStatsItems: { _statusKey: string; _sourceRoute?: string }[] = viewTab === 'all'
     ? [...passengers, ...packages]
+    : viewTab === 'allPackages' ? [...packages, ...shippingItems]
     : viewTab === 'shipping' ? shippingItems
     : viewTab === 'passengers' ? passengers : packages;
   const statsBase = isUnifiedView && routeFilter !== 'all'
@@ -154,7 +156,7 @@ export function ListScreen() {
     cancelled: statsBase.filter((i) => getStatus(i._statusKey) === 'cancelled').length,
   };
 
-  const countSource: { _sourceRoute?: string }[] = viewTab === 'all' ? [...passengers, ...packages] : viewTab === 'shipping' ? shippingItems : viewTab === 'passengers' ? passengers : packages;
+  const countSource: { _sourceRoute?: string }[] = viewTab === 'all' ? [...passengers, ...packages] : viewTab === 'allPackages' ? [...packages, ...shippingItems] : viewTab === 'shipping' ? shippingItems : viewTab === 'passengers' ? passengers : packages;
   const routeTabs = isUnifiedView
     ? [{ name: 'all', label: 'Усі', count: countSource.length },
        ...routes.map((r) => ({ name: r.name, label: r.name.replace('Маршрут_', 'М'), count: countSource.filter((i) => i._sourceRoute === r.name).length }))]
@@ -175,6 +177,7 @@ export function ListScreen() {
 
   const showShipping = viewTab === 'shipping';
   const showAllTab = viewTab === 'all';
+  const showAllPackages = viewTab === 'allPackages';
 
   return (
     <div className="flex-1 flex flex-col bg-bg max-h-dvh overflow-hidden">
@@ -211,7 +214,7 @@ export function ListScreen() {
         {/* Main tabs */}
         <div className="flex gap-2 mb-2.5">
           {mainTabs.map((t) => (
-            <button key={t.key} onClick={() => setViewTab(t.key === 'all' ? 'all' : t.key)}
+            <button key={t.key} onClick={() => setViewTab(t.key === 'packages' && hasShipping ? 'allPackages' : t.key)}
               className={`flex-1 py-2.5 rounded-xl text-[13px] font-bold text-center cursor-pointer transition-all ${
                 activeMainTab === t.key ? 'bg-brand text-white shadow-sm' : 'bg-gray-100 text-gray-400'
               }`}>
@@ -220,9 +223,13 @@ export function ListScreen() {
           ))}
         </div>
 
-        {/* Sub-tabs: Отримання | Відправка */}
+        {/* Sub-tabs: Усі | Отримання | Відправка */}
         {isPackagesMode && hasShipping && (
           <div className="flex items-center gap-1 mb-2 bg-gray-100 rounded-lg p-0.5">
+            <button onClick={() => setViewTab('allPackages')}
+              className={`flex-1 py-1.5 rounded-md text-[11px] font-semibold text-center cursor-pointer transition-all ${viewTab === 'allPackages' ? 'bg-white text-text shadow-sm' : 'text-gray-400'}`}>
+              <LayoutGrid className="w-3 h-3 inline mr-1 -mt-0.5" />Усі
+            </button>
             <button onClick={() => setViewTab('packages')}
               className={`flex-1 py-1.5 rounded-md text-[11px] font-semibold text-center cursor-pointer transition-all ${viewTab === 'packages' ? 'bg-white text-text shadow-sm' : 'text-gray-400'}`}>
               <Package className="w-3 h-3 inline mr-1 -mt-0.5" />Отримання
@@ -275,6 +282,35 @@ export function ListScreen() {
             <RefreshCw className="w-7 h-7 text-brand animate-spin mb-3" />
             <p className="text-muted text-sm">Завантаження...</p>
           </div>
+        ) : showAllPackages ? (
+          (filteredPackages.length === 0 && filteredShipping.length === 0) ? <Empty /> : (
+            <>
+              {filteredPackages.length > 0 && (
+                <>
+                  <div className="flex items-center gap-2 px-1">
+                    <Package className="w-4 h-4 text-brand" />
+                    <span className="text-xs font-bold text-text">Отримання</span>
+                    <span className="text-[10px] font-bold text-muted bg-gray-100 px-2 py-0.5 rounded-full">{filteredPackages.length}</span>
+                  </div>
+                  {filteredPackages.map((p, i) => (
+                    <PackageCard key={p._statusKey} pkg={p} index={i} searchQuery={searchQuery} />
+                  ))}
+                </>
+              )}
+              {filteredShipping.length > 0 && (
+                <>
+                  <div className="flex items-center gap-2 px-1 mt-2">
+                    <Truck className="w-4 h-4 text-blue-500" />
+                    <span className="text-xs font-bold text-text">Відправка</span>
+                    <span className="text-[10px] font-bold text-muted bg-gray-100 px-2 py-0.5 rounded-full">{filteredShipping.length}</span>
+                  </div>
+                  {filteredShipping.map((item, i) => (
+                    <ShippingCard key={item._statusKey || `ship_${item.rowNum}_${i}`} item={item} index={i} />
+                  ))}
+                </>
+              )}
+            </>
+          )
         ) : showShipping ? (
           filteredShipping.length === 0 ? <Empty /> : filteredShipping.map((item, i) => (
             <ShippingCard key={item._statusKey || `ship_${item.rowNum}_${i}`} item={item} index={i} />
