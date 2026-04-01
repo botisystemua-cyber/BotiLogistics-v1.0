@@ -2955,13 +2955,13 @@ function toggleRouteSelectAll() {
     const sheet = routes[activeRouteIdx];
     if (!sheet) return;
     const filtered = getFilteredRouteRows(sheet.rows || []);
-    const allSelected = filtered.length > 0 && filtered.every(r => routeSelectedIds.has(r['RTE_ID']));
+    const allSelected = filtered.length > 0 && filtered.every(r => routeSelectedIds.has(r._resolvedId || r['RTE_ID']));
     if (allSelected) {
         // Всі вибрані — знімаємо всі
         routeSelectedIds.clear();
     } else {
         // Не всі вибрані — вибираємо всі
-        filtered.forEach(r => routeSelectedIds.add(r['RTE_ID']));
+        filtered.forEach(r => routeSelectedIds.add(r._resolvedId || r['RTE_ID']));
     }
     _routeToolbarForceOpen = true;
     renderRoutes();
@@ -3131,7 +3131,7 @@ async function routeBulkDeleteFromRoute() {
         let ok = 0, fail = 0;
         for (const rteId of routeSelectedIds) {
             const res = await apiPost('deleteFromSheet', { sheet: sheet.sheetName, id_col: 'RTE_ID', id_val: rteId });
-            if (res.ok) { ok++; sheet.rows = (sheet.rows || []).filter(r => r['RTE_ID'] !== rteId); }
+            if (res.ok) { ok++; sheet.rows = (sheet.rows || []).filter(r => (r._resolvedId || r['RTE_ID']) !== rteId); }
             else fail++;
         }
         hideLoader();
@@ -3162,7 +3162,7 @@ async function doTransferRouteLead(rteId, fromSheet, toSheet) {
     closeMessengerPopup();
     const sheet = routes[activeRouteIdx];
     if (!sheet) return;
-    const row = (sheet.rows || []).find(r => r['RTE_ID'] === rteId);
+    const row = (sheet.rows || []).find(r => r._resolvedId === rteId || r['RTE_ID'] === rteId);
     if (!row) return;
 
     showLoader('Пересадка...');
@@ -3174,7 +3174,7 @@ async function doTransferRouteLead(rteId, fromSheet, toSheet) {
     hideLoader();
     if (delRes.ok) {
         // Видаляємо зі старого маршруту
-        sheet.rows = (sheet.rows || []).filter(r => r['RTE_ID'] !== rteId);
+        sheet.rows = (sheet.rows || []).filter(r => (r._resolvedId || r['RTE_ID']) !== rteId);
         routeSelectedIds.delete(rteId);
         // Інвалідуємо дані цільового маршруту щоб при відкритті перезавантажив
         var targetRoute = routes.find(function(r) { return r.sheetName === toSheet; });
@@ -3209,14 +3209,14 @@ async function doBulkTransfer(toSheet) {
     if (!sheet) return;
     showLoader('Пересадка ' + routeSelectedIds.size + ' записів...');
 
-    const leadsToMove = (sheet.rows || []).filter(r => routeSelectedIds.has(r['RTE_ID']));
+    const leadsToMove = (sheet.rows || []).filter(r => routeSelectedIds.has(r._resolvedId || r['RTE_ID']));
     const addRes = await apiPost('addToRoute', { sheetName: toSheet, leads: leadsToMove });
     if (!addRes.ok) { hideLoader(); showToast('❌ ' + (addRes.error || 'Помилка')); return; }
 
     let ok = 0;
     for (const rteId of routeSelectedIds) {
         const res = await apiPost('deleteFromSheet', { sheet: sheet.sheetName, id_col: 'RTE_ID', id_val: rteId });
-        if (res.ok) { ok++; sheet.rows = (sheet.rows || []).filter(r => r['RTE_ID'] !== rteId); }
+        if (res.ok) { ok++; sheet.rows = (sheet.rows || []).filter(r => (r._resolvedId || r['RTE_ID']) !== rteId); }
     }
     // Інвалідуємо цільовий маршрут
     var targetRoute = routes.find(function(r) { return r.sheetName === toSheet; });
@@ -4528,7 +4528,7 @@ async function savePassenger() {
             // Оновлюємо локальні дані маршруту
             const rSheet = routes[activeRouteIdx];
             if (rSheet) {
-                const row = (rSheet.rows || []).find(r => r['RTE_ID'] === editingPaxId);
+                const row = (rSheet.rows || []).find(r => r._resolvedId === editingPaxId || r['RTE_ID'] === editingPaxId);
                 if (row) { for (const [col, value] of Object.entries(fieldMap)) row[col] = value || ''; }
             }
             closeModal('passengerModal');
@@ -7146,7 +7146,7 @@ async function reorderRouteAfterOptimize() {
 
     // Побудувати оптимізований порядок
     const byId = {};
-    for (const r of paxRows) byId[r['RTE_ID']] = r;
+    for (const r of paxRows) byId[r._resolvedId || r['RTE_ID']] = r;
 
     const orderedPax = [];
     for (const id of optimizedOrderIds) {
@@ -7154,7 +7154,7 @@ async function reorderRouteAfterOptimize() {
     }
     // Додати тих, хто не потрапив в оптимізацію
     for (const r of paxRows) {
-        if (!optimizedOrderIds.includes(r['RTE_ID'])) orderedPax.push(r);
+        if (!optimizedOrderIds.includes(r._resolvedId || r['RTE_ID'])) orderedPax.push(r);
     }
 
     // Видаляємо всіх пасажирів і додаємо заново в правильному порядку
@@ -7535,7 +7535,7 @@ function routeBulkArchive() {
             await apiPost('archivePassenger', { pax_ids: ids, reason: 'Архівовано з маршруту', archived_by: getManagerName() || 'Менеджер' });
             for (const rteId of ids) {
                 await apiPost('deleteFromSheet', { sheet: sheet.sheetName, id_col: 'RTE_ID', id_val: rteId });
-                sheet.rows = (sheet.rows || []).filter(r => r['RTE_ID'] !== rteId);
+                sheet.rows = (sheet.rows || []).filter(r => (r._resolvedId || r['RTE_ID']) !== rteId);
             }
             passengers = passengers.filter(x => !ids.includes(x['PAX_ID']));
             hideLoader();
@@ -7565,7 +7565,7 @@ function routeBulkDeleteFull() {
         try {
             for (const rteId of ids) {
                 await apiPost('deleteFromSheet', { sheet: sheet.sheetName, id_col: 'RTE_ID', id_val: rteId });
-                sheet.rows = (sheet.rows || []).filter(r => r['RTE_ID'] !== rteId);
+                sheet.rows = (sheet.rows || []).filter(r => (r._resolvedId || r['RTE_ID']) !== rteId);
             }
             await apiPost('deletePassenger', { pax_ids: ids, reason: 'Видалено з маршруту і CRM', archived_by: getManagerName() || 'Менеджер' });
             passengers = passengers.filter(x => !ids.includes(x['PAX_ID']));
