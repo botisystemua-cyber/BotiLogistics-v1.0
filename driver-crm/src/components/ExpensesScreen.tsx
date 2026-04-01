@@ -48,9 +48,20 @@ export function ExpensesScreen() {
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  const total = items.reduce((sum, e) => sum + e.amount, 0);
+  const totalsByCurrency: Record<string, number> = {};
+  items.forEach((e) => { totalsByCurrency[e.currency] = (totalsByCurrency[e.currency] || 0) + e.amount; });
+  const currencyEntries = Object.entries(totalsByCurrency);
+
+  // Залишок авансу — рахуємо тільки витрати в тій самій валюті
+  const advanceCashSpent = advance ? (totalsByCurrency[advance.cashCurrency] || 0) : 0;
+  const advanceCardSpent = advance ? (totalsByCurrency[advance.cardCurrency] || 0) : 0;
   const advanceTotal = advance ? advance.cash + advance.card : 0;
-  const remaining = advanceTotal - total;
+  const totalSpentInAdvanceCurrency = advance
+    ? (advance.cashCurrency === advance.cardCurrency
+        ? advanceCashSpent
+        : advanceCashSpent + advanceCardSpent)
+    : 0;
+  const remaining = advanceTotal - totalSpentInAdvanceCurrency;
 
   const handleDelete = async (item: ExpenseItem) => {
     try {
@@ -115,9 +126,19 @@ export function ExpensesScreen() {
               <div className="flex items-center justify-between">
                 <div>
                   <div className="text-[10px] font-bold text-muted uppercase tracking-wider">Всього витрат</div>
-                  <div className="text-2xl font-black text-text">{total.toFixed(2)}</div>
+                  {currencyEntries.length === 0 ? (
+                    <div className="text-2xl font-black text-text">0</div>
+                  ) : (
+                    <div className="flex flex-wrap gap-x-3 gap-y-0.5">
+                      {currencyEntries.map(([cur, sum]) => (
+                        <div key={cur} className="text-xl font-black text-text">
+                          {sum.toFixed(2)} <span className="text-sm text-muted font-bold">{cur}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                <div className="text-right">
+                <div className="text-right shrink-0">
                   <div className="text-[10px] font-bold text-muted uppercase tracking-wider">Записів</div>
                   <div className="text-2xl font-black text-muted">{items.length}</div>
                 </div>
