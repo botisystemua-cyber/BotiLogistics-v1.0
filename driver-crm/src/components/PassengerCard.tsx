@@ -60,9 +60,9 @@ export function PassengerCard({ passenger: p, index, searchQuery = '' }: Props) 
     <div className={`bg-card rounded-2xl border-2 border-gray-300 ${borderColor[status]} border-l-4 shadow-[0_2px_8px_rgba(0,0,0,0.06)] overflow-hidden`}>
       <div className="p-3.5">
         <div className="flex items-center gap-2.5 mb-2">
-          <span className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex flex-col items-center justify-center shrink-0">
-            <User className="w-3 h-3" />
-            <span className="text-[8px] font-black leading-none">{index + 1}</span>
+          <span className="relative w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center text-xs font-black shrink-0">
+            {index + 1}
+            <User className="w-2.5 h-2.5 absolute -bottom-0.5 -right-0.5 bg-blue-100 rounded-full p-0.5 box-content" />
           </span>
           <div className="flex-1 min-w-0">
             {isUnifiedView && p._sourceRoute && <span className="inline-block px-2 py-0.5 rounded-full text-[9px] font-bold text-blue-600 bg-blue-50 mb-0.5">{p._sourceRoute}</span>}

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
   Phone, MapPin, RotateCw, CheckCircle2, XCircle, Undo2,
-  CreditCard, Info, ChevronUp, Calendar, Package as PkgIcon,
+  CreditCard, Info, ChevronUp, Calendar,
 } from 'lucide-react';
 import type { Package, ItemStatus } from '../types';
 import { useApp } from '../store/useAppStore';
@@ -60,9 +60,9 @@ export function PackageCard({ pkg: p, index, searchQuery = '' }: Props) {
     <div className={`bg-card rounded-2xl border-2 border-gray-300 ${borderColor[status]} border-l-4 shadow-[0_2px_8px_rgba(0,0,0,0.06)] overflow-hidden`}>
       <div className="px-3 py-2.5">
         <div className="flex items-center gap-2 mb-1">
-          <span className="w-7 h-7 rounded-lg bg-amber-50 text-amber-600 flex flex-col items-center justify-center shrink-0">
-            <PkgIcon className="w-3 h-3" />
-            <span className="text-[8px] font-black leading-none">{index + 1}</span>
+          <span className="relative w-7 h-7 rounded-lg bg-gray-100 text-secondary flex items-center justify-center text-[11px] font-black shrink-0">
+            {index + 1}
+            <span className="absolute -bottom-0.5 -right-0.5 text-[10px] leading-none">📦</span>
           </span>
           <div className="flex-1 min-w-0">
             {isUnifiedView && p._sourceRoute && <span className="inline-block px-2 py-0.5 rounded-full text-[9px] font-bold text-blue-600 bg-blue-50 mb-0.5">{p._sourceRoute}</span>}
