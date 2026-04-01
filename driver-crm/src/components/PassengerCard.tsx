@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
   Phone, MapPin, RotateCw, CheckCircle2, XCircle, Undo2,
-  Car, ArrowRight, Info, ChevronUp, CreditCard, Calendar, Clock, Users,
+  Car, ArrowRight, Info, ChevronUp, CreditCard, Calendar, Clock, Users, User,
 } from 'lucide-react';
 import type { Passenger, ItemStatus } from '../types';
 import { useApp } from '../store/useAppStore';
@@ -60,7 +60,10 @@ export function PassengerCard({ passenger: p, index, searchQuery = '' }: Props) 
     <div className={`bg-card rounded-2xl border-2 border-gray-300 ${borderColor[status]} border-l-4 shadow-[0_2px_8px_rgba(0,0,0,0.06)] overflow-hidden`}>
       <div className="p-3.5">
         <div className="flex items-center gap-2.5 mb-2">
-          <span className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center text-xs font-black shrink-0">{index + 1}</span>
+          <span className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex flex-col items-center justify-center shrink-0">
+            <User className="w-3 h-3" />
+            <span className="text-[8px] font-black leading-none">{index + 1}</span>
+          </span>
           <div className="flex-1 min-w-0">
             {isUnifiedView && p._sourceRoute && <span className="inline-block px-2 py-0.5 rounded-full text-[9px] font-bold text-blue-600 bg-blue-50 mb-0.5">{p._sourceRoute}</span>}
             {show('name') && <div className="font-bold text-text text-[13px] leading-snug truncate">{hl(p.name)}</div>}
