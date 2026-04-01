@@ -1,6 +1,8 @@
 export interface Route {
   name: string;
   count: number;
+  paxCount?: number;
+  pkgCount?: number;
 }
 
 export interface ShippingRoute {

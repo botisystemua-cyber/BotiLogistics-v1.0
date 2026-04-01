@@ -45,64 +45,63 @@ export function ListScreen() {
 
     setLoading(true);
     try {
+      const tasks: Promise<void>[] = [];
+
       for (const loadTab of tabsToLoad) {
         if (!force && loadedTabs.has(loadTab)) continue;
 
         if (loadTab === 'passengers') {
-          if (isUnifiedView && routes.length > 0) {
-            const all: Passenger[] = [];
-            for (const route of routes) {
-              try {
-                const items = await fetchPassengers(route.name);
-                all.push(...items.map((p) => ({ ...p, _sourceRoute: route.name })));
-              } catch { /* skip failed route */ }
+          tasks.push((async () => {
+            if (isUnifiedView && routes.length > 0) {
+              const results = await Promise.allSettled(routes.map((route) => fetchPassengers(route.name).then((items) => items.map((p) => ({ ...p, _sourceRoute: route.name })))));
+              const all = results.flatMap((r) => r.status === 'fulfilled' ? r.value : []);
+              all.forEach((p, i) => { p._statusKey = `pax_${p.itemId}_${p._sourceRoute}_${i}`; if (p.status && p.status !== 'pending') setStatus(p._statusKey, p.status as ItemStatus); });
+              setPassengers(all);
+            } else if (!isUnifiedView) {
+              const items = await fetchPassengers(currentSheet);
+              items.forEach((p, i) => { p._statusKey = `pax_${p.itemId}_${i}`; if (p.status && p.status !== 'pending') setStatus(p._statusKey, p.status as ItemStatus); });
+              setPassengers(items);
             }
-            all.forEach((p, i) => { p._statusKey = `pax_${p.itemId}_${p._sourceRoute}_${i}`; if (p.status && p.status !== 'pending') setStatus(p._statusKey, p.status as ItemStatus); });
-            setPassengers(all);
-          } else if (!isUnifiedView) {
-            const items = await fetchPassengers(currentSheet);
-            items.forEach((p, i) => { p._statusKey = `pax_${p.itemId}_${i}`; if (p.status && p.status !== 'pending') setStatus(p._statusKey, p.status as ItemStatus); });
-            setPassengers(items);
-          }
+            setLoadedTabs((prev) => new Set(prev).add('passengers'));
+          })());
         } else if (loadTab === 'packages') {
-          if (isUnifiedView && routes.length > 0) {
-            const all: Pkg[] = [];
-            for (const route of routes) {
-              try {
-                const items = await fetchPackages(route.name);
-                all.push(...items.map((p) => ({ ...p, _sourceRoute: route.name })));
-              } catch { /* skip failed route */ }
+          tasks.push((async () => {
+            if (isUnifiedView && routes.length > 0) {
+              const results = await Promise.allSettled(routes.map((route) => fetchPackages(route.name).then((items) => items.map((p) => ({ ...p, _sourceRoute: route.name })))));
+              const all = results.flatMap((r) => r.status === 'fulfilled' ? r.value : []);
+              all.forEach((p, i) => { p._statusKey = `pkg_${p.itemId}_${p._sourceRoute}_${i}`; if (p.status && p.status !== 'pending') setStatus(p._statusKey, p.status as ItemStatus); });
+              setPackages(all);
+            } else if (!isUnifiedView) {
+              const items = await fetchPackages(currentSheet);
+              items.forEach((p, i) => { p._statusKey = `pkg_${p.itemId}_${i}`; if (p.status && p.status !== 'pending') setStatus(p._statusKey, p.status as ItemStatus); });
+              setPackages(items);
             }
-            all.forEach((p, i) => { p._statusKey = `pkg_${p.itemId}_${p._sourceRoute}_${i}`; if (p.status && p.status !== 'pending') setStatus(p._statusKey, p.status as ItemStatus); });
-            setPackages(all);
-          } else if (!isUnifiedView) {
-            const items = await fetchPackages(currentSheet);
-            items.forEach((p, i) => { p._statusKey = `pkg_${p.itemId}_${i}`; if (p.status && p.status !== 'pending') setStatus(p._statusKey, p.status as ItemStatus); });
-            setPackages(items);
-          }
+            setLoadedTabs((prev) => new Set(prev).add('packages'));
+          })());
         } else if (loadTab === 'shipping') {
-          if (isUnifiedView && routes.length > 0) {
-            const all: ShippingItem[] = [];
-            for (let ri = 0; ri < routes.length; ri++) {
-              const routeName = routes[ri].name;
-              const sName = shippingRoutes.find((s) => s.name === 'Відправка_' + (ri + 1))?.name;
-              if (!sName) continue;
-              try {
-                const items = await fetchShippingItems(sName);
-                all.push(...items.map((s) => ({ ...s, _sourceRoute: routeName })));
-              } catch { /* skip */ }
+          tasks.push((async () => {
+            if (isUnifiedView && routes.length > 0) {
+              const shipTasks = routes.map((route) => {
+                const num = route.name.replace('Маршрут_', '');
+                const sName = shippingRoutes.find((s) => s.name === 'Відправка_' + num)?.name;
+                if (!sName) return Promise.resolve([]);
+                return fetchShippingItems(sName).then((items) => items.map((s) => ({ ...s, _sourceRoute: route.name }))).catch(() => [] as ShippingItem[]);
+              });
+              const results = await Promise.all(shipTasks);
+              const all = results.flat();
+              all.forEach((s, i) => { s._statusKey = `ship_${s.dispatchId || s.rowNum}_${s._sourceRoute}_${i}`; if (s.status && s.status !== 'pending') setStatus(s._statusKey, s.status as ItemStatus); });
+              setShippingItems(all);
+            } else if (shippingSheetName) {
+              const items = await fetchShippingItems(shippingSheetName);
+              items.forEach((s, i) => { s._statusKey = `ship_${s.dispatchId || s.rowNum}_${i}`; if (s.status && s.status !== 'pending') setStatus(s._statusKey, s.status as ItemStatus); });
+              setShippingItems(items);
             }
-            all.forEach((s, i) => { s._statusKey = `ship_${s.dispatchId || s.rowNum}_${s._sourceRoute}_${i}`; if (s.status && s.status !== 'pending') setStatus(s._statusKey, s.status as ItemStatus); });
-            setShippingItems(all);
-          } else if (shippingSheetName) {
-            const items = await fetchShippingItems(shippingSheetName);
-            items.forEach((s, i) => { s._statusKey = `ship_${s.dispatchId || s.rowNum}_${i}`; if (s.status && s.status !== 'pending') setStatus(s._statusKey, s.status as ItemStatus); });
-            setShippingItems(items);
-          }
+            setLoadedTabs((prev) => new Set(prev).add('shipping'));
+          })());
         }
-
-        setLoadedTabs((prev) => new Set(prev).add(loadTab));
       }
+
+      await Promise.all(tasks);
       if (tab === 'all') showToast('Завантажено усе');
       else if (tab === 'passengers') showToast('Завантажено пасажирів');
       else if (tab === 'packages') showToast('Завантажено посилок');

@@ -238,12 +238,23 @@ function getAvailableRoutes() {
   var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   var routes = [];
   for (var i = 0; i < KNOWN_ROUTES.length; i++) {
-    var count = 0;
+    var count = 0, paxCount = 0, pkgCount = 0;
     try {
       var sheet = ss.getSheetByName(KNOWN_ROUTES[i]);
-      if (sheet) count = Math.max(0, sheet.getLastRow() - 1);
+      if (sheet) {
+        var lastRow = sheet.getLastRow();
+        count = Math.max(0, lastRow - 1);
+        if (count > 0) {
+          var types = sheet.getRange(2, COL.TYPE + 1, count, 1).getValues();
+          for (var t = 0; t < types.length; t++) {
+            var tv = String(types[t][0] || '').toLowerCase();
+            if (tv.indexOf('пасажир') >= 0) paxCount++;
+            else if (tv.indexOf('посилк') >= 0) pkgCount++;
+          }
+        }
+      }
     } catch (e) { /* sheet not found */ }
-    routes.push({ name: KNOWN_ROUTES[i], count: count });
+    routes.push({ name: KNOWN_ROUTES[i], count: count, paxCount: paxCount, pkgCount: pkgCount });
   }
   var shipping = [];
   for (var j = 0; j < KNOWN_SHIPPING.length; j++) {
