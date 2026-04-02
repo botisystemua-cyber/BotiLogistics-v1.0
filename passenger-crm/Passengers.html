@@ -1329,9 +1329,9 @@
                     </div>
                 </div>
                 <div id="routeDashContent" style="margin-top:10px;">
+                    <div id="routeExpensesStats" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;"></div>
                     <div style="display:flex;gap:6px;flex-wrap:wrap;">
                         <button class="bs-btn" style="background:rgba(255,255,255,0.2);color:white;font-size:11px;padding:8px 14px;border:1px solid rgba(255,255,255,0.3);" onclick="event.stopPropagation();optimizeRouteOrder()">⚡ Оптимізувати порядок</button>
-                        <button class="bs-btn" style="background:rgba(255,255,255,0.2);color:white;font-size:11px;padding:8px 14px;border:1px solid rgba(255,255,255,0.3);" onclick="event.stopPropagation();loadRoutes(true)">🔄 Оновити</button>
                         <button class="bs-btn" style="background:rgba(220,38,38,0.3);color:white;font-size:11px;padding:8px 14px;border:1px solid rgba(220,38,38,0.4);" onclick="event.stopPropagation();confirmDeleteRoute(activeRouteIdx)">🗑️ Видалити маршрут</button>
                     </div>
                 </div>
@@ -2818,6 +2818,9 @@ function renderRoutes() {
     if (title) title.textContent = '🚐 ' + name;
     if (subtitle) subtitle.textContent = '👤 ' + paxCount + ' пасажирів · 📦 ' + parcelCount + ' посилок · ' + rows.length + ' записів';
 
+    // Завантажуємо витрати для цього маршруту
+    loadRouteExpenses(sheet.sheetName);
+
     const filtered = getFilteredRouteRows(rows);
     let html = '';
 
@@ -2831,6 +2834,105 @@ function renderRoutes() {
     list.innerHTML = html;
     renderRouteSidebar();
     updateRouteBulkToolbar();
+}
+
+// ── Витрати маршруту (міні-статистика в дашборді) ──
+var _routeExpensesCache = {};
+async function loadRouteExpenses(sheetName) {
+    var el = document.getElementById('routeExpensesStats');
+    if (!el) return;
+
+    var expSheetName = sheetName.replace('Маршрут_', 'Витрати_');
+
+    // Показуємо loader
+    el.innerHTML = '<span style="font-size:10px;opacity:0.6;">💰 Завантаження витрат...</span>';
+
+    try {
+        var res = await fetch(API_URL_ROUTES, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify({ action: 'getExpenses', payload: { sheetName: expSheetName } })
+        });
+        var data = await res.json();
+
+        if (!data.success || !data.items || data.items.length === 0) {
+            el.innerHTML = '<span style="font-size:10px;opacity:0.5;">💰 Витрат немає</span>';
+            return;
+        }
+
+        var items = data.items;
+        var advance = data.advance;
+
+        // Групуємо по валюті
+        var byCurrency = {};
+        var categoryLabels = { fuel:'⛽ Бензин', food:'🍔 Їжа', parking:'🅿️ Паркування', toll:'🛣️ Толл', fine:'⚠️ Штраф', customs:'🏛️ Митниця', topUp:'📱 Поповнення', other:'📝 Інше', tips:'💵 Чайові' };
+        var byCat = {};
+
+        items.forEach(function(e) {
+            var cur = e.currency || 'CHF';
+            byCurrency[cur] = (byCurrency[cur] || 0) + e.amount;
+            var cat = e.category || 'other';
+            if (!byCat[cat]) byCat[cat] = 0;
+            byCat[cat] += e.amount;
+        });
+
+        // Рендеримо
+        var html = '';
+
+        // Аванс
+        if (advance && (advance.cash > 0 || advance.card > 0)) {
+            html += '<div style="background:rgba(255,255,255,0.15);border-radius:8px;padding:6px 10px;flex-shrink:0;">';
+            html += '<div style="font-size:9px;font-weight:700;opacity:0.6;text-transform:uppercase;">Аванс</div>';
+            if (advance.cash > 0) html += '<div style="font-size:13px;font-weight:800;">' + advance.cash + ' <span style="font-size:10px;opacity:0.7;">' + advance.cashCurrency + '</span></div>';
+            if (advance.card > 0) html += '<div style="font-size:13px;font-weight:800;">' + advance.card + ' <span style="font-size:10px;opacity:0.7;">' + advance.cardCurrency + '</span></div>';
+            html += '</div>';
+        }
+
+        // Всього по валютах
+        var curEntries = Object.entries(byCurrency);
+        if (curEntries.length > 0) {
+            html += '<div style="background:rgba(255,255,255,0.15);border-radius:8px;padding:6px 10px;flex-shrink:0;">';
+            html += '<div style="font-size:9px;font-weight:700;opacity:0.6;text-transform:uppercase;">Витрачено</div>';
+            curEntries.forEach(function(e) {
+                html += '<div style="font-size:13px;font-weight:800;">' + e[1].toFixed(0) + ' <span style="font-size:10px;opacity:0.7;">' + e[0] + '</span></div>';
+            });
+            html += '</div>';
+        }
+
+        // Залишок
+        if (advance && (advance.cash > 0 || advance.card > 0)) {
+            var advTotal = advance.cash + advance.card;
+            // Беремо витрати в тій же валюті що аванс
+            var advCur = advance.cashCurrency || advance.cardCurrency || 'UAH';
+            var spent = byCurrency[advCur] || 0;
+            var remaining = advTotal - spent;
+            html += '<div style="background:' + (remaining >= 0 ? 'rgba(74,222,128,0.2)' : 'rgba(248,113,113,0.2)') + ';border-radius:8px;padding:6px 10px;flex-shrink:0;">';
+            html += '<div style="font-size:9px;font-weight:700;opacity:0.6;text-transform:uppercase;">Залишок</div>';
+            html += '<div style="font-size:13px;font-weight:800;color:' + (remaining >= 0 ? '#4ade80' : '#f87171') + ';">' + remaining.toFixed(0) + ' <span style="font-size:10px;opacity:0.7;">' + advCur + '</span></div>';
+            html += '</div>';
+        }
+
+        // Топ категорії
+        var catEntries = Object.entries(byCat).sort(function(a,b) { return b[1] - a[1]; }).slice(0, 3);
+        if (catEntries.length > 0) {
+            html += '<div style="background:rgba(255,255,255,0.15);border-radius:8px;padding:6px 10px;flex-shrink:0;">';
+            html += '<div style="font-size:9px;font-weight:700;opacity:0.6;text-transform:uppercase;">Топ витрати</div>';
+            catEntries.forEach(function(e) {
+                html += '<div style="font-size:11px;font-weight:600;">' + (categoryLabels[e[0]] || e[0]) + ': ' + e[1].toFixed(0) + '</div>';
+            });
+            html += '</div>';
+        }
+
+        // Записів
+        html += '<div style="background:rgba(255,255,255,0.15);border-radius:8px;padding:6px 10px;flex-shrink:0;">';
+        html += '<div style="font-size:9px;font-weight:700;opacity:0.6;text-transform:uppercase;">Записів</div>';
+        html += '<div style="font-size:13px;font-weight:800;">' + items.length + '</div>';
+        html += '</div>';
+
+        el.innerHTML = html;
+    } catch (e) {
+        el.innerHTML = '<span style="font-size:10px;color:#fca5a5;">💰 Помилка витрат</span>';
+    }
 }
 
 // ── Рендер картки ліда маршруту (card-style як в CRM) ──
