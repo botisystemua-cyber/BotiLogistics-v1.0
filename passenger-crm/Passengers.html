@@ -389,7 +389,7 @@
         .passengers-view.hidden { display: none; }
 
         .trips-filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; align-items: center; }
-        .trip-filter-btn { padding: 6px 14px; border: 1px solid var(--border); border-radius: 20px; background: white; font-size: 11px; font-weight: 600; cursor: pointer; font-family: inherit; white-space: nowrap; transition: all 0.2s; }
+        .trip-filter-btn { padding: 8px 16px; border: 1px solid var(--border); border-radius: 20px; background: white; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; white-space: nowrap; transition: all 0.2s; }
         .trip-filter-btn:hover { border-color: var(--orange); }
         .trip-filter-btn.active { background: var(--orange); color: white; border-color: var(--orange); }
 
@@ -1329,10 +1329,10 @@
                     </div>
                 </div>
                 <div id="routeDashContent" style="margin-top:10px;">
-                    <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
                         <button class="bs-btn" style="background:rgba(255,255,255,0.2);color:white;font-size:11px;padding:8px 14px;border:1px solid rgba(255,255,255,0.3);" onclick="event.stopPropagation();toggleRouteExpensesView()">💰 Витрати</button>
                         <button class="bs-btn" style="background:rgba(255,255,255,0.2);color:white;font-size:11px;padding:8px 14px;border:1px solid rgba(255,255,255,0.3);" onclick="event.stopPropagation();optimizeRouteOrder()">⚡ Оптимізувати порядок</button>
-                        <button class="bs-btn" style="background:rgba(255,255,255,0.2);color:white;font-size:11px;padding:8px 14px;border:1px solid rgba(255,255,255,0.3);" onclick="event.stopPropagation();loadRoutes(true)">🔄 Оновити</button>
+                        <div style="flex:1;"></div>
                         <button class="bs-btn" style="background:rgba(220,38,38,0.3);color:white;font-size:11px;padding:8px 14px;border:1px solid rgba(220,38,38,0.4);" onclick="event.stopPropagation();confirmDeleteRoute(activeRouteIdx)">🗑️ Видалити маршрут</button>
                     </div>
                 </div>
@@ -2402,7 +2402,7 @@ function silentSync(manual, force) {
                     loadRouteSheetData(idx, true).catch(function() {});
                 });
                 // Перерендерити якщо маршрут відкритий
-                if (currentView === 'routes' && activeRouteIdx !== null) renderRoutes();
+                if (currentView === 'routes' && activeRouteIdx !== null && !_showingExpenses) renderRoutes();
             }
             updateAllCounts();
             updateTripFilterDropdown();
