@@ -76,7 +76,7 @@ export function EditItemModal({ item, onClose, onSaved }: Props) {
         fields['Телефон отримувача'] = recipientPhone;
         fields['Адреса отримувача'] = recipientAddr;
         fields['Вага'] = weight;
-        fields['Опис'] = description;
+        fields['Опис посилки'] = description;
         fields['Сума'] = amount;
         fields['Валюта'] = currency;
         fields['Примітка'] = note;

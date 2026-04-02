@@ -656,9 +656,10 @@ function handleAddRouteItem(data) {
 // ============================================
 function handleUpdateDriverFields(data) {
   try {
-    var routeName = data.routeName;
-    var isShipping = /^Відправка_\d+$/.test(routeName);
-    if (!routeName || (!/^Маршрут_\d+$/.test(routeName) && !isShipping)) {
+    var routeName = String(data.routeName || '').trim();
+    var isShipping = routeName.indexOf('Відправка_') === 0;
+    var isRoute = routeName.indexOf('Маршрут_') === 0;
+    if (!routeName || (!isRoute && !isShipping)) {
       return { success: false, error: 'Невалідний маршрут: ' + (routeName || '(пусто)') };
     }
 
