@@ -2385,8 +2385,9 @@ function silentSync(manual, force) {
                 allRouteSheets = newList.map(function(s) {
                     var existing = allRouteSheets.find(function(e) { return e.sheetName === s.sheetName; });
                     return { sheetName: s.sheetName, rowCount: s.rowCount,
-                        headers: existing && existing.rows !== null ? existing.headers : [],
-                        rows: existing ? existing.rows : null };
+                        paxCount: s.paxCount || 0, parcelCount: s.parcelCount || 0,
+                        headers: [],
+                        rows: null }; // Скидаємо rows щоб перезавантажити при відкритті
                 });
                 routes = allRouteSheets.filter(s => {
                     const n = (s.sheetName || '');
@@ -2395,6 +2396,12 @@ function silentSync(manual, force) {
                 setCount('pcCountRoutes', routes.length);
                 setCount('mobileCountRoutes', routes.length);
                 renderRouteSidebar();
+                // Перезавантажуємо дані всіх маршрутів у фоні
+                routes.forEach(function(s, idx) {
+                    loadRouteSheetData(idx, true).catch(function() {});
+                });
+                // Перерендерити якщо маршрут відкритий
+                if (currentView === 'routes' && activeRouteIdx !== null) renderRoutes();
             }
             updateAllCounts();
             updateTripFilterDropdown();
@@ -2434,10 +2441,10 @@ function silentSync(manual, force) {
         if (routeRes.ok && routeRes.data) {
             var newList = routeRes.data;
             allRouteSheets = newList.map(function(s) {
-                var existing = allRouteSheets.find(function(e) { return e.sheetName === s.sheetName; });
                 return { sheetName: s.sheetName, rowCount: s.rowCount,
-                    headers: existing && existing.rows !== null ? existing.headers : [],
-                    rows: existing ? existing.rows : null };
+                    paxCount: s.paxCount || 0, parcelCount: s.parcelCount || 0,
+                    headers: [],
+                    rows: null };
             });
             routes = allRouteSheets.filter(s => {
                 const n = (s.sheetName || '');
@@ -2446,6 +2453,10 @@ function silentSync(manual, force) {
             setCount('pcCountRoutes', routes.length);
             setCount('mobileCountRoutes', routes.length);
             renderRouteSidebar();
+            routes.forEach(function(s, idx) {
+                loadRouteSheetData(idx, true).catch(function() {});
+            });
+            if (currentView === 'routes' && activeRouteIdx !== null) renderRoutes();
         }
         updateAllCounts();
         updateTripFilterDropdown();
