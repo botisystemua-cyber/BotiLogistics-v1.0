@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import {
-  Phone, MapPin, Package, ChevronUp, Info, Car,
+  Phone, MapPin, Package, ChevronUp, Info,
   CreditCard, RotateCw, CheckCircle2, XCircle, Undo2, Pencil,
 } from 'lucide-react';
 import type { ShippingItem, ItemStatus } from '../types';
@@ -10,6 +10,7 @@ import { updateItemStatus } from '../api';
 interface Props {
   item: ShippingItem;
   index: number;
+  onEdit?: (item: ShippingItem) => void;
 }
 
 const borderColor: Record<ItemStatus, string> = {
@@ -23,7 +24,7 @@ const stLabel: Record<ItemStatus, { t: string; c: string }> = {
   cancelled: { t: 'Скасов.', c: 'text-red-700 bg-red-50' },
 };
 
-export function ShippingCard({ item, index }: Props) {
+export function ShippingCard({ item, index, onEdit }: Props) {
   const { getStatus, setStatus, driverName, isUnifiedView, showToast } = useApp();
   const [expanded, setExpanded] = useState(false);
 
@@ -39,7 +40,7 @@ export function ShippingCard({ item, index }: Props) {
     if (!item._statusKey) return;
     setStatus(item._statusKey, ns);
     try {
-      await updateItemStatus(driverName, sheetName, { itemId: item.dispatchId, type: 'відправка' } as never, ns);
+      await updateItemStatus(driverName, sheetName, item, ns);
       showToast(stLabel[ns].t + '!');
     } catch (e) { showToast('Помилка: ' + (e as Error).message); }
   };
@@ -48,7 +49,7 @@ export function ShippingCard({ item, index }: Props) {
     const prev = status;
     setStatus(item._statusKey, 'pending');
     try {
-      await updateItemStatus(driverName, sheetName, { itemId: item.dispatchId, type: 'відправка' } as never, 'pending', 'Відміна');
+      await updateItemStatus(driverName, sheetName, item, 'pending', 'Відміна');
       showToast('Відмінено');
     } catch (e) { showToast('Помилка: ' + (e as Error).message); setStatus(item._statusKey, prev); }
   };
@@ -100,7 +101,7 @@ export function ShippingCard({ item, index }: Props) {
         {/* Actions */}
         <div className="flex gap-2 mb-2">
           <Btn icon={Phone} label="Дзвонити" color="bg-green-50 text-green-700" onClick={() => { if (item.recipientPhone) window.location.href = `tel:${item.recipientPhone}`; else showToast('Немає телефону'); }} />
-          <Btn icon={Car} label="Звідки" color="bg-blue-50 text-blue-700" onClick={() => { showToast('Немає адреси відправки'); }} />
+          <Btn icon={Phone} label="Відправник" color="bg-blue-50 text-blue-700" onClick={() => { if (item.senderPhone) window.location.href = `tel:${item.senderPhone}`; else showToast('Немає телефону відправника'); }} />
           <Btn icon={MapPin} label="Куди" color="bg-blue-50 text-blue-700" onClick={() => { if (item.recipientAddr) window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(item.recipientAddr)}&travelmode=driving`, '_blank'); else showToast('Немає адреси'); }} />
           <Btn icon={expanded ? ChevronUp : Info} label={expanded ? 'Згорнути' : 'Деталі'} color={expanded ? 'bg-brand/10 text-brand' : 'bg-gray-50 text-gray-600'} onClick={() => setExpanded(!expanded)} />
         </div>
@@ -117,9 +118,11 @@ export function ShippingCard({ item, index }: Props) {
       {expanded && (
         <div className="border-t border-gray-100 bg-gray-50/50 px-3 py-2.5">
           <div className="flex justify-end mb-2">
-            <button onClick={() => showToast('Редагування відправок поки недоступне')} className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-gray-100 text-gray-400 text-[11px] font-bold cursor-pointer">
-              <Pencil className="w-3 h-3" />Редагувати
-            </button>
+            {onEdit && (
+              <button onClick={() => onEdit(item)} className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-amber-50 text-amber-700 text-[11px] font-bold cursor-pointer active:scale-95 transition-all">
+                <Pencil className="w-3 h-3" />Редагувати
+              </button>
+            )}
           </div>
           <div className="grid grid-cols-2 gap-x-3 gap-y-1">
             <Cell label="Відправник" value={item.senderName} full />

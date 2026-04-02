@@ -29,11 +29,29 @@ const PACKAGE_COLUMNS = [
   { key: 'direction', label: 'Напрям' },
 ];
 
+const SHIPPING_COLUMNS = [
+  { key: 'recipientAddr', label: 'Адреса отримувача' },
+  { key: 'recipientName', label: 'Отримувач' },
+  { key: 'recipientPhone', label: 'Тел. отримувача' },
+  { key: 'senderName', label: 'Відправник' },
+  { key: 'senderPhone', label: 'Тел. відправника' },
+  { key: 'internalNum', label: 'Внутрішній №' },
+  { key: 'weight', label: 'Вага' },
+  { key: 'description', label: 'Опис' },
+  { key: 'amount', label: 'Сума' },
+  { key: 'payForm', label: 'Форма оплати' },
+  { key: 'payStatus', label: 'Статус оплати' },
+  { key: 'debt', label: 'Борг' },
+  { key: 'dateTrip', label: 'Дата рейсу' },
+];
+
 interface Props { onClose: () => void; }
 
 export function ColumnEditor({ onClose }: Props) {
   const { hiddenCols, toggleCol, viewTab } = useApp();
-  const columns = viewTab === 'packages' ? PACKAGE_COLUMNS : PASSENGER_COLUMNS;
+  const columns = viewTab === 'shipping' ? SHIPPING_COLUMNS
+    : viewTab === 'packages' ? PACKAGE_COLUMNS
+    : PASSENGER_COLUMNS;
 
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-end justify-center" onClick={onClose}>

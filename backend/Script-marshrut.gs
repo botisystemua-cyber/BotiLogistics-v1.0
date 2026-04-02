@@ -657,7 +657,8 @@ function handleAddRouteItem(data) {
 function handleUpdateDriverFields(data) {
   try {
     var routeName = data.routeName;
-    if (!routeName || !/^Маршрут_\d+$/.test(routeName)) {
+    var isShipping = /^Відправка_\d+$/.test(routeName);
+    if (!routeName || (!/^Маршрут_\d+$/.test(routeName) && !isShipping)) {
       return { success: false, error: 'Невалідний маршрут: ' + (routeName || '(пусто)') };
     }
 
@@ -679,13 +680,14 @@ function handleUpdateDriverFields(data) {
       return String(h).replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
     });
 
-    // Шукаємо рядок по ITEM_ID (col E)
+    // Шукаємо рядок: для Відправка по DISPATCH_ID (col A), для Маршрут по ITEM_ID (col E)
     var allData = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
     var rowNum = -1;
     for (var i = 0; i < allData.length; i++) {
-      if (str(allData[i][COL.ITEM_ID]) === str(itemId) || str(allData[i][COL.RTE_ID]) === str(itemId)) {
-        rowNum = i + 2;
-        break;
+      if (isShipping) {
+        if (str(allData[i][COL_SHIP.DISPATCH_ID]) === str(itemId)) { rowNum = i + 2; break; }
+      } else {
+        if (str(allData[i][COL.ITEM_ID]) === str(itemId) || str(allData[i][COL.RTE_ID]) === str(itemId)) { rowNum = i + 2; break; }
       }
     }
     if (rowNum === -1) return { success: false, error: 'Запис не знайдено: ' + itemId };
