@@ -296,6 +296,19 @@ export async function deleteExpense(data: Record<string, string>) {
   catch { throw new Error('Помилка видалення витрати'); }
 }
 
+// ---- Update advance ----
+export async function updateAdvance(data: Record<string, string>) {
+  const response = await fetch(CONFIG.API_URL, {
+    method: 'POST',
+    redirect: 'follow',
+    headers: { 'Content-Type': 'text/plain' },
+    body: JSON.stringify({ action: 'updateAdvance', ...data }),
+  });
+  const text = await response.text();
+  try { return JSON.parse(text); }
+  catch { throw new Error('Помилка оновлення коштів'); }
+}
+
 // ---- Add new item (passenger or package) ----
 export async function addRouteItem(data: Record<string, string>) {
   const response = await fetch(CONFIG.API_URL, {
