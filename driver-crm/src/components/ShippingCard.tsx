@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import {
-  Phone, MapPin, Package, ChevronUp, Info,
-  CreditCard, RotateCw, CheckCircle2, XCircle, Undo2,
+  Phone, MapPin, Package, ChevronUp, Info, Car,
+  CreditCard, RotateCw, CheckCircle2, XCircle, Undo2, Pencil,
 } from 'lucide-react';
 import type { ShippingItem, ItemStatus } from '../types';
 import { useApp } from '../store/useAppStore';
+import { updateItemStatus } from '../api';
 
 interface Props {
   item: ShippingItem;
@@ -23,19 +24,33 @@ const stLabel: Record<ItemStatus, { t: string; c: string }> = {
 };
 
 export function ShippingCard({ item, index }: Props) {
-  const { getStatus, setStatus, showToast } = useApp();
+  const { getStatus, setStatus, driverName, isUnifiedView, showToast } = useApp();
   const [expanded, setExpanded] = useState(false);
 
   const rawStatus = item._statusKey ? getStatus(item._statusKey) : 'pending';
   const status: ItemStatus = rawStatus in stLabel ? rawStatus : 'pending';
   const canUndo = status === 'completed' || status === 'cancelled';
   const sl = stLabel[status];
+  const sheetName = isUnifiedView && item._sourceRoute
+    ? item._sourceRoute.replace('Маршрут_', 'Відправка_')
+    : item.sheet;
 
-  const doStatus = (ns: ItemStatus) => {
-    if (item._statusKey) { setStatus(item._statusKey, ns); showToast(stLabel[ns].t + '!'); }
+  const doStatus = async (ns: ItemStatus) => {
+    if (!item._statusKey) return;
+    setStatus(item._statusKey, ns);
+    try {
+      await updateItemStatus(driverName, sheetName, { itemId: item.dispatchId, type: 'відправка' } as never, ns);
+      showToast(stLabel[ns].t + '!');
+    } catch (e) { showToast('Помилка: ' + (e as Error).message); }
   };
-  const doUndo = () => {
-    if (canUndo && item._statusKey) { setStatus(item._statusKey, 'pending'); showToast('Відмінено'); }
+  const doUndo = async () => {
+    if (!canUndo || !item._statusKey) return;
+    const prev = status;
+    setStatus(item._statusKey, 'pending');
+    try {
+      await updateItemStatus(driverName, sheetName, { itemId: item.dispatchId, type: 'відправка' } as never, 'pending', 'Відміна');
+      showToast('Відмінено');
+    } catch (e) { showToast('Помилка: ' + (e as Error).message); setStatus(item._statusKey, prev); }
   };
 
   return (
@@ -43,8 +58,9 @@ export function ShippingCard({ item, index }: Props) {
       <div className="px-3 py-2.5">
         {/* Header */}
         <div className="flex items-center gap-2 mb-1">
-          <span className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center text-[11px] font-black shrink-0">
+          <span className="relative w-7 h-7 rounded-lg bg-gray-100 text-secondary flex items-center justify-center text-[11px] font-black shrink-0">
             {index + 1}
+            <span className="absolute -bottom-0.5 -right-0.5 text-[10px] leading-none">📦</span>
           </span>
           <div className="flex-1 min-w-0">
             {item._sourceRoute && <span className="inline-block px-2 py-0.5 rounded-full text-[9px] font-bold text-blue-600 bg-blue-50 mb-0.5">{item._sourceRoute}</span>}
@@ -63,7 +79,7 @@ export function ShippingCard({ item, index }: Props) {
         </div>
 
         {/* Key info */}
-        <div className="flex items-center gap-2 ml-9 mb-2 flex-wrap">
+        <div className="flex items-center gap-2 mb-2 flex-wrap">
           {item.internalNum && (
             <span className="text-xs font-semibold text-text flex items-center gap-1">
               <Package className="w-3 h-3 text-blue-500" />#{item.internalNum}
@@ -82,24 +98,11 @@ export function ShippingCard({ item, index }: Props) {
         </div>
 
         {/* Actions */}
-        <div className="flex gap-1.5 ml-9 mb-1.5">
-          {item.recipientPhone && (
-            <button onClick={() => { window.location.href = `tel:${item.recipientPhone}`; }}
-              className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-semibold cursor-pointer active:scale-95 transition-transform bg-green-50 text-green-700">
-              <Phone className="w-4 h-4" />Дзвонити
-            </button>
-          )}
-          {item.recipientAddr && (
-            <button onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(item.recipientAddr)}&travelmode=driving`, '_blank')}
-              className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-semibold cursor-pointer active:scale-95 transition-transform bg-blue-50 text-blue-700">
-              <MapPin className="w-4 h-4" />Карта
-            </button>
-          )}
-          <button onClick={() => setExpanded(!expanded)}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-semibold cursor-pointer active:scale-95 transition-transform ${expanded ? 'bg-brand/10 text-brand' : 'bg-gray-50 text-gray-600'}`}>
-            {expanded ? <ChevronUp className="w-4 h-4" /> : <Info className="w-4 h-4" />}
-            {expanded ? 'Згорнути' : 'Деталі'}
-          </button>
+        <div className="flex gap-2 mb-2">
+          <Btn icon={Phone} label="Дзвонити" color="bg-green-50 text-green-700" onClick={() => { if (item.recipientPhone) window.location.href = `tel:${item.recipientPhone}`; else showToast('Немає телефону'); }} />
+          <Btn icon={Car} label="Звідки" color="bg-blue-50 text-blue-700" onClick={() => { showToast('Немає адреси відправки'); }} />
+          <Btn icon={MapPin} label="Куди" color="bg-blue-50 text-blue-700" onClick={() => { if (item.recipientAddr) window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(item.recipientAddr)}&travelmode=driving`, '_blank'); else showToast('Немає адреси'); }} />
+          <Btn icon={expanded ? ChevronUp : Info} label={expanded ? 'Згорнути' : 'Деталі'} color={expanded ? 'bg-brand/10 text-brand' : 'bg-gray-50 text-gray-600'} onClick={() => setExpanded(!expanded)} />
         </div>
 
         {/* Status buttons */}
@@ -113,6 +116,11 @@ export function ShippingCard({ item, index }: Props) {
 
       {expanded && (
         <div className="border-t border-gray-100 bg-gray-50/50 px-3 py-2.5">
+          <div className="flex justify-end mb-2">
+            <button onClick={() => showToast('Редагування відправок поки недоступне')} className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-gray-100 text-gray-400 text-[11px] font-bold cursor-pointer">
+              <Pencil className="w-3 h-3" />Редагувати
+            </button>
+          </div>
           <div className="grid grid-cols-2 gap-x-3 gap-y-1">
             <Cell label="Відправник" value={item.senderName} full />
             <Cell label="Тел. відправника" value={item.senderPhone} />
@@ -154,6 +162,9 @@ function Cell({ label, value, full }: { label: string; value?: string; full?: bo
   );
 }
 
+function Btn({ icon: I, label, color, onClick }: { icon: typeof Phone; label: string; color: string; onClick: () => void }) {
+  return <button onClick={onClick} className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-semibold cursor-pointer active:scale-95 transition-transform ${color}`}><I className="w-4 h-4" />{label}</button>;
+}
 function SB({ icon: I, c, onClick, disabled }: { icon: typeof RotateCw; c: string; onClick: () => void; disabled?: boolean }) {
   return <button onClick={onClick} disabled={disabled} className={`flex-1 py-2 border rounded-xl flex items-center justify-center transition-all ${c} ${disabled ? 'opacity-50' : 'cursor-pointer active:scale-95'}`}><I className="w-4 h-4" /></button>;
 }

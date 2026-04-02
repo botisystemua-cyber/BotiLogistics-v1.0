@@ -1,5 +1,5 @@
 import { CONFIG } from '../config';
-import type { Route, ShippingRoute, Passenger, Package, ShippingItem, RouteItem } from '../types';
+import type { Route, ShippingRoute, Passenger, Package, ShippingItem, RouteItem, ExpenseItem, ExpenseAdvance } from '../types';
 
 // ============================================
 // Читання через Google Sheets gviz API (публічна таблиця)
@@ -249,6 +249,45 @@ export async function updateItemStatus(
   const text = await response.text();
   try { return JSON.parse(text); }
   catch { throw new Error('Помилка оновлення'); }
+}
+
+// ---- Expenses ----
+export async function fetchExpenses(routeName: string): Promise<{ items: ExpenseItem[]; advance: ExpenseAdvance | null }> {
+  const sheetName = routeName.replace('Маршрут_', 'Витрати_');
+  const response = await fetch(CONFIG.API_URL, {
+    method: 'POST',
+    redirect: 'follow',
+    headers: { 'Content-Type': 'text/plain' },
+    body: JSON.stringify({ action: 'getExpenses', payload: { sheetName } }),
+  });
+  const text = await response.text();
+  const data = JSON.parse(text);
+  if (data.success) return { items: data.items || [], advance: data.advance || null };
+  throw new Error(data.error || 'Помилка завантаження витрат');
+}
+
+export async function addExpense(data: Record<string, string>) {
+  const response = await fetch(CONFIG.API_URL, {
+    method: 'POST',
+    redirect: 'follow',
+    headers: { 'Content-Type': 'text/plain' },
+    body: JSON.stringify({ action: 'addExpense', ...data }),
+  });
+  const text = await response.text();
+  try { return JSON.parse(text); }
+  catch { throw new Error('Помилка додавання витрати'); }
+}
+
+export async function deleteExpense(data: Record<string, string>) {
+  const response = await fetch(CONFIG.API_URL, {
+    method: 'POST',
+    redirect: 'follow',
+    headers: { 'Content-Type': 'text/plain' },
+    body: JSON.stringify({ action: 'deleteExpense', ...data }),
+  });
+  const text = await response.text();
+  try { return JSON.parse(text); }
+  catch { throw new Error('Помилка видалення витрати'); }
 }
 
 // ---- Add new item (passenger or package) ----

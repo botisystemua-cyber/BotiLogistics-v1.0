@@ -1,11 +1,23 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { LogIn, Truck } from 'lucide-react';
 import { BotiLogo } from './BotiLogo';
 import { useApp } from '../store/useAppStore';
+import { fetchRoutes } from '../api';
 
 export function LoginScreen() {
-  const { driverName, setDriverName, setCurrentScreen, showToast } = useApp();
+  const { driverName, setDriverName, setCurrentScreen, setRoutes, setShippingRoutes, showToast } = useApp();
   const [inputValue, setInputValue] = useState(driverName);
+  const prefetched = useRef(false);
+
+  // Prefetch routes while user is on login screen
+  useEffect(() => {
+    if (prefetched.current) return;
+    prefetched.current = true;
+    fetchRoutes().then((data) => {
+      setRoutes(data.routes);
+      setShippingRoutes(data.shipping);
+    }).catch(() => {});
+  }, [setRoutes, setShippingRoutes]);
 
   const handleLogin = () => {
     const name = inputValue.trim();

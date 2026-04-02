@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Package, LogOut, ChevronRight, Layers, RefreshCw } from 'lucide-react';
+import { Package, LogOut, ChevronRight, Layers, RefreshCw, User } from 'lucide-react';
 import { useApp } from '../store/useAppStore';
 import { fetchRoutes } from '../api';
 import { BotiLogo } from './BotiLogo';
 
 export function RouteScreen() {
-  const { driverName, setDriverName, setCurrentScreen, openRoute, routes, setRoutes, setShippingRoutes, showToast } = useApp();
+  const { driverName, setDriverName, setCurrentScreen, openRoute, routes, setRoutes, shippingRoutes, setShippingRoutes } = useApp();
   const [loading, setLoading] = useState(false);
 
   const loadRoutes = async () => {
@@ -47,7 +47,10 @@ export function RouteScreen() {
                 <div className="w-11 h-11 rounded-xl bg-brand flex items-center justify-center shadow-sm"><Layers className="w-5 h-5 text-white" /></div>
                 <div className="flex-1 text-left">
                   <div className="font-bold text-brand-dark text-sm">Усі маршрути</div>
-                  <div className="text-xs text-brand/60">{routes.reduce((s, r) => s + r.count, 0)} записів</div>
+                  <div className="flex items-center gap-2 text-xs text-brand/60">
+                    <span className="flex items-center gap-0.5"><User className="w-3 h-3" />{routes.reduce((s, r) => s + (r.paxCount || 0), 0)}</span>
+                    <span className="flex items-center gap-0.5">📦 {routes.reduce((s, r) => s + (r.pkgCount || 0), 0) + shippingRoutes.reduce((s, r) => s + r.count, 0)}</span>
+                  </div>
                 </div>
                 <ChevronRight className="w-5 h-5 text-brand" />
               </button>
@@ -58,7 +61,10 @@ export function RouteScreen() {
                 <div className="w-10 h-10 rounded-xl bg-brand/10 flex items-center justify-center"><Package className="w-5 h-5 text-brand" /></div>
                 <div className="flex-1 text-left">
                   <div className="font-bold text-text text-sm">{r.name}</div>
-                  <div className="text-xs text-muted">{r.count} записів</div>
+                  <div className="flex items-center gap-2 text-xs text-muted">
+                    <span className="flex items-center gap-0.5"><User className="w-3 h-3" />{r.paxCount || 0}</span>
+                    <span className="flex items-center gap-0.5">📦 {(r.pkgCount || 0) + (() => { const num = r.name.replace('Маршрут_', ''); const ship = shippingRoutes.find(s => s.name === 'Відправка_' + num); return ship ? ship.count : 0; })()}</span>
+                  </div>
                 </div>
                 <ChevronRight className="w-5 h-5 text-muted" />
               </button>

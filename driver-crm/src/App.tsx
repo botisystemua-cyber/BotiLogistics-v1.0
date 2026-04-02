@@ -3,6 +3,7 @@ import { useApp } from './store/useAppStore';
 import { LoginScreen } from './components/LoginScreen';
 import { RouteScreen } from './components/RouteScreen';
 import { ListScreen } from './components/ListScreen';
+import { ExpensesScreen } from './components/ExpensesScreen';
 import { Toast } from './components/Toast';
 
 function AppContent() {
@@ -13,6 +14,7 @@ function AppContent() {
       {currentScreen === 'login' && <LoginScreen />}
       {currentScreen === 'routes' && <RouteScreen />}
       {currentScreen === 'list' && <ListScreen />}
+      {currentScreen === 'expenses' && <ExpensesScreen />}
       <Toast />
     </>
   );

@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import {
   Phone, MapPin, RotateCw, CheckCircle2, XCircle, Undo2,
-  Car, ArrowRight, Info, ChevronUp, CreditCard, Calendar, Clock, Users,
+  Car, ArrowRight, Info, ChevronUp, CreditCard, Calendar, Clock, Users, User, Pencil,
 } from 'lucide-react';
 import type { Passenger, ItemStatus } from '../types';
 import { useApp } from '../store/useAppStore';
 import { updateItemStatus } from '../api';
+import { Highlight } from './Highlight';
 
-interface Props { passenger: Passenger; index: number; }
+interface Props { passenger: Passenger; index: number; searchQuery?: string; onEdit?: (p: Passenger) => void; }
 
 const borderColor: Record<ItemStatus, string> = {
   pending: 'border-l-amber-400', 'in-progress': 'border-l-blue-500',
@@ -20,7 +21,8 @@ const stLabel: Record<ItemStatus, { t: string; c: string }> = {
   cancelled: { t: 'Скасов.', c: 'text-red-700 bg-red-50' },
 };
 
-export function PassengerCard({ passenger: p, index }: Props) {
+export function PassengerCard({ passenger: p, index, searchQuery = '', onEdit }: Props) {
+  const hl = (text: string) => <Highlight text={text} query={searchQuery} />;
   const { getStatus, setStatus, hiddenCols, driverName, currentSheet, isUnifiedView, showToast } = useApp();
   const [showCancel, setShowCancel] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
@@ -58,15 +60,18 @@ export function PassengerCard({ passenger: p, index }: Props) {
     <div className={`bg-card rounded-2xl border-2 border-gray-300 ${borderColor[status]} border-l-4 shadow-[0_2px_8px_rgba(0,0,0,0.06)] overflow-hidden`}>
       <div className="p-3.5">
         <div className="flex items-center gap-2.5 mb-2">
-          <span className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center text-xs font-black shrink-0">{index + 1}</span>
+          <span className="relative w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center text-xs font-black shrink-0">
+            {index + 1}
+            <User className="w-2.5 h-2.5 absolute -bottom-0.5 -right-0.5 bg-blue-100 rounded-full p-0.5 box-content" />
+          </span>
           <div className="flex-1 min-w-0">
             {isUnifiedView && p._sourceRoute && <span className="inline-block px-2 py-0.5 rounded-full text-[9px] font-bold text-blue-600 bg-blue-50 mb-0.5">{p._sourceRoute}</span>}
-            {show('name') && <div className="font-bold text-text text-[13px] leading-snug truncate">{p.name}</div>}
+            {show('name') && <div className="font-bold text-text text-[13px] leading-snug truncate">{hl(p.name)}</div>}
             {(show('addrFrom') || show('addrTo')) && (
               <div className="flex items-center gap-1 text-xs text-secondary truncate">
-                {show('addrFrom') && <><Car className="w-3 h-3 shrink-0" /><span className="truncate">{p.addrFrom}</span></>}
+                {show('addrFrom') && <><Car className="w-3 h-3 shrink-0" /><span className="truncate">{hl(p.addrFrom)}</span></>}
                 {show('addrFrom') && show('addrTo') && <ArrowRight className="w-3 h-3 shrink-0 text-brand" />}
-                {show('addrTo') && <span className="truncate">{p.addrTo}</span>}
+                {show('addrTo') && <span className="truncate">{hl(p.addrTo)}</span>}
               </div>
             )}
           </div>
@@ -74,7 +79,7 @@ export function PassengerCard({ passenger: p, index }: Props) {
         </div>
 
         <div className="flex flex-wrap gap-1.5 mb-2">
-          {show('phone') && p.phone && <Chip icon={Phone} c="green">{p.phone}</Chip>}
+          {show('phone') && p.phone && <Chip icon={Phone} c="green">{hl(p.phone)}</Chip>}
           {show('dateTrip') && p.dateTrip && <Chip icon={Calendar} c="gray">{p.dateTrip}</Chip>}
           {show('timing') && p.timing && <Chip icon={Clock} c="gray">{p.timing}</Chip>}
           {show('seatsCount') && p.seatsCount && <Chip icon={Users} c="blue">{p.seatsCount} місць</Chip>}
@@ -82,11 +87,9 @@ export function PassengerCard({ passenger: p, index }: Props) {
         </div>
 
         <div className="flex gap-2 mb-2">
-          {p.phone && <Btn icon={Phone} label="Дзвонити" color="bg-green-50 text-green-700" onClick={() => { window.location.href = `tel:${p.phone}`; }} />}
+          <Btn icon={Phone} label="Дзвонити" color="bg-green-50 text-green-700" onClick={() => { if (p.phone) window.location.href = `tel:${p.phone}`; else showToast('Немає телефону'); }} />
           <Btn icon={Car} label="Звідки" color="bg-blue-50 text-blue-700" onClick={() => nav(p.addrFrom)} />
           <Btn icon={MapPin} label="Куди" color="bg-blue-50 text-blue-700" onClick={() => nav(p.addrTo)} />
-        </div>
-        <div className="flex gap-2 mb-2">
           <Btn icon={expanded ? ChevronUp : Info} label={expanded ? 'Згорнути' : 'Деталі'} color={expanded ? 'bg-brand/10 text-brand' : 'bg-gray-50 text-gray-600'} onClick={() => setExpanded(!expanded)} />
         </div>
 
@@ -100,6 +103,13 @@ export function PassengerCard({ passenger: p, index }: Props) {
 
       {expanded && (
         <div className="border-t border-gray-100 bg-gray-50/50 px-3 py-2.5">
+          {onEdit && (
+            <div className="flex justify-end mb-2">
+              <button onClick={() => onEdit(p)} className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-amber-50 text-amber-700 text-[11px] font-bold cursor-pointer active:scale-95 transition-all">
+                <Pencil className="w-3 h-3" />Редагувати
+              </button>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-x-3 gap-y-1">
             <Cell label="ПІБ" value={p.name} full />
             <Cell label="Телефон" value={p.phone} />

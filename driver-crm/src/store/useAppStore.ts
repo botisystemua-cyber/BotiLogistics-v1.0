@@ -5,8 +5,8 @@ export interface AppStore {
   driverName: string;
   setDriverName: (name: string) => void;
 
-  currentScreen: 'login' | 'routes' | 'list';
-  setCurrentScreen: (screen: 'login' | 'routes' | 'list') => void;
+  currentScreen: 'login' | 'routes' | 'list' | 'expenses';
+  setCurrentScreen: (screen: 'login' | 'routes' | 'list' | 'expenses') => void;
 
   currentSheet: string;
   isUnifiedView: boolean;

@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import {
   Phone, MapPin, RotateCw, CheckCircle2, XCircle, Undo2,
-  CreditCard, Info, ChevronUp, Package as PkgIcon, Calendar,
+  CreditCard, Info, ChevronUp, Calendar, Pencil,
 } from 'lucide-react';
 import type { Package, ItemStatus } from '../types';
 import { useApp } from '../store/useAppStore';
 import { updateItemStatus } from '../api';
+import { Highlight } from './Highlight';
 
-interface Props { pkg: Package; index: number; }
+interface Props { pkg: Package; index: number; searchQuery?: string; onEdit?: (p: Package) => void; }
 
 const borderColor: Record<ItemStatus, string> = {
   pending: 'border-l-amber-400', 'in-progress': 'border-l-blue-500',
@@ -20,7 +21,8 @@ const stLabel: Record<ItemStatus, { t: string; c: string }> = {
   cancelled: { t: 'Скасов.', c: 'text-red-700 bg-red-50' },
 };
 
-export function PackageCard({ pkg: p, index }: Props) {
+export function PackageCard({ pkg: p, index, searchQuery = '', onEdit }: Props) {
+  const hl = (text: string) => <Highlight text={text} query={searchQuery} />;
   const { getStatus, setStatus, hiddenCols, driverName, currentSheet, isUnifiedView, showToast } = useApp();
   const [showCancel, setShowCancel] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
@@ -58,29 +60,33 @@ export function PackageCard({ pkg: p, index }: Props) {
     <div className={`bg-card rounded-2xl border-2 border-gray-300 ${borderColor[status]} border-l-4 shadow-[0_2px_8px_rgba(0,0,0,0.06)] overflow-hidden`}>
       <div className="px-3 py-2.5">
         <div className="flex items-center gap-2 mb-1">
-          <span className="w-7 h-7 rounded-lg bg-gray-100 text-secondary flex items-center justify-center text-[11px] font-black shrink-0">{index + 1}</span>
+          <span className="relative w-7 h-7 rounded-lg bg-gray-100 text-secondary flex items-center justify-center text-[11px] font-black shrink-0">
+            {index + 1}
+            <span className="absolute -bottom-0.5 -right-0.5 text-[10px] leading-none">📦</span>
+          </span>
           <div className="flex-1 min-w-0">
             {isUnifiedView && p._sourceRoute && <span className="inline-block px-2 py-0.5 rounded-full text-[9px] font-bold text-blue-600 bg-blue-50 mb-0.5">{p._sourceRoute}</span>}
-            {show('recipientAddr') && <div className="font-bold text-text text-[13px] leading-snug truncate">{p.recipientAddr || '—'}</div>}
-            {show('recipientName') && p.recipientName && <div className="text-xs text-secondary truncate">{p.recipientName}</div>}
+            {show('recipientAddr') && <div className="font-bold text-text text-[13px] leading-snug truncate">{hl(p.recipientAddr || '—')}</div>}
+            {show('recipientName') && p.recipientName && <div className="text-xs text-secondary truncate">{hl(p.recipientName)}</div>}
           </div>
           <span className={`shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold ${sl.c}`}>{sl.t}</span>
         </div>
 
         <div className="flex items-center gap-2 ml-9 mb-2 flex-wrap">
-          {show('recipientPhone') && p.recipientPhone && <Chip icon={Phone} c="green">{p.recipientPhone}</Chip>}
+          {show('recipientPhone') && p.recipientPhone && <Chip icon={Phone} c="green">{hl(p.recipientPhone)}</Chip>}
           {show('amount') && p.amount && <Chip icon={CreditCard} c="green" b>{p.amount} {p.currency}</Chip>}
           {show('payStatus') && p.payStatus && <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${p.payStatus === 'Оплачено' ? 'text-emerald-700 bg-emerald-50' : 'text-red-600 bg-red-50'}`}>{p.payStatus}</span>}
           {show('dateTrip') && p.dateTrip && <Chip icon={Calendar} c="gray">{p.dateTrip}</Chip>}
         </div>
 
-        <div className="flex gap-1.5 ml-9 mb-1.5">
-          {p.recipientPhone && <Btn icon={Phone} label="Дзвонити" color="bg-green-50 text-green-700" onClick={() => { window.location.href = `tel:${p.recipientPhone}`; }} />}
-          <Btn icon={MapPin} label="Карта" color="bg-blue-50 text-blue-700" onClick={navigate} />
+        <div className="flex gap-2 mb-2">
+          <Btn icon={Phone} label="Дзвонити" color="bg-green-50 text-green-700" onClick={() => { if (p.recipientPhone) window.location.href = `tel:${p.recipientPhone}`; else showToast('Немає телефону'); }} />
+          <Btn icon={MapPin} label="Звідки" color="bg-blue-50 text-blue-700" onClick={() => { showToast('Немає адреси відправки'); }} />
+          <Btn icon={MapPin} label="Куди" color="bg-blue-50 text-blue-700" onClick={navigate} />
           <Btn icon={expanded ? ChevronUp : Info} label={expanded ? 'Згорнути' : 'Деталі'} color={expanded ? 'bg-brand/10 text-brand' : 'bg-gray-50 text-gray-600'} onClick={() => setExpanded(!expanded)} />
         </div>
 
-        <div className="flex gap-1 ml-9">
+        <div className="flex gap-1.5">
           <SB icon={RotateCw} c="border-blue-200 text-blue-600 hover:bg-blue-50" onClick={() => doStatus('in-progress')} />
           <SB icon={CheckCircle2} c="border-emerald-200 text-emerald-600 hover:bg-emerald-50" onClick={() => doStatus('completed')} />
           <SB icon={XCircle} c="border-red-200 text-red-500 hover:bg-red-50" onClick={() => setShowCancel(true)} />
@@ -90,6 +96,13 @@ export function PackageCard({ pkg: p, index }: Props) {
 
       {expanded && (
         <div className="border-t border-gray-100 bg-gray-50/50 px-3 py-2.5">
+          {onEdit && (
+            <div className="flex justify-end mb-2">
+              <button onClick={() => onEdit(p)} className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-amber-50 text-amber-700 text-[11px] font-bold cursor-pointer active:scale-95 transition-all">
+                <Pencil className="w-3 h-3" />Редагувати
+              </button>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-x-3 gap-y-1">
             <Cell label="Адреса отримувача" value={p.recipientAddr} full />
             <Cell label="Отримувач" value={p.recipientName} />

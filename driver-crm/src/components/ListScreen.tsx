@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
   ArrowLeft, RefreshCw, Package, Users, Truck, BarChart3,
-  ListFilter, LayoutGrid,
+  ListFilter, LayoutGrid, Search, X,
 } from 'lucide-react';
 import { useApp } from '../store/useAppStore';
 import { fetchPassengers, fetchPackages, fetchShippingItems } from '../api';
@@ -11,12 +11,12 @@ import { ShippingCard } from './ShippingCard';
 import { ColumnEditor } from './ColumnEditor';
 import { BottomNav } from './BottomNav';
 import { AddItemModal } from './AddItemModal';
-import { SearchModal } from './SearchModal';
-import type { Passenger, Package as Pkg, ShippingItem, ItemStatus, StatusFilter, ViewTab } from '../types';
+import { EditItemModal } from './EditItemModal';
+import type { Passenger, Package as Pkg, ShippingItem, ItemStatus, StatusFilter, ViewTab, RouteItem } from '../types';
 
 export function ListScreen() {
   const {
-    currentSheet, isUnifiedView, goBack, showToast,
+    currentSheet, isUnifiedView, goBack, showToast, setCurrentScreen,
     statusFilter, setStatusFilter, getStatus, setStatus,
     routeFilter, setRouteFilter, routes, shippingRoutes,
     viewTab, setViewTab,
@@ -29,85 +29,86 @@ export function ListScreen() {
   const [loadedTabs, setLoadedTabs] = useState<Set<ViewTab>>(new Set());
   const [showColumnEditor, setShowColumnEditor] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
-  const [showSearch, setShowSearch] = useState(false);
+  const [editItem, setEditItem] = useState<RouteItem | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const routeNum = currentSheet.replace('Маршрут_', '');
   const shippingSheetName = shippingRoutes.find((s) => s.name === 'Відправка_' + routeNum)?.name || '';
   const hasShipping = !!shippingSheetName || isUnifiedView;
 
-  const isPackagesMode = viewTab === 'packages' || viewTab === 'shipping';
+  const isPackagesMode = viewTab === 'packages' || viewTab === 'shipping' || viewTab === 'allPackages';
   const activeMainTab: 'all' | 'passengers' | 'packages' = viewTab === 'all' ? 'all' : isPackagesMode ? 'packages' : 'passengers';
 
   // Load data for current tab only
   const loadCurrentTab = useCallback(async (tab: ViewTab, force = false) => {
-    const tabsToLoad: ViewTab[] = tab === 'all' ? ['passengers', 'packages'] : [tab];
+    const tabsToLoad: ViewTab[] = tab === 'all' ? ['passengers', 'packages', 'shipping'] : tab === 'allPackages' ? ['packages', 'shipping'] : [tab];
     const needsLoad = tabsToLoad.some((t) => force || !loadedTabs.has(t));
     if (!needsLoad) return;
 
     setLoading(true);
     try {
+      const tasks: Promise<void>[] = [];
+
       for (const loadTab of tabsToLoad) {
         if (!force && loadedTabs.has(loadTab)) continue;
 
         if (loadTab === 'passengers') {
-          if (isUnifiedView && routes.length > 0) {
-            const all: Passenger[] = [];
-            for (const route of routes) {
-              try {
-                const items = await fetchPassengers(route.name);
-                all.push(...items.map((p) => ({ ...p, _sourceRoute: route.name })));
-              } catch { /* skip failed route */ }
+          tasks.push((async () => {
+            if (isUnifiedView && routes.length > 0) {
+              const results = await Promise.allSettled(routes.map((route) => fetchPassengers(route.name).then((items) => items.map((p) => ({ ...p, _sourceRoute: route.name })))));
+              const all = results.flatMap((r) => r.status === 'fulfilled' ? r.value : []);
+              all.forEach((p, i) => { p._statusKey = `pax_${p.itemId}_${p._sourceRoute}_${i}`; if (p.status && p.status !== 'pending') setStatus(p._statusKey, p.status as ItemStatus); });
+              setPassengers(all);
+            } else if (!isUnifiedView) {
+              const items = await fetchPassengers(currentSheet);
+              items.forEach((p, i) => { p._statusKey = `pax_${p.itemId}_${i}`; if (p.status && p.status !== 'pending') setStatus(p._statusKey, p.status as ItemStatus); });
+              setPassengers(items);
             }
-            all.forEach((p, i) => { p._statusKey = `pax_${p.itemId}_${p._sourceRoute}_${i}`; if (p.status && p.status !== 'pending') setStatus(p._statusKey, p.status as ItemStatus); });
-            setPassengers(all);
-          } else if (!isUnifiedView) {
-            const items = await fetchPassengers(currentSheet);
-            items.forEach((p, i) => { p._statusKey = `pax_${p.itemId}_${i}`; if (p.status && p.status !== 'pending') setStatus(p._statusKey, p.status as ItemStatus); });
-            setPassengers(items);
-          }
+            setLoadedTabs((prev) => new Set(prev).add('passengers'));
+          })());
         } else if (loadTab === 'packages') {
-          if (isUnifiedView && routes.length > 0) {
-            const all: Pkg[] = [];
-            for (const route of routes) {
-              try {
-                const items = await fetchPackages(route.name);
-                all.push(...items.map((p) => ({ ...p, _sourceRoute: route.name })));
-              } catch { /* skip failed route */ }
+          tasks.push((async () => {
+            if (isUnifiedView && routes.length > 0) {
+              const results = await Promise.allSettled(routes.map((route) => fetchPackages(route.name).then((items) => items.map((p) => ({ ...p, _sourceRoute: route.name })))));
+              const all = results.flatMap((r) => r.status === 'fulfilled' ? r.value : []);
+              all.forEach((p, i) => { p._statusKey = `pkg_${p.itemId}_${p._sourceRoute}_${i}`; if (p.status && p.status !== 'pending') setStatus(p._statusKey, p.status as ItemStatus); });
+              setPackages(all);
+            } else if (!isUnifiedView) {
+              const items = await fetchPackages(currentSheet);
+              items.forEach((p, i) => { p._statusKey = `pkg_${p.itemId}_${i}`; if (p.status && p.status !== 'pending') setStatus(p._statusKey, p.status as ItemStatus); });
+              setPackages(items);
             }
-            all.forEach((p, i) => { p._statusKey = `pkg_${p.itemId}_${p._sourceRoute}_${i}`; if (p.status && p.status !== 'pending') setStatus(p._statusKey, p.status as ItemStatus); });
-            setPackages(all);
-          } else if (!isUnifiedView) {
-            const items = await fetchPackages(currentSheet);
-            items.forEach((p, i) => { p._statusKey = `pkg_${p.itemId}_${i}`; if (p.status && p.status !== 'pending') setStatus(p._statusKey, p.status as ItemStatus); });
-            setPackages(items);
-          }
+            setLoadedTabs((prev) => new Set(prev).add('packages'));
+          })());
         } else if (loadTab === 'shipping') {
-          if (isUnifiedView && routes.length > 0) {
-            const all: ShippingItem[] = [];
-            for (let ri = 0; ri < routes.length; ri++) {
-              const routeName = routes[ri].name;
-              const sName = shippingRoutes.find((s) => s.name === 'Відправка_' + (ri + 1))?.name;
-              if (!sName) continue;
-              try {
-                const items = await fetchShippingItems(sName);
-                all.push(...items.map((s) => ({ ...s, _sourceRoute: routeName })));
-              } catch { /* skip */ }
+          tasks.push((async () => {
+            if (isUnifiedView && routes.length > 0) {
+              const shipTasks = routes.map((route) => {
+                const num = route.name.replace('Маршрут_', '');
+                const sName = shippingRoutes.find((s) => s.name === 'Відправка_' + num)?.name;
+                if (!sName) return Promise.resolve([]);
+                return fetchShippingItems(sName).then((items) => items.map((s) => ({ ...s, _sourceRoute: route.name }))).catch(() => [] as ShippingItem[]);
+              });
+              const results = await Promise.all(shipTasks);
+              const all = results.flat();
+              all.forEach((s, i) => { s._statusKey = `ship_${s.dispatchId || s.rowNum}_${s._sourceRoute}_${i}`; if (s.status && s.status !== 'pending') setStatus(s._statusKey, s.status as ItemStatus); });
+              setShippingItems(all);
+            } else if (shippingSheetName) {
+              const items = await fetchShippingItems(shippingSheetName);
+              items.forEach((s, i) => { s._statusKey = `ship_${s.dispatchId || s.rowNum}_${i}`; if (s.status && s.status !== 'pending') setStatus(s._statusKey, s.status as ItemStatus); });
+              setShippingItems(items);
             }
-            all.forEach((s, i) => { s._statusKey = `ship_${s.dispatchId || s.rowNum}_${s._sourceRoute}_${i}`; if (s.status && s.status !== 'pending') setStatus(s._statusKey, s.status as ItemStatus); });
-            setShippingItems(all);
-          } else if (shippingSheetName) {
-            const items = await fetchShippingItems(shippingSheetName);
-            items.forEach((s, i) => { s._statusKey = `ship_${s.dispatchId || s.rowNum}_${i}`; if (s.status && s.status !== 'pending') setStatus(s._statusKey, s.status as ItemStatus); });
-            setShippingItems(items);
-          }
+            setLoadedTabs((prev) => new Set(prev).add('shipping'));
+          })());
         }
-
-        setLoadedTabs((prev) => new Set(prev).add(loadTab));
       }
+
+      await Promise.all(tasks);
       if (tab === 'all') showToast('Завантажено усе');
       else if (tab === 'passengers') showToast('Завантажено пасажирів');
       else if (tab === 'packages') showToast('Завантажено посилок');
       else if (tab === 'shipping') showToast('Відправлення завантажено');
+      else if (tab === 'allPackages') showToast('Завантажено посилки та відправлення');
     } catch (err) { showToast('Помилка: ' + (err as Error).message); }
     finally { setLoading(false); }
   }, [currentSheet, isUnifiedView, shippingSheetName, loadedTabs, routes, shippingRoutes, setStatus, showToast]);
@@ -127,14 +128,23 @@ export function ListScreen() {
     return filtered;
   };
 
-  const filteredPassengers = filterItems(passengers);
-  const filteredPackages = filterItems(packages);
-  const filteredShipping = filterItems(shippingItems);
+  const q = searchQuery.toLowerCase().trim();
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const searchIn = <T,>(items: T[], fields: string[]): T[] => {
+    if (!q) return items;
+    return items.filter((item) => fields.some((f) => String((item as any)[f] || '').toLowerCase().includes(q)));
+  };
+
+  const filteredPassengers = searchIn(filterItems(passengers), ['name', 'phone', 'addrFrom', 'addrTo', 'itemId']);
+  const filteredPackages = searchIn(filterItems(packages), ['recipientName', 'recipientPhone', 'senderName', 'recipientAddr', 'ttn', 'itemId']);
+  const filteredShipping = searchIn(filterItems(shippingItems), ['senderName', 'recipientName', 'recipientPhone', 'recipientAddr', 'dispatchId']);
   const currentItems = viewTab === 'passengers' || viewTab === 'all' ? filteredPassengers : viewTab === 'packages' ? filteredPackages : [];
 
   // Stats
   const allStatsItems: { _statusKey: string; _sourceRoute?: string }[] = viewTab === 'all'
-    ? [...passengers, ...packages]
+    ? [...passengers, ...packages, ...shippingItems]
+    : viewTab === 'allPackages' ? [...packages, ...shippingItems]
     : viewTab === 'shipping' ? shippingItems
     : viewTab === 'passengers' ? passengers : packages;
   const statsBase = isUnifiedView && routeFilter !== 'all'
@@ -147,7 +157,7 @@ export function ListScreen() {
     cancelled: statsBase.filter((i) => getStatus(i._statusKey) === 'cancelled').length,
   };
 
-  const countSource: { _sourceRoute?: string }[] = viewTab === 'all' ? [...passengers, ...packages] : viewTab === 'shipping' ? shippingItems : viewTab === 'passengers' ? passengers : packages;
+  const countSource: { _sourceRoute?: string }[] = viewTab === 'all' ? [...passengers, ...packages, ...shippingItems] : viewTab === 'allPackages' ? [...packages, ...shippingItems] : viewTab === 'shipping' ? shippingItems : viewTab === 'passengers' ? passengers : packages;
   const routeTabs = isUnifiedView
     ? [{ name: 'all', label: 'Усі', count: countSource.length },
        ...routes.map((r) => ({ name: r.name, label: r.name.replace('Маршрут_', 'М'), count: countSource.filter((i) => i._sourceRoute === r.name).length }))]
@@ -168,6 +178,7 @@ export function ListScreen() {
 
   const showShipping = viewTab === 'shipping';
   const showAllTab = viewTab === 'all';
+  const showAllPackages = viewTab === 'allPackages';
 
   return (
     <div className="flex-1 flex flex-col bg-bg max-h-dvh overflow-hidden">
@@ -183,12 +194,26 @@ export function ListScreen() {
               <span className="text-sm font-bold text-text">{isUnifiedView ? 'Усі маршрути' : currentSheet}</span>
             </div>
           </div>
+          <div className="flex items-center gap-1.5 bg-gray-50 rounded-lg px-2 py-1.5 min-w-0 flex-1 max-w-[180px]">
+            <Search className="w-3.5 h-3.5 text-muted shrink-0" />
+            <input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Пошук..."
+              className="flex-1 text-[11px] text-text placeholder:text-gray-300 bg-transparent focus:outline-none min-w-0"
+            />
+            {searchQuery && (
+              <button onClick={() => setSearchQuery('')} className="p-0.5 rounded-md hover:bg-gray-200 cursor-pointer">
+                <X className="w-3 h-3 text-muted" />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Main tabs */}
         <div className="flex gap-2 mb-2.5">
           {mainTabs.map((t) => (
-            <button key={t.key} onClick={() => setViewTab(t.key === 'all' ? 'all' : t.key)}
+            <button key={t.key} onClick={() => setViewTab(t.key === 'packages' && hasShipping ? 'allPackages' : t.key)}
               className={`flex-1 py-2.5 rounded-xl text-[13px] font-bold text-center cursor-pointer transition-all ${
                 activeMainTab === t.key ? 'bg-brand text-white shadow-sm' : 'bg-gray-100 text-gray-400'
               }`}>
@@ -197,9 +222,13 @@ export function ListScreen() {
           ))}
         </div>
 
-        {/* Sub-tabs: Отримання | Відправка */}
+        {/* Sub-tabs: Усі | Отримання | Відправка */}
         {isPackagesMode && hasShipping && (
           <div className="flex items-center gap-1 mb-2 bg-gray-100 rounded-lg p-0.5">
+            <button onClick={() => setViewTab('allPackages')}
+              className={`flex-1 py-1.5 rounded-md text-[11px] font-semibold text-center cursor-pointer transition-all ${viewTab === 'allPackages' ? 'bg-white text-text shadow-sm' : 'text-gray-400'}`}>
+              <LayoutGrid className="w-3 h-3 inline mr-1 -mt-0.5" />Усі
+            </button>
             <button onClick={() => setViewTab('packages')}
               className={`flex-1 py-1.5 rounded-md text-[11px] font-semibold text-center cursor-pointer transition-all ${viewTab === 'packages' ? 'bg-white text-text shadow-sm' : 'text-gray-400'}`}>
               <Package className="w-3 h-3 inline mr-1 -mt-0.5" />Отримання
@@ -252,12 +281,41 @@ export function ListScreen() {
             <RefreshCw className="w-7 h-7 text-brand animate-spin mb-3" />
             <p className="text-muted text-sm">Завантаження...</p>
           </div>
+        ) : showAllPackages ? (
+          (filteredPackages.length === 0 && filteredShipping.length === 0) ? <Empty /> : (
+            <>
+              {filteredPackages.length > 0 && (
+                <>
+                  <div className="flex items-center gap-2 px-1">
+                    <Package className="w-4 h-4 text-brand" />
+                    <span className="text-xs font-bold text-text">Отримання</span>
+                    <span className="text-[10px] font-bold text-muted bg-gray-100 px-2 py-0.5 rounded-full">{filteredPackages.length}</span>
+                  </div>
+                  {filteredPackages.map((p, i) => (
+                    <PackageCard key={p._statusKey} pkg={p} index={i} searchQuery={searchQuery} onEdit={setEditItem} />
+                  ))}
+                </>
+              )}
+              {filteredShipping.length > 0 && (
+                <>
+                  <div className="flex items-center gap-2 px-1 mt-2">
+                    <Truck className="w-4 h-4 text-blue-500" />
+                    <span className="text-xs font-bold text-text">Відправка</span>
+                    <span className="text-[10px] font-bold text-muted bg-gray-100 px-2 py-0.5 rounded-full">{filteredShipping.length}</span>
+                  </div>
+                  {filteredShipping.map((item, i) => (
+                    <ShippingCard key={item._statusKey || `ship_${item.rowNum}_${i}`} item={item} index={i} />
+                  ))}
+                </>
+              )}
+            </>
+          )
         ) : showShipping ? (
           filteredShipping.length === 0 ? <Empty /> : filteredShipping.map((item, i) => (
             <ShippingCard key={item._statusKey || `ship_${item.rowNum}_${i}`} item={item} index={i} />
           ))
         ) : showAllTab ? (
-          (filteredPassengers.length === 0 && filteredPackages.length === 0) ? <Empty /> : (
+          (filteredPassengers.length === 0 && filteredPackages.length === 0 && filteredShipping.length === 0) ? <Empty /> : (
             <>
               {filteredPassengers.length > 0 && (
                 <>
@@ -267,7 +325,7 @@ export function ListScreen() {
                     <span className="text-[10px] font-bold text-muted bg-gray-100 px-2 py-0.5 rounded-full">{filteredPassengers.length}</span>
                   </div>
                   {filteredPassengers.map((p, i) => (
-                    <PassengerCard key={p._statusKey} passenger={p} index={i} />
+                    <PassengerCard key={p._statusKey} passenger={p} index={i} searchQuery={searchQuery} onEdit={setEditItem} />
                   ))}
                 </>
               )}
@@ -279,7 +337,19 @@ export function ListScreen() {
                     <span className="text-[10px] font-bold text-muted bg-gray-100 px-2 py-0.5 rounded-full">{filteredPackages.length}</span>
                   </div>
                   {filteredPackages.map((p, i) => (
-                    <PackageCard key={p._statusKey} pkg={p} index={i} />
+                    <PackageCard key={p._statusKey} pkg={p} index={i} searchQuery={searchQuery} onEdit={setEditItem} />
+                  ))}
+                </>
+              )}
+              {filteredShipping.length > 0 && (
+                <>
+                  <div className="flex items-center gap-2 px-1 mt-2">
+                    <Truck className="w-4 h-4 text-blue-500" />
+                    <span className="text-xs font-bold text-text">Відправка</span>
+                    <span className="text-[10px] font-bold text-muted bg-gray-100 px-2 py-0.5 rounded-full">{filteredShipping.length}</span>
+                  </div>
+                  {filteredShipping.map((item, i) => (
+                    <ShippingCard key={item._statusKey || `ship_${item.rowNum}_${i}`} item={item} index={i} />
                   ))}
                 </>
               )}
@@ -287,11 +357,11 @@ export function ListScreen() {
           )
         ) : viewTab === 'passengers' ? (
           currentItems.length === 0 ? <Empty /> : (currentItems as Passenger[]).map((p, i) => (
-            <PassengerCard key={p._statusKey} passenger={p} index={i} />
+            <PassengerCard key={p._statusKey} passenger={p} index={i} searchQuery={searchQuery} onEdit={setEditItem} />
           ))
         ) : (
           currentItems.length === 0 ? <Empty /> : (currentItems as Pkg[]).map((p, i) => (
-            <PackageCard key={p._statusKey} pkg={p} index={i} />
+            <PackageCard key={p._statusKey} pkg={p} index={i} searchQuery={searchQuery} onEdit={setEditItem} />
           ))
         )}
       </div>
@@ -299,7 +369,7 @@ export function ListScreen() {
       {/* Bottom Nav */}
       <BottomNav
         onAdd={() => setShowAddModal(true)}
-        onSearch={() => setShowSearch(true)}
+        onExpenses={() => setCurrentScreen('expenses')}
         onColumns={() => setShowColumnEditor(true)}
         onRefresh={refresh}
         loading={loading}
@@ -308,7 +378,7 @@ export function ListScreen() {
       {/* Modals */}
       {showColumnEditor && <ColumnEditor onClose={() => setShowColumnEditor(false)} />}
       {showAddModal && <AddItemModal onClose={() => setShowAddModal(false)} onAdded={refresh} />}
-      {showSearch && <SearchModal passengers={passengers} packages={packages} onClose={() => setShowSearch(false)} />}
+      {editItem && <EditItemModal item={editItem} onClose={() => setEditItem(null)} onSaved={refresh} />}
     </div>
   );
 }

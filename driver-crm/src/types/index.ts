@@ -1,6 +1,8 @@
 export interface Route {
   name: string;
   count: number;
+  paxCount?: number;
+  pkgCount?: number;
 }
 
 export interface ShippingRoute {
@@ -100,4 +102,24 @@ export type RouteType = 'route';  // one type now — route contains both pax + 
 
 export type StatusFilter = 'all' | ItemStatus;
 
-export type ViewTab = 'all' | 'passengers' | 'packages' | 'shipping';
+export type ViewTab = 'all' | 'passengers' | 'packages' | 'shipping' | 'allPackages';
+
+export type ExpenseCategory = 'fuel' | 'food' | 'parking' | 'toll' | 'fine' | 'customs' | 'topUp' | 'other' | 'tips';
+
+export interface ExpenseItem {
+  rowNum: number;
+  expId: string;
+  dateTrip: string;
+  driver: string;
+  category: ExpenseCategory;
+  amount: number;
+  currency: string;
+  description: string;
+}
+
+export interface ExpenseAdvance {
+  cash: number;
+  cashCurrency: string;
+  card: number;
+  cardCurrency: string;
+}
