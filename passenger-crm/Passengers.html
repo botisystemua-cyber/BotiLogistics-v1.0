@@ -2387,8 +2387,8 @@ function silentSync(manual, force) {
                     var existing = allRouteSheets.find(function(e) { return e.sheetName === s.sheetName; });
                     return { sheetName: s.sheetName, rowCount: s.rowCount,
                         paxCount: s.paxCount || 0, parcelCount: s.parcelCount || 0,
-                        headers: [],
-                        rows: null }; // Скидаємо rows щоб перезавантажити при відкритті
+                        headers: existing ? existing.headers : [],
+                        rows: existing ? existing.rows : null };
                 });
                 routes = allRouteSheets.filter(s => {
                     const n = (s.sheetName || '');
@@ -2397,12 +2397,10 @@ function silentSync(manual, force) {
                 setCount('pcCountRoutes', routes.length);
                 setCount('mobileCountRoutes', routes.length);
                 renderRouteSidebar();
-                // Перезавантажуємо дані всіх маршрутів у фоні
+                // Перезавантажуємо дані всіх маршрутів у фоні (замінить старі rows коли прийдуть)
                 routes.forEach(function(s, idx) {
                     loadRouteSheetData(idx, true).catch(function() {});
                 });
-                // Перерендерити якщо маршрут відкритий
-                if (currentView === 'routes' && activeRouteIdx !== null && !_showingExpenses) renderRoutes();
             }
             updateAllCounts();
             updateTripFilterDropdown();
@@ -2442,10 +2440,11 @@ function silentSync(manual, force) {
         if (routeRes.ok && routeRes.data) {
             var newList = routeRes.data;
             allRouteSheets = newList.map(function(s) {
+                var existing = allRouteSheets.find(function(e) { return e.sheetName === s.sheetName; });
                 return { sheetName: s.sheetName, rowCount: s.rowCount,
                     paxCount: s.paxCount || 0, parcelCount: s.parcelCount || 0,
-                    headers: [],
-                    rows: null };
+                    headers: existing ? existing.headers : [],
+                    rows: existing ? existing.rows : null };
             });
             routes = allRouteSheets.filter(s => {
                 const n = (s.sheetName || '');
@@ -2457,7 +2456,6 @@ function silentSync(manual, force) {
             routes.forEach(function(s, idx) {
                 loadRouteSheetData(idx, true).catch(function() {});
             });
-            if (currentView === 'routes' && activeRouteIdx !== null) renderRoutes();
         }
         updateAllCounts();
         updateTripFilterDropdown();
@@ -2575,8 +2573,10 @@ async function loadRouteSheetData(idx, forceRefresh) {
     if (!sheet) return;
     if (sheet.rows !== null && !forceRefresh) return; // вже завантажено
 
+    // Показуємо лоадер тільки при першому завантаженні, не при фоновому оновленні
     const loading = document.getElementById('routesLoading');
-    if (loading) {
+    const showLoading = sheet.rows === null;
+    if (loading && showLoading) {
         loading.style.display = 'block';
         loading.textContent = '⏳ Завантаження даних маршруту ' + (sheet.sheetName || '').replace('Маршрут_', '') + '...';
     }
@@ -2593,6 +2593,10 @@ async function loadRouteSheetData(idx, forceRefresh) {
             // Оновити також в allRouteSheets
             const allIdx = allRouteSheets.findIndex(s => s.sheetName === sheet.sheetName);
             if (allIdx !== -1) allRouteSheets[allIdx] = sheet;
+            // Перерендерити якщо цей маршрут зараз відкритий
+            if (currentView === 'routes' && activeRouteIdx === idx && !_showingExpenses) {
+                renderRoutes();
+            }
         } else {
             console.error('loadRouteSheetData API error:', res.error || 'Unknown error');
             showToast('❌ Помилка завантаження маршруту: ' + (res.error || 'Невідома помилка'));
