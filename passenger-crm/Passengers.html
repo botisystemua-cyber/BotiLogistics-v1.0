@@ -57,6 +57,8 @@
         .search-input:focus { background: rgba(255,255,255,0.25); }
         .search-icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); font-size: 12px; opacity: 0.7; }
         .header-right { display: flex; align-items: center; gap: 8px; margin-left: auto; overflow: visible; padding-right: 4px; }
+        .hdr-chat-btn { width: 34px; height: 34px; border-radius: 50%; background: #22d3ee; border: 2.5px solid #22d3ee; display: flex; align-items: center; justify-content: center; font-size: 17px; text-decoration: none; transition: all .15s; flex-shrink: 0; box-shadow: 0 2px 8px rgba(34,211,238,0.4); }
+        .hdr-chat-btn:hover { background: #06b6d4; transform: scale(1.1); border-color: #67e8f9; }
         .sync-indicator { display: none; }
         /* Спільний стиль для всіх аватарів в хедері */
         .hdr-avatar { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; font-size: 11px; position: relative; overflow: visible; flex-shrink: 0; }
@@ -225,7 +227,9 @@
         /* === КАРТКА ЛІДА: Мета-рядок (дата рейсу, дата реєстрації, SmartSender ID) === */
         .card-meta-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
         .card-meta-tag { font-size: 9px; color: var(--text-secondary); background: var(--bg-main); padding: 1px 5px; border-radius: 3px; white-space: nowrap; }
-        .card-smart-id { font-size: 9px; color: #7c3aed; background: #f3e8ff; padding: 1px 5px; border-radius: 3px; white-space: nowrap; }
+        .card-smart-id { font-size: 11px; font-weight: 600; color: #7c3aed; background: #f3e8ff; padding: 2px 8px; border-radius: 4px; white-space: nowrap; cursor: pointer; transition: background .15s; }
+        .card-smart-id:hover { background: #e9d5ff; }
+        .card-smart-id:active { background: #d8b4fe; }
 
         .card-right-section { display: flex; align-items: center; justify-content: center; padding: 6px 8px; border-left: 1px solid var(--border); flex-shrink: 0; }
         /* Trip strip — повна ширина внизу картки */
@@ -910,6 +914,8 @@
         .bulk-toolbar-btn.assign:hover { background: #ea580c; }
         .bulk-toolbar-btn.route { background: #7c3aed; color: white; }
         .bulk-toolbar-btn.route:hover { background: #6d28d9; }
+        .bulk-toolbar-btn.bulk-delete { background: #dc2626; color: white; }
+        .bulk-toolbar-btn.bulk-delete:hover { background: #b91c1c; }
         .bulk-toolbar-btn.cancel { background: rgba(255,255,255,0.15); color: white; }
         .bulk-toolbar-btn.cancel:hover { background: rgba(255,255,255,0.25); }
         .bulk-trip-dd { position: absolute; bottom: 100%; left: 0; margin-bottom: 6px; background: white; border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.15); min-width: 240px; max-height: 280px; overflow-y: auto; display: none; color: var(--text-primary); }
@@ -1153,6 +1159,8 @@
             <input class="search-input" type="text" id="globalSearch" placeholder="Пошук по ПІБ або телефону..." oninput="onSearchInput()">
         </div>
         <div class="header-right">
+            <!-- [ПРОЕКТ] Посилання на чати Smart Sender — змінити project= для нового проекту -->
+            <a href="https://messenger.smartsender.com/chats?project=esko-proek-131349" target="_blank" class="hdr-chat-btn" title="Smart Sender Чати">💬</a>
             <div class="presence-bar" id="presenceBar"></div>
             <div class="hdr-avatar user-avatar sync-loading" id="userAvatar" onclick="openManagerModal()" title="Натисніть щоб змінити менеджера">?</div>
         </div>
@@ -1624,6 +1632,25 @@
     </div>
 </div>
 
+<!-- TAG MODAL -->
+<div class="modal-overlay" id="tagModal" onclick="if(event.target===this)closeModal('tagModal')">
+    <div class="modal" style="max-width:400px;">
+        <div class="modal-header">
+            <span class="modal-title" id="tagModalTitle">🏷 Присвоїти тег</span>
+            <button class="modal-close" onclick="closeModal('tagModal')">×</button>
+        </div>
+        <div class="modal-body" style="padding:12px;">
+            <div class="form-group"><label>Назва тегу</label><input type="text" id="tagNameInput" placeholder="Введіть назву тегу..." onkeydown="if(event.key==='Enter')applyTag()"></div>
+            <div id="tagTargetInfo" style="font-size:11px;color:var(--text-secondary);margin-top:4px;"></div>
+            <div id="tagResult" style="display:none;margin-top:8px;padding:8px 12px;border-radius:8px;font-size:11px;font-weight:600;max-height:200px;overflow-y:auto;"></div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn-cancel" onclick="closeModal('tagModal')">Скасувати</button>
+            <button class="btn-save" onclick="applyTag()">🏷 Застосувати</button>
+        </div>
+    </div>
+</div>
+
 <!-- TRIP ASSIGN MODAL -->
 <div class="trip-modal-overlay" id="tripAssignOverlay" onclick="if(event.target===this)closeTripModal()">
     <div class="trip-modal">
@@ -1652,8 +1679,10 @@
     <div class="bulk-toolbar-grid">
         <button class="bulk-toolbar-btn assign" onclick="openBulkTripDropdown(event)">🚐 Рейс</button>
         <button class="bulk-toolbar-btn route" onclick="openRouteAssignModal()">🗺️ Маршрут</button>
-        <button class="bulk-toolbar-btn optimize" onclick="bulkOptimize()">⚡ Оптиміз.</button>
-        <button class="bulk-toolbar-btn" style="background:#f3f4f6;color:#6b7280;" onclick="bulkArchive()">📦 Архів</button>
+        <button class="bulk-toolbar-btn assign" onclick="openTagModal()">🏷 Теги</button>
+        <button class="bulk-toolbar-btn assign" onclick="bulkOptimize()">⚡ Оптиміз.</button>
+        <button class="bulk-toolbar-btn assign" onclick="bulkArchive()">📦 Архів</button>
+        <button class="bulk-toolbar-btn bulk-delete" onclick="bulkDelete()">🗑️ Видалити</button>
     </div>
     <div class="bulk-trip-dd" id="bulkTripDd"></div>
 </div>
@@ -3653,7 +3682,7 @@ function renderCard(p) {
                     <div class="card-row2-wrap">
                         <div class="card-info-row">
                             ${cf.includes('pax_id') ? `<span class="card-id">${id}</span>` : ''}
-                            ${cf.includes('smartId') ? `<span class="card-smart-id">SS: ${smartId || '—'}</span>` : ''}
+                            ${cf.includes('smartId') ? `<span class="card-smart-id" onclick="event.stopPropagation(); copyToClipboard('${smartId || ''}'); this.style.background='#d8b4fe'; setTimeout(()=>this.style.background='',400);" title="Натисни щоб скопіювати">SS: ${smartId || '—'}</span>` : ''}
                             ${cf.includes('name') ? `<span class="card-name">${name}</span>` : ''}
                             ${isRecent24h ? '<span class="badge badge-new24">🆕 NEW</span>' : ''}
                             ${cf.includes('leadStatus') ? lsBadge : ''} ${cf.includes('payStatus') ? payBadge : ''}
@@ -3945,12 +3974,12 @@ function toggleCardActions(id) {
 function openMessengerPopup(phone, smartId) {
     const grid = document.getElementById('messengerGrid');
     const cleanPhone = (phone || '').replace(/[^+\d]/g, '');
-    var smartBtn = (smartId && smartId.trim()) ? `<button class="messenger-popup-item" onclick="openMessenger('smartsender','${smartId}')">🤖 SmartSender</button>` : '';
+    var smartBtn = `<button class="messenger-popup-item" onclick="openSmartSender('${smartId || ''}')">🤖 <span style="color:#ff6600">Smart</span></button>`;
     grid.innerHTML = `
-        <button class="messenger-popup-item" onclick="closeMessengerPopup(); window.open('tel:${cleanPhone}')" style="background:var(--primary);color:white;border-color:var(--primary)">📞 Дзвінок</button>
-        <button class="messenger-popup-item" onclick="openMessenger('viber','${cleanPhone}')" style="background:#7360f2;color:white;border-color:#7360f2">💬 Viber</button>
-        <button class="messenger-popup-item" onclick="openMessenger('telegram','${cleanPhone}')" style="background:#0088cc;color:white;border-color:#0088cc">✈️ Telegram</button>
-        <button class="messenger-popup-item" onclick="openMessenger('whatsapp','${cleanPhone}')" style="background:#25d366;color:white;border-color:#25d366">📱 WhatsApp</button>
+        <button class="messenger-popup-item" onclick="closeMessengerPopup(); window.open('tel:${cleanPhone}')">📞 <span style="color:var(--primary)">Дзвінок</span></button>
+        <button class="messenger-popup-item" onclick="openMessenger('viber','${cleanPhone}')">💬 <span style="color:#7360f2">Viber</span></button>
+        <button class="messenger-popup-item" onclick="openMessenger('telegram','${cleanPhone}')">✈️ <span style="color:#0088cc">Telegram</span></button>
+        <button class="messenger-popup-item" onclick="openMessenger('whatsapp','${cleanPhone}')">📱 <span style="color:#25d366">WhatsApp</span></button>
         ${smartBtn}
     `;
     document.getElementById('messengerOverlay').classList.add('show');
@@ -3979,10 +4008,18 @@ function openMessenger(type, contact) {
         case 'whatsapp':
             window.open('https://wa.me/' + phoneNoPlus, '_blank');
             break;
-        case 'smartsender':
-            window.open('https://smartsender.com/contacts/' + encodeURIComponent(contact), '_blank');
-            break;
     }
+}
+
+// ── Smart Sender: копіює ID + відкриває консоль пошуку контактів ──
+// [ПРОЕКТ] Посилання Smart Sender — змінити для нового проекту:
+const SMART_SENDER_CONSOLE_URL = 'https://console.smartsender.com/contacts?project=esko-proek-131349';
+function openSmartSender(smartId) {
+    closeMessengerPopup();
+    if (!smartId || !smartId.trim()) { showToast('⚠️ Немає Ід_смарт'); return; }
+    copyToClipboard(smartId.trim());
+    showToast('📋 SS ID скопійовано — вставте в пошук');
+    window.open(SMART_SENDER_CONSOLE_URL, '_blank');
 }
 
 // ================================================================
@@ -7359,6 +7396,131 @@ function bulkArchive() {
             showToast('❌ ' + (res.error || 'Помилка'));
         }
     });
+}
+
+// ── Масове видалення ──
+function bulkDelete() {
+    const ids = Array.from(selectedIds);
+    if (!ids.length) return;
+    showConfirm('🗑️ Видалити ' + ids.length + ' пасажир(ів)?\n\n(Переміщення в архів з позначкою "Видалено")', async function(yes) {
+        if (!yes) return;
+        showLoader('Видалення ' + ids.length + ' записів...');
+        const res = await apiPost('deletePassenger', { pax_ids: ids });
+        hideLoader();
+        if (res.ok) {
+            passengers = passengers.filter(x => !ids.includes(x['PAX_ID']));
+            showToast('✅ Видалено ' + ids.length + ' записів');
+            clearSelection();
+            render(); updateAllCounts();
+        } else {
+            showToast('❌ ' + (res.error || 'Помилка'));
+        }
+    });
+}
+
+// ── Smart Sender: Теги ──
+// [ПРОЕКТ] URL PHP proxy для тегування — змінити для нового проекту:
+const TAG_API_URL = 'https://botisystem.com/Esco_Express/smart_teg.php';
+var _tagTargetIds = [];
+
+function openTagModal(singlePaxId) {
+    _tagTargetIds = [];
+    if (singlePaxId) {
+        _tagTargetIds = [singlePaxId];
+    } else {
+        _tagTargetIds = Array.from(selectedIds);
+    }
+    if (!_tagTargetIds.length) { showToast('Оберіть лідів'); return; }
+
+    const noSmart = _tagTargetIds.filter(id => {
+        const p = passengers.find(x => x['PAX_ID'] === id);
+        return !p || !p['Ід_смарт'] || String(p['Ід_смарт']).trim() === '';
+    });
+
+    document.getElementById('tagNameInput').value = '';
+    const resultEl = document.getElementById('tagResult');
+    resultEl.style.display = 'none';
+    resultEl.innerHTML = '';
+
+    const names = _tagTargetIds.map(id => {
+        const p = passengers.find(x => x['PAX_ID'] === id);
+        const ss = p ? String(p['Ід_смарт'] || '').trim() : '';
+        return (p ? (p['Піб'] || id) : id) + (ss ? ' <span style="color:#7c3aed;">(SS: ' + ss + ')</span>' : '');
+    });
+    let info = _tagTargetIds.length === 1
+        ? 'Лід: <b>' + names[0] + '</b>'
+        : 'Лідів: <b>' + _tagTargetIds.length + '</b> (' + names.slice(0, 3).join(', ') + (_tagTargetIds.length > 3 ? '...' : '') + ')';
+    if (noSmart.length > 0) {
+        info += '<br><span style="color:var(--danger);">⚠️ ' + noSmart.length + ' без Ід_смарт — буде пропущено</span>';
+    }
+    document.getElementById('tagTargetInfo').innerHTML = info;
+    document.getElementById('tagModalTitle').textContent = _tagTargetIds.length === 1 ? '🏷 Присвоїти тег' : '🏷 Теги (' + _tagTargetIds.length + ' лідів)';
+    openModal('tagModal');
+    setTimeout(() => document.getElementById('tagNameInput').focus(), 100);
+}
+
+async function applyTag() {
+    const tagName = document.getElementById('tagNameInput').value.trim();
+    if (!tagName) { showToast('Введіть назву тегу'); return; }
+
+    const targets = _tagTargetIds.map(id => {
+        const p = passengers.find(x => x['PAX_ID'] === id);
+        return { paxId: id, smartId: p ? String(p['Ід_смарт'] || '').trim() : '', name: p ? (p['Піб'] || id) : id };
+    }).filter(t => t.smartId);
+
+    if (!targets.length) { showToast('Немає лідів з Ід_смарт'); return; }
+
+    const resultEl = document.getElementById('tagResult');
+    resultEl.style.display = 'block';
+    resultEl.innerHTML = '⏳ Надсилаю тег «' + tagName + '» для ' + targets.length + ' контакт(ів)...';
+    resultEl.style.background = '#f0f9ff';
+    resultEl.style.color = '#0369a1';
+
+    let ok = 0, fail = 0;
+    let html = '';
+
+    for (const t of targets) {
+        try {
+            const res = await fetch(TAG_API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: t.smartId, tagName: tagName })
+            });
+            const data = await res.json();
+            if (data.state) {
+                ok++;
+                html += '<div style="color:#059669;">✅ ' + t.name + ' <span style="color:#7c3aed;font-size:10px;">(SS: ' + t.smartId + ')</span>' + (data.note ? ' — вже був' : '') + '</div>';
+                const p = passengers.find(x => x['PAX_ID'] === t.paxId);
+                if (p) {
+                    const old = p['Тег'] || '';
+                    if (!old.includes(tagName)) {
+                        p['Тег'] = old ? old + ', ' + tagName : tagName;
+                    }
+                }
+            } else {
+                fail++;
+                html += '<div style="color:#dc2626;">❌ ' + t.name + ' <span style="color:#7c3aed;font-size:10px;">(SS: ' + t.smartId + ')</span>: ' + (data.error || 'Помилка') + '</div>';
+            }
+        } catch (e) {
+            fail++;
+            html += '<div style="color:#dc2626;">❌ ' + t.name + ' <span style="color:#7c3aed;font-size:10px;">(SS: ' + t.smartId + ')</span>: ' + e.message + '</div>';
+        }
+    }
+
+    resultEl.innerHTML = '<div style="margin-bottom:6px;font-size:12px;"><b>Результат:</b> ✅ ' + ok + ' / ❌ ' + fail + '</div>' + html;
+    resultEl.style.background = fail === 0 ? '#f0fdf4' : '#fef2f2';
+    resultEl.style.color = '#1f2937';
+
+    if (ok > 0) {
+        showToast('✅ Тег «' + tagName + '» додано: ' + ok + ' контакт(ів)');
+        for (const t of targets) {
+            const p = passengers.find(x => x['PAX_ID'] === t.paxId);
+            if (p) {
+                await apiPost('updateField', { sheet: p._sheet || '', pax_id: t.paxId, col: 'Тег', value: p['Тег'] || tagName });
+            }
+        }
+        render();
+    }
 }
 
 // ── Відновлення з архіву ──
