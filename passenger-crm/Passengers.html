@@ -905,19 +905,12 @@
         .bulk-toolbar { position: fixed; bottom: 60px; left: 0; right: 0; background: var(--primary); color: white; padding: 8px 6px; border-radius: 0; z-index: 90; display: none; box-shadow: 0 -4px 20px rgba(0,0,0,0.3); font-size: 12px; font-weight: 600; }
         .bulk-toolbar.show { display: block; }
         .bulk-toolbar-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
-        .bulk-toolbar-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+        .bulk-toolbar-grid { display: flex; gap: 5px; overflow-x: auto; padding-bottom: 2px; }
         .bulk-toolbar-count { background: rgba(255,255,255,0.2); padding: 3px 8px; border-radius: 8px; font-size: 11px; font-weight: 700; white-space: nowrap; }
-        .bulk-toolbar-btn { padding: 7px 4px; border: none; border-radius: 8px; font-size: 11px; font-weight: 700; cursor: pointer; font-family: inherit; white-space: nowrap; transition: all 0.2s; min-height: 34px; width: 100%; text-align: center; }
-        .bulk-toolbar-btn.select-all { background: rgba(255,255,255,0.2); color: white; }
-        .bulk-toolbar-btn.select-all:hover { background: rgba(255,255,255,0.35); }
-        .bulk-toolbar-btn.assign { background: var(--orange); color: white; }
-        .bulk-toolbar-btn.assign:hover { background: #ea580c; }
-        .bulk-toolbar-btn.route { background: #7c3aed; color: white; }
-        .bulk-toolbar-btn.route:hover { background: #6d28d9; }
-        .bulk-toolbar-btn.bulk-delete { background: #dc2626; color: white; }
-        .bulk-toolbar-btn.bulk-delete:hover { background: #b91c1c; }
-        .bulk-toolbar-btn.cancel { background: rgba(255,255,255,0.15); color: white; }
-        .bulk-toolbar-btn.cancel:hover { background: rgba(255,255,255,0.25); }
+        .bulk-toolbar-btn { padding: 7px 10px; border: 1.5px solid rgba(255,255,255,0.4); border-radius: 8px; font-size: 11px; font-weight: 700; cursor: pointer; font-family: inherit; white-space: nowrap; transition: all 0.15s; min-height: 34px; text-align: center; background: rgba(255,255,255,0.1); color: white; flex-shrink: 0; }
+        .bulk-toolbar-btn:hover { background: rgba(255,255,255,0.25); border-color: rgba(255,255,255,0.6); }
+        .bulk-toolbar-btn.bulk-delete { border-color: #fca5a5; color: #fca5a5; }
+        .bulk-toolbar-btn.bulk-delete:hover { background: #dc2626; color: white; border-color: #dc2626; }
         .bulk-trip-dd { position: absolute; bottom: 100%; left: 0; margin-bottom: 6px; background: white; border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.15); min-width: 240px; max-height: 280px; overflow-y: auto; display: none; color: var(--text-primary); }
         .bulk-trip-dd.show { display: block; }
 
@@ -937,9 +930,9 @@
                 z-index: 160;
             }
             .bulk-toolbar-top { flex-direction: row; margin-bottom: 12px; }
-            .bulk-toolbar-grid { grid-template-columns: 1fr; gap: 10px; }
+            .bulk-toolbar-grid { flex-direction: column; gap: 8px; overflow-x: visible; }
             .bulk-toolbar-count { text-align: center; padding: 8px 12px; font-size: 13px; border-radius: 10px; }
-            .bulk-toolbar-btn { padding: 12px 16px; font-size: 13px; border-radius: 10px; text-align: center; }
+            .bulk-toolbar-btn { padding: 12px 16px; font-size: 13px; border-radius: 10px; text-align: center; width: 100%; }
             .bulk-trip-dd { position: relative; bottom: auto; left: auto; margin-bottom: 0; margin-top: 6px; max-height: calc(100vh - 280px); }
         }
 
@@ -1677,11 +1670,11 @@
         <button class="bulk-toolbar-btn cancel" style="width:auto;padding:6px 12px;" onclick="clearSelection()">✕</button>
     </div>
     <div class="bulk-toolbar-grid">
-        <button class="bulk-toolbar-btn assign" onclick="openBulkTripDropdown(event)">🚐 Рейс</button>
-        <button class="bulk-toolbar-btn route" onclick="openRouteAssignModal()">🗺️ Маршрут</button>
-        <button class="bulk-toolbar-btn assign" onclick="openTagModal()">🏷 Теги</button>
-        <button class="bulk-toolbar-btn assign" onclick="bulkOptimize()">⚡ Оптиміз.</button>
-        <button class="bulk-toolbar-btn assign" onclick="bulkArchive()">📦 Архів</button>
+        <button class="bulk-toolbar-btn" onclick="openBulkTripDropdown(event)">🚐 Рейс</button>
+        <button class="bulk-toolbar-btn" onclick="openRouteAssignModal()">🗺️ Маршрут</button>
+        <button class="bulk-toolbar-btn" onclick="openTagModal()">🏷 Теги</button>
+        <button class="bulk-toolbar-btn" onclick="bulkOptimize()">⚡ Оптиміз.</button>
+        <button class="bulk-toolbar-btn" onclick="bulkArchive()">📦 Архів</button>
         <button class="bulk-toolbar-btn bulk-delete" onclick="bulkDelete()">🗑️ Видалити</button>
     </div>
     <div class="bulk-trip-dd" id="bulkTripDd"></div>
