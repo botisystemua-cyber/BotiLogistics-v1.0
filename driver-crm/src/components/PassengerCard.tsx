@@ -1,14 +1,14 @@
 import { useState } from 'react';
 import {
   Phone, MapPin, RotateCw, CheckCircle2, XCircle, Undo2,
-  Car, ArrowRight, Info, ChevronUp, CreditCard, Calendar, Clock, Users, User,
+  Car, ArrowRight, Info, ChevronUp, CreditCard, Calendar, Clock, Users, User, Pencil,
 } from 'lucide-react';
 import type { Passenger, ItemStatus } from '../types';
 import { useApp } from '../store/useAppStore';
 import { updateItemStatus } from '../api';
 import { Highlight } from './Highlight';
 
-interface Props { passenger: Passenger; index: number; searchQuery?: string; }
+interface Props { passenger: Passenger; index: number; searchQuery?: string; onEdit?: (p: Passenger) => void; }
 
 const borderColor: Record<ItemStatus, string> = {
   pending: 'border-l-amber-400', 'in-progress': 'border-l-blue-500',
@@ -21,7 +21,7 @@ const stLabel: Record<ItemStatus, { t: string; c: string }> = {
   cancelled: { t: 'Скасов.', c: 'text-red-700 bg-red-50' },
 };
 
-export function PassengerCard({ passenger: p, index, searchQuery = '' }: Props) {
+export function PassengerCard({ passenger: p, index, searchQuery = '', onEdit }: Props) {
   const hl = (text: string) => <Highlight text={text} query={searchQuery} />;
   const { getStatus, setStatus, hiddenCols, driverName, currentSheet, isUnifiedView, showToast } = useApp();
   const [showCancel, setShowCancel] = useState(false);
@@ -93,6 +93,7 @@ export function PassengerCard({ passenger: p, index, searchQuery = '' }: Props) 
         </div>
         <div className="flex gap-2 mb-2">
           <Btn icon={expanded ? ChevronUp : Info} label={expanded ? 'Згорнути' : 'Деталі'} color={expanded ? 'bg-brand/10 text-brand' : 'bg-gray-50 text-gray-600'} onClick={() => setExpanded(!expanded)} />
+          {onEdit && <Btn icon={Pencil} label="Редагувати" color="bg-amber-50 text-amber-700" onClick={() => onEdit(p)} />}
         </div>
 
         <div className="flex gap-1.5">

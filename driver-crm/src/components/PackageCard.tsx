@@ -1,14 +1,14 @@
 import { useState } from 'react';
 import {
   Phone, MapPin, RotateCw, CheckCircle2, XCircle, Undo2,
-  CreditCard, Info, ChevronUp, Calendar,
+  CreditCard, Info, ChevronUp, Calendar, Pencil,
 } from 'lucide-react';
 import type { Package, ItemStatus } from '../types';
 import { useApp } from '../store/useAppStore';
 import { updateItemStatus } from '../api';
 import { Highlight } from './Highlight';
 
-interface Props { pkg: Package; index: number; searchQuery?: string; }
+interface Props { pkg: Package; index: number; searchQuery?: string; onEdit?: (p: Package) => void; }
 
 const borderColor: Record<ItemStatus, string> = {
   pending: 'border-l-amber-400', 'in-progress': 'border-l-blue-500',
@@ -21,7 +21,7 @@ const stLabel: Record<ItemStatus, { t: string; c: string }> = {
   cancelled: { t: 'Скасов.', c: 'text-red-700 bg-red-50' },
 };
 
-export function PackageCard({ pkg: p, index, searchQuery = '' }: Props) {
+export function PackageCard({ pkg: p, index, searchQuery = '', onEdit }: Props) {
   const hl = (text: string) => <Highlight text={text} query={searchQuery} />;
   const { getStatus, setStatus, hiddenCols, driverName, currentSheet, isUnifiedView, showToast } = useApp();
   const [showCancel, setShowCancel] = useState(false);
@@ -83,6 +83,7 @@ export function PackageCard({ pkg: p, index, searchQuery = '' }: Props) {
           {p.recipientPhone && <Btn icon={Phone} label="Дзвонити" color="bg-green-50 text-green-700" onClick={() => { window.location.href = `tel:${p.recipientPhone}`; }} />}
           <Btn icon={MapPin} label="Карта" color="bg-blue-50 text-blue-700" onClick={navigate} />
           <Btn icon={expanded ? ChevronUp : Info} label={expanded ? 'Згорнути' : 'Деталі'} color={expanded ? 'bg-brand/10 text-brand' : 'bg-gray-50 text-gray-600'} onClick={() => setExpanded(!expanded)} />
+          {onEdit && <Btn icon={Pencil} label="Редагувати" color="bg-amber-50 text-amber-700" onClick={() => onEdit(p)} />}
         </div>
 
         <div className="flex gap-1 ml-9">

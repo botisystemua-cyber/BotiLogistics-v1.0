@@ -209,6 +209,8 @@ function doPost(e) {
         return respond(handleDriverStatusUpdate(data));
       case 'addRouteItem':
         return respond(handleAddRouteItem(data));
+      case 'updateDriverFields':
+        return respond(handleUpdateDriverFields(data));
       case 'getExpenses':
         return respond(getExpenses(payload.sheetName || ''));
       case 'addExpense':
@@ -644,6 +646,72 @@ function handleAddRouteItem(data) {
     }
 
     return { success: true, message: 'Додано ' + (itemType === 'пасажир' ? 'пасажира' : 'посилку'), itemId: itemId };
+  } catch (err) {
+    return { success: false, error: err.toString() };
+  }
+}
+
+// ============================================
+// handleUpdateDriverFields — водій редагує поля запису (batch)
+// ============================================
+function handleUpdateDriverFields(data) {
+  try {
+    var routeName = data.routeName;
+    if (!routeName || !/^Маршрут_\d+$/.test(routeName)) {
+      return { success: false, error: 'Невалідний маршрут: ' + (routeName || '(пусто)') };
+    }
+
+    var itemId = data.itemId;
+    if (!itemId) return { success: false, error: 'itemId обов\'язковий' };
+
+    var fields = data.fields;
+    if (!fields || typeof fields !== 'object') return { success: false, error: 'fields обов\'язкові' };
+
+    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var sheet = ss.getSheetByName(routeName);
+    if (!sheet) return { success: false, error: 'Аркуш не знайдено: ' + routeName };
+
+    var lastRow = sheet.getLastRow();
+    var lastCol = sheet.getLastColumn();
+    if (lastRow < 2) return { success: false, error: 'Аркуш порожній' };
+
+    var headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(function(h) {
+      return String(h).replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
+    });
+
+    // Шукаємо рядок по ITEM_ID (col E)
+    var allData = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
+    var rowNum = -1;
+    for (var i = 0; i < allData.length; i++) {
+      if (str(allData[i][COL.ITEM_ID]) === str(itemId) || str(allData[i][COL.RTE_ID]) === str(itemId)) {
+        rowNum = i + 2;
+        break;
+      }
+    }
+    if (rowNum === -1) return { success: false, error: 'Запис не знайдено: ' + itemId };
+
+    var updated = 0;
+    for (var col in fields) {
+      var colIdx = headers.indexOf(col);
+      if (colIdx !== -1) {
+        sheet.getRange(rowNum, colIdx + 1).setValue(fields[col]);
+        updated++;
+      }
+    }
+
+    // Логуємо
+    var now = new Date();
+    var logSheet = ss.getSheetByName(SHEET_LOGS);
+    if (logSheet) {
+      logSheet.appendRow([
+        Utilities.formatDate(now, 'Europe/Kiev', 'yyyy-MM-dd'),
+        Utilities.formatDate(now, 'Europe/Kiev', 'HH:mm:ss'),
+        data.driverId || '', routeName, itemId,
+        data.itemType || '', 'edited', 'fields: ' + updated, ''
+      ]);
+    }
+
+    return { success: true, message: 'Оновлено ' + updated + ' полів', updated: updated };
   } catch (err) {
     return { success: false, error: err.toString() };
   }

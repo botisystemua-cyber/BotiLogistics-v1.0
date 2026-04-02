@@ -11,7 +11,8 @@ import { ShippingCard } from './ShippingCard';
 import { ColumnEditor } from './ColumnEditor';
 import { BottomNav } from './BottomNav';
 import { AddItemModal } from './AddItemModal';
-import type { Passenger, Package as Pkg, ShippingItem, ItemStatus, StatusFilter, ViewTab } from '../types';
+import { EditItemModal } from './EditItemModal';
+import type { Passenger, Package as Pkg, ShippingItem, ItemStatus, StatusFilter, ViewTab, RouteItem } from '../types';
 
 export function ListScreen() {
   const {
@@ -28,6 +29,7 @@ export function ListScreen() {
   const [loadedTabs, setLoadedTabs] = useState<Set<ViewTab>>(new Set());
   const [showColumnEditor, setShowColumnEditor] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [editItem, setEditItem] = useState<RouteItem | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
   const routeNum = currentSheet.replace('Маршрут_', '');
@@ -192,22 +194,20 @@ export function ListScreen() {
               <span className="text-sm font-bold text-text">{isUnifiedView ? 'Усі маршрути' : currentSheet}</span>
             </div>
           </div>
-        </div>
-
-        {/* Search bar */}
-        <div className="flex items-center gap-2 bg-gray-50 rounded-xl px-3 py-2 mb-2.5">
-          <Search className="w-4 h-4 text-muted shrink-0" />
-          <input
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Пошук: ім'я, телефон, адреса..."
-            className="flex-1 text-xs text-text placeholder:text-gray-300 bg-transparent focus:outline-none"
-          />
-          {searchQuery && (
-            <button onClick={() => setSearchQuery('')} className="p-0.5 rounded-md hover:bg-gray-200 cursor-pointer">
-              <X className="w-3.5 h-3.5 text-muted" />
-            </button>
-          )}
+          <div className="flex items-center gap-1.5 bg-gray-50 rounded-lg px-2 py-1.5 min-w-0 flex-1 max-w-[180px]">
+            <Search className="w-3.5 h-3.5 text-muted shrink-0" />
+            <input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Пошук..."
+              className="flex-1 text-[11px] text-text placeholder:text-gray-300 bg-transparent focus:outline-none min-w-0"
+            />
+            {searchQuery && (
+              <button onClick={() => setSearchQuery('')} className="p-0.5 rounded-md hover:bg-gray-200 cursor-pointer">
+                <X className="w-3 h-3 text-muted" />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Main tabs */}
@@ -292,7 +292,7 @@ export function ListScreen() {
                     <span className="text-[10px] font-bold text-muted bg-gray-100 px-2 py-0.5 rounded-full">{filteredPackages.length}</span>
                   </div>
                   {filteredPackages.map((p, i) => (
-                    <PackageCard key={p._statusKey} pkg={p} index={i} searchQuery={searchQuery} />
+                    <PackageCard key={p._statusKey} pkg={p} index={i} searchQuery={searchQuery} onEdit={setEditItem} />
                   ))}
                 </>
               )}
@@ -325,7 +325,7 @@ export function ListScreen() {
                     <span className="text-[10px] font-bold text-muted bg-gray-100 px-2 py-0.5 rounded-full">{filteredPassengers.length}</span>
                   </div>
                   {filteredPassengers.map((p, i) => (
-                    <PassengerCard key={p._statusKey} passenger={p} index={i} searchQuery={searchQuery} />
+                    <PassengerCard key={p._statusKey} passenger={p} index={i} searchQuery={searchQuery} onEdit={setEditItem} />
                   ))}
                 </>
               )}
@@ -337,7 +337,7 @@ export function ListScreen() {
                     <span className="text-[10px] font-bold text-muted bg-gray-100 px-2 py-0.5 rounded-full">{filteredPackages.length}</span>
                   </div>
                   {filteredPackages.map((p, i) => (
-                    <PackageCard key={p._statusKey} pkg={p} index={i} searchQuery={searchQuery} />
+                    <PackageCard key={p._statusKey} pkg={p} index={i} searchQuery={searchQuery} onEdit={setEditItem} />
                   ))}
                 </>
               )}
@@ -357,11 +357,11 @@ export function ListScreen() {
           )
         ) : viewTab === 'passengers' ? (
           currentItems.length === 0 ? <Empty /> : (currentItems as Passenger[]).map((p, i) => (
-            <PassengerCard key={p._statusKey} passenger={p} index={i} searchQuery={searchQuery} />
+            <PassengerCard key={p._statusKey} passenger={p} index={i} searchQuery={searchQuery} onEdit={setEditItem} />
           ))
         ) : (
           currentItems.length === 0 ? <Empty /> : (currentItems as Pkg[]).map((p, i) => (
-            <PackageCard key={p._statusKey} pkg={p} index={i} searchQuery={searchQuery} />
+            <PackageCard key={p._statusKey} pkg={p} index={i} searchQuery={searchQuery} onEdit={setEditItem} />
           ))
         )}
       </div>
@@ -378,6 +378,7 @@ export function ListScreen() {
       {/* Modals */}
       {showColumnEditor && <ColumnEditor onClose={() => setShowColumnEditor(false)} />}
       {showAddModal && <AddItemModal onClose={() => setShowAddModal(false)} onAdded={refresh} />}
+      {editItem && <EditItemModal item={editItem} onClose={() => setEditItem(null)} onSaved={refresh} />}
     </div>
   );
 }
