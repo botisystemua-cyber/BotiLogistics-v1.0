@@ -2883,36 +2883,33 @@ async function loadAndRenderExpenses(sheetName) {
         var advance = data.advance;
         var html = '';
 
-        // ── Статистика зверху ──
+        // ── Статистика ──
         var byCurrency = {};
-        var byCat = {};
         items.forEach(function(e) {
             var cur = e.currency || 'CHF';
             byCurrency[cur] = (byCurrency[cur] || 0) + e.amount;
-            var cat = e.category || 'other';
-            byCat[cat] = (byCat[cat] || 0) + e.amount;
         });
 
-        html += '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;">';
+        html += '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px;">';
 
         // Аванс
         if (advance && (advance.cash > 0 || advance.card > 0)) {
-            html += '<div style="background:white;border:1px solid var(--border);border-radius:12px;padding:12px 16px;flex:1;min-width:120px;">';
-            html += '<div style="font-size:10px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;margin-bottom:4px;">💳 Аванс</div>';
-            if (advance.cash > 0) html += '<div style="font-size:18px;font-weight:800;color:var(--text-primary);">' + advance.cash + ' <span style="font-size:12px;color:var(--text-secondary);">' + advance.cashCurrency + '</span></div>';
-            if (advance.card > 0) html += '<div style="font-size:18px;font-weight:800;color:var(--text-primary);">' + advance.card + ' <span style="font-size:12px;color:var(--text-secondary);">' + advance.cardCurrency + '</span></div>';
+            html += '<div style="background:white;border:1px solid var(--border);border-radius:14px;padding:18px 22px;flex:1;min-width:140px;">';
+            html += '<div style="font-size:13px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;margin-bottom:6px;">💳 Аванс</div>';
+            if (advance.cash > 0) html += '<div style="font-size:24px;font-weight:800;color:var(--text-primary);">' + advance.cash + ' <span style="font-size:14px;color:var(--text-secondary);">' + advance.cashCurrency + '</span></div>';
+            if (advance.card > 0) html += '<div style="font-size:24px;font-weight:800;color:var(--text-primary);">' + advance.card + ' <span style="font-size:14px;color:var(--text-secondary);">' + advance.cardCurrency + '</span></div>';
             html += '</div>';
         }
 
         // Витрачено
         var curEntries = Object.entries(byCurrency);
-        html += '<div style="background:white;border:1px solid var(--border);border-radius:12px;padding:12px 16px;flex:1;min-width:120px;">';
-        html += '<div style="font-size:10px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;margin-bottom:4px;">💰 Витрачено</div>';
+        html += '<div style="background:white;border:1px solid var(--border);border-radius:14px;padding:18px 22px;flex:1;min-width:140px;">';
+        html += '<div style="font-size:13px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;margin-bottom:6px;">💰 Витрачено</div>';
         if (curEntries.length === 0) {
-            html += '<div style="font-size:18px;font-weight:800;color:var(--text-secondary);">0</div>';
+            html += '<div style="font-size:24px;font-weight:800;color:var(--text-secondary);">0</div>';
         } else {
             curEntries.forEach(function(e) {
-                html += '<div style="font-size:18px;font-weight:800;color:var(--text-primary);">' + e[1].toFixed(2) + ' <span style="font-size:12px;color:var(--text-secondary);">' + e[0] + '</span></div>';
+                html += '<div style="font-size:24px;font-weight:800;color:var(--text-primary);">' + e[1].toFixed(2) + ' <span style="font-size:14px;color:var(--text-secondary);">' + e[0] + '</span></div>';
             });
         }
         html += '</div>';
@@ -2924,53 +2921,38 @@ async function loadAndRenderExpenses(sheetName) {
             var spent = byCurrency[advCur] || 0;
             var remaining = advTotal - spent;
             var isPositive = remaining >= 0;
-            html += '<div style="background:' + (isPositive ? '#f0fdf4' : '#fef2f2') + ';border:1px solid ' + (isPositive ? '#bbf7d0' : '#fecaca') + ';border-radius:12px;padding:12px 16px;flex:1;min-width:120px;">';
-            html += '<div style="font-size:10px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;margin-bottom:4px;">📊 Залишок</div>';
-            html += '<div style="font-size:18px;font-weight:800;color:' + (isPositive ? '#16a34a' : '#dc2626') + ';">' + remaining.toFixed(2) + ' <span style="font-size:12px;color:var(--text-secondary);">' + advCur + '</span></div>';
+            html += '<div style="background:' + (isPositive ? '#f0fdf4' : '#fef2f2') + ';border:1px solid ' + (isPositive ? '#bbf7d0' : '#fecaca') + ';border-radius:14px;padding:18px 22px;flex:1;min-width:140px;">';
+            html += '<div style="font-size:13px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;margin-bottom:6px;">📊 Залишок</div>';
+            html += '<div style="font-size:24px;font-weight:800;color:' + (isPositive ? '#16a34a' : '#dc2626') + ';">' + remaining.toFixed(2) + ' <span style="font-size:14px;color:var(--text-secondary);">' + advCur + '</span></div>';
             html += '</div>';
         }
+
+        // Записів
+        html += '<div style="background:white;border:1px solid var(--border);border-radius:14px;padding:18px 22px;flex:1;min-width:100px;text-align:center;">';
+        html += '<div style="font-size:13px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;margin-bottom:6px;">📋 Записів</div>';
+        html += '<div style="font-size:24px;font-weight:800;color:var(--text-primary);">' + items.length + '</div>';
+        html += '</div>';
 
         html += '</div>';
 
-        // ── Категорії (горизонтальні бари) ──
-        var catEntries = Object.entries(byCat).sort(function(a,b) { return b[1] - a[1]; });
-        if (catEntries.length > 0) {
-            var maxCat = catEntries[0][1];
-            html += '<div style="background:white;border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:16px;">';
-            html += '<div style="font-size:11px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;margin-bottom:10px;">Розбивка по категоріях</div>';
-            catEntries.forEach(function(e) {
-                var pct = maxCat > 0 ? Math.round(e[1] / maxCat * 100) : 0;
-                var color = CATEGORY_COLORS[e[0]] || '#6b7280';
-                html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">';
-                html += '<span style="font-size:12px;font-weight:600;min-width:110px;color:var(--text-primary);">' + (CATEGORY_LABELS[e[0]] || e[0]) + '</span>';
-                html += '<div style="flex:1;background:#f1f5f9;border-radius:4px;height:8px;overflow:hidden;">';
-                html += '<div style="width:' + pct + '%;height:100%;background:' + color + ';border-radius:4px;transition:width 0.3s;"></div>';
-                html += '</div>';
-                html += '<span style="font-size:12px;font-weight:700;min-width:60px;text-align:right;color:var(--text-primary);">' + e[1].toFixed(0) + '</span>';
-                html += '</div>';
-            });
-            html += '</div>';
-        }
-
         // ── Список записів ──
-        html += '<div style="font-size:11px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;margin-bottom:8px;">Записи витрат (' + items.length + ')</div>';
-
         if (items.length === 0) {
-            html += '<div style="text-align:center;padding:30px;color:var(--text-secondary);font-size:13px;">Витрат ще немає</div>';
+            html += '<div style="text-align:center;padding:30px;color:var(--text-secondary);font-size:14px;">Витрат ще немає</div>';
         } else {
+            html += '<div style="font-size:13px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;margin-bottom:10px;">Записи витрат</div>';
             items.forEach(function(e) {
                 var color = CATEGORY_COLORS[e.category] || '#6b7280';
                 var label = CATEGORY_LABELS[e.category] || e.category;
-                html += '<div style="background:white;border:1px solid var(--border);border-radius:10px;padding:10px 14px;margin-bottom:6px;display:flex;align-items:center;gap:10px;">';
-                html += '<div style="width:36px;height:36px;border-radius:8px;background:' + color + '20;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;">' + (CATEGORY_LABELS[e.category] || '📝').split(' ')[0] + '</div>';
+                html += '<div style="background:white;border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:8px;display:flex;align-items:center;gap:12px;">';
+                html += '<div style="width:42px;height:42px;border-radius:10px;background:' + color + '20;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">' + (CATEGORY_LABELS[e.category] || '📝').split(' ')[0] + '</div>';
                 html += '<div style="flex:1;min-width:0;">';
-                html += '<div style="font-size:13px;font-weight:700;color:var(--text-primary);">' + label.split(' ').slice(1).join(' ') + '</div>';
-                if (e.description) html += '<div style="font-size:11px;color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + e.description + '</div>';
-                html += '<div style="font-size:10px;color:var(--text-secondary);">' + (e.dateTrip || '') + ' · ' + (e.driver || '') + '</div>';
+                html += '<div style="font-size:14px;font-weight:700;color:var(--text-primary);">' + label.split(' ').slice(1).join(' ') + '</div>';
+                if (e.description) html += '<div style="font-size:12px;color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + e.description + '</div>';
+                html += '<div style="font-size:11px;color:var(--text-secondary);margin-top:2px;">' + (e.dateTrip || '') + ' · ' + (e.driver || '') + '</div>';
                 html += '</div>';
                 html += '<div style="text-align:right;flex-shrink:0;">';
-                html += '<div style="font-size:15px;font-weight:800;color:var(--text-primary);">' + e.amount + '</div>';
-                html += '<div style="font-size:10px;font-weight:600;color:var(--text-secondary);">' + (e.currency || 'CHF') + '</div>';
+                html += '<div style="font-size:18px;font-weight:800;color:var(--text-primary);">' + e.amount + '</div>';
+                html += '<div style="font-size:11px;font-weight:600;color:var(--text-secondary);">' + (e.currency || 'CHF') + '</div>';
                 html += '</div>';
                 html += '</div>';
             });
