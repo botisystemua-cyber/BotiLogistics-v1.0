@@ -270,12 +270,22 @@ function handleAddStaff(params) {
 
 function handleUpdateStaff(params) {
   var s = params.staff || {};
-  var rowNum = parseInt(s.rowNum);
-  if (!rowNum || rowNum < 2) return { success: false, error: 'Невірний рядок' };
+  var staffId = String(s.staffId || '');
+  if (!staffId) return { success: false, error: 'staffId обов\'язковий' };
 
   var ss = SpreadsheetApp.openById(CONFIG_SS_ID);
   var sh = ss.getSheetByName('Персонал');
   if (!sh) return { success: false, error: 'Аркуш не знайдено' };
+
+  var data = sh.getDataRange().getValues();
+  var rowNum = -1;
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][STF.STAFF_ID]).trim() === staffId) {
+      rowNum = i + 1;
+      break;
+    }
+  }
+  if (rowNum === -1) return { success: false, error: 'Співробітника не знайдено' };
 
   var lastCol = sh.getLastColumn();
   var range = sh.getRange(rowNum, 1, 1, lastCol);
@@ -300,15 +310,21 @@ function handleUpdateStaff(params) {
 }
 
 function handleDeleteStaff(params) {
-  var rowNum = parseInt(params.rowNum);
-  if (!rowNum || rowNum < 2) return { success: false, error: 'Невірний рядок' };
+  var staffId = String(params.staffId || '');
+  if (!staffId) return { success: false, error: 'staffId обов\'язковий' };
 
   var ss = SpreadsheetApp.openById(CONFIG_SS_ID);
   var sh = ss.getSheetByName('Персонал');
   if (!sh) return { success: false, error: 'Аркуш не знайдено' };
 
-  sh.deleteRow(rowNum);
-  return { success: true };
+  var data = sh.getDataRange().getValues();
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][STF.STAFF_ID]).trim() === staffId) {
+      sh.deleteRow(i + 1);
+      return { success: true };
+    }
+  }
+  return { success: false, error: 'Співробітника не знайдено' };
 }
 
 // ========================================
@@ -396,15 +412,21 @@ function handleAddRouteAccess(params) {
 }
 
 function handleDeleteRouteAccess(params) {
-  var rowNum = parseInt(params.rowNum);
-  if (!rowNum || rowNum < 2) return { success: false, error: 'Невірний рядок' };
+  var accessId = String(params.accessId || '');
+  if (!accessId) return { success: false, error: 'accessId обов\'язковий' };
 
   var ss = SpreadsheetApp.openById(CONFIG_SS_ID);
   var sh = ss.getSheetByName('Маршрути_доступ');
   if (!sh) return { success: false, error: 'Аркуш не знайдено' };
 
-  sh.deleteRow(rowNum);
-  return { success: true };
+  var data = sh.getDataRange().getValues();
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][RTE_ACC.ACCESS_ID]).trim() === accessId) {
+      sh.deleteRow(i + 1);
+      return { success: true };
+    }
+  }
+  return { success: false, error: 'Доступ не знайдено' };
 }
 
 // ========================================

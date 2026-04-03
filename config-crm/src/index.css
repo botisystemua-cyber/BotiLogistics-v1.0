@@ -24,6 +24,10 @@
 
   #root {
     min-height: 100dvh;
+  }
+
+  /* Login centering - only when not in admin mode */
+  #root:has(> .login-wrapper) {
     display: flex;
     align-items: center;
     justify-content: center;

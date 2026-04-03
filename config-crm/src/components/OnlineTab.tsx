@@ -1,43 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
 import { RefreshCw, Wifi, WifiOff, Clock } from 'lucide-react';
-import { API_URL } from './shared';
+import type { OnlineUser } from './shared';
 
-interface OnlineUser {
-  staffId: string;
-  name: string;
-  role: string;
-  lastActive: string;
-  status: string;
-  city: string;
-  isOnline: boolean;
-}
-
-export function OnlineTab() {
-  const [users, setUsers] = useState<OnlineUser[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await fetch(API_URL, {
-        method: 'POST', redirect: 'follow',
-        headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify({ action: 'getOnlineUsers' }),
-      });
-      const data = await res.json();
-      if (data.success) setUsers(data.users || []);
-    } catch { /* ignore */ }
-    setLoading(false);
-  }, []);
-
-  useEffect(() => { load(); }, [load]);
-
-  // Auto-refresh every 30s
-  useEffect(() => {
-    const iv = setInterval(load, 30000);
-    return () => clearInterval(iv);
-  }, [load]);
-
+export function OnlineTab({ users, onReload }: { users: OnlineUser[]; onReload: () => void }) {
   const online = users.filter(u => u.isOnline);
   const offline = users.filter(u => !u.isOnline);
 
@@ -51,30 +15,29 @@ export function OnlineTab() {
             {online.length} онлайн
           </span>
         </div>
-        <button onClick={load} className="p-2 rounded-xl hover:bg-white cursor-pointer transition-all">
-          <RefreshCw className={`w-4 h-4 text-muted ${loading ? 'animate-spin' : ''}`} />
+        <button onClick={onReload} className="p-2 rounded-xl hover:bg-white cursor-pointer transition-all">
+          <RefreshCw className="w-4 h-4 text-muted" />
         </button>
       </div>
 
-      {loading ? (
-        <div className="text-center py-12 text-muted text-sm"><RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2" />Завантаження...</div>
-      ) : users.length === 0 ? (
+      {users.length === 0 ? (
         <div className="text-center py-12 text-muted text-sm">Немає користувачів</div>
       ) : (
         <div className="space-y-4">
-          {/* Online */}
           {online.length > 0 && (
             <div className="space-y-2">
               <div className="text-[10px] font-bold text-green-600 uppercase tracking-wider px-1">В мережі</div>
-              {online.map(u => <UserCard key={u.staffId} user={u} />)}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
+                {online.map(u => <UserCard key={u.staffId} user={u} />)}
+              </div>
             </div>
           )}
-
-          {/* Offline */}
           {offline.length > 0 && (
             <div className="space-y-2">
               <div className="text-[10px] font-bold text-muted uppercase tracking-wider px-1">Не в мережі</div>
-              {offline.map(u => <UserCard key={u.staffId} user={u} />)}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
+                {offline.map(u => <UserCard key={u.staffId} user={u} />)}
+              </div>
             </div>
           )}
         </div>

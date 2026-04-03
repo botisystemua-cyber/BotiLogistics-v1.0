@@ -1,38 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
 import { RefreshCw, CheckCircle, XCircle, AlertTriangle, ShieldOff } from 'lucide-react';
-import { API_URL } from './shared';
+import type { LogEntry } from './shared';
 
-interface LogEntry {
-  logId: string;
-  userId: string;
-  name: string;
-  role: string;
-  action: string;
-  datetime: string;
-  status: string;
-  note: string;
-}
-
-export function LogTab() {
-  const [logs, setLogs] = useState<LogEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await fetch(API_URL, {
-        method: 'POST', redirect: 'follow',
-        headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify({ action: 'getAccessLog' }),
-      });
-      const data = await res.json();
-      if (data.success) setLogs((data.logs || []).reverse());
-    } catch { /* ignore */ }
-    setLoading(false);
-  }, []);
-
-  useEffect(() => { load(); }, [load]);
-
+export function LogTab({ logs, onReload }: { logs: LogEntry[]; onReload: () => void }) {
   const getStatusIcon = (status: string) => {
     if (status === 'Успішно') return <CheckCircle className="w-4 h-4 text-green-500" />;
     if (status === 'Помилка') return <XCircle className="w-4 h-4 text-red-500" />;
@@ -51,17 +20,15 @@ export function LogTab() {
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <span className="text-xs font-bold text-muted uppercase tracking-wider">{logs.length} записів</span>
-        <button onClick={load} className="p-2 rounded-xl hover:bg-white cursor-pointer transition-all">
-          <RefreshCw className={`w-4 h-4 text-muted ${loading ? 'animate-spin' : ''}`} />
+        <button onClick={onReload} className="p-2 rounded-xl hover:bg-white cursor-pointer transition-all">
+          <RefreshCw className="w-4 h-4 text-muted" />
         </button>
       </div>
 
-      {loading ? (
-        <div className="text-center py-12 text-muted text-sm"><RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2" />Завантаження...</div>
-      ) : logs.length === 0 ? (
+      {logs.length === 0 ? (
         <div className="text-center py-12 text-muted text-sm">Немає записів</div>
       ) : (
-        <div className="space-y-2">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
           {logs.map((log, i) => (
             <div key={log.logId || i} className={`rounded-2xl border p-3 sm:p-4 flex items-start gap-3 ${getStatusBg(log.status)}`}>
               <div className="mt-0.5 shrink-0">{getStatusIcon(log.status)}</div>
