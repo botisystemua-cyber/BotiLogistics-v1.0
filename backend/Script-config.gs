@@ -11,7 +11,7 @@
  */
 
 // ── Spreadsheet ID Config таблиці (замінити на реальний) ──
-var CONFIG_SS_ID = 'YOUR_CONFIG_SPREADSHEET_ID';
+var CONFIG_SS_ID = '1GEVqqWCvOZG_RNmVrIGwlrW9d-yjXlXi-v7hX_z5-kc';
 
 // ── Стовпці аркуша «Власник» ──
 var OWN = {

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Truck, ShieldCheck, Users, Eye, EyeOff, LogIn, Loader2, LogOut, ChevronLeft } from 'lucide-react';
 
-const API_URL = 'https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbxjKhlvWe_GrJ1LIqYJRXkEDl__-a11yhMSbhuqesfzJYa_MTwFLM5EPxMvC8QraBw/exec';
 
 type Role = 'owner' | 'manager' | 'driver';
 
