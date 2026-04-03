@@ -79,7 +79,7 @@ export default function TariffsScreen({ onNavigate }: Props) {
               </div>
               <div>
                 <p className="text-xs text-gray-400">Telegram</p>
-                <p className="text-sm font-semibold text-navy">@escoexpress</p>
+                <p className="text-sm font-semibold text-navy">@botilogistics</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
@@ -88,7 +88,7 @@ export default function TariffsScreen({ onNavigate }: Props) {
               </div>
               <div>
                 <p className="text-xs text-gray-400">Email</p>
-                <p className="text-sm font-semibold text-navy">info@escoexpress.com</p>
+                <p className="text-sm font-semibold text-navy">info@botilogistics.com</p>
               </div>
             </div>
           </div>
