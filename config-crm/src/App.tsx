@@ -1,8 +1,6 @@
 import { useState } from 'react';
 import { ShieldCheck, Users, Eye, EyeOff, LogIn, Loader2, LogOut, ArrowLeft, CircleCheck, AlertCircle, Truck } from 'lucide-react';
-import { AdminPanel } from './components/AdminPanel';
-import { Logo, API_URL, type AuthUser } from './components/shared';
-
+import { Logo, API_URL } from './components/shared';
 
 type Role = 'owner' | 'manager' | 'driver';
 
@@ -125,23 +123,16 @@ function App() {
     setError('');
   };
 
-  // Owner → full admin panel
-  if (step === 'success' && user && selectedRole?.key === 'owner') {
-    return <AdminPanel user={user as AuthUser} onLogout={handleLogout} />;
-  }
-
   return (
     <div className="login-wrapper w-full max-w-sm sm:max-w-md lg:max-w-lg mx-auto">
       {/* ═══════ ROLE SELECTION ═══════ */}
       {step === 'role' && (
         <div className="animate-[fadeIn_0.4s_ease-out]">
-          {/* Logo block */}
           <div className="text-center mb-8 sm:mb-10">
             <Logo />
             <p className="text-xs sm:text-sm text-muted mt-3 font-medium">Оберіть вашу роль для входу</p>
           </div>
 
-          {/* Role cards */}
           <div className="space-y-3 sm:space-y-4">
             {ROLES.map((role, idx) => {
               const Icon = role.icon;
@@ -172,7 +163,6 @@ function App() {
       {/* ═══════ LOGIN FORM ═══════ */}
       {step === 'login' && selectedRole && (
         <div className="animate-[fadeIn_0.35s_ease-out]">
-          {/* Back */}
           <div className="mb-6 sm:mb-8">
             <button
               onClick={handleBack}
@@ -184,7 +174,6 @@ function App() {
           </div>
 
           <div className="bg-card border-2 border-border rounded-2xl sm:rounded-3xl p-5 sm:p-7 shadow-sm">
-            {/* Role header */}
             <div className="flex items-center gap-4 mb-6 sm:mb-7">
               <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center shrink-0 ${selectedRole.iconBg} shadow-lg ${selectedRole.shadow}`}>
                 <selectedRole.icon className="w-6 h-6 sm:w-7 sm:h-7" />
@@ -195,7 +184,6 @@ function App() {
               </div>
             </div>
 
-            {/* Fields */}
             <div className="space-y-4 sm:space-y-5">
               <div>
                 <label className="block text-[11px] sm:text-xs font-bold text-muted uppercase tracking-wider mb-2">Логін</label>
@@ -235,7 +223,6 @@ function App() {
               </div>
             </div>
 
-            {/* Error */}
             {error && (
               <div className="mt-4 sm:mt-5 px-4 py-3 bg-red-50 border-2 border-red-200 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-semibold text-error flex items-center gap-2.5 animate-[scaleIn_0.2s_ease-out]">
                 <AlertCircle className="w-4 h-4 shrink-0" />
@@ -243,7 +230,6 @@ function App() {
               </div>
             )}
 
-            {/* Submit */}
             <button
               onClick={handleLogin}
               disabled={loading || !login.trim() || !password.trim()}
@@ -269,22 +255,18 @@ function App() {
       {step === 'success' && user && selectedRole && (
         <div className="animate-[scaleIn_0.35s_ease-out]">
           <div className="bg-card border-2 border-border rounded-2xl sm:rounded-3xl p-6 sm:p-8 shadow-sm text-center">
-            {/* Icon */}
             <div className={`inline-flex items-center justify-center w-20 h-20 sm:w-24 sm:h-24 rounded-3xl bg-gradient-to-br ${selectedRole.gradient} shadow-xl ${selectedRole.shadow} mb-5`}>
               <selectedRole.icon className="w-10 h-10 sm:w-12 sm:h-12 text-white" />
             </div>
 
-            {/* Status badge */}
             <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-green-50 border border-green-200 text-success text-xs sm:text-sm font-bold mb-4">
               <CircleCheck className="w-4 h-4" />
               Авторизовано
             </div>
 
-            {/* User info */}
             <h2 className="text-2xl sm:text-3xl font-black text-text">{user.name}</h2>
             <p className="text-sm sm:text-base text-muted mt-1 font-medium">{user.role}</p>
 
-            {/* Details */}
             <div className="mt-6 sm:mt-8 bg-bg rounded-xl sm:rounded-2xl p-4 space-y-3">
               <div className="flex justify-between items-center">
                 <span className="text-xs sm:text-sm text-muted">ID</span>
@@ -299,7 +281,6 @@ function App() {
               </div>
             </div>
 
-            {/* Logout */}
             <button
               onClick={handleLogout}
               className="w-full mt-6 sm:mt-8 py-3.5 sm:py-4 rounded-xl sm:rounded-2xl border-2 border-border text-sm sm:text-base font-bold text-text-secondary hover:bg-bg hover:border-red-200 hover:text-error cursor-pointer transition-all active:scale-[0.97] flex items-center justify-center gap-2"
@@ -311,7 +292,6 @@ function App() {
         </div>
       )}
 
-      {/* Footer */}
       <p className="text-center text-[10px] sm:text-[11px] text-muted/50 mt-6 sm:mt-8 font-medium">
         <span className="text-text/40 font-bold">Boti</span><span className="text-success/40 font-bold">Logistics</span> v1.0
       </p>

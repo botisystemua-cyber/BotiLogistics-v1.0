@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Users, Wifi, LogOut, RefreshCw, ExternalLink } from 'lucide-react';
-import { Logo, apiCall, type AuthUser, type StaffMember, type RouteAccess, type OnlineUser } from './shared';
+import { Users, Wifi, RefreshCw, ExternalLink } from 'lucide-react';
+import { Logo, apiCall, type StaffMember, type RouteAccess, type OnlineUser } from './shared';
 import { StaffTab } from './StaffTab';
 import { OnlineTab } from './OnlineTab';
 
@@ -11,10 +11,9 @@ const TABS: { key: Tab; label: string; icon: typeof Users }[] = [
   { key: 'online', label: 'Онлайн', icon: Wifi },
 ];
 
-// URL менеджерської CRM
 const CRM_URL = '/passenger-crm/Passengers.html';
 
-export function AdminPanel({ user, onLogout }: { user: AuthUser; onLogout: () => void }) {
+export function AdminPanel() {
   const [tab, setTab] = useState<Tab>('staff');
   const [loading, setLoading] = useState(true);
   const [staff, setStaff] = useState<StaffMember[]>([]);
@@ -57,20 +56,10 @@ export function AdminPanel({ user, onLogout }: { user: AuthUser; onLogout: () =>
       <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-xl border-b border-border px-4 sm:px-6 py-4">
         <div className="max-w-[1400px] mx-auto flex items-center justify-between">
           <Logo size="md" />
-          <div className="flex items-center gap-3 sm:gap-4">
-            <button onClick={loadAll}
-              className="p-2.5 rounded-xl hover:bg-bg cursor-pointer transition-all" title="Оновити все">
-              <RefreshCw className={`w-5 h-5 text-muted ${loading ? 'animate-spin' : ''}`} />
-            </button>
-            <div className="text-right hidden sm:block">
-              <div className="text-sm font-bold text-text">{user.name}</div>
-              <div className="text-xs text-muted">{user.role}</div>
-            </div>
-            <button onClick={onLogout}
-              className="p-2.5 rounded-xl hover:bg-red-50 cursor-pointer transition-all group">
-              <LogOut className="w-5 h-5 text-muted group-hover:text-red-500 transition-colors" />
-            </button>
-          </div>
+          <button onClick={loadAll}
+            className="p-2.5 rounded-xl hover:bg-bg cursor-pointer transition-all" title="Оновити все">
+            <RefreshCw className={`w-5 h-5 text-muted ${loading ? 'animate-spin' : ''}`} />
+          </button>
         </div>
       </header>
 
@@ -122,7 +111,7 @@ export function AdminPanel({ user, onLogout }: { user: AuthUser; onLogout: () =>
 
       {/* Footer */}
       <footer className="text-center text-xs text-muted/50 py-5 font-medium">
-        <span className="text-text/40 font-bold">Boti</span><span className="text-success/40 font-bold">Logistics</span> Config v1.0
+        <span className="text-text/40 font-bold">Boti</span><span className="text-success/40 font-bold">Logistics</span> Owner v1.0
       </footer>
     </div>
   );
