@@ -11,8 +11,8 @@ const EMPTY_STAFF: Omit<StaffMember, 'rowNum'> = {
 
 const ROLES_FILTER = ['Всі', 'Водій', 'Менеджер'];
 
-function staffKey(s: StaffMember) {
-  return s.staffId || `row-${s.rowNum}`;
+function staffKey(s: StaffMember, idx: number) {
+  return s.staffId ? s.staffId : `row-${s.rowNum}-${idx}`;
 }
 
 export function StaffTab({ staff, access, onReload }: {
@@ -96,8 +96,8 @@ export function StaffTab({ staff, access, onReload }: {
         <div className="text-center py-12 lg:py-16 text-muted text-sm lg:text-base">Немає персоналу</div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-2.5 lg:gap-4">
-          {filtered.map(s => {
-            const key = staffKey(s);
+          {filtered.map((s, idx) => {
+            const key = staffKey(s, idx);
             const staffAccess = getAccessForStaff(s);
             const isExpanded = expandedKey === key;
             return (
