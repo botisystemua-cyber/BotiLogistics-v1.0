@@ -55,8 +55,8 @@ export function AdminPanel({ user, onLogout }: { user: AuthUser; onLogout: () =>
     <div className="min-h-[100dvh] flex flex-col">
       {/* Header */}
       <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-xl border-b border-border px-4 sm:px-6 py-4">
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <Logo size="sm" />
+        <div className="max-w-[1400px] mx-auto flex items-center justify-between">
+          <Logo size="md" />
           <div className="flex items-center gap-3 sm:gap-4">
             <button onClick={loadAll}
               className="p-2.5 rounded-xl hover:bg-bg cursor-pointer transition-all" title="Оновити все">
@@ -76,7 +76,7 @@ export function AdminPanel({ user, onLogout }: { user: AuthUser; onLogout: () =>
 
       {/* Tab bar */}
       <nav className="sticky top-[65px] z-30 bg-white/80 backdrop-blur-xl border-b border-border px-4 sm:px-6">
-        <div className="max-w-6xl mx-auto flex items-center gap-2 overflow-x-auto no-scrollbar py-3">
+        <div className="max-w-[1400px] mx-auto flex items-center gap-2 overflow-x-auto no-scrollbar py-3">
           {TABS.map(t => {
             const Icon = t.icon;
             const active = tab === t.key;
@@ -96,7 +96,7 @@ export function AdminPanel({ user, onLogout }: { user: AuthUser; onLogout: () =>
 
           {/* CRM button */}
           <a href={CRM_URL} target="_blank" rel="noopener noreferrer"
-            className="flex items-center gap-2 px-4 sm:px-5 py-2.5 rounded-xl text-sm font-bold whitespace-nowrap cursor-pointer transition-all text-muted hover:bg-bg ml-auto">
+            className="flex items-center gap-2 px-4 sm:px-5 py-2.5 rounded-xl text-sm font-bold whitespace-nowrap cursor-pointer transition-all bg-emerald-500 text-white shadow-sm hover:bg-emerald-600">
             <ExternalLink className="w-5 h-5" />
             CRM
           </a>
@@ -105,7 +105,7 @@ export function AdminPanel({ user, onLogout }: { user: AuthUser; onLogout: () =>
 
       {/* Content */}
       <main className="flex-1 px-4 sm:px-6 py-5 sm:py-6">
-        <div className="max-w-6xl mx-auto">
+        <div className="max-w-[1400px] mx-auto">
           {loading ? (
             <div className="text-center py-24 text-muted">
               <RefreshCw className="w-7 h-7 animate-spin mx-auto mb-4" />
