@@ -29,11 +29,51 @@ const PACKAGE_COLUMNS = [
   { key: 'direction', label: 'Напрям' },
 ];
 
+const SHIPPING_COLUMNS = [
+  { key: 'recipientAddr', label: 'Адреса отримувача' },
+  { key: 'recipientName', label: 'Отримувач' },
+  { key: 'recipientPhone', label: 'Тел. отримувача' },
+  { key: 'senderName', label: 'Відправник' },
+  { key: 'senderPhone', label: 'Тел. відправника' },
+  { key: 'internalNum', label: 'Внутрішній №' },
+  { key: 'weight', label: 'Вага' },
+  { key: 'description', label: 'Опис' },
+  { key: 'amount', label: 'Сума' },
+  { key: 'payForm', label: 'Форма оплати' },
+  { key: 'payStatus', label: 'Статус оплати' },
+  { key: 'debt', label: 'Борг' },
+  { key: 'dateTrip', label: 'Дата рейсу' },
+];
+
 interface Props { onClose: () => void; }
+
+// Combined columns for "all" tab (unique by key, preserving order)
+const ALL_COLUMNS = (() => {
+  const seen = new Set<string>();
+  const result: { key: string; label: string }[] = [];
+  for (const col of [...PASSENGER_COLUMNS, ...PACKAGE_COLUMNS, ...SHIPPING_COLUMNS]) {
+    if (!seen.has(col.key)) { seen.add(col.key); result.push(col); }
+  }
+  return result;
+})();
+
+// Combined package+shipping columns for "allPackages" tab
+const ALL_PACKAGE_COLUMNS = (() => {
+  const seen = new Set<string>();
+  const result: { key: string; label: string }[] = [];
+  for (const col of [...PACKAGE_COLUMNS, ...SHIPPING_COLUMNS]) {
+    if (!seen.has(col.key)) { seen.add(col.key); result.push(col); }
+  }
+  return result;
+})();
 
 export function ColumnEditor({ onClose }: Props) {
   const { hiddenCols, toggleCol, viewTab } = useApp();
-  const columns = viewTab === 'packages' ? PACKAGE_COLUMNS : PASSENGER_COLUMNS;
+  const columns = viewTab === 'shipping' ? SHIPPING_COLUMNS
+    : viewTab === 'packages' ? PACKAGE_COLUMNS
+    : viewTab === 'allPackages' ? ALL_PACKAGE_COLUMNS
+    : viewTab === 'all' ? ALL_COLUMNS
+    : PASSENGER_COLUMNS;
 
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-end justify-center" onClick={onClose}>

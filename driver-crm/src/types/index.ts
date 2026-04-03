@@ -54,6 +54,8 @@ export interface Passenger extends RouteItemBase {
 
 export interface Package extends RouteItemBase {
   senderName: string;
+  senderPhone: string;
+  addrFrom: string;
   recipientName: string;
   recipientPhone: string;
   recipientAddr: string;
@@ -94,7 +96,7 @@ export interface ShippingItem {
   _sourceRoute?: string;
 }
 
-export type RouteItem = Passenger | Package;
+export type RouteItem = Passenger | Package | ShippingItem;
 
 export type ItemStatus = 'pending' | 'in-progress' | 'completed' | 'cancelled';
 

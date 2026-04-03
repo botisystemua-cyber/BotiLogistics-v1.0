@@ -81,7 +81,7 @@ export function PackageCard({ pkg: p, index, searchQuery = '', onEdit }: Props) 
 
         <div className="flex gap-2 mb-2">
           <Btn icon={Phone} label="Дзвонити" color="bg-green-50 text-green-700" onClick={() => { if (p.recipientPhone) window.location.href = `tel:${p.recipientPhone}`; else showToast('Немає телефону'); }} />
-          <Btn icon={MapPin} label="Звідки" color="bg-blue-50 text-blue-700" onClick={() => { showToast('Немає адреси відправки'); }} />
+          <Btn icon={MapPin} label="Звідки" color="bg-blue-50 text-blue-700" onClick={() => { if (p.addrFrom) window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(p.addrFrom)}&travelmode=driving`, '_blank'); else showToast('Немає адреси відправки'); }} />
           <Btn icon={MapPin} label="Куди" color="bg-blue-50 text-blue-700" onClick={navigate} />
           <Btn icon={expanded ? ChevronUp : Info} label={expanded ? 'Згорнути' : 'Деталі'} color={expanded ? 'bg-brand/10 text-brand' : 'bg-gray-50 text-gray-600'} onClick={() => setExpanded(!expanded)} />
         </div>

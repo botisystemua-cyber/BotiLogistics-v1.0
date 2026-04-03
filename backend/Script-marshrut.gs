@@ -217,6 +217,8 @@ function doPost(e) {
         return respond(handleAddExpense(data));
       case 'deleteExpense':
         return respond(handleDeleteExpense(data));
+      case 'updateAdvance':
+        return respond(handleUpdateAdvance(data));
       default:
         return respond({ success: false, error: 'Невідома дія: ' + action });
     }
@@ -656,8 +658,10 @@ function handleAddRouteItem(data) {
 // ============================================
 function handleUpdateDriverFields(data) {
   try {
-    var routeName = data.routeName;
-    if (!routeName || !/^Маршрут_\d+$/.test(routeName)) {
+    var routeName = String(data.routeName || '').trim();
+    var isShipping = routeName.indexOf('Відправка_') === 0;
+    var isRoute = routeName.indexOf('Маршрут_') === 0;
+    if (!routeName || (!isRoute && !isShipping)) {
       return { success: false, error: 'Невалідний маршрут: ' + (routeName || '(пусто)') };
     }
 
@@ -679,13 +683,14 @@ function handleUpdateDriverFields(data) {
       return String(h).replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
     });
 
-    // Шукаємо рядок по ITEM_ID (col E)
+    // Шукаємо рядок: для Відправка по DISPATCH_ID (col A), для Маршрут по ITEM_ID (col E)
     var allData = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
     var rowNum = -1;
     for (var i = 0; i < allData.length; i++) {
-      if (str(allData[i][COL.ITEM_ID]) === str(itemId) || str(allData[i][COL.RTE_ID]) === str(itemId)) {
-        rowNum = i + 2;
-        break;
+      if (isShipping) {
+        if (str(allData[i][COL_SHIP.DISPATCH_ID]) === str(itemId)) { rowNum = i + 2; break; }
+      } else {
+        if (str(allData[i][COL.ITEM_ID]) === str(itemId) || str(allData[i][COL.RTE_ID]) === str(itemId)) { rowNum = i + 2; break; }
       }
     }
     if (rowNum === -1) return { success: false, error: 'Запис не знайдено: ' + itemId };
@@ -888,6 +893,54 @@ function handleDeleteExpense(data) {
     }
 
     return { success: true, message: 'Витрату видалено' };
+  } catch (err) {
+    return { success: false, error: err.toString() };
+  }
+}
+
+// ============================================
+// updateAdvance — водій оновлює кошти на поїздку (перший рядок Витрати_*)
+// ============================================
+function handleUpdateAdvance(data) {
+  try {
+    var routeName = data.routeName;
+    if (!routeName || routeName.indexOf('Маршрут_') !== 0) {
+      return { success: false, error: 'Невалідний маршрут: ' + (routeName || '(пусто)') };
+    }
+
+    var expSheetName = routeName.replace('Маршрут_', 'Витрати_');
+    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var sheet = ss.getSheetByName(expSheetName);
+    if (!sheet) return { success: false, error: 'Аркуш не знайдено: ' + expSheetName };
+
+    var lastRow = sheet.getLastRow();
+    if (lastRow < 2) return { success: false, error: 'Аркуш порожній' };
+
+    // Пишемо аванс у перший рядок даних (row 2)
+    var cash = parseFloat(data.cash) || 0;
+    var cashCurrency = data.cashCurrency || 'UAH';
+    var card = parseFloat(data.card) || 0;
+    var cardCurrency = data.cardCurrency || 'UAH';
+
+    sheet.getRange(2, COL_EXP.ADVANCE_CASH + 1).setValue(cash);
+    sheet.getRange(2, COL_EXP.ADVANCE_CASH_CUR + 1).setValue(cashCurrency);
+    sheet.getRange(2, COL_EXP.ADVANCE_CARD + 1).setValue(card);
+    sheet.getRange(2, COL_EXP.ADVANCE_CARD_CUR + 1).setValue(cardCurrency);
+
+    // Логуємо
+    var now = new Date();
+    var logSheet = ss.getSheetByName(SHEET_LOGS);
+    if (logSheet) {
+      logSheet.appendRow([
+        Utilities.formatDate(now, 'Europe/Kiev', 'yyyy-MM-dd'),
+        Utilities.formatDate(now, 'Europe/Kiev', 'HH:mm:ss'),
+        data.driverName || '', routeName, '',
+        'витрати', 'advance_updated',
+        'cash: ' + cash + ' ' + cashCurrency + ', card: ' + card + ' ' + cardCurrency, ''
+      ]);
+    }
+
+    return { success: true, message: 'Кошти оновлено' };
   } catch (err) {
     return { success: false, error: err.toString() };
   }

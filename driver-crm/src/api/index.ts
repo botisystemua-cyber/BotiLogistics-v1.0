@@ -167,6 +167,8 @@ export async function fetchPackages(sheetName: string): Promise<Package[]> {
     items.push({
       ...buildCommon(row, sheetName, i + 1),
       senderName: val(row, C.SENDER_NAME),
+      senderPhone: val(row, C.PAX_PHONE),
+      addrFrom: val(row, C.ADDR_FROM),
       recipientName: val(row, C.RECIPIENT_NAME),
       recipientPhone: val(row, C.RECIPIENT_PHONE),
       recipientAddr: val(row, C.RECIPIENT_ADDR),
@@ -227,10 +229,14 @@ export async function fetchShippingItems(sheetName: string): Promise<ShippingIte
 export async function updateItemStatus(
   driverName: string,
   routeName: string,
-  item: RouteItem,
+  item: RouteItem | { itemId: string; type: string },
   status: string,
   cancelReason = ''
 ) {
+  const itemId = 'dispatchId' in item ? (item as ShippingItem).dispatchId : (item as Passenger | Package).itemId;
+  const itemType = 'dispatchId' in item ? 'відправка' : (item as Passenger | Package).type;
+  const phone = 'phone' in item ? (item as Passenger).phone : ('recipientPhone' in item ? (item as Package | ShippingItem).recipientPhone : '');
+
   const response = await fetch(CONFIG.API_URL, {
     method: 'POST',
     redirect: 'follow',
@@ -239,9 +245,9 @@ export async function updateItemStatus(
       action: 'updateDriverStatus',
       driverId: driverName,
       routeName,
-      itemId: item.itemId,
-      itemType: item.type,
-      phone: 'phone' in item ? item.phone : ('recipientPhone' in item ? item.recipientPhone : ''),
+      itemId,
+      itemType,
+      phone,
       status,
       cancelReason,
     }),
@@ -288,6 +294,19 @@ export async function deleteExpense(data: Record<string, string>) {
   const text = await response.text();
   try { return JSON.parse(text); }
   catch { throw new Error('Помилка видалення витрати'); }
+}
+
+// ---- Update advance ----
+export async function updateAdvance(data: Record<string, string>) {
+  const response = await fetch(CONFIG.API_URL, {
+    method: 'POST',
+    redirect: 'follow',
+    headers: { 'Content-Type': 'text/plain' },
+    body: JSON.stringify({ action: 'updateAdvance', ...data }),
+  });
+  const text = await response.text();
+  try { return JSON.parse(text); }
+  catch { throw new Error('Помилка оновлення коштів'); }
 }
 
 // ---- Add new item (passenger or package) ----

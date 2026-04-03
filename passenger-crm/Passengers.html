@@ -1378,8 +1378,7 @@
                     <button class="bulk-toolbar-btn cancel" onclick="clearRouteSelection()">✕ Скасувати</button>
                     <button class="bulk-toolbar-btn select-all" onclick="routeBulkTransfer()">🔄 Перенести</button>
                     <button class="bulk-toolbar-btn select-all" onclick="routeBulkArchive()">📦 Архів</button>
-                    <button class="bulk-toolbar-btn" style="background:#dc2626;color:white;" onclick="routeBulkDeleteFull()">🗑️ Видалити</button>
-                    <button class="bulk-toolbar-btn" style="background:rgba(220,38,38,0.5);color:white;" onclick="routeBulkDeleteFromRoute()">🗑️ З маршруту</button>
+                    <button class="bulk-toolbar-btn" style="background:rgba(220,38,38,0.7);color:white;" onclick="routeBulkDeleteFromRoute()">🗑️ З маршруту</button>
                 </div>
             </div>
             <div id="routesLoading" style="display:none;text-align:center;padding:40px;color:var(--text-secondary);font-size:13px;">⏳ Завантаження маршрутів...</div>
@@ -1621,7 +1620,7 @@
 <!-- MESSENGER POPUP -->
 <div class="messenger-overlay" id="messengerOverlay" onclick="if(event.target===this)closeMessengerPopup()">
     <div class="messenger-popup">
-        <div class="messenger-popup-title">✉️ Написати через:</div>
+        <div class="messenger-popup-title" id="messengerPopupTitle">✉️ Написати через:</div>
         <div class="messenger-popup-grid" id="messengerGrid"></div>
         <button class="messenger-popup-cancel" onclick="closeMessengerPopup()">Скасувати</button>
     </div>
@@ -1990,7 +1989,7 @@ function initMapsAPI() {
 // ================================================================
 // CONFIG
 // ================================================================
-const API_URL = 'https://script.google.com/macros/s/AKfycbxRRPJtjKLAI5Aj7aU7tVDT_eeS9hIULE9K75E-dJamvuV5EmVBm86VVdYma3Ov1z_x/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbw3YQqn3-iyyxwbsAdgfeaj3bV1ik5cobb9D-hVftqmrSISwCSQDUZrhPW8yELvSXFy/exec';
 const API_URL_ROUTES = 'https://script.google.com/macros/s/AKfycbx8ew1K34h8WMy-mAk8HBIuJ28rZmPOxSyBUDZLj9HKbEwU6fAW35OtHsKufYSHqariOw/exec';
 const ROUTE_ACTIONS = [];
 const COL_MAP = {
@@ -3288,12 +3287,14 @@ function openRouteEditModal(rteId, sheetName) {
 async function deleteFromRoute(rteId, sheetName, leadName) {
     showConfirm('Прибрати «' + leadName + '» з маршруту? (лід залишиться в CRM)', async (yes) => {
         if (!yes) return;
+        const sheet = routes[activeRouteIdx];
+        const row = sheet ? (sheet.rows || []).find(r => r._resolvedId === rteId || r['RTE_ID'] === rteId) : null;
+        const idInfo = row ? getRouteRowIdInfo(row) : { id_col: 'RTE_ID', id_val: rteId };
         showLoader('Видалення з маршруту...');
-        const res = await apiPost('deleteFromSheet', { sheet: sheetName, id_col: 'RTE_ID', id_val: rteId });
+        const res = await apiPost('deleteFromSheet', { sheet: sheetName, id_col: idInfo.id_col, id_val: idInfo.id_val });
         hideLoader();
         if (res.ok) {
-            const sheet = routes[activeRouteIdx];
-            if (sheet) sheet.rows = (sheet.rows || []).filter(r => r._resolvedId !== rteId);
+            if (sheet) sheet.rows = (sheet.rows || []).filter(r => (r._resolvedId || r['RTE_ID']) !== rteId);
             routeSelectedIds.delete(rteId);
             showToast('✅ Прибрано з маршруту');
             renderRoutes();
@@ -3311,10 +3312,18 @@ async function routeBulkDeleteFromRoute() {
     showConfirm('Прибрати ' + routeSelectedIds.size + ' записів з маршруту? (ліди залишаться в CRM)', async (yes) => {
         if (!yes) return;
         showLoader('Видалення з маршруту...');
+        // Збираємо інфо для видалення по кожному рядку
+        const deleteInfos = [];
+        for (const row of (sheet.rows || [])) {
+            const resolvedId = row._resolvedId || row['RTE_ID'];
+            if (!routeSelectedIds.has(resolvedId)) continue;
+            const idInfo = getRouteRowIdInfo(row);
+            if (idInfo) deleteInfos.push({ ...idInfo, resolvedId });
+        }
         let ok = 0, fail = 0;
-        for (const rteId of routeSelectedIds) {
-            const res = await apiPost('deleteFromSheet', { sheet: sheet.sheetName, id_col: 'RTE_ID', id_val: rteId });
-            if (res.ok) { ok++; sheet.rows = (sheet.rows || []).filter(r => (r._resolvedId || r['RTE_ID']) !== rteId); }
+        for (const info of deleteInfos) {
+            const res = await apiPost('deleteFromSheet', { sheet: sheet.sheetName, id_col: info.id_col, id_val: info.id_val });
+            if (res.ok) { ok++; sheet.rows = (sheet.rows || []).filter(r => (r._resolvedId || r['RTE_ID']) !== info.resolvedId); }
             else fail++;
         }
         hideLoader();
@@ -3324,6 +3333,23 @@ async function routeBulkDeleteFromRoute() {
         showToast('✅ Прибрано з маршруту: ' + ok + (fail ? ', помилок: ' + fail : ''));
         renderRoutes();
     });
+}
+
+// ── Визначити правильну колонку та значення ID для рядка маршруту ──
+function getRouteRowIdInfo(row) {
+    if (row['RTE_ID']) return { id_col: 'RTE_ID', id_val: row['RTE_ID'] };
+    if (row['PAX_ID / PKG_ID']) return { id_col: 'PAX_ID / PKG_ID', id_val: row['PAX_ID / PKG_ID'] };
+    if (row['PAX_ID/PKG_ID']) return { id_col: 'PAX_ID/PKG_ID', id_val: row['PAX_ID/PKG_ID'] };
+    return null;
+}
+
+// ── Очистити row від фронтенд-властивостей перед відправкою на бекенд ──
+function cleanRowForApi(row) {
+    const clean = {};
+    for (const key of Object.keys(row)) {
+        if (!key.startsWith('_')) clean[key] = row[key];
+    }
+    return clean;
 }
 
 // ── Пересадити лід в інший маршрут ──
@@ -3336,6 +3362,7 @@ function transferRouteLeadModal(rteId, sheetName) {
         return `<button class="messenger-popup-item" onclick="doTransferRouteLead('${rteId}','${sheetName}','${r.sheetName}')" style="padding:10px;font-size:12px;">🗺️ ${n}</button>`;
     }).join('');
 
+    document.getElementById('messengerPopupTitle').textContent = '🔄 Пересадити в маршрут:';
     const grid = document.getElementById('messengerGrid');
     grid.innerHTML = opts;
     document.getElementById('messengerOverlay').classList.add('show');
@@ -3348,12 +3375,16 @@ async function doTransferRouteLead(rteId, fromSheet, toSheet) {
     const row = (sheet.rows || []).find(r => r._resolvedId === rteId || r['RTE_ID'] === rteId);
     if (!row) return;
 
+    // Визначаємо правильну колонку і значення для видалення
+    const idInfo = getRouteRowIdInfo(row);
+    if (!idInfo) { showToast('❌ Не вдалося визначити ID запису'); return; }
+
     showLoader('Пересадка...');
-    // Add to new route
-    const addRes = await apiPost('addToRoute', { sheetName: toSheet, leads: [row] });
+    // Add to new route (без фронтенд-властивостей)
+    const addRes = await apiPost('addToRoute', { sheetName: toSheet, leads: [cleanRowForApi(row)] });
     if (!addRes.ok) { hideLoader(); showToast('❌ ' + (addRes.error || 'Помилка додавання')); return; }
-    // Delete from old route
-    const delRes = await apiPost('deleteFromSheet', { sheet: fromSheet, id_col: 'RTE_ID', id_val: rteId });
+    // Delete from old route (з правильним id_col)
+    const delRes = await apiPost('deleteFromSheet', { sheet: fromSheet, id_col: idInfo.id_col, id_val: idInfo.id_val });
     hideLoader();
     if (delRes.ok) {
         // Видаляємо зі старого маршруту
@@ -3366,7 +3397,7 @@ async function doTransferRouteLead(rteId, fromSheet, toSheet) {
         renderRoutes();
         showToast('✅ Пересаджено в ' + toSheet.replace('Маршрут_', ''));
     } else {
-        showToast('⚠️ Додано в новий маршрут, але не видалено зі старого');
+        showToast('⚠️ Додано в новий маршрут, але не видалено зі старого: ' + (delRes.error || ''));
     }
 }
 
@@ -3381,6 +3412,7 @@ function routeBulkTransfer() {
         return `<button class="messenger-popup-item" onclick="doBulkTransfer('${r.sheetName}')" style="padding:10px;font-size:12px;">🗺️ ${n}</button>`;
     }).join('');
 
+    document.getElementById('messengerPopupTitle').textContent = '🔄 Перенести ' + routeSelectedIds.size + ' записів в:';
     const grid = document.getElementById('messengerGrid');
     grid.innerHTML = opts;
     document.getElementById('messengerOverlay').classList.add('show');
@@ -3392,14 +3424,32 @@ async function doBulkTransfer(toSheet) {
     if (!sheet) return;
     showLoader('Пересадка ' + routeSelectedIds.size + ' записів...');
 
-    const leadsToMove = (sheet.rows || []).filter(r => routeSelectedIds.has(r._resolvedId || r['RTE_ID']));
+    // Збираємо рядки для переносу та їхні ID-дані для видалення
+    const leadsToMove = [];
+    const deleteInfos = [];
+    for (const row of (sheet.rows || [])) {
+        const resolvedId = row._resolvedId || row['RTE_ID'];
+        if (!routeSelectedIds.has(resolvedId)) continue;
+        leadsToMove.push(cleanRowForApi(row));
+        const idInfo = getRouteRowIdInfo(row);
+        if (idInfo) deleteInfos.push({ ...idInfo, resolvedId });
+    }
+
+    if (leadsToMove.length === 0) { hideLoader(); showToast('⚠️ Не знайдено записів для переносу'); return; }
+
     const addRes = await apiPost('addToRoute', { sheetName: toSheet, leads: leadsToMove });
-    if (!addRes.ok) { hideLoader(); showToast('❌ ' + (addRes.error || 'Помилка')); return; }
+    if (!addRes.ok) { hideLoader(); showToast('❌ ' + (addRes.error || 'Помилка додавання')); return; }
 
     let ok = 0;
-    for (const rteId of routeSelectedIds) {
-        const res = await apiPost('deleteFromSheet', { sheet: sheet.sheetName, id_col: 'RTE_ID', id_val: rteId });
-        if (res.ok) { ok++; sheet.rows = (sheet.rows || []).filter(r => (r._resolvedId || r['RTE_ID']) !== rteId); }
+    let failed = 0;
+    for (const info of deleteInfos) {
+        const res = await apiPost('deleteFromSheet', { sheet: sheet.sheetName, id_col: info.id_col, id_val: info.id_val });
+        if (res.ok) {
+            ok++;
+            sheet.rows = (sheet.rows || []).filter(r => (r._resolvedId || r['RTE_ID']) !== info.resolvedId);
+        } else {
+            failed++;
+        }
     }
     // Інвалідуємо цільовий маршрут
     var targetRoute = routes.find(function(r) { return r.sheetName === toSheet; });
@@ -3410,7 +3460,11 @@ async function doBulkTransfer(toSheet) {
     updateRouteBulkToolbar();
     renderRouteSidebar();
     renderRoutes();
-    showToast('✅ Пересаджено: ' + ok + ' в ' + toSheet.replace('Маршрут_', ''));
+    if (failed > 0) {
+        showToast('⚠️ Перенесено: ' + ok + ', не видалено зі старого: ' + failed);
+    } else {
+        showToast('✅ Пересаджено: ' + ok + ' в ' + toSheet.replace('Маршрут_', ''));
+    }
 }
 
 // ── Створення нового маршруту ──
@@ -4122,6 +4176,7 @@ function toggleCardActions(id) {
 // Відкрити popup з кнопками месенджерів
 // phone — телефон пасажира, smartId — ID SmartSender (може бути пустий)
 function openMessengerPopup(phone, smartId) {
+    document.getElementById('messengerPopupTitle').textContent = '✉️ Написати через:';
     const grid = document.getElementById('messengerGrid');
     const cleanPhone = (phone || '').replace(/[^+\d]/g, '');
     var smartBtn = `<button class="messenger-popup-item" onclick="openSmartSender('${smartId || ''}')">🤖 <span style="color:#ff6600">Smart</span></button>`;
@@ -7801,10 +7856,12 @@ async function archiveFromRoute(rteId, sheetName, leadName) {
             if (paxId) {
                 await apiPost('archivePassenger', { pax_ids: [paxId], reason: 'Архівовано з маршруту', archived_by: getManagerName() || 'Менеджер' });
             }
-            await apiPost('deleteFromSheet', { sheet: sheetName, id_col: 'RTE_ID', id_val: rteId });
+            // Видаляємо з маршруту з правильним id_col
+            var idInfo = row ? getRouteRowIdInfo(row) : { id_col: 'RTE_ID', id_val: rteId };
+            await apiPost('deleteFromSheet', { sheet: sheetName, id_col: idInfo.id_col, id_val: idInfo.id_val });
             // Оновлюємо локальні дані
-            if (sheet) sheet.rows = (sheet.rows || []).filter(r => r._resolvedId !== rteId);
-            passengers = passengers.filter(x => x['PAX_ID'] !== rteId);
+            if (sheet) sheet.rows = (sheet.rows || []).filter(r => (r._resolvedId || r['RTE_ID']) !== rteId);
+            if (paxId) passengers = passengers.filter(x => x['PAX_ID'] !== paxId);
             routeSelectedIds.delete(rteId);
             hideLoader();
             updateAllCounts();
@@ -7823,12 +7880,15 @@ async function deleteFromRouteFull(rteId, sheetName, leadName) {
         if (!yes) return;
         showLoader('Видалення...');
         try {
-            await apiPost('deleteFromSheet', { sheet: sheetName, id_col: 'RTE_ID', id_val: rteId });
-            await apiPost('deletePassenger', { pax_ids: [rteId], reason: 'Видалено з маршруту і CRM', archived_by: getManagerName() || 'Менеджер' });
-            // Оновлюємо локальні дані
             const sheet = routes[activeRouteIdx];
-            if (sheet) sheet.rows = (sheet.rows || []).filter(r => r._resolvedId !== rteId);
-            passengers = passengers.filter(x => x['PAX_ID'] !== rteId);
+            const row = sheet ? (sheet.rows || []).find(r => r._resolvedId === rteId || r['RTE_ID'] === rteId) : null;
+            const idInfo = row ? getRouteRowIdInfo(row) : { id_col: 'RTE_ID', id_val: rteId };
+            const paxId = row ? (row['PAX_ID / PKG_ID'] || row['PAX_ID/PKG_ID'] || rteId) : rteId;
+            await apiPost('deleteFromSheet', { sheet: sheetName, id_col: idInfo.id_col, id_val: idInfo.id_val });
+            await apiPost('deletePassenger', { pax_ids: [paxId], reason: 'Видалено з маршруту і CRM', archived_by: getManagerName() || 'Менеджер' });
+            // Оновлюємо локальні дані
+            if (sheet) sheet.rows = (sheet.rows || []).filter(r => (r._resolvedId || r['RTE_ID']) !== rteId);
+            passengers = passengers.filter(x => x['PAX_ID'] !== paxId);
             routeSelectedIds.delete(rteId);
             hideLoader();
             updateAllCounts();
@@ -7852,14 +7912,29 @@ function routeBulkArchive() {
         if (!sheet) return;
         showLoader('Архівування...');
         try {
-            await apiPost('archivePassenger', { pax_ids: ids, reason: 'Архівовано з маршруту', archived_by: getManagerName() || 'Менеджер' });
-            for (const rteId of ids) {
-                await apiPost('deleteFromSheet', { sheet: sheet.sheetName, id_col: 'RTE_ID', id_val: rteId });
-                sheet.rows = (sheet.rows || []).filter(r => (r._resolvedId || r['RTE_ID']) !== rteId);
+            // Збираємо реальні PAX_ID та інфо для видалення
+            const paxIds = [];
+            const deleteInfos = [];
+            for (const row of (sheet.rows || [])) {
+                const resolvedId = row._resolvedId || row['RTE_ID'];
+                if (!routeSelectedIds.has(resolvedId)) continue;
+                const paxId = row['PAX_ID / PKG_ID'] || row['PAX_ID/PKG_ID'] || '';
+                if (paxId) paxIds.push(paxId);
+                const idInfo = getRouteRowIdInfo(row);
+                if (idInfo) deleteInfos.push({ ...idInfo, resolvedId });
             }
-            passengers = passengers.filter(x => !ids.includes(x['PAX_ID']));
+            // Архівуємо в CRM по реальних PAX_ID
+            if (paxIds.length > 0) {
+                await apiPost('archivePassenger', { pax_ids: paxIds, reason: 'Архівовано з маршруту', archived_by: getManagerName() || 'Менеджер' });
+            }
+            // Видаляємо з маршруту з правильним id_col
+            for (const info of deleteInfos) {
+                await apiPost('deleteFromSheet', { sheet: sheet.sheetName, id_col: info.id_col, id_val: info.id_val });
+                sheet.rows = (sheet.rows || []).filter(r => (r._resolvedId || r['RTE_ID']) !== info.resolvedId);
+            }
+            passengers = passengers.filter(x => !paxIds.includes(x['PAX_ID']));
             hideLoader();
-            showToast('✅ Архівовано ' + ids.length + ' записів');
+            showToast('✅ Архівовано ' + deleteInfos.length + ' записів');
             routeSelectedIds.clear();
             _routeToolbarForceOpen = false;
             updateRouteBulkToolbar();

@@ -304,7 +304,7 @@ export function ListScreen() {
                     <span className="text-[10px] font-bold text-muted bg-gray-100 px-2 py-0.5 rounded-full">{filteredShipping.length}</span>
                   </div>
                   {filteredShipping.map((item, i) => (
-                    <ShippingCard key={item._statusKey || `ship_${item.rowNum}_${i}`} item={item} index={i} />
+                    <ShippingCard key={item._statusKey || `ship_${item.rowNum}_${i}`} item={item} index={i} onEdit={setEditItem} />
                   ))}
                 </>
               )}
@@ -312,7 +312,7 @@ export function ListScreen() {
           )
         ) : showShipping ? (
           filteredShipping.length === 0 ? <Empty /> : filteredShipping.map((item, i) => (
-            <ShippingCard key={item._statusKey || `ship_${item.rowNum}_${i}`} item={item} index={i} />
+            <ShippingCard key={item._statusKey || `ship_${item.rowNum}_${i}`} item={item} index={i} onEdit={setEditItem} />
           ))
         ) : showAllTab ? (
           (filteredPassengers.length === 0 && filteredPackages.length === 0 && filteredShipping.length === 0) ? <Empty /> : (
@@ -349,7 +349,7 @@ export function ListScreen() {
                     <span className="text-[10px] font-bold text-muted bg-gray-100 px-2 py-0.5 rounded-full">{filteredShipping.length}</span>
                   </div>
                   {filteredShipping.map((item, i) => (
-                    <ShippingCard key={item._statusKey || `ship_${item.rowNum}_${i}`} item={item} index={i} />
+                    <ShippingCard key={item._statusKey || `ship_${item.rowNum}_${i}`} item={item} index={i} onEdit={setEditItem} />
                   ))}
                 </>
               )}
