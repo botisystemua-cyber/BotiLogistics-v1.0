@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { RefreshCw, Plus, Pencil, Trash2, X, Save, UserPlus, Shield, Truck as TruckIcon, Users as UsersIcon, ChevronDown, MapPin } from 'lucide-react';
+import { RefreshCw, Plus, Pencil, Trash2, X, Save, UserPlus, Truck as TruckIcon, Users as UsersIcon, ChevronDown, MapPin } from 'lucide-react';
 import { apiCall, type StaffMember, type RouteAccess } from './shared';
 
 const EMPTY_STAFF: Omit<StaffMember, 'rowNum'> = {
@@ -10,7 +10,11 @@ const EMPTY_STAFF: Omit<StaffMember, 'rowNum'> = {
 };
 
 const ROLES_FILTER = ['Всі', 'Водій', 'Менеджер'];
-const CURRENCIES = ['UAH', 'EUR', 'CHF', 'PLN', 'USD'];
+
+// Unique key for each staff member
+function staffKey(s: StaffMember) {
+  return s.staffId || `row-${s.rowNum}`;
+}
 
 export function StaffTab({ staff, access, onReload }: {
   staff: StaffMember[];
@@ -20,7 +24,7 @@ export function StaffTab({ staff, access, onReload }: {
   const [filter, setFilter] = useState('Всі');
   const [editItem, setEditItem] = useState<StaffMember | null>(null);
   const [isNew, setIsNew] = useState(false);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const [showAddAccess, setShowAddAccess] = useState<string | null>(null);
 
   const filtered = filter === 'Всі' ? staff : staff.filter(s => s.role === filter);
@@ -56,14 +60,12 @@ export function StaffTab({ staff, access, onReload }: {
 
   const getRoleIcon = (role: string) => {
     if (role === 'Менеджер') return <UsersIcon className="w-5 h-5" />;
-    if (role === 'Водій') return <TruckIcon className="w-5 h-5" />;
-    return <Shield className="w-5 h-5" />;
+    return <TruckIcon className="w-5 h-5" />;
   };
 
   const getRoleBg = (role: string) => {
     if (role === 'Менеджер') return 'bg-blue-50 text-blue-600 border-blue-200';
-    if (role === 'Водій') return 'bg-emerald-50 text-emerald-600 border-emerald-200';
-    return 'bg-violet-50 text-violet-600 border-violet-200';
+    return 'bg-emerald-50 text-emerald-600 border-emerald-200';
   };
 
   const getLevelBg = (level: string) => {
@@ -96,11 +98,11 @@ export function StaffTab({ staff, access, onReload }: {
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {filtered.map(s => {
+            const key = staffKey(s);
             const staffAccess = getAccessForStaff(s);
-            const isExpanded = expandedId === s.staffId;
+            const isExpanded = expandedKey === key;
             return (
-              <div key={s.staffId || s.rowNum} className="bg-white rounded-2xl border border-border overflow-hidden shadow-sm">
-                {/* Main card */}
+              <div key={key} className="bg-white rounded-2xl border border-border overflow-hidden shadow-sm">
                 <div className="p-5 flex items-center gap-4">
                   <div className={`w-14 h-14 rounded-xl flex items-center justify-center shrink-0 ${getRoleBg(s.role)}`}>
                     {getRoleIcon(s.role)}
@@ -119,7 +121,7 @@ export function StaffTab({ staff, access, onReload }: {
                     {s.lastActive && <div className="text-xs text-muted/60 mt-1">Останній вхід: {s.lastActive}</div>}
                   </div>
                   <div className="flex gap-1.5 shrink-0">
-                    <button onClick={() => setExpandedId(isExpanded ? null : s.staffId)}
+                    <button onClick={() => setExpandedKey(isExpanded ? null : key)}
                       className="p-2.5 rounded-xl hover:bg-bg cursor-pointer transition-all" title="Доступи до маршрутів">
                       <ChevronDown className={`w-5 h-5 text-muted transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
                     </button>
@@ -134,7 +136,6 @@ export function StaffTab({ staff, access, onReload }: {
                   </div>
                 </div>
 
-                {/* Expanded: route access */}
                 {isExpanded && (
                   <div className="border-t border-border bg-bg/50 px-5 py-4 space-y-3">
                     <div className="flex items-center justify-between">
@@ -174,12 +175,9 @@ export function StaffTab({ staff, access, onReload }: {
         </div>
       )}
 
-      {/* Staff Edit Modal */}
       {editItem && (
         <StaffModal item={editItem} isNew={isNew} onClose={() => setEditItem(null)} onSave={handleSave} />
       )}
-
-      {/* Add Access Modal */}
       {showAddAccess && (
         <AddAccessModal staffName={showAddAccess} onClose={() => setShowAddAccess(null)} onSave={handleAddAccess} />
       )}
@@ -198,6 +196,7 @@ function StaffModal({ item, isNew, onClose, onSave }: {
   const [saving, setSaving] = useState(false);
 
   const set = (k: keyof StaffMember, v: string) => setForm(prev => ({ ...prev, [k]: v }));
+  const isDriver = form.role === 'Водій';
 
   const submit = async () => {
     if (!form.name.trim() || !form.login.trim()) { alert('ПІБ та Логін обов\'язкові'); return; }
@@ -215,49 +214,38 @@ function StaffModal({ item, isNew, onClose, onSave }: {
         </div>
 
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+          {/* Role toggle at top */}
+          <div>
+            <label className="block text-xs font-bold text-muted uppercase tracking-wider mb-2">Роль</label>
+            <div className="grid grid-cols-2 gap-2">
+              {(['Водій', 'Менеджер'] as const).map(role => {
+                const active = form.role === role;
+                const Icon = role === 'Водій' ? TruckIcon : UsersIcon;
+                return (
+                  <button key={role} onClick={() => set('role', role)}
+                    className={`flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold cursor-pointer transition-all ${active
+                      ? role === 'Водій' ? 'bg-emerald-500 text-white shadow-sm' : 'bg-blue-500 text-white shadow-sm'
+                      : 'bg-bg text-muted border border-border hover:bg-white'}`}>
+                    <Icon className="w-5 h-5" />
+                    {role}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           <F label="ПІБ" value={form.name} onChange={v => set('name', v)} autoFocus />
           <div className="grid grid-cols-2 gap-4">
             <F label="Телефон" value={form.phone} onChange={v => set('phone', v)} type="tel" />
             <F label="Email" value={form.email} onChange={v => set('email', v)} type="email" />
           </div>
           <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-bold text-muted uppercase tracking-wider mb-1.5">Роль</label>
-              <select value={form.role} onChange={e => set('role', e.target.value)}
-                className="w-full px-4 py-3 bg-bg border border-border rounded-xl text-sm text-text focus:outline-none focus:border-brand">
-                <option>Водій</option>
-                <option>Менеджер</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-muted uppercase tracking-wider mb-1.5">Статус</label>
-              <select value={form.status} onChange={e => set('status', e.target.value)}
-                className="w-full px-4 py-3 bg-bg border border-border rounded-xl text-sm text-text focus:outline-none focus:border-brand">
-                <option>Активний</option>
-                <option>Неактивний</option>
-                <option>Звільнений</option>
-              </select>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
             <F label="Логін" value={form.login} onChange={v => set('login', v)} />
             <F label="Пароль" value={form.password} onChange={v => set('password', v)} />
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className={`grid gap-4 ${isDriver ? 'grid-cols-2' : 'grid-cols-1'}`}>
             <F label="Місто" value={form.city} onChange={v => set('city', v)} />
-            <F label="Номер авто" value={form.autoNum} onChange={v => set('autoNum', v)} />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <F label="Ставка" value={form.rate} onChange={v => set('rate', v)} type="number" />
-            <div>
-              <label className="block text-xs font-bold text-muted uppercase tracking-wider mb-1.5">Валюта</label>
-              <div className="flex gap-1.5">
-                {CURRENCIES.map(c => (
-                  <button key={c} onClick={() => set('rateCur', c)}
-                    className={`flex-1 py-2.5 rounded-lg text-xs font-bold cursor-pointer transition-all ${form.rateCur === c ? 'bg-brand text-white' : 'bg-bg text-muted border border-border'}`}>{c}</button>
-                ))}
-              </div>
-            </div>
+            {isDriver && <F label="Номер авто" value={form.autoNum} onChange={v => set('autoNum', v)} />}
           </div>
           <F label="Примітка" value={form.note} onChange={v => set('note', v)} />
         </div>
