@@ -172,17 +172,15 @@ function App() {
       {/* ═══════ LOGIN FORM ═══════ */}
       {step === 'login' && selectedRole && (
         <div className="animate-[fadeIn_0.35s_ease-out]">
-          {/* Back + logo */}
-          <div className="flex items-center justify-between mb-6 sm:mb-8">
+          {/* Back */}
+          <div className="mb-6 sm:mb-8">
             <button
               onClick={handleBack}
               className="flex items-center gap-1.5 text-sm text-muted hover:text-text font-semibold cursor-pointer transition-colors"
             >
               <ArrowLeft className="w-4 h-4" />
-              <span className="hidden sm:inline">Назад</span>
+              Назад
             </button>
-            <Logo size="md" />
-            <div className="w-14" /> {/* spacer for centering */}
           </div>
 
           <div className="bg-card border-2 border-border rounded-2xl sm:rounded-3xl p-5 sm:p-7 shadow-sm">

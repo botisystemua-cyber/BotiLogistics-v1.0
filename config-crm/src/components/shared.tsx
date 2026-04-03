@@ -76,17 +76,6 @@ export interface RouteAccess {
   note: string;
 }
 
-export interface LogEntry {
-  logId: string;
-  userId: string;
-  name: string;
-  role: string;
-  action: string;
-  datetime: string;
-  status: string;
-  note: string;
-}
-
 export interface OnlineUser {
   staffId: string;
   name: string;
