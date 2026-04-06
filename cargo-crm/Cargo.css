@@ -51,11 +51,11 @@ body {
 }
 .logo {
   font-weight: 800;
-  font-size: 13px;
+  font-size: 22px;
   color: #fff;
   white-space: nowrap;
 }
-.logo span { color: var(--accent); }
+.logo span { color: #22c55e; }
 .header-search {
   flex: 1;
   max-width: 320px;
