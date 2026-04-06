@@ -466,7 +466,7 @@ async function sbGetArchive(params) {
             return obj;
         });
 
-        return { ok: true, data: results, total: count };
+        return { ok: true, rows: results, data: results, total: count, hasMore: (offset + limit) < count };
     } catch (e) {
         console.error('sbGetArchive error:', e);
         return { ok: false, error: e.message };
