@@ -1,5 +1,5 @@
 // ================================================================
-// supabase-api.js — Supabase API layer for Passenger CRM
+// sb-api.js — Supabase API layer for Passenger CRM
 // Replaces all Google Apps Script (GAS) API calls
 // ================================================================
 
@@ -149,7 +149,7 @@ const TENANT_ID = 'gresco';
 
 async function sbGetAll(params) {
     try {
-        let query = supabase.from('passengers').select('*');
+        let query = sb.from('passengers').select('*');
 
         // Filter by archived status
         query = query.eq('is_archived', false);
@@ -204,7 +204,7 @@ async function sbAddPassenger(params) {
             sbData.source_sheet = sbData.direction === 'Європа-УК' ? 'Європа-УК' : 'Україна-ЄВ';
         }
 
-        const { data, error } = await supabase.from('passengers').insert(sbData).select();
+        const { data, error } = await sb.from('passengers').insert(sbData).select();
         if (error) throw error;
 
         const obj = sbToGasObj(data[0]);
@@ -230,7 +230,7 @@ async function sbUpdatePassenger(params) {
         delete sbData.pax_id;
         delete sbData.created_at;
 
-        const { data, error } = await supabase
+        const { data, error } = await sb
             .from('passengers')
             .update(sbData)
             .eq('pax_id', paxId)
@@ -267,7 +267,7 @@ async function sbUpdateField(params) {
 
         // Recalculate debt if price/deposit changed
         if (['ticket_price', 'baggage_price', 'deposit'].includes(sbCol)) {
-            const { data: current } = await supabase
+            const { data: current } = await sb
                 .from('passengers')
                 .select('ticket_price, baggage_price, deposit')
                 .eq('pax_id', paxId)
@@ -282,7 +282,7 @@ async function sbUpdateField(params) {
             }
         }
 
-        const { data, error } = await supabase
+        const { data, error } = await sb
             .from('passengers')
             .update(updateObj)
             .eq('pax_id', paxId)
@@ -309,7 +309,7 @@ async function sbMoveDirection(params) {
         const sbDir = newDir;
         const sourceSheet = newDir === 'Європа-УК' ? 'Європа-УК' : 'Україна-ЄВ';
 
-        const { data, error } = await supabase
+        const { data, error } = await sb
             .from('passengers')
             .update({ direction: sbDir, source_sheet: sourceSheet, updated_at: new Date().toISOString() })
             .eq('pax_id', paxId)
@@ -333,7 +333,7 @@ async function sbArchivePassenger(params) {
         const reason = params.reason || 'Архівовано';
         const manager = params.manager || '';
 
-        const { data, error } = await supabase
+        const { data, error } = await sb
             .from('passengers')
             .update({
                 is_archived: true,
@@ -365,7 +365,7 @@ async function sbRestorePassenger(params) {
     try {
         const paxIds = params.pax_ids || (params.pax_id ? [params.pax_id] : []);
 
-        const { data, error } = await supabase
+        const { data, error } = await sb
             .from('passengers')
             .update({
                 is_archived: false,
@@ -390,7 +390,7 @@ async function sbGetArchive(params) {
         const offset = params.offset || 0;
         const limit = params.limit || 50;
 
-        const { data, error, count } = await supabase
+        const { data, error, count } = await sb
             .from('passengers')
             .select('*', { count: 'exact' })
             .eq('is_archived', true)
@@ -417,7 +417,7 @@ async function sbGetArchive(params) {
 
 async function sbGetTrips(params) {
     try {
-        let query = supabase.from('calendar').select('*');
+        let query = sb.from('calendar').select('*');
 
         if (params && params.filter) {
             if (params.filter.direction) query = query.eq('direction', params.filter.direction);
@@ -469,7 +469,7 @@ async function sbCreateTrip(params) {
             sbData.paired_calendar_id = tripData.paired_id;
         }
 
-        const { data, error } = await supabase.from('calendar').insert(sbData).select();
+        const { data, error } = await sb.from('calendar').insert(sbData).select();
         if (error) throw error;
 
         const obj = sbToGasObj(data[0], SB_TO_GAS_CAL);
@@ -502,7 +502,7 @@ async function sbUpdateTrip(params) {
 
         sbData.updated_at = new Date().toISOString();
 
-        const { data, error } = await supabase
+        const { data, error } = await sb
             .from('calendar')
             .update(sbData)
             .eq('cal_id', calId)
@@ -521,13 +521,13 @@ async function sbArchiveTrip(params) {
         const calId = params.cal_id;
 
         // Clear CAL_ID from passengers assigned to this trip
-        await supabase
+        await sb
             .from('passengers')
             .update({ cal_id: null, updated_at: new Date().toISOString() })
             .eq('cal_id', calId);
 
         // Delete the trip (or archive)
-        const { error } = await supabase
+        const { error } = await sb
             .from('calendar')
             .delete()
             .eq('cal_id', calId);
@@ -550,21 +550,21 @@ async function sbAssignTrip(params) {
         const paxIds = params.pax_ids || [];
 
         // Update passengers with CAL_ID
-        const { error } = await supabase
+        const { error } = await sb
             .from('passengers')
             .update({ cal_id: calId, updated_at: new Date().toISOString() })
             .in('pax_id', paxIds);
         if (error) throw error;
 
         // Update trip seat counts
-        const { data: paxCount } = await supabase
+        const { data: paxCount } = await sb
             .from('passengers')
             .select('pax_id', { count: 'exact' })
             .eq('cal_id', calId)
             .eq('is_archived', false);
 
         if (paxCount) {
-            await supabase
+            await sb
                 .from('calendar')
                 .update({
                     occupied_seats: paxCount.length,
@@ -585,20 +585,20 @@ async function sbUnassignTrip(params) {
         const calId = params.cal_id;
         const paxIds = params.pax_ids || [];
 
-        const { error } = await supabase
+        const { error } = await sb
             .from('passengers')
             .update({ cal_id: null, updated_at: new Date().toISOString() })
             .in('pax_id', paxIds);
         if (error) throw error;
 
         // Update trip seat counts
-        const { data: remaining } = await supabase
+        const { data: remaining } = await sb
             .from('passengers')
             .select('pax_id')
             .eq('cal_id', calId)
             .eq('is_archived', false);
 
-        await supabase
+        await sb
             .from('calendar')
             .update({
                 occupied_seats: remaining ? remaining.length : 0,
@@ -620,7 +620,7 @@ async function sbUnassignTrip(params) {
 async function sbGetRoutesList(params) {
     try {
         // Get distinct route groups with counts
-        const { data, error } = await supabase
+        const { data, error } = await sb
             .from('routes')
             .select('rte_id, record_type, direction');
         if (error) throw error;
@@ -655,7 +655,7 @@ async function sbGetRouteSheet(params) {
         // Extract route number from sheet name (e.g., "Маршрут_1" → "1")
         const routeNum = sheetName.replace(/^Маршрут_/, '');
 
-        const { data, error } = await supabase
+        const { data, error } = await sb
             .from('routes')
             .select('*')
             .eq('rte_id', routeNum)
@@ -682,7 +682,7 @@ async function sbUpdateRouteField(params) {
         updateObj[col] = value === '' ? null : value;
         updateObj.updated_at = new Date().toISOString();
 
-        const { data, error } = await supabase
+        const { data, error } = await sb
             .from('routes')
             .update(updateObj)
             .eq('rte_id', rteId)
@@ -717,7 +717,7 @@ async function sbAddToRoute(params) {
             status: item.status || 'Новий',
         }));
 
-        const { data, error } = await supabase.from('routes').insert(insertData).select();
+        const { data, error } = await sb.from('routes').insert(insertData).select();
         if (error) throw error;
 
         return { ok: true, data: data };
@@ -731,7 +731,7 @@ async function sbDeleteFromSheet(params) {
     try {
         const rteId = params.rte_id;
 
-        const { error } = await supabase
+        const { error } = await sb
             .from('routes')
             .delete()
             .eq('rte_id', rteId);
@@ -750,7 +750,7 @@ async function sbDeleteFromSheet(params) {
 
 async function sbGetAutopark(params) {
     try {
-        const { data, error } = await supabase
+        const { data, error } = await sb
             .from('vehicles')
             .select('*')
             .order('name');
@@ -774,7 +774,7 @@ let presenceChannel = null;
 async function sbHeartbeat(params) {
     try {
         if (!presenceChannel) {
-            presenceChannel = supabase.channel('online-managers');
+            presenceChannel = sb.channel('online-managers');
             presenceChannel.subscribe(async (status) => {
                 if (status === 'SUBSCRIBED') {
                     await presenceChannel.track({
@@ -828,7 +828,7 @@ async function sbGetOnlineManagers(params) {
 async function sbGetPayments(params) {
     try {
         const paxId = params.pax_id;
-        const { data, error } = await supabase
+        const { data, error } = await sb
             .from('payments')
             .select('*')
             .eq('passenger_id', paxId)
@@ -849,7 +849,7 @@ async function sbGetPayments(params) {
 async function sbGetExpenses(params) {
     try {
         const sheetName = params.sheetName;
-        const { data, error } = await supabase
+        const { data, error } = await sb
             .from('expenses')
             .select('*')
             .order('created_at', { ascending: false });
@@ -878,7 +878,7 @@ async function apiPostSupabase(action, data) {
         moveDirection:      sbMoveDirection,
         clonePassenger:     sbAddPassenger, // clone = add with existing data
         checkDuplicates:    async (p) => {
-            const { data } = await supabase.from('passengers')
+            const { data } = await sb.from('passengers')
                 .select('pax_id, full_name, phone')
                 .or(`phone.eq.${p.phone},full_name.ilike.%${p.name}%`)
                 .eq('is_archived', false)
@@ -902,7 +902,7 @@ async function apiPostSupabase(action, data) {
         assignTrip:         sbAssignTrip,
         unassignTrip:       sbUnassignTrip,
         duplicateTrip:      async (p) => {
-            const { data } = await supabase.from('calendar').select('*').eq('cal_id', p.cal_id).single();
+            const { data } = await sb.from('calendar').select('*').eq('cal_id', p.cal_id).single();
             if (!data) return { ok: false, error: 'Trip not found' };
             const newTrip = { ...data, cal_id: 'CAL' + Date.now(), id: undefined, created_at: undefined };
             if (p.date) newTrip.route_date = p.date;
@@ -936,7 +936,7 @@ async function apiPostSupabase(action, data) {
         // Misc
         logOnboarding:      async (p) => ({ ok: true }), // TODO: implement logging
         getStats:           async () => {
-            const { data } = await supabase.from('passengers')
+            const { data } = await sb.from('passengers')
                 .select('lead_status, direction, debt')
                 .eq('is_archived', false);
             return { ok: true, data: data || [] };
