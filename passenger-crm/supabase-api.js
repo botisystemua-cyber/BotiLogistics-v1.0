@@ -402,7 +402,6 @@ async function sbArchivePassenger(params) {
             .update({
                 is_archived: true,
                 archived_at: new Date().toISOString(),
-                archived_by: params.manager || null,
                 archive_reason: reason,
                 updated_at: new Date().toISOString()
             })
@@ -434,7 +433,6 @@ async function sbRestorePassenger(params) {
             .update({
                 is_archived: false,
                 archived_at: null,
-                archived_by: null,
                 archive_reason: null,
                 updated_at: new Date().toISOString()
             })
@@ -773,13 +771,17 @@ async function sbUpdateRouteField(params) {
 
 async function sbAddToRoute(params) {
     try {
-        const items = params.items || [params];
-        const insertData = items.map(item => ({
+        // Frontend sends: { sheetName: 'Маршрут_RTE001', leads: [...] }
+        const routeName = params.sheetName || params.sheet_name || '';
+        const rteId = params.rte_id || routeName.replace(/^Маршрут_/, '') || ('RTE' + Date.now());
+        const leads = params.leads || params.items || [params];
+
+        const insertData = leads.map(item => ({
             tenant_id: TENANT_ID,
-            rte_id: item.rte_id || item.routeId,
-            record_type: item.type || 'Пасажир',
-            direction: item.direction || '',
-            pax_id_or_pkg_id: item.pax_id || item.pkg_id || '',
+            rte_id: rteId,
+            record_type: item.type || item['Тип запису'] || 'Passenger',
+            direction: item.direction || item['Напрям'] || '',
+            pax_id_or_pkg_id: item.pax_id || item['PAX_ID'] || item.pkg_id || '',
             passenger_name: item.name || item['Піб'] || '',
             passenger_phone: item.phone || item['Телефон пасажира'] || '',
             departure_address: item.from || item['Адреса відправки'] || '',
@@ -789,7 +791,7 @@ async function sbAddToRoute(params) {
             amount_currency: item.currency || item['Валюта квитка'] || 'UAH',
             deposit: parseFloat(item.deposit || item['Завдаток']) || 0,
             payment_status: item.payStatus || item['Статус оплати'] || '',
-            status: item.status || 'Новий',
+            status: item.status || 'scheduled',
         }));
 
         const { data, error } = await sb.from('routes').insert(insertData).select();
