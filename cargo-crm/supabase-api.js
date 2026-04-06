@@ -55,7 +55,6 @@ const SB_TO_GAS_PKG = {
     archived_at:        'DATE_ARCHIVE',
     archived_by:        'ARCHIVED_BY',
     archive_reason:     'ARCHIVE_REASON',
-    archive_id:         'ARCHIVE_ID',
 };
 
 // Reverse mapping: GAS Ukrainian → Supabase column
@@ -200,7 +199,7 @@ async function sbPkgGetStats(params) {
             stats.byPkgStatus[row.package_status || '—'] = (stats.byPkgStatus[row.package_status || '—'] || 0) + 1;
             stats.totalDebt += Math.max(0, (parseFloat(row.total_amount) || 0) - (parseFloat(row.deposit) || 0));
         }
-        return { ok: true, data: stats };
+        return { ok: true, stats: stats };
     } catch (e) {
         console.error('sbPkgGetStats error:', e);
         return { ok: false, error: e.message };
@@ -228,6 +227,8 @@ async function sbPkgAdd(params) {
         sbData.direction = normalizeDirection(sbData.direction) || 'Україна-ЄВ';
 
         // Ensure required NOT NULL fields have defaults
+        sbData.sender_name = sbData.sender_name || '';
+        sbData.sender_phone = sbData.sender_phone || '';
         sbData.sender_address = sbData.sender_address || '';
         sbData.recipient_name = sbData.recipient_name || '';
         sbData.recipient_phone = sbData.recipient_phone || '';
@@ -391,7 +392,7 @@ async function sbPkgGetRoutesList(params) {
         if (error) throw error;
 
         const results = (data || []).map(r => ({
-            sheetName: r.route_id || r.id,
+            sheetName: r.rte_id || r.id,
             rowCount: 0,
             paxCount: 0,
             parcelCount: 0,
@@ -409,7 +410,7 @@ async function sbPkgGetRouteSheet(params) {
         const sheetName = params.sheetName || params.sheet;
         const { data, error } = await sb.from('routes')
             .select('*')
-            .eq('route_id', sheetName);
+            .eq('rte_id', sheetName);
         if (error) throw error;
 
         return { ok: true, data: data || [], headers: Object.keys(SB_TO_GAS_PKG) };
@@ -475,7 +476,7 @@ async function sbPkgUpdateRouteField(params) {
         updateObj.updated_at = new Date().toISOString();
 
         const { data, error } = await sb.from('routes')
-            .update(updateObj).eq('route_id', rteId).select();
+            .update(updateObj).eq('rte_id', rteId).select();
         if (error) throw error;
 
         return { ok: true, data: data[0] };
