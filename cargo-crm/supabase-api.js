@@ -8,7 +8,6 @@ const SB_TO_GAS_PKG = {
     pkg_id:             'PKG_ID',
     smart_id:           'Ід_смарт',
     direction:          'Напрям',
-    source_sheet:       'SOURCE_SHEET',
     created_at:         'Дата створення',
     sender_name:        'Піб відправника',
     registrar_phone:    'Телефон реєстратора',
@@ -39,8 +38,8 @@ const SB_TO_GAS_PKG = {
     payment_notes:      'Примітка оплати',
     dispatch_date:      'Дата відправки',
     timing:             'Таймінг',
-    vehicle_name:       'Номер авто',
-    rte_id:             'RTE_ID',
+    vehicle_id:         'Номер авто',
+    route_id:           'RTE_ID',
     received_date:      'Дата отримання',
     package_status:     'Статус посилки',
     lead_status:        'Статус ліда',
@@ -69,10 +68,21 @@ for (const [sbKey, gasKey] of Object.entries(SB_TO_GAS_PKG)) {
 function normalizeDirection(dir) {
     if (!dir) return null;
     const d = String(dir).toLowerCase().trim();
-    if (d === 'eu' || d === 'eu-ua' || d.includes('євро')) return 'Європа-УК';
-    if (d === 'ue' || d === 'ua-eu' || d.includes('укра')) return 'Україна-ЄВ';
+    if (d === 'eu' || d === 'eu-ua' || d.includes('євро') || d.includes('єв→ук') || d.includes('єв-ук') || d.includes('реєстрація ттн єв')) return 'Європа-УК';
+    if (d === 'ue' || d === 'ua-eu' || d.includes('укра') || d.includes('ук→єв') || d.includes('ук-єв') || d.includes('реєстрація ттн ук')) return 'Україна-ЄВ';
     return dir;
 }
+
+// ── FORM FIELD → Supabase column (for any non-GAS keys) ──
+const FORM_TO_SB_PKG = {
+    direction:          'direction',
+    sender_name:        'sender_name',
+    sender_phone:       'sender_phone',
+    sender_address:     'sender_address',
+    recipient_name:     'recipient_name',
+    recipient_phone:    'recipient_phone',
+    recipient_address:  'recipient_address',
+};
 
 // ── NUMERIC COLUMNS ──
 const NUMERIC_COLS_PKG = new Set([
@@ -80,15 +90,31 @@ const NUMERIC_COLS_PKG = new Set([
     'total_amount', 'deposit', 'debt', 'rating',
 ]);
 
+// ── STATUS VALUE MAPPING: Supabase English → Frontend Ukrainian ──
+const STATUS_SB_TO_UA = {
+    'new': 'Новий', 'in_progress': 'В роботі', 'confirmed': 'Підтверджено',
+    'refused': 'Відмова', 'active': 'Активний', 'archived': 'Архів',
+    'pending': 'Не оплачено', 'partial': 'Частково', 'paid': 'Оплачено',
+    'received': 'Отримано', 'in_transit': 'В дорозі', 'delivered': 'Доставлено',
+    'returned': 'Повернуто',
+};
+const STATUS_UA_TO_SB = {};
+for (const [en, ua] of Object.entries(STATUS_SB_TO_UA)) STATUS_UA_TO_SB[ua] = en;
+
 // ── TRANSFORM HELPERS ──
 
 function sbToGasObjPkg(sbRow) {
     const obj = {};
     for (const [sbKey, gasKey] of Object.entries(SB_TO_GAS_PKG)) {
-        obj[gasKey] = sbRow[sbKey] !== null && sbRow[sbKey] !== undefined ? sbRow[sbKey] : '';
+        let val = sbRow[sbKey] !== null && sbRow[sbKey] !== undefined ? sbRow[sbKey] : '';
+        // Translate English status values to Ukrainian for frontend
+        if ((sbKey === 'lead_status' || sbKey === 'crm_status' || sbKey === 'payment_status' || sbKey === 'package_status' || sbKey === 'np_status') && STATUS_SB_TO_UA[val]) {
+            val = STATUS_SB_TO_UA[val];
+        }
+        obj[gasKey] = val;
     }
     obj._uuid = sbRow.id;
-    obj._sheet = sbRow.source_sheet || (sbRow.direction === 'Європа-УК' ? 'Європа-УК' : 'Україна-ЄВ');
+    obj._sheet = sbRow.direction === 'Європа-УК' ? 'Європа-УК' : 'Україна-ЄВ';
     return obj;
 }
 
@@ -96,9 +122,13 @@ function gasToSbObjPkg(gasObj) {
     const obj = {};
     for (const [key, val] of Object.entries(gasObj)) {
         if (key.startsWith('_')) continue;
-        const sbKey = GAS_TO_SB_PKG[key] || key;
+        const sbKey = GAS_TO_SB_PKG[key] || FORM_TO_SB_PKG[key] || key;
         if (sbKey && SB_TO_GAS_PKG[sbKey] !== undefined) {
             let v = val === '' ? null : val;
+            // Translate Ukrainian status values to English for DB
+            if (v !== null && (sbKey === 'lead_status' || sbKey === 'crm_status' || sbKey === 'payment_status' || sbKey === 'package_status' || sbKey === 'np_status') && STATUS_UA_TO_SB[v]) {
+                v = STATUS_UA_TO_SB[v];
+            }
             if (v !== null && NUMERIC_COLS_PKG.has(sbKey)) {
                 const n = parseFloat(v);
                 v = isNaN(n) ? null : n;
@@ -186,17 +216,22 @@ async function sbPkgAdd(params) {
         if (!sbData.pkg_id) {
             sbData.pkg_id = 'PKG' + Date.now();
         }
-        sbData.created_at = new Date().toISOString();
         sbData.is_archived = false;
-        sbData.crm_status = sbData.crm_status || 'Активний';
-        sbData.lead_status = sbData.lead_status || 'Новий';
+        sbData.crm_status = sbData.crm_status || 'active';
+        sbData.lead_status = sbData.lead_status || 'new';
+        sbData.package_status = sbData.package_status || 'pending';
 
         // Direction from sheet param
         if (!sbData.direction && params.sheet) {
             sbData.direction = normalizeDirection(params.sheet);
         }
         sbData.direction = normalizeDirection(sbData.direction) || 'Україна-ЄВ';
-        sbData.source_sheet = sbData.direction;
+
+        // Ensure required NOT NULL fields have defaults
+        sbData.sender_address = sbData.sender_address || '';
+        sbData.recipient_name = sbData.recipient_name || '';
+        sbData.recipient_phone = sbData.recipient_phone || '';
+        sbData.recipient_address = sbData.recipient_address || '';
 
         // Calculate debt
         sbData.debt = Math.max(0, (parseFloat(sbData.total_amount) || 0) - (parseFloat(sbData.deposit) || 0));
@@ -356,7 +391,7 @@ async function sbPkgGetRoutesList(params) {
         if (error) throw error;
 
         const results = (data || []).map(r => ({
-            sheetName: r.rte_id || r.id,
+            sheetName: r.route_id || r.id,
             rowCount: 0,
             paxCount: 0,
             parcelCount: 0,
@@ -374,7 +409,7 @@ async function sbPkgGetRouteSheet(params) {
         const sheetName = params.sheetName || params.sheet;
         const { data, error } = await sb.from('routes')
             .select('*')
-            .eq('rte_id', sheetName);
+            .eq('route_id', sheetName);
         if (error) throw error;
 
         return { ok: true, data: data || [], headers: Object.keys(SB_TO_GAS_PKG) };
@@ -387,11 +422,11 @@ async function sbPkgGetRouteSheet(params) {
 async function sbPkgAddToRoute(params) {
     try {
         const pkgId = params.pkg_id;
-        const rteId = params.rte_id || params.sheet_name;
+        const rteId = params.rte_id || params.route_id || params.sheet_name;
 
         if (pkgId) {
             const { error } = await sb.from('packages')
-                .update({ rte_id: rteId, updated_at: new Date().toISOString() })
+                .update({ route_id: rteId, updated_at: new Date().toISOString() })
                 .eq('pkg_id', pkgId);
             if (error) throw error;
         }
@@ -408,8 +443,8 @@ async function sbPkgRemoveFromRoute(params) {
         const pkgId = params.pkg_id;
         const { error } = await sb.from('packages')
             .update({
-                rte_id: null,
-                vehicle_name: null,
+                route_id: null,
+                vehicle_id: null,
                 dispatch_date: null,
                 updated_at: new Date().toISOString()
             })
@@ -425,7 +460,7 @@ async function sbPkgRemoveFromRoute(params) {
 
 async function sbPkgUpdateRouteField(params) {
     try {
-        const rteId = params.rte_id;
+        const rteId = params.rte_id || params.route_id;
         const updateObj = {};
 
         if (params.fields) {
@@ -440,7 +475,7 @@ async function sbPkgUpdateRouteField(params) {
         updateObj.updated_at = new Date().toISOString();
 
         const { data, error } = await sb.from('routes')
-            .update(updateObj).eq('rte_id', rteId).select();
+            .update(updateObj).eq('route_id', rteId).select();
         if (error) throw error;
 
         return { ok: true, data: data[0] };
