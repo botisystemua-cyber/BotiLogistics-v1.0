@@ -271,7 +271,17 @@ async function sbPkgUpdateField(params) {
         if (!sbCol) return { ok: false, error: 'Unknown column: ' + gasCol };
 
         const updateObj = {};
-        updateObj[sbCol] = value === '' ? null : value;
+        let v = value === '' ? null : value;
+        // Convert Ukrainian status values to English for DB
+        if (v !== null && (sbCol === 'lead_status' || sbCol === 'crm_status' || sbCol === 'payment_status' || sbCol === 'package_status' || sbCol === 'np_status') && STATUS_UA_TO_SB[v]) {
+            v = STATUS_UA_TO_SB[v];
+        }
+        // Convert numeric values
+        if (v !== null && NUMERIC_COLS_PKG.has(sbCol)) {
+            const n = parseFloat(v);
+            v = isNaN(n) ? null : n;
+        }
+        updateObj[sbCol] = v;
         updateObj.updated_at = new Date().toISOString();
 
         // Recalculate debt if total/deposit changed
@@ -449,10 +459,10 @@ async function sbPkgAddToRoute(params) {
             if (error) throw error;
         }
 
-        // Handle leads array (bulk add from route sidebar)
+        // Handle leads array (bulk add from route sidebar — leads are route rows)
         if (params.leads && Array.isArray(params.leads)) {
             for (const lead of params.leads) {
-                const id = lead['PKG_ID'] || lead.pkg_id;
+                const id = lead['PKG_ID'] || lead.pkg_id || lead.pax_id_or_pkg_id;
                 if (id) {
                     await sb.from('packages')
                         .update({ route_id: rteId, updated_at: new Date().toISOString() })
