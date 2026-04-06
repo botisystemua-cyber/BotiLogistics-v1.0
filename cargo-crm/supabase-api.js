@@ -11,7 +11,7 @@ const SB_TO_GAS_PKG = {
     created_at:         'Дата створення',
     sender_name:        'Піб відправника',
     registrar_phone:    'Телефон реєстратора',
-    sender_phone:       'Телефон реєстратора',
+    sender_phone:       'Телефон відправника',
     sender_address:     'Адреса відправки',
     recipient_name:     'Піб отримувача',
     recipient_phone:    'Телефон отримувача',
@@ -165,7 +165,7 @@ const TENANT_ID = 'gresco';
 async function sbPkgGetAll(params) {
     try {
         let query = sb.from('packages').select('*');
-        query = query.eq('is_archived', false);
+        query = query.eq('tenant_id', TENANT_ID).eq('is_archived', false);
 
         if (params && params.filter) {
             if (params.filter.dir && params.filter.dir !== 'all') {
@@ -200,7 +200,7 @@ async function sbPkgGetStats(params) {
     try {
         const { data, error } = await sb.from('packages')
             .select('lead_status, payment_status, package_status, total_amount, deposit')
-            .eq('is_archived', false);
+            .eq('tenant_id', TENANT_ID).eq('is_archived', false);
         if (error) throw error;
 
         const stats = { total: data.length, byLeadStatus: {}, byPayStatus: {}, byPkgStatus: {}, totalDebt: 0 };
@@ -424,7 +424,12 @@ async function sbPkgGetRouteSheet(params) {
             .eq('rte_id', sheetName);
         if (error) throw error;
 
-        return { ok: true, data: data || [], headers: Object.keys(SB_TO_GAS_PKG) };
+        const results = (data || []).map(row => {
+            const obj = sbToGasObjPkg(row);
+            obj['Борг'] = calcDebtPkg(obj);
+            return obj;
+        });
+        return { ok: true, data: results, headers: Object.values(SB_TO_GAS_PKG) };
     } catch (e) {
         console.error('sbPkgGetRouteSheet error:', e);
         return { ok: false, error: e.message };
@@ -434,13 +439,26 @@ async function sbPkgGetRouteSheet(params) {
 async function sbPkgAddToRoute(params) {
     try {
         const pkgId = params.pkg_id;
-        const rteId = params.rte_id || params.route_id || params.sheet_name;
+        const rteId = params.rte_id || params.route_id || params.sheet_name || params.sheetName;
 
+        // Handle single pkg_id
         if (pkgId) {
             const { error } = await sb.from('packages')
                 .update({ route_id: rteId, updated_at: new Date().toISOString() })
                 .eq('pkg_id', pkgId);
             if (error) throw error;
+        }
+
+        // Handle leads array (bulk add from route sidebar)
+        if (params.leads && Array.isArray(params.leads)) {
+            for (const lead of params.leads) {
+                const id = lead['PKG_ID'] || lead.pkg_id;
+                if (id) {
+                    await sb.from('packages')
+                        .update({ route_id: rteId, updated_at: new Date().toISOString() })
+                        .eq('pkg_id', id);
+                }
+            }
         }
 
         return { ok: true };
@@ -472,7 +490,7 @@ async function sbPkgRemoveFromRoute(params) {
 
 async function sbPkgUpdateRouteField(params) {
     try {
-        const rteId = params.rte_id || params.route_id;
+        const rteId = params.rte_id || params.route_id || params.sheetName || params.sheet;
         const updateObj = {};
 
         if (params.fields) {
