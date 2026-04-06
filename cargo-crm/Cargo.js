@@ -1,7 +1,7 @@
 // Раннє оголошення функцій для onclick в HTML
 window.openRouteView = function(idx) { if (typeof openRoute === 'function') openRoute(idx); else alert('Маршрути ще завантажуються'); };
 // ╔══════════════════════════════════════════════════════════════╗
-// ║  EscoExpress CRM — Посилкова система                        ║
+// ║  BotiLogistics CRM — Посилкова система                       ║
 // ║                                                              ║
 // ║  ЗМІСТ (Ctrl+F для навігації):                               ║
 // ║  [SECT-CONFIG]   — Конфігурація, URL, константи              ║
@@ -31,7 +31,7 @@ window.openRouteView = function(idx) { if (typeof openRoute === 'function') open
 // GAS Web App URLs
 const GAS_URL_POSYLKI = 'https://script.google.com/macros/s/AKfycbzTLwKLzOlyZV_xUagXlAMY4mJK2d2HOG889T4IB-1xc9rmegnhCGEwn9W_doFDiW9nJA/exec';
 const GAS_URL = GAS_URL_POSYLKI;
-const PASAZHYRY_URL = 'https://botisystem.com/Esco_Express/index.html';
+const PASAZHYRY_URL = 'https://botisystem.com/BotiLogistics-v1.0/passenger-crm';
 const USE_MOCK = false;
 
 // ===== [SECT-STATE] GLOBAL STATE =====

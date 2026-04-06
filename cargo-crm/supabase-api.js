@@ -100,6 +100,13 @@ const STATUS_SB_TO_UA = {
 const STATUS_UA_TO_SB = {};
 for (const [en, ua] of Object.entries(STATUS_SB_TO_UA)) STATUS_UA_TO_SB[ua] = en;
 
+// ── DIRECTION: Supabase → Frontend display format ──
+function directionToFrontend(dir) {
+    if (dir === 'Україна-ЄВ') return 'УК→ЄВ';
+    if (dir === 'Європа-УК') return 'ЄВ→УК';
+    return dir || '';
+}
+
 // ── TRANSFORM HELPERS ──
 
 function sbToGasObjPkg(sbRow) {
@@ -109,6 +116,10 @@ function sbToGasObjPkg(sbRow) {
         // Translate English status values to Ukrainian for frontend
         if ((sbKey === 'lead_status' || sbKey === 'crm_status' || sbKey === 'payment_status' || sbKey === 'package_status' || sbKey === 'np_status') && STATUS_SB_TO_UA[val]) {
             val = STATUS_SB_TO_UA[val];
+        }
+        // Direction: convert Supabase format to frontend format
+        if (sbKey === 'direction') {
+            val = directionToFrontend(val);
         }
         obj[gasKey] = val;
     }
