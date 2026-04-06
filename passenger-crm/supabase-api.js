@@ -105,6 +105,16 @@ const SB_TO_GAS_AUTO = {
     notes:          'Примітка',
 };
 
+// ── DIRECTION NORMALIZER ──
+// Frontend uses 'eu-ua'/'ua-eu', Supabase stores 'Європа-УК'/'Україна-ЄВ'
+function normalizeDirection(dir) {
+    if (!dir) return null;
+    const d = String(dir).toLowerCase().trim();
+    if (d === 'eu-ua' || d.includes('євро') || d.includes('eu')) return 'Європа-УК';
+    if (d === 'ua-eu' || d.includes('укра') || d.includes('ua')) return 'Україна-ЄВ';
+    return dir; // Return as-is if already correct
+}
+
 // ── TRANSFORM HELPERS ──
 
 function sbToGasObj(sbRow, mapping) {
@@ -119,12 +129,49 @@ function sbToGasObj(sbRow, mapping) {
     return obj;
 }
 
+// Frontend form keys (COL_MAP) → Supabase columns
+const FORM_TO_SB = {
+    name: 'full_name',
+    phone: 'phone',
+    phoneReg: 'registrar_phone',
+    seats: 'seats_count',
+    from: 'departure_address',
+    to: 'arrival_address',
+    date: 'departure_date',
+    timing: 'departure_time',
+    vehicle: 'vehicle_name',
+    seatInCar: 'seat_number',
+    price: 'ticket_price',
+    currency: 'ticket_currency',
+    deposit: 'deposit',
+    currencyDeposit: 'deposit_currency',
+    weight: 'baggage_weight',
+    weightPrice: 'baggage_price',
+    currencyWeight: 'baggage_currency',
+    payStatus: 'payment_status',
+    leadStatus: 'lead_status',
+    crmStatus: 'crm_status',
+    tag: 'tag',
+    note: 'notes',
+    noteSms: 'sms_notes',
+    pax_id: 'pax_id',
+    smartId: 'smart_id',
+    direction: 'direction',
+    calId: 'cal_id',
+    rteId: 'rte_id',
+    cliId: 'cli_id',
+    bookingId: 'booking_id',
+    sourceSheet: 'source_sheet',
+    dateCreated: 'booking_created_at',
+};
+
 function gasToSbObj(gasObj, mapping) {
     const m = mapping || GAS_TO_SB;
     const obj = {};
-    for (const [gasKey, val] of Object.entries(gasObj)) {
-        if (gasKey.startsWith('_')) continue;
-        const sbKey = m[gasKey];
+    for (const [key, val] of Object.entries(gasObj)) {
+        if (key.startsWith('_')) continue;
+        // Try GAS mapping first, then form mapping, then pass through
+        const sbKey = m[key] || FORM_TO_SB[key];
         if (sbKey) {
             obj[sbKey] = val === '' ? null : val;
         }
@@ -199,10 +246,14 @@ async function sbAddPassenger(params) {
         sbData.crm_status = sbData.crm_status || 'active';
         sbData.lead_status = sbData.lead_status || 'Новий';
 
-        // Direction → source_sheet mapping
-        if (sbData.direction) {
-            sbData.source_sheet = sbData.direction === 'Європа-УК' ? 'Європа-УК' : 'Україна-ЄВ';
+        // Direction: derive from sheet param if not in data
+        if (!sbData.direction && params.sheet) {
+            sbData.direction = (params.sheet === 'eu' || params.sheet === 'Європа-УК')
+                ? 'Європа-УК' : 'Україна-ЄВ';
         }
+        // Normalize direction (eu-ua → Європа-УК, ua-eu → Україна-ЄВ)
+        sbData.direction = normalizeDirection(sbData.direction);
+        sbData.source_sheet = sbData.direction || 'Україна-ЄВ';
 
         const { data, error } = await sb.from('passengers').insert(sbData).select();
         if (error) throw error;
@@ -304,10 +355,10 @@ async function sbUpdateField(params) {
 async function sbMoveDirection(params) {
     try {
         const paxId = params.pax_id;
-        const newDir = params.direction || params.newDirection;
+        const rawDir = params.direction || params.newDirection || params.target_dir;
 
-        const sbDir = newDir;
-        const sourceSheet = newDir === 'Європа-УК' ? 'Європа-УК' : 'Україна-ЄВ';
+        const sbDir = normalizeDirection(rawDir);
+        const sourceSheet = sbDir || 'Україна-ЄВ';
 
         const { data, error } = await sb
             .from('passengers')
@@ -675,11 +726,22 @@ async function sbGetRouteSheet(params) {
 async function sbUpdateRouteField(params) {
     try {
         const rteId = params.rte_id;
-        const col = params.col;
-        const value = params.value;
-
         const updateObj = {};
-        updateObj[col] = value === '' ? null : value;
+
+        if (params.fields) {
+            // Bulk update (updateRouteFields): { fields: { 'Col Name': value, ... } }
+            for (const [col, val] of Object.entries(params.fields)) {
+                // Try to map GAS column name to Supabase column
+                const sbCol = GAS_TO_SB[col] || col;
+                updateObj[sbCol] = val === '' ? null : val;
+            }
+        } else {
+            // Single field update (updateRouteField): { col, value }
+            const col = params.col;
+            const sbCol = GAS_TO_SB[col] || col;
+            updateObj[sbCol] = params.value === '' ? null : params.value;
+        }
+
         updateObj.updated_at = new Date().toISOString();
 
         const { data, error } = await sb
@@ -883,7 +945,13 @@ async function apiPostSupabase(action, data) {
                 .or(`phone.eq.${p.phone},full_name.ilike.%${p.name}%`)
                 .eq('is_archived', false)
                 .limit(10);
-            return { ok: true, data: data || [] };
+            // Map to GAS keys for frontend compatibility
+            const mapped = (data || []).map(r => ({
+                'PAX_ID': r.pax_id,
+                'Піб': r.full_name,
+                'Телефон пасажира': r.phone
+            }));
+            return { ok: true, data: mapped };
         },
 
         // Archive
