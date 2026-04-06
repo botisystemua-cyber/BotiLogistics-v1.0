@@ -256,12 +256,8 @@ async function apiPost(action, params = {}) {
   syncEl.style.color = '#f59e0b';
 
   try {
-    const res = await fetch(GAS_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ action, ...params })
-    });
-    const data = await res.json();
+    // Route through Supabase API layer (supabase-api.js)
+    const data = await apiPostSupabase(action, params);
 
     syncEl.textContent = '✓ Синхронізовано';
     syncEl.style.color = 'rgba(255,255,255,0.5)';
