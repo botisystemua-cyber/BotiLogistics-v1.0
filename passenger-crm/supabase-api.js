@@ -165,6 +165,13 @@ const FORM_TO_SB = {
     dateCreated: 'booking_created_at',
 };
 
+// Supabase columns that require numeric type
+const NUMERIC_COLS = new Set([
+    'seats_count', 'baggage_weight', 'ticket_price', 'deposit', 'debt',
+    'baggage_price', 'seat_number', 'driver_rating', 'manager_rating',
+    'total_seats', 'available_seats', 'occupied_seats',
+]);
+
 function gasToSbObj(gasObj, mapping) {
     const m = mapping || GAS_TO_SB;
     const obj = {};
@@ -173,7 +180,13 @@ function gasToSbObj(gasObj, mapping) {
         // Try GAS mapping first, then form mapping, then pass through
         const sbKey = m[key] || FORM_TO_SB[key];
         if (sbKey) {
-            obj[sbKey] = val === '' ? null : val;
+            let v = val === '' ? null : val;
+            // Coerce numeric fields
+            if (v !== null && NUMERIC_COLS.has(sbKey)) {
+                const n = parseFloat(v);
+                v = isNaN(n) ? null : n;
+            }
+            obj[sbKey] = v;
         }
     }
     return obj;
@@ -389,7 +402,7 @@ async function sbArchivePassenger(params) {
             .update({
                 is_archived: true,
                 archived_at: new Date().toISOString(),
-                archived_by: null, // TODO: use auth user id
+                archived_by: params.manager || null,
                 archive_reason: reason,
                 updated_at: new Date().toISOString()
             })
