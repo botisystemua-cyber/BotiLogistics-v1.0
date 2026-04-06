@@ -457,23 +457,14 @@ document.addEventListener('DOMContentLoaded', function() {
 var _apiActiveRequests = 0;
 
 async function apiPost(action, data) {
-    const url = ROUTE_ACTIONS.includes(action) ? API_URL_ROUTES : API_URL;
-    if (!url) {
-        showToast('⚠️ API_URL не налаштовано');
-        return { ok: false, error: 'No API URL' };
-    }
-    console.log('[apiPost]', action, '→', url === API_URL_ROUTES ? 'ROUTES API' : 'MAIN API');
+    console.log('[apiPost → Supabase]', action);
     _apiActiveRequests++;
     if (_apiActiveRequests === 1) setSyncStatus('loading');
     try {
-        const res = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain' },
-            body: JSON.stringify({ action, manager: getManagerName(), ...data })
-        });
+        const result = await apiPostSupabase(action, { manager: getManagerName(), ...data });
         _apiActiveRequests = Math.max(0, _apiActiveRequests - 1);
         if (_apiActiveRequests === 0) setSyncStatus('ok');
-        return await res.json();
+        return result;
     } catch (e) {
         _apiActiveRequests = Math.max(0, _apiActiveRequests - 1);
         setSyncStatus('error');
@@ -1030,14 +1021,9 @@ async function loadAndRenderExpenses(sheetName) {
     var expSheetName = sheetName.replace('Маршрут_', 'Витрати_');
 
     try {
-        var res = await fetch(API_URL_ROUTES, {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain' },
-            body: JSON.stringify({ action: 'getExpenses', payload: { sheetName: expSheetName } })
-        });
-        var data = await res.json();
+        var data = await apiPost('getExpenses', { sheetName: expSheetName });
 
-        if (!data.success) {
+        if (!data.ok && !data.success) {
             list.innerHTML = '<div style="text-align:center;padding:40px;color:var(--danger);">❌ ' + (data.error || 'Помилка') + '</div>';
             return;
         }

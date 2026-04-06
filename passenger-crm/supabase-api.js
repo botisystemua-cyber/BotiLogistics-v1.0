@@ -1,0 +1,953 @@
+// ================================================================
+// supabase-api.js — Supabase API layer for Passenger CRM
+// Replaces all Google Apps Script (GAS) API calls
+// ================================================================
+
+// ── COLUMN MAPPING: Supabase (English) ↔ GAS (Ukrainian) ──
+// Frontend uses Ukrainian keys (from GAS). This layer translates.
+const SB_TO_GAS = {
+    pax_id:            'PAX_ID',
+    smart_id:          'Ід_смарт',
+    direction:         'Напрям',
+    source_sheet:      'SOURCE_SHEET',
+    booking_created_at:'Дата створення',
+    full_name:         'Піб',
+    phone:             'Телефон пасажира',
+    registrar_phone:   'Телефон реєстратора',
+    seats_count:       'Кількість місць',
+    departure_address: 'Адреса відправки',
+    arrival_address:   'Адреса прибуття',
+    departure_date:    'Дата виїзду',
+    departure_time:    'Таймінг',
+    vehicle_name:      'Номер авто',
+    seat_number:       'Місце в авто',
+    rte_id:            'RTE_ID',
+    ticket_price:      'Ціна квитка',
+    ticket_currency:   'Валюта квитка',
+    deposit:           'Завдаток',
+    deposit_currency:  'Валюта завдатку',
+    baggage_weight:    'Вага багажу',
+    baggage_price:     'Ціна багажу',
+    baggage_currency:  'Валюта багажу',
+    debt:              'Борг',
+    payment_status:    'Статус оплати',
+    lead_status:       'Статус ліда',
+    crm_status:        'Статус CRM',
+    tag:               'Тег',
+    notes:             'Примітка',
+    sms_notes:         'Примітка СМС',
+    cli_id:            'CLI_ID',
+    booking_id:        'BOOKING_ID',
+    archived_at:       'DATE_ARCHIVE',
+    archived_by:       'ARCHIVED_BY',
+    archive_reason:    'ARCHIVE_REASON',
+    archive_id:        'ARCHIVE_ID',
+    cal_id:            'CAL_ID',
+    // Extra fields from Supabase not in GAS
+    id:                '_uuid',
+    tenant_id:         '_tenant',
+    is_archived:       '_is_archived',
+    created_at:        '_created_at',
+    updated_at:        '_updated_at',
+    vehicle_id:        '_vehicle_id',
+    email:             'Email',
+    payment_form:      'Форма оплати',
+    driver_rating:     'Рейтинг водія',
+    driver_comment:    'Коментар водія',
+    manager_rating:    'Рейтинг менеджера',
+    manager_comment:   'Коментар менеджера',
+};
+
+// Reverse mapping: GAS key → Supabase column
+const GAS_TO_SB = {};
+for (const [sb, gas] of Object.entries(SB_TO_GAS)) {
+    GAS_TO_SB[gas] = sb;
+}
+
+// Calendar columns mapping
+const SB_TO_GAS_CAL = {
+    cal_id:             'CAL_ID',
+    rte_id:             'RTE_ID',
+    auto_id:            'AUTO_ID',
+    vehicle_name:       'Назва авто',
+    seating_layout:     'Тип розкладки',
+    route_date:         'Дата рейсу',
+    direction:          'Напрямок',
+    city:               'Місто',
+    total_seats:        'Макс. місць',
+    available_seats:    'Вільні місця',
+    occupied_seats:     'Зайняті місця',
+    available_seats_list:'Список вільних',
+    occupied_seats_list:'Список зайнятих',
+    paired_calendar_id: 'PAIRED_CAL_ID',
+    status:             'Статус рейсу',
+};
+
+const GAS_TO_SB_CAL = {};
+for (const [sb, gas] of Object.entries(SB_TO_GAS_CAL)) {
+    GAS_TO_SB_CAL[gas] = sb;
+}
+
+// Vehicle columns mapping
+const SB_TO_GAS_AUTO = {
+    auto_id:        'AUTO_ID',
+    name:           'Назва авто',
+    plate_number:   'Держ. номер',
+    seating_layout: 'Тип розкладки',
+    total_seats:    'Місткість',
+    price_uah:      'Ціна UAH',
+    price_chf:      'Ціна CHF',
+    price_eur:      'Ціна EUR',
+    price_pln:      'Ціна PLN',
+    price_czk:      'Ціна CZK',
+    price_usd:      'Ціна USD',
+    status:         'Статус авто',
+    notes:          'Примітка',
+};
+
+// ── TRANSFORM HELPERS ──
+
+function sbToGasObj(sbRow, mapping) {
+    const obj = {};
+    for (const [sbKey, gasKey] of Object.entries(mapping || SB_TO_GAS)) {
+        if (gasKey.startsWith('_')) continue; // Skip internal fields
+        obj[gasKey] = sbRow[sbKey] !== null && sbRow[sbKey] !== undefined ? sbRow[sbKey] : '';
+    }
+    // Preserve _rowNum and _sheet for compatibility
+    obj._uuid = sbRow.id;
+    obj._sheet = sbRow.source_sheet || (sbRow.direction === 'Європа-УК' ? 'Європа-УК' : 'Україна-ЄВ');
+    return obj;
+}
+
+function gasToSbObj(gasObj, mapping) {
+    const m = mapping || GAS_TO_SB;
+    const obj = {};
+    for (const [gasKey, val] of Object.entries(gasObj)) {
+        if (gasKey.startsWith('_')) continue;
+        const sbKey = m[gasKey];
+        if (sbKey) {
+            obj[sbKey] = val === '' ? null : val;
+        }
+    }
+    return obj;
+}
+
+// Calculate debt (matches GAS calcDebt)
+function calcDebt(obj) {
+    const price = parseFloat(obj['Ціна квитка']) || 0;
+    const wp = parseFloat(obj['Ціна багажу']) || 0;
+    const dep = parseFloat(obj['Завдаток']) || 0;
+    return Math.max(0, price + wp - dep);
+}
+
+// ── TENANT (hardcoded for now, will come from auth later) ──
+const TENANT_ID = 'gresco';
+
+// ================================================================
+// PASSENGERS API
+// ================================================================
+
+async function sbGetAll(params) {
+    try {
+        let query = supabase.from('passengers').select('*');
+
+        // Filter by archived status
+        query = query.eq('is_archived', false);
+
+        // Filter by direction
+        if (params && params.filter && params.filter.dir && params.filter.dir !== 'all') {
+            if (params.filter.dir === 'ua-eu') {
+                query = query.ilike('direction', '%Укра%');
+            } else if (params.filter.dir === 'eu-ua') {
+                query = query.ilike('direction', '%Євро%');
+            }
+        }
+
+        // Filter by status
+        if (params && params.filter && params.filter.status) {
+            query = query.eq('lead_status', params.filter.status);
+        }
+
+        const { data, error } = await query.order('created_at', { ascending: false });
+        if (error) throw error;
+
+        const results = data.map(row => {
+            const obj = sbToGasObj(row);
+            obj['Борг'] = calcDebt(obj);
+            return obj;
+        });
+
+        return { ok: true, data: results };
+    } catch (e) {
+        console.error('sbGetAll error:', e);
+        return { ok: false, error: e.message };
+    }
+}
+
+async function sbAddPassenger(params) {
+    try {
+        const gasData = params.data || params;
+        const sbData = gasToSbObj(gasData);
+
+        // Set defaults
+        sbData.tenant_id = TENANT_ID;
+        if (!sbData.pax_id) {
+            sbData.pax_id = 'PAX' + Date.now();
+        }
+        sbData.booking_created_at = new Date().toISOString();
+        sbData.is_archived = false;
+        sbData.crm_status = sbData.crm_status || 'active';
+        sbData.lead_status = sbData.lead_status || 'Новий';
+
+        // Direction → source_sheet mapping
+        if (sbData.direction) {
+            sbData.source_sheet = sbData.direction === 'Європа-УК' ? 'Європа-УК' : 'Україна-ЄВ';
+        }
+
+        const { data, error } = await supabase.from('passengers').insert(sbData).select();
+        if (error) throw error;
+
+        const obj = sbToGasObj(data[0]);
+        obj['Борг'] = calcDebt(obj);
+
+        return { ok: true, data: obj, pax_id: data[0].pax_id };
+    } catch (e) {
+        console.error('sbAddPassenger error:', e);
+        return { ok: false, error: e.message };
+    }
+}
+
+async function sbUpdatePassenger(params) {
+    try {
+        const paxId = params.pax_id || params.id;
+        const gasData = params.data || params;
+        const sbData = gasToSbObj(gasData);
+        sbData.updated_at = new Date().toISOString();
+
+        // Remove fields that shouldn't be updated
+        delete sbData.id;
+        delete sbData.tenant_id;
+        delete sbData.pax_id;
+        delete sbData.created_at;
+
+        const { data, error } = await supabase
+            .from('passengers')
+            .update(sbData)
+            .eq('pax_id', paxId)
+            .select();
+        if (error) throw error;
+
+        if (data && data[0]) {
+            const obj = sbToGasObj(data[0]);
+            obj['Борг'] = calcDebt(obj);
+            return { ok: true, data: obj };
+        }
+        return { ok: true };
+    } catch (e) {
+        console.error('sbUpdatePassenger error:', e);
+        return { ok: false, error: e.message };
+    }
+}
+
+async function sbUpdateField(params) {
+    try {
+        const paxId = params.pax_id;
+        const gasCol = params.col;
+        const value = params.value;
+
+        // Convert GAS column name to Supabase column
+        const sbCol = GAS_TO_SB[gasCol] || gasCol;
+        if (!sbCol || sbCol.startsWith('_')) {
+            return { ok: false, error: 'Unknown column: ' + gasCol };
+        }
+
+        const updateObj = {};
+        updateObj[sbCol] = value === '' ? null : value;
+        updateObj.updated_at = new Date().toISOString();
+
+        // Recalculate debt if price/deposit changed
+        if (['ticket_price', 'baggage_price', 'deposit'].includes(sbCol)) {
+            const { data: current } = await supabase
+                .from('passengers')
+                .select('ticket_price, baggage_price, deposit')
+                .eq('pax_id', paxId)
+                .single();
+            if (current) {
+                const merged = { ...current, ...updateObj };
+                updateObj.debt = Math.max(0,
+                    (parseFloat(merged.ticket_price) || 0) +
+                    (parseFloat(merged.baggage_price) || 0) -
+                    (parseFloat(merged.deposit) || 0)
+                );
+            }
+        }
+
+        const { data, error } = await supabase
+            .from('passengers')
+            .update(updateObj)
+            .eq('pax_id', paxId)
+            .select();
+        if (error) throw error;
+
+        if (data && data[0]) {
+            const obj = sbToGasObj(data[0]);
+            obj['Борг'] = calcDebt(obj);
+            return { ok: true, data: obj };
+        }
+        return { ok: true };
+    } catch (e) {
+        console.error('sbUpdateField error:', e);
+        return { ok: false, error: e.message };
+    }
+}
+
+async function sbMoveDirection(params) {
+    try {
+        const paxId = params.pax_id;
+        const newDir = params.direction || params.newDirection;
+
+        const sbDir = newDir;
+        const sourceSheet = newDir === 'Європа-УК' ? 'Європа-УК' : 'Україна-ЄВ';
+
+        const { data, error } = await supabase
+            .from('passengers')
+            .update({ direction: sbDir, source_sheet: sourceSheet, updated_at: new Date().toISOString() })
+            .eq('pax_id', paxId)
+            .select();
+        if (error) throw error;
+
+        return { ok: true, data: data[0] ? sbToGasObj(data[0]) : null };
+    } catch (e) {
+        console.error('sbMoveDirection error:', e);
+        return { ok: false, error: e.message };
+    }
+}
+
+// ================================================================
+// ARCHIVE
+// ================================================================
+
+async function sbArchivePassenger(params) {
+    try {
+        const paxIds = params.pax_ids || (params.pax_id ? [params.pax_id] : []);
+        const reason = params.reason || 'Архівовано';
+        const manager = params.manager || '';
+
+        const { data, error } = await supabase
+            .from('passengers')
+            .update({
+                is_archived: true,
+                archived_at: new Date().toISOString(),
+                archived_by: null, // TODO: use auth user id
+                archive_reason: reason,
+                updated_at: new Date().toISOString()
+            })
+            .in('pax_id', paxIds)
+            .select();
+        if (error) throw error;
+
+        return { ok: true, count: data.length };
+    } catch (e) {
+        console.error('sbArchivePassenger error:', e);
+        return { ok: false, error: e.message };
+    }
+}
+
+async function sbDeletePassenger(params) {
+    // Soft delete = archive with reason "Видалено"
+    return sbArchivePassenger({
+        ...params,
+        reason: params.reason || 'Видалено'
+    });
+}
+
+async function sbRestorePassenger(params) {
+    try {
+        const paxIds = params.pax_ids || (params.pax_id ? [params.pax_id] : []);
+
+        const { data, error } = await supabase
+            .from('passengers')
+            .update({
+                is_archived: false,
+                archived_at: null,
+                archived_by: null,
+                archive_reason: null,
+                updated_at: new Date().toISOString()
+            })
+            .in('pax_id', paxIds)
+            .select();
+        if (error) throw error;
+
+        return { ok: true, count: data.length };
+    } catch (e) {
+        console.error('sbRestorePassenger error:', e);
+        return { ok: false, error: e.message };
+    }
+}
+
+async function sbGetArchive(params) {
+    try {
+        const offset = params.offset || 0;
+        const limit = params.limit || 50;
+
+        const { data, error, count } = await supabase
+            .from('passengers')
+            .select('*', { count: 'exact' })
+            .eq('is_archived', true)
+            .order('archived_at', { ascending: false })
+            .range(offset, offset + limit - 1);
+        if (error) throw error;
+
+        const results = data.map(row => {
+            const obj = sbToGasObj(row);
+            obj['Борг'] = calcDebt(obj);
+            return obj;
+        });
+
+        return { ok: true, data: results, total: count };
+    } catch (e) {
+        console.error('sbGetArchive error:', e);
+        return { ok: false, error: e.message };
+    }
+}
+
+// ================================================================
+// TRIPS (Calendar)
+// ================================================================
+
+async function sbGetTrips(params) {
+    try {
+        let query = supabase.from('calendar').select('*');
+
+        if (params && params.filter) {
+            if (params.filter.direction) query = query.eq('direction', params.filter.direction);
+            if (params.filter.date) query = query.eq('route_date', params.filter.date);
+        }
+
+        const { data, error } = await query.order('route_date', { ascending: true });
+        if (error) throw error;
+
+        const results = data.map(row => sbToGasObj(row, SB_TO_GAS_CAL));
+        return { ok: true, data: results };
+    } catch (e) {
+        console.error('sbGetTrips error:', e);
+        return { ok: false, error: e.message };
+    }
+}
+
+async function sbCreateTrip(params) {
+    try {
+        const tripData = params.data || params;
+        const sbData = {};
+
+        // Map from frontend format to Supabase
+        sbData.tenant_id = TENANT_ID;
+        sbData.cal_id = tripData.cal_id || ('CAL' + Date.now());
+        sbData.route_date = tripData['Дата рейсу'] || tripData.date;
+        sbData.direction = tripData['Напрямок'] || tripData.direction;
+        sbData.city = tripData['Місто'] || tripData.city || '';
+        sbData.status = tripData['Статус рейсу'] || 'Активний';
+        sbData.total_seats = parseInt(tripData['Макс. місць'] || tripData.maxSeats) || 0;
+        sbData.available_seats = sbData.total_seats;
+        sbData.occupied_seats = 0;
+        sbData.available_seats_list = '';
+        sbData.occupied_seats_list = '';
+
+        // Vehicle
+        if (tripData.auto_id || tripData['AUTO_ID']) {
+            sbData.auto_id = tripData.auto_id || tripData['AUTO_ID'];
+        }
+        if (tripData['Назва авто'] || tripData.autoName) {
+            sbData.vehicle_name = tripData['Назва авто'] || tripData.autoName;
+        }
+        if (tripData['Тип розкладки'] || tripData.layout) {
+            sbData.seating_layout = tripData['Тип розкладки'] || tripData.layout;
+        }
+
+        // Paired trip
+        if (tripData.paired_id) {
+            sbData.paired_calendar_id = tripData.paired_id;
+        }
+
+        const { data, error } = await supabase.from('calendar').insert(sbData).select();
+        if (error) throw error;
+
+        const obj = sbToGasObj(data[0], SB_TO_GAS_CAL);
+        return { ok: true, data: obj, cal_id: data[0].cal_id };
+    } catch (e) {
+        console.error('sbCreateTrip error:', e);
+        return { ok: false, error: e.message };
+    }
+}
+
+async function sbUpdateTrip(params) {
+    try {
+        const calId = params.cal_id;
+        const tripData = params.data || params;
+        const sbData = {};
+
+        // Map fields
+        if (tripData['Дата рейсу'] !== undefined) sbData.route_date = tripData['Дата рейсу'];
+        if (tripData['Напрямок'] !== undefined) sbData.direction = tripData['Напрямок'];
+        if (tripData['Місто'] !== undefined) sbData.city = tripData['Місто'];
+        if (tripData['Статус рейсу'] !== undefined) sbData.status = tripData['Статус рейсу'];
+        if (tripData['Макс. місць'] !== undefined) sbData.total_seats = parseInt(tripData['Макс. місць']);
+        if (tripData['Вільні місця'] !== undefined) sbData.available_seats = parseInt(tripData['Вільні місця']);
+        if (tripData['Зайняті місця'] !== undefined) sbData.occupied_seats = parseInt(tripData['Зайняті місця']);
+        if (tripData['Список вільних'] !== undefined) sbData.available_seats_list = tripData['Список вільних'];
+        if (tripData['Список зайнятих'] !== undefined) sbData.occupied_seats_list = tripData['Список зайнятих'];
+        if (tripData['AUTO_ID'] !== undefined) sbData.auto_id = tripData['AUTO_ID'];
+        if (tripData['Назва авто'] !== undefined) sbData.vehicle_name = tripData['Назва авто'];
+        if (tripData['Тип розкладки'] !== undefined) sbData.seating_layout = tripData['Тип розкладки'];
+
+        sbData.updated_at = new Date().toISOString();
+
+        const { data, error } = await supabase
+            .from('calendar')
+            .update(sbData)
+            .eq('cal_id', calId)
+            .select();
+        if (error) throw error;
+
+        return { ok: true, data: data[0] ? sbToGasObj(data[0], SB_TO_GAS_CAL) : null };
+    } catch (e) {
+        console.error('sbUpdateTrip error:', e);
+        return { ok: false, error: e.message };
+    }
+}
+
+async function sbArchiveTrip(params) {
+    try {
+        const calId = params.cal_id;
+
+        // Clear CAL_ID from passengers assigned to this trip
+        await supabase
+            .from('passengers')
+            .update({ cal_id: null, updated_at: new Date().toISOString() })
+            .eq('cal_id', calId);
+
+        // Delete the trip (or archive)
+        const { error } = await supabase
+            .from('calendar')
+            .delete()
+            .eq('cal_id', calId);
+        if (error) throw error;
+
+        return { ok: true };
+    } catch (e) {
+        console.error('sbArchiveTrip error:', e);
+        return { ok: false, error: e.message };
+    }
+}
+
+async function sbDeleteTrip(params) {
+    return sbArchiveTrip(params);
+}
+
+async function sbAssignTrip(params) {
+    try {
+        const calId = params.cal_id;
+        const paxIds = params.pax_ids || [];
+
+        // Update passengers with CAL_ID
+        const { error } = await supabase
+            .from('passengers')
+            .update({ cal_id: calId, updated_at: new Date().toISOString() })
+            .in('pax_id', paxIds);
+        if (error) throw error;
+
+        // Update trip seat counts
+        const { data: paxCount } = await supabase
+            .from('passengers')
+            .select('pax_id', { count: 'exact' })
+            .eq('cal_id', calId)
+            .eq('is_archived', false);
+
+        if (paxCount) {
+            await supabase
+                .from('calendar')
+                .update({
+                    occupied_seats: paxCount.length,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('cal_id', calId);
+        }
+
+        return { ok: true };
+    } catch (e) {
+        console.error('sbAssignTrip error:', e);
+        return { ok: false, error: e.message };
+    }
+}
+
+async function sbUnassignTrip(params) {
+    try {
+        const calId = params.cal_id;
+        const paxIds = params.pax_ids || [];
+
+        const { error } = await supabase
+            .from('passengers')
+            .update({ cal_id: null, updated_at: new Date().toISOString() })
+            .in('pax_id', paxIds);
+        if (error) throw error;
+
+        // Update trip seat counts
+        const { data: remaining } = await supabase
+            .from('passengers')
+            .select('pax_id')
+            .eq('cal_id', calId)
+            .eq('is_archived', false);
+
+        await supabase
+            .from('calendar')
+            .update({
+                occupied_seats: remaining ? remaining.length : 0,
+                updated_at: new Date().toISOString()
+            })
+            .eq('cal_id', calId);
+
+        return { ok: true };
+    } catch (e) {
+        console.error('sbUnassignTrip error:', e);
+        return { ok: false, error: e.message };
+    }
+}
+
+// ================================================================
+// ROUTES
+// ================================================================
+
+async function sbGetRoutesList(params) {
+    try {
+        // Get distinct route groups with counts
+        const { data, error } = await supabase
+            .from('routes')
+            .select('rte_id, record_type, direction');
+        if (error) throw error;
+
+        // Group by route name pattern (Маршрут_1, etc.)
+        // For now, return as route sheets
+        const routeMap = {};
+        data.forEach(row => {
+            const name = 'Маршрут_' + (row.rte_id || '1');
+            if (!routeMap[name]) {
+                routeMap[name] = { sheetName: name, rowCount: 0, paxCount: 0, parcelCount: 0 };
+            }
+            routeMap[name].rowCount++;
+            if (row.record_type === 'Пасажир' || row.record_type === 'Passenger') {
+                routeMap[name].paxCount++;
+            } else {
+                routeMap[name].parcelCount++;
+            }
+        });
+
+        return { ok: true, data: Object.values(routeMap) };
+    } catch (e) {
+        console.error('sbGetRoutesList error:', e);
+        return { ok: false, error: e.message };
+    }
+}
+
+async function sbGetRouteSheet(params) {
+    try {
+        const sheetName = params.sheetName || params.sheet;
+
+        // Extract route number from sheet name (e.g., "Маршрут_1" → "1")
+        const routeNum = sheetName.replace(/^Маршрут_/, '');
+
+        const { data, error } = await supabase
+            .from('routes')
+            .select('*')
+            .eq('rte_id', routeNum)
+            .order('created_at', { ascending: true });
+        if (error) throw error;
+
+        // Get headers from first row or defaults
+        const headers = data.length > 0 ? Object.keys(data[0]) : [];
+
+        return { ok: true, data: data, headers: headers, sheetName: sheetName };
+    } catch (e) {
+        console.error('sbGetRouteSheet error:', e);
+        return { ok: false, error: e.message };
+    }
+}
+
+async function sbUpdateRouteField(params) {
+    try {
+        const rteId = params.rte_id;
+        const col = params.col;
+        const value = params.value;
+
+        const updateObj = {};
+        updateObj[col] = value === '' ? null : value;
+        updateObj.updated_at = new Date().toISOString();
+
+        const { data, error } = await supabase
+            .from('routes')
+            .update(updateObj)
+            .eq('rte_id', rteId)
+            .select();
+        if (error) throw error;
+
+        return { ok: true, data: data[0] };
+    } catch (e) {
+        console.error('sbUpdateRouteField error:', e);
+        return { ok: false, error: e.message };
+    }
+}
+
+async function sbAddToRoute(params) {
+    try {
+        const items = params.items || [params];
+        const insertData = items.map(item => ({
+            tenant_id: TENANT_ID,
+            rte_id: item.rte_id || item.routeId,
+            record_type: item.type || 'Пасажир',
+            direction: item.direction || '',
+            pax_id_or_pkg_id: item.pax_id || item.pkg_id || '',
+            passenger_name: item.name || item['Піб'] || '',
+            passenger_phone: item.phone || item['Телефон пасажира'] || '',
+            departure_address: item.from || item['Адреса відправки'] || '',
+            arrival_address: item.to || item['Адреса прибуття'] || '',
+            seats_count: parseInt(item.seats || item['Кількість місць']) || 1,
+            amount: parseFloat(item.price || item['Ціна квитка']) || 0,
+            amount_currency: item.currency || item['Валюта квитка'] || 'UAH',
+            deposit: parseFloat(item.deposit || item['Завдаток']) || 0,
+            payment_status: item.payStatus || item['Статус оплати'] || '',
+            status: item.status || 'Новий',
+        }));
+
+        const { data, error } = await supabase.from('routes').insert(insertData).select();
+        if (error) throw error;
+
+        return { ok: true, data: data };
+    } catch (e) {
+        console.error('sbAddToRoute error:', e);
+        return { ok: false, error: e.message };
+    }
+}
+
+async function sbDeleteFromSheet(params) {
+    try {
+        const rteId = params.rte_id;
+
+        const { error } = await supabase
+            .from('routes')
+            .delete()
+            .eq('rte_id', rteId);
+        if (error) throw error;
+
+        return { ok: true };
+    } catch (e) {
+        console.error('sbDeleteFromSheet error:', e);
+        return { ok: false, error: e.message };
+    }
+}
+
+// ================================================================
+// AUTOPARK
+// ================================================================
+
+async function sbGetAutopark(params) {
+    try {
+        const { data, error } = await supabase
+            .from('vehicles')
+            .select('*')
+            .order('name');
+        if (error) throw error;
+
+        const results = data.map(row => sbToGasObj(row, SB_TO_GAS_AUTO));
+        return { ok: true, data: results };
+    } catch (e) {
+        console.error('sbGetAutopark error:', e);
+        return { ok: false, error: e.message };
+    }
+}
+
+// ================================================================
+// PRESENCE (Online managers)
+// ================================================================
+
+// Use Supabase Realtime Presence instead of polling
+let presenceChannel = null;
+
+async function sbHeartbeat(params) {
+    try {
+        if (!presenceChannel) {
+            presenceChannel = supabase.channel('online-managers');
+            presenceChannel.subscribe(async (status) => {
+                if (status === 'SUBSCRIBED') {
+                    await presenceChannel.track({
+                        name: params.manager || '',
+                        device: params.device || navigator.userAgent,
+                        ts: new Date().toISOString()
+                    });
+                }
+            });
+        } else {
+            await presenceChannel.track({
+                name: params.manager || '',
+                device: params.device || navigator.userAgent,
+                ts: new Date().toISOString()
+            });
+        }
+        return { ok: true };
+    } catch (e) {
+        console.error('sbHeartbeat error:', e);
+        return { ok: true }; // Don't fail on presence errors
+    }
+}
+
+async function sbGetOnlineManagers(params) {
+    try {
+        if (!presenceChannel) {
+            return { ok: true, data: [] };
+        }
+        const state = presenceChannel.presenceState();
+        const managers = [];
+        for (const [key, presences] of Object.entries(state)) {
+            for (const p of presences) {
+                managers.push({
+                    name: p.name,
+                    device: p.device,
+                    ts: p.ts
+                });
+            }
+        }
+        return { ok: true, data: managers };
+    } catch (e) {
+        console.error('sbGetOnlineManagers error:', e);
+        return { ok: true, data: [] };
+    }
+}
+
+// ================================================================
+// PAYMENTS
+// ================================================================
+
+async function sbGetPayments(params) {
+    try {
+        const paxId = params.pax_id;
+        const { data, error } = await supabase
+            .from('payments')
+            .select('*')
+            .eq('passenger_id', paxId)
+            .order('created_at', { ascending: false });
+        if (error) throw error;
+
+        return { ok: true, data: data || [] };
+    } catch (e) {
+        console.error('sbGetPayments error:', e);
+        return { ok: false, error: e.message };
+    }
+}
+
+// ================================================================
+// EXPENSES
+// ================================================================
+
+async function sbGetExpenses(params) {
+    try {
+        const sheetName = params.sheetName;
+        const { data, error } = await supabase
+            .from('expenses')
+            .select('*')
+            .order('created_at', { ascending: false });
+        if (error) throw error;
+
+        return { ok: true, data: data || [] };
+    } catch (e) {
+        console.error('sbGetExpenses error:', e);
+        return { ok: false, error: e.message };
+    }
+}
+
+// ================================================================
+// MAIN ROUTER — replaces apiPost()
+// ================================================================
+
+async function apiPostSupabase(action, data) {
+    console.log('[Supabase API]', action);
+
+    const handlers = {
+        // Passengers
+        getAll:             sbGetAll,
+        addPassenger:       sbAddPassenger,
+        updatePassenger:    sbUpdatePassenger,
+        updateField:        sbUpdateField,
+        moveDirection:      sbMoveDirection,
+        clonePassenger:     sbAddPassenger, // clone = add with existing data
+        checkDuplicates:    async (p) => {
+            const { data } = await supabase.from('passengers')
+                .select('pax_id, full_name, phone')
+                .or(`phone.eq.${p.phone},full_name.ilike.%${p.name}%`)
+                .eq('is_archived', false)
+                .limit(10);
+            return { ok: true, data: data || [] };
+        },
+
+        // Archive
+        archivePassenger:   sbArchivePassenger,
+        deletePassenger:    sbDeletePassenger,
+        restorePassenger:   sbRestorePassenger,
+        getArchive:         sbGetArchive,
+        deleteFromArchive:  async () => ({ ok: false, error: 'Видалення з архіву заблоковано' }),
+
+        // Trips
+        getTrips:           sbGetTrips,
+        createTrip:         sbCreateTrip,
+        updateTrip:         sbUpdateTrip,
+        archiveTrip:        sbArchiveTrip,
+        deleteTrip:         sbDeleteTrip,
+        assignTrip:         sbAssignTrip,
+        unassignTrip:       sbUnassignTrip,
+        duplicateTrip:      async (p) => {
+            const { data } = await supabase.from('calendar').select('*').eq('cal_id', p.cal_id).single();
+            if (!data) return { ok: false, error: 'Trip not found' };
+            const newTrip = { ...data, cal_id: 'CAL' + Date.now(), id: undefined, created_at: undefined };
+            if (p.date) newTrip.route_date = p.date;
+            return sbCreateTrip({ data: newTrip });
+        },
+
+        // Routes
+        getRoutesList:      sbGetRoutesList,
+        getRouteSheet:      sbGetRouteSheet,
+        updateRouteField:   sbUpdateRouteField,
+        updateRouteFields:  sbUpdateRouteField,
+        addToRoute:         sbAddToRoute,
+        deleteFromSheet:    sbDeleteFromSheet,
+        createRoute:        async (p) => ({ ok: true, sheetName: p.name }),
+        deleteRoute:        async (p) => ({ ok: true }),
+        deleteLinkedSheets: async (p) => ({ ok: true }),
+
+        // Autopark
+        getAutopark:        sbGetAutopark,
+
+        // Presence
+        heartbeat:          sbHeartbeat,
+        getOnlineManagers:  sbGetOnlineManagers,
+
+        // Payments
+        getPayments:        sbGetPayments,
+
+        // Expenses
+        getExpenses:        sbGetExpenses,
+
+        // Misc
+        logOnboarding:      async (p) => ({ ok: true }), // TODO: implement logging
+        getStats:           async () => {
+            const { data } = await supabase.from('passengers')
+                .select('lead_status, direction, debt')
+                .eq('is_archived', false);
+            return { ok: true, data: data || [] };
+        },
+    };
+
+    const handler = handlers[action];
+    if (!handler) {
+        console.warn('Unknown Supabase action:', action);
+        return { ok: false, error: 'Unknown action: ' + action };
+    }
+
+    return handler(data || {});
+}
