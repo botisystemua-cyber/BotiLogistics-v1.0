@@ -1113,8 +1113,9 @@ async function apiPostSupabase(action, data) {
             const { error } = await sb.from('routes').insert({
                 tenant_id: TENANT_ID,
                 rte_id: name,
-                record_type: 'Passenger',
-                direction: '',
+                is_placeholder: true,
+                record_type: 'Пасажир',
+                direction: p.direction || '',
                 route_date: new Date().toISOString().split('T')[0],
                 status: 'scheduled',
                 crm_status: 'active',
