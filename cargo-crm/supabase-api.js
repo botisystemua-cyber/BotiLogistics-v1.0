@@ -536,6 +536,39 @@ async function sbPkgGetRoutesList(params) {
 async function sbPkgGetRouteSheet(params) {
     try {
         const sheetName = params.sheetName || params.sheet;
+
+        // Summary view: aggregate all routes by rte_id
+        if (sheetName === 'Зведення рейсів') {
+            const { data: all, error: e1 } = await sb.from('routes')
+                .select('*')
+                .eq('tenant_id', TENANT_ID)
+                .order('created_at', { ascending: false });
+            if (e1) throw e1;
+            const groups = {};
+            (all || []).forEach(r => {
+                const k = r.rte_id || '';
+                if (!k) return;
+                if (!groups[k]) groups[k] = { rte_id: k, route_date: r.route_date, city: r.city, driver: r.driver, vehicle_number: r.vehicle_number, status: r.status, note: r.note };
+                const g = groups[k];
+                if (!g.route_date && r.route_date) g.route_date = r.route_date;
+                if (!g.city && r.city) g.city = r.city;
+                if (!g.driver && r.driver) g.driver = r.driver;
+                if (!g.vehicle_number && r.vehicle_number) g.vehicle_number = r.vehicle_number;
+                if (!g.status && r.status) g.status = r.status;
+                if (!g.note && r.note) g.note = r.note;
+            });
+            const rows = Object.values(groups).map(g => ({
+                'RTE_ID': g.rte_id,
+                'Дата рейсу': g.route_date || '',
+                'Місто': g.city || '',
+                'Водій': g.driver || '',
+                'Номер авто': g.vehicle_number || '',
+                'Статус': g.status || '',
+                'Примітка': g.note || ''
+            }));
+            return { ok: true, data: { rows, headers: ['RTE_ID','Дата рейсу','Місто','Водій','Номер авто','Статус','Примітка'], sheetName }, rows, sheetName };
+        }
+
         const { data, error } = await sb.from('routes')
             .select('*')
             .eq('tenant_id', TENANT_ID)
