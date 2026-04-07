@@ -820,6 +820,8 @@ async function sbAddToRoute(params) {
         const rteId = params.sheetName || params.sheet_name || params.rte_id || ('Маршрут_' + Date.now());
         const leads = params.leads || params.items || [params];
 
+        const num = (v) => { const n = parseFloat(v); return isNaN(n) ? null : n; };
+        const str = (v) => (v === undefined || v === null || v === '') ? null : String(v);
         const insertData = leads.map(item => ({
             tenant_id: TENANT_ID,
             rte_id: rteId,
@@ -841,14 +843,14 @@ async function sbAddToRoute(params) {
             driver_phone: item['Телефон водія'] || '',
             timing: item['Таймінг'] || '',
             seats_count: parseInt(item.seats || item['Кількість місць']) || 1,
-            baggage_weight: item['Вага багажу'] || '',
-            internal_number: item['Внутрішній №'] || '',
-            ttn_number: item['Номер ТТН'] || '',
-            package_description: item['Опис посилки'] || '',
-            package_weight: item['Вага посилки'] || '',
-            amount: parseFloat(item.price || item['Сума'] || item['Ціна квитка']) || 0,
+            baggage_weight: num(item['Вага багажу']),
+            internal_number: str(item['Внутрішній №']),
+            ttn_number: str(item['Номер ТТН']),
+            package_description: str(item['Опис посилки']),
+            package_weight: num(item['Вага посилки']),
+            amount: num(item.price || item['Сума'] || item['Ціна квитка']) || 0,
             amount_currency: item.currency || item['Валюта'] || item['Валюта квитка'] || 'UAH',
-            deposit: parseFloat(item.deposit || item['Завдаток']) || 0,
+            deposit: num(item.deposit || item['Завдаток']) || 0,
             deposit_currency: item['Валюта завдатку'] || 'UAH',
             payment_form: item['Форма оплати'] || '',
             payment_status: item.payStatus || item['Статус оплати'] || '',
