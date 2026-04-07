@@ -1,10 +1,26 @@
 import { useState } from 'react';
 import { ShieldCheck, Users, Eye, EyeOff, LogIn, Loader2, LogOut, ArrowLeft, CircleCheck, AlertCircle, Truck } from 'lucide-react';
-import { Logo, API_URL } from './components/shared';
+import { Logo } from './components/shared';
 import { AdminPanel } from './components/AdminPanel';
+import { authenticate } from './api/users';
 
 const ADMIN_LOGIN = 'admin';
 const ADMIN_PASSWORD = 'botibro';
+
+// Where to send each app after successful login. Adjust paths to match hosting.
+const APP_URLS: Record<string, string> = {
+  passenger: '/BotiLogistics-v1.0/passenger-crm/',
+  cargo:     '/BotiLogistics-v1.0/cargo-crm/',
+  driver:    '/BotiLogistics-v1.0/driver-crm/',
+  owner:     '/BotiLogistics-v1.0/owner-crm/',
+};
+
+const APP_LABEL: Record<string, string> = {
+  passenger: 'Пасажири',
+  cargo:     'Посилки',
+  driver:    'Водій',
+  owner:     'Власник',
+};
 
 type Role = 'owner' | 'manager' | 'driver';
 
@@ -52,10 +68,13 @@ const ROLES: RoleOption[] = [
   },
 ];
 
-interface AuthResult {
-  success: boolean;
-  user?: { name: string; role: string; staffId: string };
-  error?: string;
+interface SessionUser {
+  name: string;
+  role: string;
+  staffId: string;
+  tenantId: string;
+  tenantName: string;
+  modules: string[];
 }
 
 function App() {
@@ -66,7 +85,7 @@ function App() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [user, setUser] = useState<AuthResult['user'] | null>(null);
+  const [user, setUser] = useState<SessionUser | null>(null);
 
   const handleRoleSelect = (role: RoleOption) => {
     setSelectedRole(role);
@@ -99,39 +118,50 @@ function App() {
     setError('');
 
     try {
-      const res = await fetch(API_URL, {
-        method: 'POST',
-        redirect: 'follow',
-        headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify({
-          action: 'login',
-          role: selectedRole!.key,
-          login: login.trim(),
-          password: password.trim(),
-        }),
-      });
-      const data: AuthResult = await res.json();
-
-      if (data.success && data.user) {
-        setUser(data.user);
-        setStep('success');
-      } else {
-        setError(data.error || 'Невірний логін або пароль');
-      }
-    } catch {
-      setError('Помилка мережі. Спробуйте ще раз.');
+      const result = await authenticate(selectedRole!.key, login.trim(), password.trim());
+      const session: SessionUser = {
+        name: result.user.full_name || result.user.login,
+        role: selectedRole!.label,
+        staffId: result.user.login,
+        tenantId: result.user.tenant_id,
+        tenantName: result.tenantName,
+        modules: result.modules,
+      };
+      // Store in localStorage so passenger-crm/cargo-crm/etc can read tenant_id on load
+      localStorage.setItem('boti_session', JSON.stringify({
+        tenant_id: session.tenantId,
+        tenant_name: session.tenantName,
+        user_login: result.user.login,
+        user_name: session.name,
+        role: result.user.role,
+        modules: session.modules,
+      }));
+      setUser(session);
+      setStep('success');
+    } catch (e: unknown) {
+      setError((e as Error).message || 'Помилка входу');
     } finally {
       setLoading(false);
     }
   };
 
   const handleLogout = () => {
+    localStorage.removeItem('boti_session');
     setStep('role');
     setSelectedRole(null);
     setUser(null);
     setLogin('');
     setPassword('');
     setError('');
+  };
+
+  // Which apps to show on success screen — based on selected role + tenant's enabled modules
+  const availableApps = (u: SessionUser): string[] => {
+    if (!u) return [];
+    if (u.role === ROLES.find((r) => r.key === 'driver')?.label) return ['driver'];
+    if (u.role === ROLES.find((r) => r.key === 'owner')?.label)  return ['owner'];
+    // manager → all data modules tenant has enabled (passenger / cargo)
+    return u.modules.filter((m) => m === 'passenger' || m === 'cargo');
   };
 
   if (step === 'admin') {
@@ -284,16 +314,28 @@ function App() {
 
             <div className="mt-6 sm:mt-8 bg-bg rounded-xl sm:rounded-2xl p-4 space-y-3">
               <div className="flex justify-between items-center">
-                <span className="text-xs sm:text-sm text-muted">ID</span>
+                <span className="text-xs sm:text-sm text-muted">Логін</span>
                 <span className="font-mono text-xs sm:text-sm font-bold text-text-secondary bg-card px-2.5 py-1 rounded-lg">{user.staffId}</span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-xs sm:text-sm text-muted">Статус</span>
-                <span className="text-xs sm:text-sm font-bold text-success flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-success animate-pulse" />
-                  Активний
-                </span>
+                <span className="text-xs sm:text-sm text-muted">Компанія</span>
+                <span className="text-xs sm:text-sm font-bold text-text">{user.tenantName}</span>
               </div>
+            </div>
+
+            <div className="mt-5 space-y-2">
+              <div className="text-[11px] font-bold text-muted uppercase tracking-wider mb-2">Перейти до додатку</div>
+              {availableApps(user).length === 0 ? (
+                <div className="text-xs text-muted italic">Немає доступних додатків для цієї ролі</div>
+              ) : availableApps(user).map((m) => (
+                <a
+                  key={m}
+                  href={APP_URLS[m]}
+                  className="block w-full py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-green-600 text-white text-sm font-bold shadow-lg shadow-emerald-500/20 hover:brightness-110 active:scale-[0.97] transition-all"
+                >
+                  {APP_LABEL[m]} →
+                </a>
+              ))}
             </div>
 
             <button
