@@ -1108,8 +1108,8 @@ async function apiPostSupabase(action, data) {
             // Create a placeholder route row so getRoutesList returns it
             let name = p.name || ('Маршрут_' + Date.now());
             // Normalize: frontend filter requires 'Маршрут_' prefix
-            name = name.replace(/^Маршрут\s+/, 'Маршрут_');
-            if (!name.startsWith('Маршрут_')) name = 'Маршрут_' + name;
+            name = name.trim().replace(/^Маршрут[\s_]*/i, '');
+            name = 'Маршрут_' + (name || Date.now());
             const { error } = await sb.from('routes').insert({
                 tenant_id: TENANT_ID,
                 rte_id: name,
@@ -1124,9 +1124,9 @@ async function apiPostSupabase(action, data) {
             return { ok: true, sheetName: name };
         },
         deleteRoute:        async (p) => {
-            let name = p.name || p.sheetName || '';
-            name = name.replace(/^Маршрут\s+/, 'Маршрут_');
-            if (!name.startsWith('Маршрут_')) name = 'Маршрут_' + name;
+            let name = (p.name || p.sheetName || '').trim();
+            name = name.replace(/^Маршрут[\s_]*/i, '');
+            name = 'Маршрут_' + name;
             const { error } = await sb.from('routes').delete()
                 .eq('tenant_id', TENANT_ID).eq('rte_id', name);
             if (error) return { ok: false, error: error.message };
