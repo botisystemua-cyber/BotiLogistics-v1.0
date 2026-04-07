@@ -1583,7 +1583,7 @@ async function loadRouteSheetData(idx, forceRefresh) {
     const loading = document.getElementById('routesLoading');
     if (loading) {
         loading.style.display = 'block';
-        loading.textContent = '⏳ Завантаження даних маршруту ' + (sheet.sheetName || '').replace('Маршрут_', '') + '...';
+        loading.textContent = '⏳ Завантаження даних маршруту ' + (sheet.sheetName || '') + '...';
     }
 
     try {
@@ -1753,7 +1753,7 @@ function renderRoutes() {
 
     const sheet = routes[activeRouteIdx];
     const rows = sheet.rows || [];
-    const name = (sheet.sheetName || 'Маршрут').replace('Маршрут_', '');
+    const name = (sheet.sheetName || 'Маршрут');
 
     const paxCount = rows.filter(r => (r['Тип запису'] || '').includes('Пасажир')).length;
     const parcelCount = rows.filter(r => (r['Тип запису'] || '').includes('Посилк')).length;
@@ -2083,7 +2083,7 @@ function transferRouteLeadModal(rteId, sheetName) {
     if (otherRoutes.length === 0) { showToast('⚠️ Немає інших маршрутів для пересадки'); return; }
 
     const opts = otherRoutes.map(r => {
-        const n = (r.sheetName || '').replace('Маршрут_', '');
+        const n = (r.sheetName || '');
         return `<button class="messenger-popup-item" onclick="doTransferRouteLead('${rteId}','${sheetName}','${r.sheetName}')" style="padding:10px;font-size:12px;">🗺️ ${n}</button>`;
     }).join('');
 
@@ -2115,7 +2115,7 @@ async function doTransferRouteLead(rteId, fromSheet, toSheet) {
         if (targetRoute) { targetRoute.rows = null; targetRoute.paxCount = (targetRoute.paxCount || 0) + 1; }
         renderRouteSidebar();
         renderRoutes();
-        showToast('✅ Пересаджено в ' + toSheet.replace('Маршрут_', ''));
+        showToast('✅ Пересаджено в ' + toSheet);
     } else {
         showToast('⚠️ Додано в новий маршрут, але не видалено зі старого');
     }
@@ -2128,7 +2128,7 @@ function routeBulkTransfer() {
     if (otherRoutes.length === 0) { showToast('⚠️ Немає інших маршрутів'); return; }
 
     const opts = otherRoutes.map(r => {
-        const n = (r.sheetName || '').replace('Маршрут_', '');
+        const n = (r.sheetName || '');
         return `<button class="messenger-popup-item" onclick="doBulkTransfer('${r.sheetName}')" style="padding:10px;font-size:12px;">🗺️ ${n}</button>`;
     }).join('');
 
@@ -2161,7 +2161,7 @@ async function doBulkTransfer(toSheet) {
     updateRouteBulkToolbar();
     renderRouteSidebar();
     renderRoutes();
-    showToast('✅ Пересаджено: ' + ok + ' в ' + toSheet.replace('Маршрут_', ''));
+    showToast('✅ Пересаджено: ' + ok + ' в ' + toSheet);
 }
 
 // ── Створення нового маршруту ──
@@ -2194,7 +2194,7 @@ function confirmDeleteRoute(idx) {
     const sheet = routes[idx];
     if (!sheet) return;
     const name = sheet.sheetName || '';
-    const baseName = name.replace('Маршрут_', '');
+    const baseName = name;
 
     showConfirm('Ви впевнені, що хочете видалити маршрут "' + baseName + '"?\nВсі ліди з маршруту потраплять в архів.', async function(yes) {
         if (!yes) return;
@@ -3313,7 +3313,8 @@ function clearAddForm() {
     'fSmsText','fSender','fPhone','fAddressFrom','fEstValue','fWeight',
     'fReceiver','fPhoneReceiver','fCityNP','fAddrCity','fAddrStreet',
     'fAddrHouse','fAddrApt','fReceiverUE','fPhoneReceiverUE','fAddressTo',
-    'fTTN','fWeightUE','fEstValueUE','fDescription','fQty','fSum','fNote'
+    'fTTN','fWeightUE','fEstValueUE','fDescription','fQty','fSum','fNote',
+    'fCity','fPayStatus','fPayForm','fTag'
   ];
   ids.forEach(id => {
     const el = document.getElementById(id);
@@ -3539,6 +3540,17 @@ async function saveParcel() {
       'Примітка': document.getElementById('fNote').value || ''
     };
   }
+
+  // Common extra fields (Місто/Статус оплати/Форма оплати/Тег)
+  const _val = (id) => { const el = document.getElementById(id); return el ? (el.value || '').trim() : ''; };
+  const _city = _val('fCity');
+  const _payStatus = _val('fPayStatus');
+  const _payForm = _val('fPayForm');
+  const _tag = _val('fTag');
+  if (_city) data['Місто Нова Пошта'] = _city;
+  if (_payStatus) data['Статус оплати'] = _payStatus;
+  if (_payForm) data['Форма оплати'] = _payForm;
+  if (_tag) data['Тег'] = _tag;
 
   // Save to server
   const saveBtn = document.getElementById('addBtnSave');
