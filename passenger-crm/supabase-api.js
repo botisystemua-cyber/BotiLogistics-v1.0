@@ -682,17 +682,16 @@ async function sbUnassignTrip(params) {
 
 async function sbGetRoutesList(params) {
     try {
-        // Get distinct route groups with counts
         const { data, error } = await sb
             .from('routes')
-            .select('rte_id, record_type, direction');
+            .select('rte_id, record_type, direction')
+            .eq('tenant_id', TENANT_ID);
         if (error) throw error;
 
-        // Group by route name pattern (Маршрут_1, etc.)
-        // For now, return as route sheets
+        // Group by rte_id (which is now "Маршрут 1", "Маршрут 2", etc.)
         const routeMap = {};
         data.forEach(row => {
-            const name = 'Маршрут_' + (row.rte_id || '1');
+            const name = row.rte_id || 'Маршрут';
             if (!routeMap[name]) {
                 routeMap[name] = { sheetName: name, rowCount: 0, paxCount: 0, parcelCount: 0 };
             }
@@ -711,24 +710,69 @@ async function sbGetRoutesList(params) {
     }
 }
 
+// Transform Supabase route row → GAS frontend format
+function routeRowToGas(r) {
+    return {
+        '_uuid':              r.id,
+        'RTE_ID':             r.rte_id || '',
+        'Тип запису':         (r.record_type === 'Passenger' || r.record_type === 'Пасажир') ? 'Пасажир' : 'Посилка',
+        'Напрям':             r.direction || '',
+        'PAX_ID':             r.pax_id_or_pkg_id || '',
+        'PKG_ID':             r.pax_id_or_pkg_id || '',
+        'Дата рейсу':         r.route_date || '',
+        'Таймінг':            r.timing || '',
+        'Номер авто':         r.vehicle_name || '',
+        'AUTO_ID':            r.vehicle_id || '',
+        'Водій':              r.driver_name || '',
+        'Телефон водія':      r.driver_phone || '',
+        'Місто':              r.city || '',
+        'Місце в авто':       r.seat_number || '',
+        'Піб пасажира':       r.passenger_name || '',
+        'Телефон пасажира':   r.passenger_phone || '',
+        'Піб відправника':    r.sender_name || '',
+        'Піб отримувача':     r.recipient_name || '',
+        'Телефон отримувача': r.recipient_phone || '',
+        'Адреса отримувача':  r.recipient_address || '',
+        'Адреса відправки':   r.departure_address || '',
+        'Адреса прибуття':    r.arrival_address || '',
+        'Кількість місць':    r.seats_count || '',
+        'Вага багажу':        r.baggage_weight || '',
+        'Внутрішній №':       r.internal_number || '',
+        'Номер ТТН':          r.ttn_number || '',
+        'Опис посилки':       r.package_description || '',
+        'Вага посилки':       r.package_weight || '',
+        'Сума':               r.amount || '',
+        'Валюта':             r.amount_currency || '',
+        'Завдаток':           r.deposit || '',
+        'Валюта завдатку':    r.deposit_currency || '',
+        'Форма оплати':       r.payment_form || '',
+        'Статус оплати':      r.payment_status || '',
+        'Борг':               r.debt || '',
+        'Примітка оплати':    r.payment_notes || '',
+        'Статус':             r.status || '',
+        'Статус CRM':         r.crm_status || '',
+        'Тег':                r.tag || '',
+        'Примітка':           r.notes || '',
+        'Примітка СМС':       r.sms_notes || '',
+    };
+}
+
 async function sbGetRouteSheet(params) {
     try {
         const sheetName = params.sheetName || params.sheet;
 
-        // Extract route number from sheet name (e.g., "Маршрут_1" → "1")
-        const routeNum = sheetName.replace(/^Маршрут_/, '');
-
         const { data, error } = await sb
             .from('routes')
             .select('*')
-            .eq('rte_id', routeNum)
+            .eq('tenant_id', TENANT_ID)
+            .eq('rte_id', sheetName)
             .order('created_at', { ascending: true });
         if (error) throw error;
 
-        // Get headers from first row or defaults
-        const headers = data.length > 0 ? Object.keys(data[0]) : [];
+        const rows = (data || []).map(routeRowToGas);
+        const headers = rows.length > 0 ? Object.keys(rows[0]) : [];
 
-        return { ok: true, data: data, headers: headers, sheetName: sheetName };
+        return { ok: true, data: rows, rows: rows, headers: headers, sheetName: sheetName };
     } catch (e) {
         console.error('sbGetRouteSheet error:', e);
         return { ok: false, error: e.message };
@@ -772,9 +816,8 @@ async function sbUpdateRouteField(params) {
 
 async function sbAddToRoute(params) {
     try {
-        // Frontend sends: { sheetName: 'Маршрут_RTE001', leads: [...] }
-        const routeName = params.sheetName || params.sheet_name || '';
-        const rteId = params.rte_id || routeName.replace(/^Маршрут_/, '') || ('RTE' + Date.now());
+        // Frontend sends: { sheetName: 'Маршрут 1', leads: [...] }
+        const rteId = params.sheetName || params.sheet_name || params.rte_id || ('Маршрут ' + Date.now());
         const leads = params.leads || params.items || [params];
 
         const insertData = leads.map(item => ({
@@ -807,12 +850,24 @@ async function sbAddToRoute(params) {
 
 async function sbDeleteFromSheet(params) {
     try {
-        const rteId = params.rte_id;
+        // Frontend: { sheet: 'Маршрут 1', id_col: 'PAX_ID'|'RTE_ID', id_val: '...' }
+        const sheet = params.sheet || params.sheetName;
+        const idCol = params.id_col;
+        const idVal = params.id_val;
 
-        const { error } = await sb
-            .from('routes')
-            .delete()
-            .eq('rte_id', rteId);
+        let query = sb.from('routes').delete().eq('tenant_id', TENANT_ID);
+        if (sheet) query = query.eq('rte_id', sheet);
+
+        if (idCol === 'PAX_ID' || idCol === 'PKG_ID') {
+            query = query.eq('pax_id_or_pkg_id', idVal);
+        } else if (idCol === 'RTE_ID') {
+            // Delete entire route by rte_id (no extra filter)
+        } else if (idCol && idVal) {
+            const sbCol = GAS_TO_SB[idCol] || idCol;
+            query = query.eq(sbCol, idVal);
+        }
+
+        const { error } = await query;
         if (error) throw error;
 
         return { ok: true };
@@ -1000,8 +1055,28 @@ async function apiPostSupabase(action, data) {
         updateRouteFields:  sbUpdateRouteField,
         addToRoute:         sbAddToRoute,
         deleteFromSheet:    sbDeleteFromSheet,
-        createRoute:        async (p) => ({ ok: true, sheetName: p.name }),
-        deleteRoute:        async (p) => ({ ok: true }),
+        createRoute:        async (p) => {
+            // Create a placeholder route row so getRoutesList returns it
+            const name = p.name || ('Маршрут ' + Date.now());
+            const { error } = await sb.from('routes').insert({
+                tenant_id: TENANT_ID,
+                rte_id: name,
+                record_type: 'Passenger',
+                direction: '',
+                route_date: new Date().toISOString().split('T')[0],
+                status: 'scheduled',
+                crm_status: 'active',
+            });
+            if (error) return { ok: false, error: error.message };
+            return { ok: true, sheetName: name };
+        },
+        deleteRoute:        async (p) => {
+            const name = p.name || p.sheetName;
+            const { error } = await sb.from('routes').delete()
+                .eq('tenant_id', TENANT_ID).eq('rte_id', name);
+            if (error) return { ok: false, error: error.message };
+            return { ok: true };
+        },
         deleteLinkedSheets: async (p) => ({ ok: true }),
 
         // Autopark
