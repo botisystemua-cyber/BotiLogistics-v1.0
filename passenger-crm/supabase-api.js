@@ -203,8 +203,54 @@ function calcDebt(obj) {
     return Math.max(0, price + wp - dep);
 }
 
-// ── TENANT (hardcoded for now, will come from auth later) ──
-const TENANT_ID = 'gresco';
+// ── TENANT (from boti_session set by config-crm login) ──
+// Falls back to 'gresco' only when no session yet (e.g. local dev). Production
+// flow: user logs in via config-crm → boti_session in localStorage → tenant_id read here.
+function _readTenantId() {
+    try {
+        const raw = localStorage.getItem('boti_session');
+        if (!raw) return null;
+        const s = JSON.parse(raw);
+        return s && s.tenant_id ? s.tenant_id : null;
+    } catch (_) { return null; }
+}
+const BOTI_SESSION = (() => { try { return JSON.parse(localStorage.getItem('boti_session') || 'null'); } catch (_) { return null; } })();
+const TENANT_ID = _readTenantId() || 'gresco';
+
+// Redirect to config-crm login if no session.
+// Disable with ?nologinguard=1 for local dev / debugging.
+if (!_readTenantId() && !location.search.includes('nologinguard=1')) {
+    console.warn('[boti] no boti_session — redirecting to config-crm login');
+    location.href = '../config-crm/';
+}
+
+// Logout: clear session and bounce to login
+window.botiLogout = function () {
+    localStorage.removeItem('boti_session');
+    location.href = '../config-crm/';
+};
+
+// Inject a small floating session badge with logout button
+(function injectSessionBadge() {
+    const s = BOTI_SESSION;
+    if (!s) return;
+    function mount() {
+        if (document.getElementById('boti-session-badge')) return;
+        const el = document.createElement('div');
+        el.id = 'boti-session-badge';
+        el.style.cssText = 'position:fixed;bottom:12px;right:12px;z-index:9999;background:rgba(15,23,42,0.92);color:#fff;padding:8px 12px;border-radius:10px;font:12px/1.2 system-ui,sans-serif;box-shadow:0 4px 12px rgba(0,0,0,0.2);display:flex;align-items:center;gap:10px;backdrop-filter:blur(6px);';
+        el.innerHTML = `
+          <div style="line-height:1.3">
+            <div style="font-weight:700;font-size:11px">${s.tenant_name || s.tenant_id}</div>
+            <div style="opacity:0.7;font-size:10px">${s.user_name || s.user_login} · ${s.role}</div>
+          </div>
+          <button onclick="botiLogout()" style="background:#ef4444;color:#fff;border:none;padding:5px 10px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer">Вийти</button>
+        `;
+        document.body.appendChild(el);
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount);
+    else mount();
+})();
 
 // ================================================================
 // PASSENGERS API
