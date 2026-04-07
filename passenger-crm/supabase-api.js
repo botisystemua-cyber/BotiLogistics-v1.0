@@ -615,7 +615,16 @@ async function sbArchiveTrip(params) {
 }
 
 async function sbDeleteTrip(params) {
-    return sbArchiveTrip(params);
+    try {
+        const calId = params.cal_id;
+        if (!calId) return { ok: false, error: 'CAL_ID порожній' };
+        const { error } = await sb.from('calendar').delete().eq('cal_id', calId);
+        if (error) throw error;
+        return { ok: true };
+    } catch (e) {
+        console.error('sbDeleteTrip error:', e);
+        return { ok: false, error: e.message };
+    }
 }
 
 async function sbAssignTrip(params) {
@@ -1098,6 +1107,7 @@ async function apiPostSupabase(action, data) {
         updateTrip:         sbUpdateTrip,
         archiveTrip:        sbArchiveTrip,
         deleteTrip:         sbDeleteTrip,
+        deleteTripPermanent: sbDeleteTrip,
         assignTrip:         sbAssignTrip,
         unassignTrip:       sbUnassignTrip,
         duplicateTrip:      async (p) => {

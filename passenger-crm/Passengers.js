@@ -3259,8 +3259,8 @@ function renderTripCard(t) {
             <div class="trip-card-actions">
                 <button class="trip-action-btn" onclick="editTrip('${safeCalId}')">✏️ Редагувати</button>
                 <button class="trip-action-btn" onclick="showTripPassengers('${safeCalId}')">👥 Пасажири</button>
-                <button class="trip-action-btn" onclick="archiveTrip('${safeCalId}','${safeCity}','${safeDate}')">📦 Архів</button>
-                <button class="trip-action-btn danger" onclick="deleteTrip('${safeCalId}','${safeCity}','${safeDate}')">🗑️</button>
+                <button class="trip-action-btn" onclick="cancelTrip('${safeCalId}','${safeCity}','${safeDate}')">🚫 Скасувати</button>
+                <button class="trip-action-btn danger" onclick="deleteTrip('${safeCalId}','${safeCity}','${safeDate}')">🗑️ Видалити</button>
             </div>
         </div>
     </div>`;
@@ -4077,23 +4077,24 @@ function editTrip(calId) {
 }
 
 // Archive trip
-function archiveTrip(calId, city, date) {
-    showConfirm('Архівувати рейс «' + city + ' ' + date + '»?', async (yes) => {
+function cancelTrip(calId, city, date) {
+    showConfirm('Скасувати рейс «' + city + ' ' + date + '»?\nРейс залишиться у списку зі статусом "Скасований".', async (yes) => {
         if (!yes) return;
-        showLoader('Архівування рейсу...');
-        var res = await apiPost('archiveTrip', { cal_id: calId });
+        showLoader('Скасування рейсу...');
+        var res = await apiPost('updateTrip', { cal_id: calId, data: { 'Статус рейсу': 'Скасований' } });
         if (!res.ok) { hideLoader(); showToast('❌ ' + (res.error || '')); return; }
-        // Видаляємо з локального масиву одразу
-        trips = trips.filter(t => t.cal_id !== calId && t.CAL_ID !== calId);
-        passengers.forEach(p => { if (p['CAL_ID'] === calId) p['CAL_ID'] = ''; });
+        const t = trips.find(x => x.cal_id === calId || x.CAL_ID === calId);
+        if (t) { t.status = 'Скасований'; t['Статус рейсу'] = 'Скасований'; }
         updateAllCounts();
         updateTripFilterDropdown();
         if (currentView === 'trips') renderTrips();
         else render();
         hideLoader();
-        showToast('✅ Рейс архівовано');
+        showToast('✅ Рейс скасовано');
     });
 }
+// Legacy alias
+function archiveTrip(calId, city, date) { return cancelTrip(calId, city, date); }
 
 // Delete trip
 function deleteTrip(calId, city, date) {
@@ -4101,10 +4102,10 @@ function deleteTrip(calId, city, date) {
         showToast('❌ CAL_ID порожній — неможливо видалити');
         return;
     }
-    showConfirm('Видалити рейс «' + city + ' ' + date + '»? Пасажири залишаться без рейсу.', async (yes) => {
+    showConfirm('⚠️ ВИДАЛИТИ НАЗАВЖДИ рейс «' + city + ' ' + date + '»?\n\nЦе остаточно — відновлення неможливе.\nПасажири залишаться без рейсу.', async (yes) => {
         if (!yes) return;
         showLoader('Видалення рейсу...');
-        var res = await apiPost('deleteTrip', { cal_id: calId });
+        var res = await apiPost('deleteTripPermanent', { cal_id: calId });
         if (!res.ok) { hideLoader(); showToast('❌ ' + (res.error || 'Невідома помилка')); return; }
         // Видаляємо з локального масиву одразу
         trips = trips.filter(t => t.cal_id !== calId && t.CAL_ID !== calId);
