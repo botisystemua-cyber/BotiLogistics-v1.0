@@ -402,6 +402,7 @@ async function sbArchivePassenger(params) {
             .update({
                 is_archived: true,
                 archived_at: new Date().toISOString(),
+                archived_by: manager || null,
                 archive_reason: reason,
                 updated_at: new Date().toISOString()
             })
