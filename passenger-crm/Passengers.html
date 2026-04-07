@@ -542,6 +542,19 @@
                     <select id="fCurrencyWeight"><option value="UAH">UAH</option><option value="EUR">EUR</option><option value="CHF">CHF</option><option value="USD">USD</option><option value="PLN">PLN</option><option value="CZK">CZK</option></select>
                 </div>
             </div>
+            <div class="form-row">
+                <div class="form-group"><label>Місто</label><input type="text" id="fCity"></div>
+                <div class="form-group"><label>Місце в авто</label><input type="text" id="fSeatNumber"></div>
+            </div>
+            <div class="form-row">
+                <div class="form-group"><label>Статус оплати</label>
+                    <select id="fPayStatus"><option value="">—</option><option value="Не оплачено">Не оплачено</option><option value="Часткова">Часткова</option><option value="Повна">Повна</option></select>
+                </div>
+                <div class="form-group"><label>Форма оплати</label>
+                    <select id="fPayForm"><option value="">—</option><option value="Готівка">Готівка</option><option value="Карта">Карта</option><option value="Переказ">Переказ</option></select>
+                </div>
+            </div>
+            <div class="form-group"><label>Тег</label><input type="text" id="fTag" placeholder="VIP, постійний, новий..."></div>
             <div class="form-group"><label>Примітка</label><input type="text" id="fNote"></div>
         </div>
         <div class="modal-footer"><button class="btn-cancel" onclick="closeModal('passengerModal')">Скасувати</button><button class="btn-save" id="paxSaveBtn" onclick="savePassenger()">💾 Зберегти</button></div>

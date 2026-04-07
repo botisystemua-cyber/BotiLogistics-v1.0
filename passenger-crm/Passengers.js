@@ -1392,6 +1392,12 @@ function openRouteEditModal(rteId, sheetName) {
     document.getElementById('fWeight').value = r['Вага багажу'] || '';
     document.getElementById('fWeightPrice').value = r['Ціна багажу'] || '';
     document.getElementById('fNote').value = r['Примітка'] || '';
+    const _set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v || ''; };
+    _set('fCity', r['Місто']);
+    _set('fSeatNumber', r['Місце в авто']);
+    _set('fPayStatus', r['Статус оплати']);
+    _set('fPayForm', r['Форма оплати']);
+    _set('fTag', r['Тег']);
 
     const rawDate = r['Дата рейсу'] || '';
     let dateVal = '';
@@ -2399,6 +2405,12 @@ function openEditPax(id) {
     document.getElementById('fWeight').value = p['Вага багажу'] || '';
     document.getElementById('fWeightPrice').value = p['Ціна багажу'] || '';
     document.getElementById('fNote').value = p['Примітка'] || '';
+    const _setP = (id, v) => { const el = document.getElementById(id); if (el) el.value = v || ''; };
+    _setP('fCity', p['Місто']);
+    _setP('fSeatNumber', p['Місце в авто']);
+    _setP('fPayStatus', p['Статус оплати']);
+    _setP('fPayForm', p['Форма оплати']);
+    _setP('fTag', p['Тег']);
 
     // Date — convert from various formats to YYYY-MM-DD for input[type=date]
     const rawDate = p['Дата виїзду'] || '';
@@ -2883,7 +2895,12 @@ async function savePassenger() {
         weight: document.getElementById('fWeight').value.trim(),
         weightPrice: document.getElementById('fWeightPrice').value.trim(),
         currencyWeight: document.getElementById('fCurrencyWeight').value,
-        note: document.getElementById('fNote').value.trim()
+        note: document.getElementById('fNote').value.trim(),
+        city: (document.getElementById('fCity')||{}).value?.trim() || '',
+        seatNumber: (document.getElementById('fSeatNumber')||{}).value?.trim() || '',
+        payStatus: (document.getElementById('fPayStatus')||{}).value || '',
+        payForm: (document.getElementById('fPayForm')||{}).value || '',
+        tag: (document.getElementById('fTag')||{}).value?.trim() || ''
     };
 
     // === РЕЖИМ РЕДАГУВАННЯ МАРШРУТУ: оновлюємо поля через updateRouteField ===
@@ -2904,7 +2921,12 @@ async function savePassenger() {
             'Завдаток': formData.deposit,
             'Валюта завдатку': formData.currencyDeposit,
             'Вага багажу': formData.weight,
-            'Примітка': formData.note
+            'Примітка': formData.note,
+            'Місто': formData.city,
+            'Місце в авто': formData.seatNumber,
+            'Статус оплати': formData.payStatus,
+            'Форма оплати': formData.payForm,
+            'Тег': formData.tag
         };
         const res = await apiPost('updateRouteFields', { sheet: routeSheet, rte_id: editingPaxId, fields: fieldMap });
         if (res.ok) {
