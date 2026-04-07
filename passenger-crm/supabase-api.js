@@ -771,7 +771,8 @@ async function sbGetRoutesList(params) {
 function routeRowToGas(r) {
     return {
         '_uuid':              r.id,
-        'RTE_ID':             r.rte_id || '',
+        'RTE_ID':             r.id || '',
+        'SHEET_NAME':         r.rte_id || '',
         'Тип запису':         (r.record_type === 'Passenger' || r.record_type === 'Пасажир') ? 'Пасажир' : 'Посилка',
         'Напрям':             r.direction || '',
         'PAX_ID':             r.pax_id_or_pkg_id || '',
@@ -899,15 +900,20 @@ async function sbDeleteFromSheet(params) {
         const idVal = params.id_val;
 
         let query = sb.from('routes').delete().eq('tenant_id', TENANT_ID);
-        if (sheet) query = query.eq('rte_id', sheet);
 
-        if (idCol === 'PAX_ID' || idCol === 'PKG_ID') {
+        if (idCol === 'RTE_ID' && idVal) {
+            // RTE_ID is now per-row uuid
+            query = query.eq('id', idVal);
+        } else if (idCol === 'PAX_ID' || idCol === 'PKG_ID') {
+            if (sheet) query = query.eq('rte_id', sheet);
             query = query.eq('pax_id_or_pkg_id', idVal);
-        } else if (idCol === 'RTE_ID') {
-            // Delete entire route by rte_id (no extra filter)
         } else if (idCol && idVal) {
-            const sbCol = GAS_TO_SB[idCol] || idCol;
+            if (sheet) query = query.eq('rte_id', sheet);
+            const sbCol = ROUTE_GAS_TO_SB[idCol] || idCol;
             query = query.eq(sbCol, idVal);
+        } else if (sheet) {
+            // No id specified — delete all non-placeholder rows of this sheet
+            query = query.eq('rte_id', sheet).eq('is_placeholder', false);
         }
 
         const { error } = await query;
