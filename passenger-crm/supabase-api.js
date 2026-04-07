@@ -1124,7 +1124,9 @@ async function apiPostSupabase(action, data) {
             return { ok: true, sheetName: name };
         },
         deleteRoute:        async (p) => {
-            const name = p.name || p.sheetName;
+            let name = p.name || p.sheetName || '';
+            name = name.replace(/^Маршрут\s+/, 'Маршрут_');
+            if (!name.startsWith('Маршрут_')) name = 'Маршрут_' + name;
             const { error } = await sb.from('routes').delete()
                 .eq('tenant_id', TENANT_ID).eq('rte_id', name);
             if (error) return { ok: false, error: error.message };
