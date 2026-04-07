@@ -9,6 +9,9 @@ export interface User {
   password: string;
   role: Role;
   full_name: string | null;
+  email?: string | null;
+  phone?: string | null;
+  is_active?: boolean | null;
   created_at?: string;
   updated_at?: string;
 }

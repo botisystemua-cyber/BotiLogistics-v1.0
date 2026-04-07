@@ -1,31 +1,25 @@
--- Users table: per-person login/password/role within a company (tenant).
--- Replaces GAS-based authentication.
--- Safe to run multiple times.
+-- Adapt existing `users` table for login/password authentication.
+-- Existing schema already has: id, tenant_id, email, phone, full_name, role,
+--   password_hash, api_token, is_active, last_login, created_at, updated_at.
+-- We add `login` (slug) and `password` (plain — security off per project decision).
+-- Idempotent. Safe to run multiple times.
 
-create table if not exists users (
-  id uuid primary key default gen_random_uuid(),
-  tenant_id text not null,
-  login text not null,
-  password text not null,
-  role text not null check (role in ('owner', 'manager', 'driver')),
-  full_name text,
-  created_at timestamptz default now(),
-  updated_at timestamptz default now()
-);
+alter table users add column if not exists login text;
+alter table users add column if not exists password text;
 
--- Login must be globally unique (one person, one login)
+-- Backfill existing rows: derive login from email local-part, default password
+update users set login = split_part(email, '@', 1) where login is null and email is not null;
+update users set password = 'changeme123' where password is null;
+
 create unique index if not exists users_login_key on users (login);
--- Common lookup: by tenant + role
 create index if not exists users_tenant_role_idx on users (tenant_id, role);
 
--- Open access for the demo (no RLS, like the rest of the project)
 grant all on users to anon, authenticated, service_role;
 alter table users disable row level security;
 
--- Seed: create a manager and a driver for gresco for testing
-insert into users (tenant_id, login, password, role, full_name)
-values
-  ('gresco', 'oleg',    'oleg123',    'manager', 'Олег Іванов'),
-  ('gresco', 'serhii',  'serhii123',  'driver',  'Сергій Петров'),
-  ('gresco', 'ivan',    'ivan123',    'owner',   'Іван Гресько')
+-- Seed test users for gresco
+insert into users (tenant_id, login, password, role, full_name, email, is_active) values
+  ('gresco', 'oleg',   'oleg123',   'manager', 'Олег Іванов',  'oleg@gresco.com',   true),
+  ('gresco', 'serhii', 'serhii123', 'driver',  'Сергій Петров','serhii@gresco.com', true),
+  ('gresco', 'ivan',   'ivan123',   'owner',   'Іван Гресько', 'ivan@gresco.com',   true)
 on conflict (login) do nothing;
