@@ -1106,7 +1106,10 @@ async function apiPostSupabase(action, data) {
         deleteFromSheet:    sbDeleteFromSheet,
         createRoute:        async (p) => {
             // Create a placeholder route row so getRoutesList returns it
-            const name = p.name || ('Маршрут_' + Date.now());
+            let name = p.name || ('Маршрут_' + Date.now());
+            // Normalize: frontend filter requires 'Маршрут_' prefix
+            name = name.replace(/^Маршрут\s+/, 'Маршрут_');
+            if (!name.startsWith('Маршрут_')) name = 'Маршрут_' + name;
             const { error } = await sb.from('routes').insert({
                 tenant_id: TENANT_ID,
                 rte_id: name,
