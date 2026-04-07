@@ -17,7 +17,7 @@ export function AdminPanel({ onLogout }: { onLogout: () => void }) {
   const [section, setSection] = useState<Section>('clients');
 
   return (
-    <div className="min-h-screen bg-bg flex">
+    <div className="fixed inset-0 bg-bg flex">
       {/* Sidebar */}
       <aside className="w-64 bg-card border-r-2 border-border flex flex-col">
         <div className="p-5 border-b-2 border-border">
@@ -45,7 +45,7 @@ export function AdminPanel({ onLogout }: { onLogout: () => void }) {
       </aside>
 
       {/* Main */}
-      <main className="flex-1 p-6 sm:p-8 overflow-x-auto">
+      <main className="flex-1 p-6 sm:p-8 overflow-auto">
         {section === 'clients' && <ClientsScreen />}
         {section === 'stats' && <Placeholder title="Статистика" />}
         {section === 'billing' && <Placeholder title="Підписки" />}
@@ -116,7 +116,7 @@ function ClientsScreen() {
   };
 
   return (
-    <div className="max-w-6xl mx-auto">
+    <div className="w-full">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-3xl font-black text-text">Клієнти</h1>
@@ -156,8 +156,8 @@ function ClientsScreen() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-bg border-b-2 border-border">
-                <Th>Tenant ID</Th>
-                <Th>Назва</Th>
+                <Th>Логін</Th>
+                <Th>Назва компанії</Th>
                 <Th>Пароль</Th>
                 <Th>Модулі</Th>
                 <Th className="text-right">Дії</Th>
@@ -283,7 +283,7 @@ function ClientFormModal({
         </div>
 
         <div className="space-y-4">
-          <Field label="Tenant ID (slug)">
+          <Field label="Логін (унікальний slug)">
             <input
               value={tenantId}
               onChange={(e) => setTenantId(e.target.value)}
@@ -292,7 +292,7 @@ function ClientFormModal({
               className="w-full px-3 py-2.5 bg-bg border-2 border-border rounded-xl text-sm font-mono focus:outline-none focus:border-violet-400 disabled:opacity-50"
             />
           </Field>
-          <Field label="Назва">
+          <Field label="Назва компанії">
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
