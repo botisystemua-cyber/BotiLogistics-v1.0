@@ -258,7 +258,7 @@ window.botiLogout = function () {
 
 async function sbGetAll(params) {
     try {
-        let query = sb.from('passengers').select('*');
+        let query = sb.from('passengers').select('*').eq('tenant_id', TENANT_ID);
 
         // Filter by archived status
         query = query.eq('is_archived', false);
@@ -346,6 +346,7 @@ async function sbUpdatePassenger(params) {
         const { data, error } = await sb
             .from('passengers')
             .update(sbData)
+            .eq('tenant_id', TENANT_ID)
             .eq('pax_id', paxId)
             .select();
         if (error) throw error;
@@ -383,6 +384,7 @@ async function sbUpdateField(params) {
             const { data: current } = await sb
                 .from('passengers')
                 .select('ticket_price, baggage_price, deposit')
+                .eq('tenant_id', TENANT_ID)
                 .eq('pax_id', paxId)
                 .single();
             if (current) {
@@ -398,6 +400,7 @@ async function sbUpdateField(params) {
         const { data, error } = await sb
             .from('passengers')
             .update(updateObj)
+            .eq('tenant_id', TENANT_ID)
             .eq('pax_id', paxId)
             .select();
         if (error) throw error;
@@ -425,6 +428,7 @@ async function sbMoveDirection(params) {
         const { data, error } = await sb
             .from('passengers')
             .update({ direction: sbDir, source_sheet: sourceSheet, updated_at: new Date().toISOString() })
+            .eq('tenant_id', TENANT_ID)
             .eq('pax_id', paxId)
             .select();
         if (error) throw error;
@@ -455,6 +459,7 @@ async function sbArchivePassenger(params) {
                 archive_reason: reason,
                 updated_at: new Date().toISOString()
             })
+            .eq('tenant_id', TENANT_ID)
             .in('pax_id', paxIds)
             .select();
         if (error) throw error;
@@ -486,6 +491,7 @@ async function sbRestorePassenger(params) {
                 archive_reason: null,
                 updated_at: new Date().toISOString()
             })
+            .eq('tenant_id', TENANT_ID)
             .in('pax_id', paxIds)
             .select();
         if (error) throw error;
@@ -505,6 +511,7 @@ async function sbGetArchive(params) {
         const { data, error, count } = await sb
             .from('passengers')
             .select('*', { count: 'exact' })
+            .eq('tenant_id', TENANT_ID)
             .eq('is_archived', true)
             .order('archived_at', { ascending: false })
             .range(offset, offset + limit - 1);
@@ -529,7 +536,7 @@ async function sbGetArchive(params) {
 
 async function sbGetTrips(params) {
     try {
-        let query = sb.from('calendar').select('*');
+        let query = sb.from('calendar').select('*').eq('tenant_id', TENANT_ID);
 
         if (params && params.filter) {
             if (params.filter.direction) query = query.eq('direction', params.filter.direction);
@@ -625,6 +632,7 @@ async function sbUpdateTrip(params) {
         const { data, error } = await sb
             .from('calendar')
             .update(sbData)
+            .eq('tenant_id', TENANT_ID)
             .eq('cal_id', calId)
             .select();
         if (error) throw error;
@@ -644,12 +652,14 @@ async function sbArchiveTrip(params) {
         await sb
             .from('passengers')
             .update({ cal_id: null, updated_at: new Date().toISOString() })
+            .eq('tenant_id', TENANT_ID)
             .eq('cal_id', calId);
 
         // Delete the trip (or archive)
         const { error } = await sb
             .from('calendar')
             .delete()
+            .eq('tenant_id', TENANT_ID)
             .eq('cal_id', calId);
         if (error) throw error;
 
@@ -664,7 +674,7 @@ async function sbDeleteTrip(params) {
     try {
         const calId = params.cal_id;
         if (!calId) return { ok: false, error: 'CAL_ID порожній' };
-        const { error } = await sb.from('calendar').delete().eq('cal_id', calId);
+        const { error } = await sb.from('calendar').delete().eq('tenant_id', TENANT_ID).eq('cal_id', calId);
         if (error) throw error;
         return { ok: true };
     } catch (e) {
@@ -682,6 +692,7 @@ async function sbAssignTrip(params) {
         const { error } = await sb
             .from('passengers')
             .update({ cal_id: calId, updated_at: new Date().toISOString() })
+            .eq('tenant_id', TENANT_ID)
             .in('pax_id', paxIds);
         if (error) throw error;
 
@@ -689,6 +700,7 @@ async function sbAssignTrip(params) {
         const { data: paxCount } = await sb
             .from('passengers')
             .select('pax_id', { count: 'exact' })
+            .eq('tenant_id', TENANT_ID)
             .eq('cal_id', calId)
             .eq('is_archived', false);
 
@@ -699,6 +711,7 @@ async function sbAssignTrip(params) {
                     occupied_seats: paxCount.length,
                     updated_at: new Date().toISOString()
                 })
+                .eq('tenant_id', TENANT_ID)
                 .eq('cal_id', calId);
         }
 
@@ -717,6 +730,7 @@ async function sbUnassignTrip(params) {
         const { error } = await sb
             .from('passengers')
             .update({ cal_id: null, updated_at: new Date().toISOString() })
+            .eq('tenant_id', TENANT_ID)
             .in('pax_id', paxIds);
         if (error) throw error;
 
@@ -724,6 +738,7 @@ async function sbUnassignTrip(params) {
         const { data: remaining } = await sb
             .from('passengers')
             .select('pax_id')
+            .eq('tenant_id', TENANT_ID)
             .eq('cal_id', calId)
             .eq('is_archived', false);
 
@@ -733,6 +748,7 @@ async function sbUnassignTrip(params) {
                 occupied_seats: remaining ? remaining.length : 0,
                 updated_at: new Date().toISOString()
             })
+            .eq('tenant_id', TENANT_ID)
             .eq('cal_id', calId);
 
         return { ok: true };
@@ -925,6 +941,7 @@ async function sbUpdateRouteField(params) {
         const { data, error } = await sb
             .from('routes')
             .update(updateObj)
+            .eq('tenant_id', TENANT_ID)
             .eq('id', rteId)
             .select();
         if (error) throw error;
@@ -1001,6 +1018,7 @@ async function sbGetAutopark(params) {
         const { data, error } = await sb
             .from('vehicles')
             .select('*')
+            .eq('tenant_id', TENANT_ID)
             .order('name');
         if (error) throw error;
 
@@ -1128,6 +1146,7 @@ async function apiPostSupabase(action, data) {
         checkDuplicates:    async (p) => {
             const { data } = await sb.from('passengers')
                 .select('pax_id, full_name, phone')
+                .eq('tenant_id', TENANT_ID)
                 .or(`phone.eq.${p.phone},full_name.ilike.%${p.name}%`)
                 .eq('is_archived', false)
                 .limit(10);
@@ -1157,7 +1176,7 @@ async function apiPostSupabase(action, data) {
         assignTrip:         sbAssignTrip,
         unassignTrip:       sbUnassignTrip,
         duplicateTrip:      async (p) => {
-            const { data } = await sb.from('calendar').select('*').eq('cal_id', p.cal_id).single();
+            const { data } = await sb.from('calendar').select('*').eq('tenant_id', TENANT_ID).eq('cal_id', p.cal_id).single();
             if (!data) return { ok: false, error: 'Trip not found' };
             const newTrip = { ...data, cal_id: 'CAL' + Date.now(), id: undefined, created_at: undefined };
             if (p.date) newTrip.route_date = p.date;
@@ -1214,6 +1233,7 @@ async function apiPostSupabase(action, data) {
         getStats:           async () => {
             const { data } = await sb.from('passengers')
                 .select('lead_status, direction, debt')
+                .eq('tenant_id', TENANT_ID)
                 .eq('is_archived', false);
             return { ok: true, data: data || [] };
         },
