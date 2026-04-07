@@ -493,7 +493,7 @@ async function sbGetTrips(params) {
         const { data, error } = await query.order('route_date', { ascending: true });
         if (error) throw error;
 
-        const results = data.map(row => sbToGasObj(row, SB_TO_GAS_CAL));
+        const results = data.map(row => ({ ...sbToGasObj(row, SB_TO_GAS_CAL), ...row }));
         return { ok: true, data: results };
     } catch (e) {
         console.error('sbGetTrips error:', e);
