@@ -1,6 +1,10 @@
 import { useState } from 'react';
 import { ShieldCheck, Users, Eye, EyeOff, LogIn, Loader2, LogOut, ArrowLeft, CircleCheck, AlertCircle, Truck } from 'lucide-react';
 import { Logo, API_URL } from './components/shared';
+import { AdminPanel } from './components/AdminPanel';
+
+const ADMIN_LOGIN = 'admin';
+const ADMIN_PASSWORD = 'botibro';
 
 type Role = 'owner' | 'manager' | 'driver';
 
@@ -55,7 +59,7 @@ interface AuthResult {
 }
 
 function App() {
-  const [step, setStep] = useState<'role' | 'login' | 'success'>('role');
+  const [step, setStep] = useState<'role' | 'login' | 'success' | 'admin'>('role');
   const [selectedRole, setSelectedRole] = useState<RoleOption | null>(null);
   const [login, setLogin] = useState('');
   const [password, setPassword] = useState('');
@@ -81,6 +85,13 @@ function App() {
   const handleLogin = async () => {
     if (!login.trim() || !password.trim()) {
       setError('Введіть логін та пароль');
+      return;
+    }
+
+    // Master admin shortcut: bypasses GAS, opens internal admin panel
+    if (login.trim() === ADMIN_LOGIN && password.trim() === ADMIN_PASSWORD) {
+      setStep('admin');
+      setError('');
       return;
     }
 
@@ -122,6 +133,10 @@ function App() {
     setPassword('');
     setError('');
   };
+
+  if (step === 'admin') {
+    return <AdminPanel onLogout={handleLogout} />;
+  }
 
   return (
     <div className="login-wrapper w-full max-w-sm sm:max-w-md lg:max-w-lg mx-auto">
