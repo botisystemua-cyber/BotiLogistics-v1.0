@@ -859,7 +859,7 @@ async function sbUpdateRouteField(params) {
         const { data, error } = await sb
             .from('routes')
             .update(updateObj)
-            .eq('rte_id', rteId)
+            .eq('id', rteId)
             .select();
         if (error) throw error;
 
