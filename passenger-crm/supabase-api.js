@@ -772,7 +772,7 @@ async function sbGetRouteSheet(params) {
         const rows = (data || []).map(routeRowToGas);
         const headers = rows.length > 0 ? Object.keys(rows[0]) : [];
 
-        return { ok: true, data: rows, rows: rows, headers: headers, sheetName: sheetName };
+        return { ok: true, data: { rows: rows, headers: headers, sheetName: sheetName }, rows: rows, headers: headers, sheetName: sheetName };
     } catch (e) {
         console.error('sbGetRouteSheet error:', e);
         return { ok: false, error: e.message };
