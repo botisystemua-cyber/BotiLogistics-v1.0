@@ -836,6 +836,7 @@ async function sbAddToRoute(params) {
             deposit: parseFloat(item.deposit || item['Завдаток']) || 0,
             payment_status: item.payStatus || item['Статус оплати'] || '',
             status: item.status || 'scheduled',
+            route_date: item.date || item['Дата рейсу'] || new Date().toISOString().split('T')[0],
         }));
 
         const { data, error } = await sb.from('routes').insert(insertData).select();
