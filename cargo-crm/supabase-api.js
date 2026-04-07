@@ -393,7 +393,7 @@ async function sbPkgGetArchive(params) {
             return obj;
         });
 
-        return { ok: true, data: results };
+        return { ok: true, data: results, rows: results, total: results.length, hasMore: false };
     } catch (e) {
         console.error('sbPkgGetArchive error:', e);
         return { ok: false, error: e.message };
@@ -401,25 +401,132 @@ async function sbPkgGetArchive(params) {
 }
 
 // ================================================================
-// ROUTES API (for cargo)
+// ROUTES API (for cargo) — uses shared `routes` table with record_type='Посилка'
 // ================================================================
+
+// Centralized GAS ↔ SB mapping for routes table (all-text columns, shared with passenger-crm)
+const ROUTE_GAS_TO_SB = {
+    'RTE_ID':             'rte_id', // overridden — actual row uuid stored in id
+    'Тип запису':         'record_type',
+    'Напрям':             'direction',
+    'PKG_ID':             'pax_id_or_pkg_id',
+    'PAX_ID':             'pax_id_or_pkg_id',
+    'Дата рейсу':         'route_date',
+    'Таймінг':            'timing',
+    'Номер авто':         'vehicle_name',
+    'AUTO_ID':            'vehicle_id',
+    'Водій':              'driver_name',
+    'Телефон водія':      'driver_phone',
+    'Місто':              'city',
+    'Піб відправника':    'sender_name',
+    'Телефон відправника':'passenger_phone',
+    'Адреса відправки':   'departure_address',
+    'Піб отримувача':     'recipient_name',
+    'Телефон отримувача': 'recipient_phone',
+    'Адреса отримувача':  'recipient_address',
+    'Адреса в Європі':    'recipient_address',
+    'Адреса прибуття':    'arrival_address',
+    'Внутрішній №':       'internal_number',
+    'Номер ТТН':          'ttn_number',
+    'Опис':               'package_description',
+    'Опис посилки':       'package_description',
+    'Кг':                 'package_weight',
+    'Вага посилки':       'package_weight',
+    'Сума':               'amount',
+    'Валюта оплати':      'amount_currency',
+    'Валюта':             'amount_currency',
+    'Завдаток':           'deposit',
+    'Валюта завдатку':    'deposit_currency',
+    'Форма оплати':       'payment_form',
+    'Статус оплати':      'payment_status',
+    'Борг':               'debt',
+    'Примітка оплати':    'payment_notes',
+    'Статус':             'status',
+    'Статус CRM':         'crm_status',
+    'Тег':                'tag',
+    'Примітка':           'notes',
+    'Примітка СМС':       'sms_notes',
+};
+
+function gasItemToRouteRow(item) {
+    const row = { tenant_id: TENANT_ID, is_placeholder: false };
+    for (const [gasKey, sbCol] of Object.entries(ROUTE_GAS_TO_SB)) {
+        if (sbCol === 'rte_id') continue; // set by caller
+        if (item[gasKey] !== undefined && item[gasKey] !== null && item[gasKey] !== '') {
+            row[sbCol] = String(item[gasKey]);
+        }
+    }
+    return row;
+}
+
+function routeRowToGasPkg(r) {
+    return {
+        '_uuid':              r.id,
+        'RTE_ID':             r.id || '',
+        'SHEET_NAME':         r.rte_id || '',
+        'Тип запису':         (r.record_type === 'Посилка' || r.record_type === 'Package') ? 'Посилка' : 'Пасажир',
+        'Напрям':             r.direction || '',
+        'PKG_ID':             r.pax_id_or_pkg_id || '',
+        'PAX_ID':             r.pax_id_or_pkg_id || '',
+        'Дата рейсу':         r.route_date || '',
+        'Таймінг':            r.timing || '',
+        'Номер авто':         r.vehicle_name || '',
+        'AUTO_ID':            r.vehicle_id || '',
+        'Водій':              r.driver_name || '',
+        'Телефон водія':      r.driver_phone || '',
+        'Місто':              r.city || '',
+        'Піб відправника':    r.sender_name || '',
+        'Телефон відправника':r.passenger_phone || '',
+        'Адреса відправки':   r.departure_address || '',
+        'Піб отримувача':     r.recipient_name || '',
+        'Телефон отримувача': r.recipient_phone || '',
+        'Адреса отримувача':  r.recipient_address || '',
+        'Адреса в Європі':    r.recipient_address || '',
+        'Внутрішній №':       r.internal_number || '',
+        'Номер ТТН':          r.ttn_number || '',
+        'Опис':               r.package_description || '',
+        'Опис посилки':       r.package_description || '',
+        'Кг':                 r.package_weight || '',
+        'Вага посилки':       r.package_weight || '',
+        'Сума':               r.amount || '',
+        'Валюта оплати':      r.amount_currency || '',
+        'Завдаток':           r.deposit || '',
+        'Валюта завдатку':    r.deposit_currency || '',
+        'Форма оплати':       r.payment_form || '',
+        'Статус оплати':      r.payment_status || '',
+        'Борг':               r.debt || '',
+        'Примітка оплати':    r.payment_notes || '',
+        'Статус':             r.status || '',
+        'Статус CRM':         r.crm_status || '',
+        'Тег':                r.tag || '',
+        'Примітка':           r.notes || '',
+        'Примітка СМС':       r.sms_notes || '',
+    };
+}
 
 async function sbPkgGetRoutesList(params) {
     try {
         const { data, error } = await sb.from('routes')
-            .select('*')
-            .eq('tenant_id', TENANT_ID)
-            .order('created_at', { ascending: false });
+            .select('rte_id, record_type, direction, is_placeholder')
+            .eq('tenant_id', TENANT_ID);
         if (error) throw error;
 
-        const results = (data || []).map(r => ({
-            sheetName: r.rte_id || r.id,
-            rowCount: 0,
-            paxCount: 0,
-            parcelCount: 0,
-        }));
+        const routeMap = {};
+        (data || []).forEach(row => {
+            const name = row.rte_id || 'Маршрут';
+            if (!routeMap[name]) {
+                routeMap[name] = { sheetName: name, rowCount: 0, paxCount: 0, parcelCount: 0 };
+            }
+            if (row.is_placeholder) return;
+            routeMap[name].rowCount++;
+            if (row.record_type === 'Посилка' || row.record_type === 'Package') {
+                routeMap[name].parcelCount++;
+            } else {
+                routeMap[name].paxCount++;
+            }
+        });
 
-        return { ok: true, data: results };
+        return { ok: true, data: Object.values(routeMap) };
     } catch (e) {
         console.error('sbPkgGetRoutesList error:', e);
         return { ok: false, error: e.message };
@@ -431,15 +538,16 @@ async function sbPkgGetRouteSheet(params) {
         const sheetName = params.sheetName || params.sheet;
         const { data, error } = await sb.from('routes')
             .select('*')
-            .eq('rte_id', sheetName);
+            .eq('tenant_id', TENANT_ID)
+            .eq('rte_id', sheetName)
+            .eq('is_placeholder', false)
+            .order('created_at', { ascending: true });
         if (error) throw error;
 
-        const results = (data || []).map(row => {
-            const obj = sbToGasObjPkg(row);
-            obj['Борг'] = calcDebtPkg(obj);
-            return obj;
-        });
-        return { ok: true, data: results, headers: Object.values(SB_TO_GAS_PKG) };
+        const rows = (data || []).map(routeRowToGasPkg);
+        const headers = rows.length > 0 ? Object.keys(rows[0]) : [];
+
+        return { ok: true, data: { rows, headers, sheetName }, rows, headers, sheetName };
     } catch (e) {
         console.error('sbPkgGetRouteSheet error:', e);
         return { ok: false, error: e.message };
@@ -448,30 +556,22 @@ async function sbPkgGetRouteSheet(params) {
 
 async function sbPkgAddToRoute(params) {
     try {
-        const pkgId = params.pkg_id;
-        const rteId = params.rte_id || params.route_id || params.sheet_name || params.sheetName;
+        const rteId = params.sheetName || params.sheet_name || params.rte_id || params.route_id;
+        if (!rteId) return { ok: false, error: 'Не вказано назву маршруту' };
 
-        // Handle single pkg_id
-        if (pkgId) {
-            const { error } = await sb.from('packages')
-                .update({ route_id: rteId, updated_at: new Date().toISOString() })
-                .eq('pkg_id', pkgId);
-            if (error) throw error;
-        }
+        const leads = params.leads || params.items || [params];
+        const insertData = leads.map(item => {
+            const row = gasItemToRouteRow(item);
+            row.rte_id = rteId;
+            if (!row.record_type) row.record_type = 'Посилка';
+            if (!row.route_date) row.route_date = new Date().toISOString().split('T')[0];
+            return row;
+        });
 
-        // Handle leads array (bulk add from route sidebar — leads are route rows)
-        if (params.leads && Array.isArray(params.leads)) {
-            for (const lead of params.leads) {
-                const id = lead['PKG_ID'] || lead.pkg_id || lead.pax_id_or_pkg_id;
-                if (id) {
-                    await sb.from('packages')
-                        .update({ route_id: rteId, updated_at: new Date().toISOString() })
-                        .eq('pkg_id', id);
-                }
-            }
-        }
+        const { data, error } = await sb.from('routes').insert(insertData).select();
+        if (error) throw error;
 
-        return { ok: true };
+        return { ok: true, data };
     } catch (e) {
         console.error('sbPkgAddToRoute error:', e);
         return { ok: false, error: e.message };
@@ -480,17 +580,14 @@ async function sbPkgAddToRoute(params) {
 
 async function sbPkgRemoveFromRoute(params) {
     try {
-        const pkgId = params.pkg_id;
-        const { error } = await sb.from('packages')
-            .update({
-                route_id: null,
-                vehicle_id: null,
-                dispatch_date: null,
-                updated_at: new Date().toISOString()
-            })
-            .eq('pkg_id', pkgId);
+        // Frontend may pass row uuid (from RTE_ID column)
+        const rowId = params.rte_id || params.id || params.pkg_id;
+        if (!rowId) return { ok: false, error: 'Не вказано id рядка' };
+        const { error } = await sb.from('routes').delete()
+            .eq('tenant_id', TENANT_ID)
+            .eq('id', rowId)
+            .eq('is_placeholder', false);
         if (error) throw error;
-
         return { ok: true };
     } catch (e) {
         console.error('sbPkgRemoveFromRoute error:', e);
@@ -500,25 +597,26 @@ async function sbPkgRemoveFromRoute(params) {
 
 async function sbPkgUpdateRouteField(params) {
     try {
-        const rteId = params.rte_id || params.route_id || params.sheetName || params.sheet;
+        // rte_id from frontend = row UUID (since routeRowToGasPkg sets RTE_ID = r.id)
+        const rowId = params.rte_id || params.id;
         const updateObj = {};
 
         if (params.fields) {
             for (const [col, val] of Object.entries(params.fields)) {
-                const sbCol = GAS_TO_SB_PKG[col] || col;
-                updateObj[sbCol] = val === '' ? null : val;
+                const sbCol = ROUTE_GAS_TO_SB[col] || col;
+                updateObj[sbCol] = (val === '' || val === undefined) ? null : String(val);
             }
         } else {
-            const sbCol = GAS_TO_SB_PKG[params.col] || params.col;
-            updateObj[sbCol] = params.value === '' ? null : params.value;
+            const sbCol = ROUTE_GAS_TO_SB[params.col] || params.col;
+            updateObj[sbCol] = (params.value === '' || params.value === undefined) ? null : String(params.value);
         }
         updateObj.updated_at = new Date().toISOString();
 
         const { data, error } = await sb.from('routes')
-            .update(updateObj).eq('rte_id', rteId).select();
+            .update(updateObj).eq('id', rowId).select();
         if (error) throw error;
 
-        return { ok: true, data: data[0] };
+        return { ok: true, data: data && data[0] };
     } catch (e) {
         console.error('sbPkgUpdateRouteField error:', e);
         return { ok: false, error: e.message };
@@ -643,23 +741,46 @@ async function apiPostSupabase(action, params) {
         updateRouteField:   sbPkgUpdateRouteField,
         updateRouteFields:  sbPkgUpdateRouteField,
         createRoute:        async (p) => {
+            const name = (p.name || ('Маршрут_' + Date.now())).trim();
             const { data, error } = await sb.from('routes').insert({
                 tenant_id: TENANT_ID,
-                rte_id: p.name,
+                rte_id: name,
+                is_placeholder: true,
                 record_type: 'Посилка',
-                direction: '',
+                direction: p.direction || '',
                 route_date: new Date().toISOString().split('T')[0],
+                status: 'scheduled',
+                crm_status: 'active',
             }).select();
             if (error) return { ok: false, error: error.message };
-            return { ok: true, data: data[0] };
+            return { ok: true, data: data && data[0], sheetName: name };
         },
         deleteRoute:        async (p) => {
-            const { error } = await sb.from('routes').delete().eq('rte_id', p.name);
+            const name = (p.name || p.sheetName || '').trim();
+            const { error } = await sb.from('routes').delete()
+                .eq('tenant_id', TENANT_ID).eq('rte_id', name);
             if (error) return { ok: false, error: error.message };
             return { ok: true };
         },
         deleteFromSheet:    async (p) => {
-            const { error } = await sb.from('routes').delete().eq('rte_id', p.id_val || p.rte_id);
+            // p.id_col='RTE_ID' → id_val is row uuid
+            const sheet = p.sheet || p.sheetName;
+            const idCol = p.id_col;
+            const idVal = p.id_val;
+            let q = sb.from('routes').delete().eq('tenant_id', TENANT_ID);
+            if (idCol === 'RTE_ID' && idVal) {
+                q = q.eq('id', idVal);
+            } else if ((idCol === 'PKG_ID' || idCol === 'PAX_ID') && idVal) {
+                if (sheet) q = q.eq('rte_id', sheet);
+                q = q.eq('pax_id_or_pkg_id', idVal);
+            } else if (idCol && idVal) {
+                if (sheet) q = q.eq('rte_id', sheet);
+                const sbCol = ROUTE_GAS_TO_SB[idCol] || idCol;
+                q = q.eq(sbCol, idVal);
+            } else if (sheet) {
+                q = q.eq('rte_id', sheet).eq('is_placeholder', false);
+            }
+            const { error } = await q;
             if (error) return { ok: false, error: error.message };
             return { ok: true };
         },
