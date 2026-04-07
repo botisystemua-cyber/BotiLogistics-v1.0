@@ -503,43 +503,38 @@ async function sbGetTrips(params) {
 
 async function sbCreateTrip(params) {
     try {
-        const tripData = params.data || params;
-        const sbData = {};
+        const p = params.data || params;
+        const city = p.city || p['Місто'] || '';
+        const direction = p.dir || p.direction || p['Напрямок'] || '';
+        const dates = Array.isArray(p.dates) && p.dates.length ? p.dates : [p.date || p['Дата рейсу']];
+        const vehicles = Array.isArray(p.vehicles) && p.vehicles.length ? p.vehicles : [{ name: p.autoName || '', layout: p.layout || '', seats: parseInt(p.maxSeats) || 0 }];
 
-        // Map from frontend format to Supabase
-        sbData.tenant_id = TENANT_ID;
-        sbData.cal_id = tripData.cal_id || ('CAL' + Date.now());
-        sbData.route_date = tripData['Дата рейсу'] || tripData.date;
-        sbData.direction = tripData['Напрямок'] || tripData.direction;
-        sbData.city = tripData['Місто'] || tripData.city || '';
-        sbData.status = tripData['Статус рейсу'] || 'Активний';
-        sbData.total_seats = parseInt(tripData['Макс. місць'] || tripData.maxSeats) || 0;
-        sbData.available_seats = sbData.total_seats;
-        sbData.occupied_seats = 0;
-        sbData.available_seats_list = '';
-        sbData.occupied_seats_list = '';
-
-        // Vehicle
-        if (tripData.auto_id || tripData['AUTO_ID']) {
-            sbData.auto_id = tripData.auto_id || tripData['AUTO_ID'];
-        }
-        if (tripData['Назва авто'] || tripData.autoName) {
-            sbData.vehicle_name = tripData['Назва авто'] || tripData.autoName;
-        }
-        if (tripData['Тип розкладки'] || tripData.layout) {
-            sbData.seating_layout = tripData['Тип розкладки'] || tripData.layout;
-        }
-
-        // Paired trip
-        if (tripData.paired_id) {
-            sbData.paired_calendar_id = tripData.paired_id;
+        const rows = [];
+        for (const d of dates) {
+            for (const v of vehicles) {
+                const totalSeats = parseInt(v.seats) || 0;
+                rows.push({
+                    tenant_id: TENANT_ID,
+                    cal_id: 'CAL' + Date.now() + Math.floor(Math.random()*1000),
+                    route_date: d || null,
+                    direction: direction,
+                    city: city,
+                    status: 'Активний',
+                    total_seats: totalSeats,
+                    available_seats: totalSeats,
+                    occupied_seats: 0,
+                    available_seats_list: '',
+                    occupied_seats_list: '',
+                    vehicle_name: v.name || '',
+                    seating_layout: v.layout || '',
+                });
+            }
         }
 
-        const { data, error } = await sb.from('calendar').insert(sbData).select();
+        const { data, error } = await sb.from('calendar').insert(rows).select();
         if (error) throw error;
 
-        const obj = sbToGasObj(data[0], SB_TO_GAS_CAL);
-        return { ok: true, data: obj, cal_id: data[0].cal_id };
+        return { ok: true, data: data, cal_id: data[0]?.cal_id };
     } catch (e) {
         console.error('sbCreateTrip error:', e);
         return { ok: false, error: e.message };
