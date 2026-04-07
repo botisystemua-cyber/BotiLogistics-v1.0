@@ -509,6 +509,13 @@ async function sbCreateTrip(params) {
         const dates = Array.isArray(p.dates) && p.dates.length ? p.dates : [p.date || p['Дата рейсу']];
         const vehicles = Array.isArray(p.vehicles) && p.vehicles.length ? p.vehicles : [{ name: p.autoName || '', layout: p.layout || '', seats: parseInt(p.maxSeats) || 0 }];
 
+        const toIso = (d) => {
+            if (!d) return null;
+            const s = String(d).trim();
+            const m = s.match(/^(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{4})$/);
+            if (m) return `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+            return s;
+        };
         const rows = [];
         for (const d of dates) {
             for (const v of vehicles) {
@@ -516,7 +523,7 @@ async function sbCreateTrip(params) {
                 rows.push({
                     tenant_id: TENANT_ID,
                     cal_id: 'CAL' + Date.now() + Math.floor(Math.random()*1000),
-                    route_date: d || null,
+                    route_date: toIso(d),
                     direction: direction,
                     city: city,
                     status: 'Активний',
