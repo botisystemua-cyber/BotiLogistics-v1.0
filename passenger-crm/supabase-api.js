@@ -817,7 +817,7 @@ async function sbUpdateRouteField(params) {
 async function sbAddToRoute(params) {
     try {
         // Frontend sends: { sheetName: 'Маршрут 1', leads: [...] }
-        const rteId = params.sheetName || params.sheet_name || params.rte_id || ('Маршрут ' + Date.now());
+        const rteId = params.sheetName || params.sheet_name || params.rte_id || ('Маршрут_' + Date.now());
         const leads = params.leads || params.items || [params];
 
         const insertData = leads.map(item => ({
@@ -1057,7 +1057,7 @@ async function apiPostSupabase(action, data) {
         deleteFromSheet:    sbDeleteFromSheet,
         createRoute:        async (p) => {
             // Create a placeholder route row so getRoutesList returns it
-            const name = p.name || ('Маршрут ' + Date.now());
+            const name = p.name || ('Маршрут_' + Date.now());
             const { error } = await sb.from('routes').insert({
                 tenant_id: TENANT_ID,
                 rte_id: name,
