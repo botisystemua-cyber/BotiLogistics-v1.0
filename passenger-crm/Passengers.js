@@ -532,7 +532,7 @@ function silentSync(manual, force) {
                 });
                 routes = allRouteSheets.filter(s => {
                     const n = (s.sheetName || '');
-                    return n.startsWith('Маршрут_') && n !== 'Маршрут_Шаблон';
+                    return n && n !== 'Маршрут_Шаблон';
                 });
                 setCount('pcCountRoutes', routes.length);
                 setCount('mobileCountRoutes', routes.length);
@@ -588,7 +588,7 @@ function silentSync(manual, force) {
             });
             routes = allRouteSheets.filter(s => {
                 const n = (s.sheetName || '');
-                return n.startsWith('Маршрут_') && n !== 'Маршрут_Шаблон';
+                return n && n !== 'Маршрут_Шаблон';
             });
             setCount('pcCountRoutes', routes.length);
             setCount('mobileCountRoutes', routes.length);
@@ -686,7 +686,7 @@ async function loadRoutes(forceRefresh) {
             }));
             routes = allRouteSheets.filter(s => {
                 const n = (s.sheetName || '');
-                return n.startsWith('Маршрут_') && n !== 'Маршрут_Шаблон';
+                return n && n !== 'Маршрут_Шаблон';
             });
             setCount('pcCountRoutes', routes.length);
             setCount('mobileCountRoutes', routes.length);
@@ -718,7 +718,7 @@ async function loadRouteSheetData(idx, forceRefresh) {
     const showLoading = sheet.rows === null;
     if (loading && showLoading) {
         loading.style.display = 'block';
-        loading.textContent = '⏳ Завантаження даних маршруту ' + (sheet.sheetName || '').replace('Маршрут_', 'Маршрут ') + '...';
+        loading.textContent = '⏳ Завантаження даних маршруту ' + (sheet.sheetName || '') + '...';
     }
 
     try {
@@ -781,7 +781,7 @@ function renderRouteSidebar() {
             pcList.innerHTML = '<div style="padding:10px 14px;font-size:11px;color:var(--text-secondary);">Немає маршрутів</div>';
         } else {
             pcList.innerHTML = routes.map((sheet, idx) => {
-                const name = (sheet.sheetName || '').replace('Маршрут_', 'Маршрут ');
+                const name = (sheet.sheetName || '');
                 const isActive = activeRouteIdx === idx && currentView === 'routes';
                 const pax = sheet.paxCount || 0;
                 const parcels = sheet.parcelCount || 0;
@@ -803,7 +803,7 @@ function renderRouteSidebar() {
             mobList.innerHTML = '<div style="padding:8px 14px;font-size:11px;color:rgba(255,255,255,0.5);">Немає маршрутів</div>';
         } else {
             mobList.innerHTML = routes.map((sheet, idx) => {
-                const name = (sheet.sheetName || '').replace('Маршрут_', 'Маршрут ');
+                const name = (sheet.sheetName || '');
                 const pax = sheet.paxCount || 0;
                 const parcels = sheet.parcelCount || 0;
                 const countLabel = '👤<span style="color:#fbbf24;font-weight:800;">' + pax + '</span> 📦<span style="color:#fbbf24;font-weight:800;">' + parcels + '</span>';
@@ -951,7 +951,7 @@ function renderRoutes() {
 
     const sheet = routes[activeRouteIdx];
     const rows = sheet.rows || [];
-    const name = (sheet.sheetName || 'Маршрут').replace('Маршрут_', 'Маршрут ');
+    const name = (sheet.sheetName || 'Маршрут');
 
     const paxCount = rows.length > 0 ? rows.filter(r => (r['Тип запису'] || '').includes('Пасажир')).length : (sheet.paxCount || 0);
     const parcelCount = rows.length > 0 ? rows.filter(r => (r['Тип запису'] || '').includes('Посилк')).length : (sheet.parcelCount || 0);
@@ -1493,7 +1493,7 @@ function transferRouteLeadModal(rteId, sheetName) {
     if (otherRoutes.length === 0) { showToast('⚠️ Немає інших маршрутів для пересадки'); return; }
 
     const opts = otherRoutes.map(r => {
-        const n = (r.sheetName || '').replace('Маршрут_', 'Маршрут ');
+        const n = (r.sheetName || '');
         return `<button class="messenger-popup-item" onclick="doTransferRouteLead('${rteId}','${sheetName}','${r.sheetName}')" style="padding:10px;font-size:12px;">🗺️ ${n}</button>`;
     }).join('');
 
@@ -1530,7 +1530,7 @@ async function doTransferRouteLead(rteId, fromSheet, toSheet) {
         if (targetRoute) { targetRoute.rows = null; targetRoute.paxCount = (targetRoute.paxCount || 0) + 1; }
         renderRouteSidebar();
         renderRoutes();
-        showToast('✅ Пересаджено в ' + toSheet.replace('Маршрут_', 'Маршрут '));
+        showToast('✅ Пересаджено в ' + toSheet);
     } else {
         showToast('⚠️ Додано в новий маршрут, але не видалено зі старого: ' + (delRes.error || ''));
     }
@@ -1543,7 +1543,7 @@ function routeBulkTransfer() {
     if (otherRoutes.length === 0) { showToast('⚠️ Немає інших маршрутів'); return; }
 
     const opts = otherRoutes.map(r => {
-        const n = (r.sheetName || '').replace('Маршрут_', 'Маршрут ');
+        const n = (r.sheetName || '');
         return `<button class="messenger-popup-item" onclick="doBulkTransfer('${r.sheetName}')" style="padding:10px;font-size:12px;">🗺️ ${n}</button>`;
     }).join('');
 
@@ -1598,7 +1598,7 @@ async function doBulkTransfer(toSheet) {
     if (failed > 0) {
         showToast('⚠️ Перенесено: ' + ok + ', не видалено зі старого: ' + failed);
     } else {
-        showToast('✅ Пересаджено: ' + ok + ' в ' + toSheet.replace('Маршрут_', 'Маршрут '));
+        showToast('✅ Пересаджено: ' + ok + ' в ' + toSheet);
     }
 }
 
@@ -1632,7 +1632,7 @@ function confirmDeleteRoute(idx) {
     const sheet = routes[idx];
     if (!sheet) return;
     const name = sheet.sheetName || '';
-    const baseName = name.replace('Маршрут_', 'Маршрут ');
+    const baseName = name;
 
     showConfirm('Ви впевнені, що хочете видалити маршрут "' + baseName + '"?\nВсі ліди з маршруту потраплять в архів.', async function(yes) {
         if (!yes) return;
@@ -4138,7 +4138,7 @@ function openRouteAssignModal() {
         list.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-secondary);font-size:12px;">Немає доступних маршрутів.<br>Створіть маршрут у меню зліва.</div>';
     } else {
         list.innerHTML = routes.map((sheet, idx) => {
-            const name = (sheet.sheetName || '').replace('Маршрут_', 'Маршрут ');
+            const name = (sheet.sheetName || '');
             const rows = sheet.rows || [];
             const pax = rows.filter(r => (r['Тип запису'] || '').includes('Пасажир')).length;
             const parcels = rows.filter(r => (r['Тип запису'] || '').includes('Посилк')).length;
@@ -4196,7 +4196,7 @@ async function assignToRoute(routeIdx) {
         const res = await apiPost('addToRoute', { sheetName: sheetName, leads: leadsData });
         hideLoader();
         if (res.ok) {
-            showToast('✅ ' + leadsData.length + ' лід(ів) перенесено в ' + sheetName.replace('Маршрут_', 'Маршрут '));
+            showToast('✅ ' + leadsData.length + ' лід(ів) перенесено в ' + sheetName);
             clearSelection();
             await loadRoutes(); // Оновити маршрути
             // Авто-оптимізація: запропонувати оптимізувати порядок
@@ -5395,7 +5395,7 @@ function toggleOptRouteDropdown() {
         dd.innerHTML = '<div style="padding:14px;text-align:center;color:var(--text-secondary);font-size:12px;">Немає доступних маршрутів</div>';
     } else {
         dd.innerHTML = routes.map((sheet, idx) => {
-            const name = (sheet.sheetName || '').replace('Маршрут_', 'Маршрут ');
+            const name = (sheet.sheetName || '');
             const rows = sheet.rows || [];
             const pax = rows.filter(r => (r['Тип запису'] || '').includes('Пасажир')).length;
             return '<button onclick="saveOptimizedToRoute(' + idx + ')" style="display:flex;align-items:center;justify-content:space-between;width:100%;padding:10px 12px;border:none;background:white;cursor:pointer;border-radius:6px;font-size:12px;font-family:inherit;transition:background 0.15s;" onmouseover="this.style.background=\'#f0f4f8\'" onmouseout="this.style.background=\'white\'">'
@@ -5463,7 +5463,7 @@ async function saveOptimizedToRoute(routeIdx) {
         const res = await apiPost('addToRoute', { sheetName: sheet.sheetName, leads: leadsData });
         hideLoader();
         if (res.ok) {
-            showToast('✅ ' + leadsData.length + ' лід(ів) перенесено в ' + sheet.sheetName.replace('Маршрут_', 'Маршрут ') + ' (оптимізований порядок)');
+            showToast('✅ ' + leadsData.length + ' лід(ів) перенесено в ' + sheet.sheetName + ' (оптимізований порядок)');
             clearSelection();
             loadRoutes();
         } else {
@@ -5513,7 +5513,7 @@ function autoOptimizeRoutePrompt(routeIdx, sheetName) {
     const paxRows = (sheet.rows || []).filter(r => (r['Тип запису'] || '').includes('Пасажир'));
     if (paxRows.length < 2) return;
 
-    const name = sheetName.replace('Маршрут_', 'Маршрут ');
+    const name = sheetName;
     showConfirm('Оптимізувати порядок пасажирів у маршруті "' + name + '"? (' + paxRows.length + ' пасажирів)', function() {
         activeRouteIdx = idx;
         optimizeRouteOrder();
