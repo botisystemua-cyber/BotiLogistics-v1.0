@@ -551,22 +551,28 @@ async function sbCreateTrip(params) {
 async function sbUpdateTrip(params) {
     try {
         const calId = params.cal_id;
-        const tripData = params.data || params;
+        const p = params.data || params;
         const sbData = {};
+        const toIso = (d) => {
+            if (!d) return null;
+            const s = String(d).trim();
+            const m = s.match(/^(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{4})$/);
+            return m ? `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}` : s;
+        };
 
-        // Map fields
-        if (tripData['Дата рейсу'] !== undefined) sbData.route_date = tripData['Дата рейсу'];
-        if (tripData['Напрямок'] !== undefined) sbData.direction = tripData['Напрямок'];
-        if (tripData['Місто'] !== undefined) sbData.city = tripData['Місто'];
-        if (tripData['Статус рейсу'] !== undefined) sbData.status = tripData['Статус рейсу'];
-        if (tripData['Макс. місць'] !== undefined) sbData.total_seats = parseInt(tripData['Макс. місць']);
-        if (tripData['Вільні місця'] !== undefined) sbData.available_seats = parseInt(tripData['Вільні місця']);
-        if (tripData['Зайняті місця'] !== undefined) sbData.occupied_seats = parseInt(tripData['Зайняті місця']);
-        if (tripData['Список вільних'] !== undefined) sbData.available_seats_list = tripData['Список вільних'];
-        if (tripData['Список зайнятих'] !== undefined) sbData.occupied_seats_list = tripData['Список зайнятих'];
-        if (tripData['AUTO_ID'] !== undefined) sbData.auto_id = tripData['AUTO_ID'];
-        if (tripData['Назва авто'] !== undefined) sbData.vehicle_name = tripData['Назва авто'];
-        if (tripData['Тип розкладки'] !== undefined) sbData.seating_layout = tripData['Тип розкладки'];
+        if (p.city !== undefined || p['Місто'] !== undefined) sbData.city = p.city ?? p['Місто'];
+        if (p.dir !== undefined || p.direction !== undefined || p['Напрямок'] !== undefined) sbData.direction = p.dir ?? p.direction ?? p['Напрямок'];
+        if (Array.isArray(p.dates) && p.dates.length) sbData.route_date = toIso(p.dates[0]);
+        else if (p['Дата рейсу'] !== undefined) sbData.route_date = toIso(p['Дата рейсу']);
+        if (Array.isArray(p.vehicles) && p.vehicles.length) {
+            const v = p.vehicles[0];
+            sbData.vehicle_name = v.name || '';
+            sbData.seating_layout = v.layout || '';
+            const ts = parseInt(v.seats) || 0;
+            sbData.total_seats = ts;
+            sbData.available_seats = ts;
+        }
+        if (p['Статус рейсу'] !== undefined) sbData.status = p['Статус рейсу'];
 
         sbData.updated_at = new Date().toISOString();
 
