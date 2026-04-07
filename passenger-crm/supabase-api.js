@@ -680,21 +680,78 @@ async function sbUnassignTrip(params) {
 // ROUTES
 // ================================================================
 
+// Centralized GAS ↔ SB mapping for routes table (all text columns)
+const ROUTE_GAS_TO_SB = {
+    'RTE_ID':             'rte_id',
+    'Тип запису':         'record_type',
+    'Напрям':             'direction',
+    'PAX_ID':             'pax_id_or_pkg_id',
+    'PKG_ID':             'pax_id_or_pkg_id',
+    'Дата рейсу':         'route_date',
+    'Таймінг':            'timing',
+    'Номер авто':         'vehicle_name',
+    'AUTO_ID':            'vehicle_id',
+    'Водій':              'driver_name',
+    'Телефон водія':      'driver_phone',
+    'Місто':              'city',
+    'Місце в авто':       'seat_number',
+    'Піб пасажира':       'passenger_name',
+    'Піб':                'passenger_name',
+    'Телефон пасажира':   'passenger_phone',
+    'Піб відправника':    'sender_name',
+    'Піб отримувача':     'recipient_name',
+    'Телефон отримувача': 'recipient_phone',
+    'Адреса отримувача':  'recipient_address',
+    'Адреса відправки':   'departure_address',
+    'Адреса прибуття':    'arrival_address',
+    'Кількість місць':    'seats_count',
+    'Вага багажу':        'baggage_weight',
+    'Внутрішній №':       'internal_number',
+    'Номер ТТН':          'ttn_number',
+    'Опис посилки':       'package_description',
+    'Вага посилки':       'package_weight',
+    'Сума':               'amount',
+    'Ціна квитка':        'amount',
+    'Валюта':             'amount_currency',
+    'Валюта квитка':      'amount_currency',
+    'Завдаток':           'deposit',
+    'Валюта завдатку':    'deposit_currency',
+    'Форма оплати':       'payment_form',
+    'Статус оплати':      'payment_status',
+    'Борг':               'debt',
+    'Примітка оплати':    'payment_notes',
+    'Статус':             'status',
+    'Статус CRM':         'crm_status',
+    'Тег':                'tag',
+    'Примітка':           'notes',
+    'Примітка СМС':       'sms_notes',
+};
+
+function gasItemToRouteRow(item) {
+    const row = { tenant_id: TENANT_ID, is_placeholder: false };
+    for (const [gasKey, sbCol] of Object.entries(ROUTE_GAS_TO_SB)) {
+        if (item[gasKey] !== undefined && item[gasKey] !== null && item[gasKey] !== '') {
+            row[sbCol] = String(item[gasKey]);
+        }
+    }
+    return row;
+}
+
 async function sbGetRoutesList(params) {
     try {
         const { data, error } = await sb
             .from('routes')
-            .select('rte_id, record_type, direction')
+            .select('rte_id, record_type, direction, is_placeholder')
             .eq('tenant_id', TENANT_ID);
         if (error) throw error;
 
-        // Group by rte_id (which is now "Маршрут 1", "Маршрут 2", etc.)
         const routeMap = {};
         data.forEach(row => {
             const name = row.rte_id || 'Маршрут';
             if (!routeMap[name]) {
                 routeMap[name] = { sheetName: name, rowCount: 0, paxCount: 0, parcelCount: 0 };
             }
+            if (row.is_placeholder) return; // don't count placeholder
             routeMap[name].rowCount++;
             if (row.record_type === 'Пасажир' || row.record_type === 'Passenger') {
                 routeMap[name].paxCount++;
@@ -766,6 +823,7 @@ async function sbGetRouteSheet(params) {
             .select('*')
             .eq('tenant_id', TENANT_ID)
             .eq('rte_id', sheetName)
+            .eq('is_placeholder', false)
             .order('created_at', { ascending: true });
         if (error) throw error;
 
@@ -785,17 +843,14 @@ async function sbUpdateRouteField(params) {
         const updateObj = {};
 
         if (params.fields) {
-            // Bulk update (updateRouteFields): { fields: { 'Col Name': value, ... } }
             for (const [col, val] of Object.entries(params.fields)) {
-                // Try to map GAS column name to Supabase column
-                const sbCol = GAS_TO_SB[col] || col;
-                updateObj[sbCol] = val === '' ? null : val;
+                const sbCol = ROUTE_GAS_TO_SB[col] || col;
+                updateObj[sbCol] = (val === '' || val === undefined) ? null : String(val);
             }
         } else {
-            // Single field update (updateRouteField): { col, value }
             const col = params.col;
-            const sbCol = GAS_TO_SB[col] || col;
-            updateObj[sbCol] = params.value === '' ? null : params.value;
+            const sbCol = ROUTE_GAS_TO_SB[col] || col;
+            updateObj[sbCol] = (params.value === '' || params.value === undefined) ? null : String(params.value);
         }
 
         updateObj.updated_at = new Date().toISOString();
@@ -816,52 +871,15 @@ async function sbUpdateRouteField(params) {
 
 async function sbAddToRoute(params) {
     try {
-        // Frontend sends: { sheetName: 'Маршрут 1', leads: [...] }
         const rteId = params.sheetName || params.sheet_name || params.rte_id || ('Маршрут_' + Date.now());
         const leads = params.leads || params.items || [params];
 
-        const num = (v) => { const n = parseFloat(v); return isNaN(n) ? null : n; };
-        const str = (v) => (v === undefined || v === null || v === '') ? null : String(v);
-        const insertData = leads.map(item => ({
-            tenant_id: TENANT_ID,
-            rte_id: rteId,
-            record_type: item.type || item['Тип запису'] || 'Пасажир',
-            direction: item.direction || item['Напрям'] || '',
-            pax_id_or_pkg_id: item.pax_id || item['PAX_ID'] || item.pkg_id || item['PKG_ID'] || '',
-            passenger_name: item.name || item['Піб пасажира'] || item['Піб'] || '',
-            passenger_phone: item.phone || item['Телефон пасажира'] || '',
-            sender_name: item['Піб відправника'] || '',
-            recipient_name: item['Піб отримувача'] || '',
-            recipient_phone: item['Телефон отримувача'] || '',
-            recipient_address: item['Адреса отримувача'] || '',
-            departure_address: item.from || item['Адреса відправки'] || '',
-            arrival_address: item.to || item['Адреса прибуття'] || '',
-            city: item['Місто'] || '',
-            seat_number: item['Місце в авто'] || '',
-            vehicle_name: item['Номер авто'] || '',
-            driver_name: item['Водій'] || '',
-            driver_phone: item['Телефон водія'] || '',
-            timing: item['Таймінг'] || '',
-            seats_count: parseInt(item.seats || item['Кількість місць']) || 1,
-            baggage_weight: num(item['Вага багажу']),
-            internal_number: str(item['Внутрішній №']),
-            ttn_number: str(item['Номер ТТН']),
-            package_description: str(item['Опис посилки']),
-            package_weight: num(item['Вага посилки']),
-            amount: num(item.price || item['Сума'] || item['Ціна квитка']) || 0,
-            amount_currency: item.currency || item['Валюта'] || item['Валюта квитка'] || 'UAH',
-            deposit: num(item.deposit || item['Завдаток']) || 0,
-            deposit_currency: item['Валюта завдатку'] || 'UAH',
-            payment_form: item['Форма оплати'] || '',
-            payment_status: item.payStatus || item['Статус оплати'] || '',
-            payment_notes: item['Примітка оплати'] || '',
-            status: item.status || item['Статус'] || 'scheduled',
-            crm_status: item['Статус CRM'] || 'active',
-            tag: item['Тег'] || '',
-            notes: item['Примітка'] || '',
-            sms_notes: item['Примітка СМС'] || '',
-            route_date: item.date || item['Дата рейсу'] || new Date().toISOString().split('T')[0],
-        }));
+        const insertData = leads.map(item => {
+            const row = gasItemToRouteRow(item);
+            row.rte_id = rteId;
+            if (!row.record_type) row.record_type = 'Пасажир';
+            return row;
+        });
 
         const { data, error } = await sb.from('routes').insert(insertData).select();
         if (error) throw error;
