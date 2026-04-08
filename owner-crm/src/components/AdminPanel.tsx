@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Users, Wifi, RefreshCw, ExternalLink, DollarSign } from 'lucide-react';
-import { Logo, apiCall, type StaffMember, type RouteAccess, type OnlineUser } from './shared';
+import { Users, Wifi, RefreshCw, ExternalLink, DollarSign, LogOut } from 'lucide-react';
+import { Logo } from './shared';
 import { StaffTab } from './StaffTab';
 import { OnlineTab } from './OnlineTab';
+import { listUsersByTenant, type User } from '../api/users';
+import { logout, type BotiSession } from '../lib/session';
 
 type Tab = 'staff' | 'online' | 'finances' | 'crm';
 
@@ -10,44 +12,46 @@ const MENU_ITEMS: { key: Tab; label: string; shortLabel: string; icon: typeof Us
   { key: 'staff', label: 'Співробітники', shortLabel: 'Команда', icon: Users },
   { key: 'online', label: 'Онлайн', shortLabel: 'Онлайн', icon: Wifi },
   { key: 'finances', label: 'Фінанси', shortLabel: 'Фінанси', icon: DollarSign },
-  { key: 'crm', label: 'CRM', shortLabel: 'CRM', icon: ExternalLink, external: '/passenger-crm/Passengers.html' },
+  { key: 'crm', label: 'CRM', shortLabel: 'CRM', icon: ExternalLink, external: '../passenger-crm/Passengers.html' },
 ];
 
-export function AdminPanel() {
+const ONLINE_THRESHOLD_MS = 5 * 60 * 1000; // 5 min
+
+function isOnline(u: User): boolean {
+  if (!u.last_login) return false;
+  const t = new Date(u.last_login).getTime();
+  if (isNaN(t)) return false;
+  return Date.now() - t < ONLINE_THRESHOLD_MS;
+}
+
+export function AdminPanel({ session }: { session: BotiSession }) {
   const [tab, setTab] = useState<Tab>('staff');
   const [loading, setLoading] = useState(true);
-  const [staff, setStaff] = useState<StaffMember[]>([]);
-  const [access, setAccess] = useState<RouteAccess[]>([]);
-  const [onlineUsers, setOnlineUsers] = useState<OnlineUser[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
+  const [error, setError] = useState('');
 
   const loadAll = useCallback(async () => {
     setLoading(true);
+    setError('');
     try {
-      const [staffRes, accessRes, onlineRes] = await Promise.all([
-        apiCall('getStaff'),
-        apiCall('getRouteAccess'),
-        apiCall('getOnlineUsers'),
-      ]);
-      if (staffRes.success) setStaff(staffRes.staff || []);
-      if (accessRes.success) setAccess(accessRes.access || []);
-      if (onlineRes.success) setOnlineUsers(onlineRes.users || []);
-    } catch { /* ignore */ }
+      setUsers(await listUsersByTenant(session.tenant_id));
+    } catch (e) {
+      setError((e as Error).message || 'Помилка завантаження');
+    }
     setLoading(false);
-  }, []);
+  }, [session.tenant_id]);
 
   useEffect(() => { loadAll(); }, [loadAll]);
 
+  // Poll online status every 30s (refetch users so last_login updates)
   useEffect(() => {
-    const iv = setInterval(async () => {
-      try {
-        const res = await apiCall('getOnlineUsers');
-        if (res.success) setOnlineUsers(res.users || []);
-      } catch { /* ignore */ }
+    const iv = setInterval(() => {
+      listUsersByTenant(session.tenant_id).then(setUsers).catch(() => { /* ignore */ });
     }, 30000);
     return () => clearInterval(iv);
-  }, []);
+  }, [session.tenant_id]);
 
-  const onlineCount = onlineUsers.filter(u => u.isOnline).length;
+  const onlineCount = users.filter(isOnline).length;
 
   const handleTabClick = (item: typeof MENU_ITEMS[0]) => {
     if (item.external) {
@@ -63,6 +67,8 @@ export function AdminPanel() {
       <aside className="hidden lg:flex w-[280px] shrink-0 flex-col bg-white border-r border-border sticky top-0 h-[100dvh]">
         <div className="px-6 py-6 border-b border-border">
           <Logo size="md" />
+          <div className="mt-3 text-xs font-bold text-text truncate">{session.tenant_name}</div>
+          <div className="text-[11px] text-muted truncate">{session.user_name}</div>
         </div>
         <nav className="flex-1 px-4 py-5 space-y-1.5">
           {MENU_ITEMS.map(item => {
@@ -83,11 +89,16 @@ export function AdminPanel() {
             );
           })}
         </nav>
-        <div className="px-4 py-4 border-t border-border">
+        <div className="px-4 py-4 border-t border-border space-y-2">
           <button onClick={loadAll}
             className="w-full flex items-center gap-3 px-5 py-3 rounded-xl text-sm font-bold text-muted hover:bg-bg cursor-pointer transition-all">
             <RefreshCw className={`w-4.5 h-4.5 ${loading ? 'animate-spin' : ''}`} />
-            Оновити все
+            Оновити
+          </button>
+          <button onClick={logout}
+            className="w-full flex items-center gap-3 px-5 py-3 rounded-xl text-sm font-bold text-muted hover:bg-red-50 hover:text-red-600 cursor-pointer transition-all">
+            <LogOut className="w-4.5 h-4.5" />
+            Вийти
           </button>
         </div>
         <div className="px-6 pb-5 text-xs text-muted/50 font-medium">
@@ -97,8 +108,24 @@ export function AdminPanel() {
 
       {/* ═══ Main area ═══ */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Content — with bottom padding for mobile tab bar */}
+        {/* Mobile header */}
+        <header className="lg:hidden flex items-center justify-between px-4 py-3 bg-white border-b border-border sticky top-0 z-30">
+          <Logo size="sm" />
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-text truncate max-w-[120px]">{session.tenant_name}</span>
+            <button onClick={logout} className="p-2 rounded-lg hover:bg-red-50 cursor-pointer">
+              <LogOut className="w-4 h-4 text-muted" />
+            </button>
+          </div>
+        </header>
+
+        {/* Content */}
         <main className="flex-1 px-3 sm:px-4 lg:px-8 py-3 sm:py-4 lg:py-6 pb-[72px] lg:pb-6">
+          {error && (
+            <div className="mb-4 px-4 py-3 bg-red-50 border-2 border-red-200 rounded-xl text-sm font-semibold text-red-600">
+              {error}
+            </div>
+          )}
           {loading ? (
             <div className="text-center py-24 text-muted">
               <RefreshCw className="w-7 h-7 animate-spin mx-auto mb-4" />
@@ -106,8 +133,14 @@ export function AdminPanel() {
             </div>
           ) : (
             <>
-              {tab === 'staff' && <StaffTab staff={staff} access={access} onReload={loadAll} />}
-              {tab === 'online' && <OnlineTab users={onlineUsers} onReload={loadAll} />}
+              {tab === 'staff' && (
+                <StaffTab
+                  users={users}
+                  tenantId={session.tenant_id}
+                  onReload={loadAll}
+                />
+              )}
+              {tab === 'online' && <OnlineTab users={users} onReload={loadAll} />}
               {tab === 'finances' && (
                 <div className="flex items-center justify-center min-h-[60vh]">
                   <div className="text-center">

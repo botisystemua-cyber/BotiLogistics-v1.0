@@ -75,6 +75,13 @@ export async function authenticate(
   if (error) throw error;
   if (!user) throw new Error('Невірний логін, пароль або роль');
 
+  // Stamp last_login so owner-crm's Online tab can show who's active.
+  // Fire-and-forget — don't block login on this.
+  void supabase
+    .from('users')
+    .update({ last_login: new Date().toISOString() })
+    .eq('id', user.id);
+
   // Fetch tenant info (name + modules) so success screen can show app links
   const { data: client, error: cErr } = await supabase
     .from('clients')
