@@ -230,6 +230,29 @@ window.botiLogout = function () {
     location.href = '../config-crm/';
 };
 
+// ── HEARTBEAT ──
+// Writes users.last_login = now() every 60s while this tab is visible, so that
+// owner-crm's Online tab (5-min threshold on last_login) can see managers that
+// are actively sitting in passenger-crm — not just those who logged in within
+// the last 5 minutes. Fire-and-forget, errors are swallowed.
+(function startHeartbeat() {
+    if (!BOTI_SESSION || !BOTI_SESSION.tenant_id || !BOTI_SESSION.user_login) return;
+    if (typeof sb === 'undefined' || !sb) return;
+    const beat = function () {
+        if (document.visibilityState !== 'visible') return;
+        try {
+            sb.from('users')
+                .update({ last_login: new Date().toISOString() })
+                .eq('tenant_id', BOTI_SESSION.tenant_id)
+                .eq('login', BOTI_SESSION.user_login)
+                .then(function () { /* ok */ }, function () { /* ignore */ });
+        } catch (_) { /* ignore */ }
+    };
+    beat(); // immediate
+    setInterval(beat, 60000);
+    document.addEventListener('visibilitychange', beat);
+})();
+
 // ================================================================
 // PASSENGERS API
 // ================================================================

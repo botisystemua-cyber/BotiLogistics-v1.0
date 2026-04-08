@@ -4,7 +4,7 @@ import { Logo } from './shared';
 import { StaffTab } from './StaffTab';
 import { OnlineTab } from './OnlineTab';
 import { listUsersByTenant, type User } from '../api/users';
-import { logout, type BotiSession } from '../lib/session';
+import { logout, beatHeartbeat, type BotiSession } from '../lib/session';
 
 type Tab = 'staff' | 'online' | 'finances' | 'crm';
 
@@ -50,6 +50,22 @@ export function AdminPanel({ session }: { session: BotiSession }) {
     }, 30000);
     return () => clearInterval(iv);
   }, [session.tenant_id]);
+
+  // Heartbeat — mark this user as "online" every 60s while the tab is visible.
+  // Without this, `users.last_login` only updates at login and the Online tab
+  // would only see users for the first 5 minutes of their session.
+  useEffect(() => {
+    const beat = () => {
+      if (document.visibilityState === 'visible') beatHeartbeat(session);
+    };
+    beat(); // fire immediately on mount
+    const iv = setInterval(beat, 60000);
+    document.addEventListener('visibilitychange', beat);
+    return () => {
+      clearInterval(iv);
+      document.removeEventListener('visibilitychange', beat);
+    };
+  }, [session]);
 
   const onlineCount = users.filter(isOnline).length;
 

@@ -67,3 +67,17 @@ export async function verifySession(s: BotiSession): Promise<
     return { ok: false, reason: 'error' };
   }
 }
+
+/**
+ * Heartbeat — writes users.last_login = now() for the current session user.
+ * Fire-and-forget. Used by an interval in AdminPanel so that the Online tab
+ * shows managers/drivers/owners currently sitting in the app (not just those
+ * who logged in within the last 5 minutes).
+ */
+export function beatHeartbeat(s: BotiSession): void {
+  void supabase
+    .from('users')
+    .update({ last_login: new Date().toISOString() })
+    .eq('tenant_id', s.tenant_id)
+    .eq('login', s.user_login);
+}

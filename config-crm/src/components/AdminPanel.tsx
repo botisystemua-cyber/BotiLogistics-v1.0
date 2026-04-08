@@ -467,7 +467,7 @@ function UsersScreen() {
                     }`}>{ROLE_LABEL[u.role]}</span>
                   </Td>
                   <Td className="text-text-secondary">{tenantName(u.tenant_id)}</Td>
-                  <Td><span className="font-mono text-xs">{'•'.repeat(Math.min(u.password.length, 8))}</span></Td>
+                  <Td><span className="font-mono text-xs text-text-secondary">{u.password}</span></Td>
                   <Td className="text-right">
                     <div className="inline-flex gap-2">
                       <IconBtn icon={Pencil} onClick={() => setEditing(u)} title="Редагувати" />
