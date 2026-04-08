@@ -571,6 +571,7 @@ function silentSync(manual, force) {
             updateTripFilterDropdown();
             updateTripAutoFilterDropdown();
             render();
+            if (currentView === 'trips') renderTrips();
             updateSyncTime();
             showToast('✅ Оновлено: ' + (passengers ? passengers.length : 0) + ' пасажирів, ' + trips.length + ' рейсів, ' + (archivedPassengers ? archivedPassengers.length : 0) + ' в архіві');
         }).catch((e) => {
@@ -626,6 +627,7 @@ function silentSync(manual, force) {
         updateTripFilterDropdown();
         updateTripAutoFilterDropdown();
         render();
+        if (currentView === 'trips') renderTrips();
         updateSyncTime();
     }).catch(() => {});
 }
@@ -4053,14 +4055,32 @@ async function saveTrip() {
         : { city, dir, vehicles, dates: tripSelectedDates };
 
     const res = await apiPost(action, payload);
-    hideLoader();
 
     if (res.ok) {
-        showToast('✅ Рейс ' + (editingTripCalId ? 'оновлено' : 'створено'));
+        // Optimistic merge so the new rows are visible immediately,
+        // even before silentSync resolves.
+        if (Array.isArray(res.data)) {
+            // create → array of inserted rows
+            trips = trips.concat(res.data);
+        } else if (res.data && (res.data.cal_id || res.data.CAL_ID)) {
+            // update → single row
+            const updatedId = res.data.cal_id || res.data.CAL_ID;
+            const idx = trips.findIndex(t => (t.cal_id || t.CAL_ID) === updatedId);
+            if (idx >= 0) trips[idx] = res.data;
+            else trips.push(res.data);
+        }
+
         closeTripForm();
-        silentSync();
         showTripsView();
+        hideLoader();
+        showToast('✅ Рейс ' + (editingTripCalId ? 'оновлено' : 'створено'));
+
+        // Refresh from server in background; re-render trips view when done.
+        silentSync(false, true).then(() => {
+            if (currentView === 'trips') renderTrips();
+        });
     } else {
+        hideLoader();
         showToast('❌ ' + (res.error || 'Помилка'));
     }
 }

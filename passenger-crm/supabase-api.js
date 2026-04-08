@@ -512,6 +512,25 @@ async function sbGetArchive(params) {
 // TRIPS (Calendar)
 // ================================================================
 
+// Calendar row → frontend trip object.
+// Frontend (Passengers.js) historically reads `t.date`, `t.auto_name`,
+// `t.max_seats`, `t.occupied` (legacy GAS shape). DB stores them as
+// `route_date`, `vehicle_name`, `total_seats`, `occupied_seats`. We expose
+// BOTH so renderTrips/getFilteredTrips/etc. work without touching the UI.
+function tripRowToFront(row) {
+    if (!row) return row;
+    return {
+        ...sbToGasObj(row, SB_TO_GAS_CAL),
+        ...row,
+        // legacy aliases used across Passengers.js
+        date:       row.route_date || '',
+        auto_name:  row.vehicle_name || '',
+        layout:     row.seating_layout || '',
+        max_seats:  row.total_seats != null ? row.total_seats : 0,
+        occupied:   row.occupied_seats != null ? row.occupied_seats : 0,
+    };
+}
+
 async function sbGetTrips(params) {
     try {
         let query = sb.from('calendar').select('*').eq('tenant_id', TENANT_ID);
@@ -524,7 +543,7 @@ async function sbGetTrips(params) {
         const { data, error } = await query.order('route_date', { ascending: true });
         if (error) throw error;
 
-        const results = data.map(row => ({ ...sbToGasObj(row, SB_TO_GAS_CAL), ...row }));
+        const results = data.map(tripRowToFront);
         return { ok: true, data: results };
     } catch (e) {
         console.error('sbGetTrips error:', e);
@@ -572,7 +591,8 @@ async function sbCreateTrip(params) {
         const { data, error } = await sb.from('calendar').insert(rows).select();
         if (error) throw error;
 
-        return { ok: true, data: data, cal_id: data[0]?.cal_id };
+        const mapped = (data || []).map(tripRowToFront);
+        return { ok: true, data: mapped, cal_id: data[0]?.cal_id };
     } catch (e) {
         console.error('sbCreateTrip error:', e);
         return { ok: false, error: e.message };
@@ -615,7 +635,7 @@ async function sbUpdateTrip(params) {
             .select();
         if (error) throw error;
 
-        return { ok: true, data: data[0] ? sbToGasObj(data[0], SB_TO_GAS_CAL) : null };
+        return { ok: true, data: data[0] ? tripRowToFront(data[0]) : null };
     } catch (e) {
         console.error('sbUpdateTrip error:', e);
         return { ok: false, error: e.message };
