@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import {
   RefreshCw, Pencil, Trash2, X, Save, UserPlus,
-  Truck as TruckIcon, Users as UsersIcon, ShieldCheck, Crown,
+  Truck as TruckIcon, Users as UsersIcon, ShieldCheck, UserCog,
 } from 'lucide-react';
 import {
   createUserForTenant, updateUser, deleteUser,
@@ -23,8 +23,10 @@ const FILTERS: { key: RoleFilter; label: string }[] = [
   { key: 'driver', label: 'Водії' },
 ];
 
-function roleIcon(role: Role, size = 'w-5 h-5') {
-  if (role === 'owner') return <ShieldCheck className={size} />;
+function roleIcon(role: Role, size = 'w-5 h-5', isFounder = false) {
+  if (role === 'owner') {
+    return isFounder ? <ShieldCheck className={size} /> : <UserCog className={size} />;
+  }
   if (role === 'manager') return <UsersIcon className={size} />;
   return <TruckIcon className={size} />;
 }
@@ -127,7 +129,7 @@ export function StaffTab({
 
   const handleDelete = async (u: User) => {
     if (u.id === founderId) {
-      alert('Неможливо видалити першого власника (засновника). Його може змінити лише супер-адмін у config-crm.');
+      alert('Неможливо видалити першого власника. Його може змінити лише супер-адмін у config-crm.');
       return;
     }
     if (u.login === currentUserLogin) {
@@ -189,7 +191,7 @@ export function StaffTab({
             >
               <div className="p-3 lg:p-5 flex items-center gap-3 lg:gap-4">
                 <div className={`w-10 h-10 lg:w-14 lg:h-14 rounded-lg lg:rounded-xl flex items-center justify-center shrink-0 ${roleBg(u.role)}`}>
-                  {roleIcon(u.role, 'w-4 h-4 lg:w-5 lg:h-5')}
+                  {roleIcon(u.role, 'w-4 h-4 lg:w-5 lg:h-5', isFounder)}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5 lg:gap-2 flex-wrap">
@@ -199,12 +201,6 @@ export function StaffTab({
                     <span className={`text-[10px] lg:text-xs font-bold px-2 lg:px-2.5 py-0.5 rounded-full border ${roleBg(u.role)}`}>
                       {ROLE_LABEL[u.role]}
                     </span>
-                    {isFounder && (
-                      <span className="flex items-center gap-1 text-[10px] lg:text-xs font-bold px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 border border-violet-300">
-                        <Crown className="w-3 h-3" />
-                        Засновник
-                      </span>
-                    )}
                     {isSelf && (
                       <span className="text-[10px] lg:text-xs font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-600 border border-amber-200">
                         Це ви
