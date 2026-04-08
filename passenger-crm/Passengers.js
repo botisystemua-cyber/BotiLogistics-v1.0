@@ -4004,6 +4004,16 @@ function renderTripCalendar() {
 }
 
 function toggleTripDate(dateStr) {
+    // Edit mode is single-date: each calendar row in DB is exactly one
+    // route_date, so picking a new day must REPLACE the current one,
+    // not add to it. Otherwise saveTrip → sbUpdateTrip uses dates[0]
+    // (the old date) and the new pick is silently ignored.
+    if (editingTripCalId) {
+        tripSelectedDates = [dateStr];
+        renderTripCalendar();
+        renderSelectedDates();
+        return;
+    }
     const idx = tripSelectedDates.indexOf(dateStr);
     if (idx >= 0) tripSelectedDates.splice(idx, 1);
     else tripSelectedDates.push(dateStr);
@@ -4114,7 +4124,12 @@ function editTrip(calId) {
         if (seatsEl) seatsEl.textContent = t.max_seats || 7;
     }
 
-    tripSelectedDates = t.date ? [t.date] : [];
+    // Calendar renders dateStr as DD.MM.YYYY, so normalise the trip's
+    // date (which arrives as ISO YYYY-MM-DD from Supabase) to the same
+    // shape — otherwise the day square doesn't highlight as selected
+    // and any subsequent toggle leaves a mixed-format array that
+    // sbUpdateTrip can't save.
+    tripSelectedDates = t.date ? [formatTripDate(t.date)] : [];
     renderTripCalendar();
     renderSelectedDates();
     updateSeatPreview(1);
