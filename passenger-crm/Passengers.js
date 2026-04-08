@@ -275,7 +275,17 @@ function saveManagerSlots(slots) {
 }
 
 function getManagerName() {
+    // Prefer boti_session (set by config-crm login) over legacy per-device slot
+    try {
+        var s = JSON.parse(localStorage.getItem('boti_session') || 'null');
+        if (s && s.user_name) return s.user_name;
+        if (s && s.user_login) return s.user_login;
+    } catch (_) {}
     return localStorage.getItem(MANAGER_ACTIVE_KEY) || '';
+}
+
+function getBotiSession() {
+    try { return JSON.parse(localStorage.getItem('boti_session') || 'null'); } catch (_) { return null; }
 }
 
 function setManagerName(name) {
@@ -297,27 +307,42 @@ function updateAvatarUI() {
 }
 
 function renderManagerSlots() {
-    var slots = getManagerSlots();
-    var active = getManagerName();
-    var hasActive = !!active;
-    var html = '';
+    var session = getBotiSession();
+    var container = document.getElementById('managerSlots');
+    if (!container) return;
 
-    for (var i = 0; i < slots.length; i++) {
-        var isActive = (slots[i] === active);
-        var initials = slots[i].trim().split(/\s+/).map(function(p) { return p[0]; }).join('').substring(0, 2).toUpperCase();
-        var colors = ['#3b82f6', '#10b981', '#f59e0b'];
-        html += '<div style="display:flex;align-items:center;gap:12px;padding:12px;margin-bottom:8px;border-radius:8px;cursor:pointer;border:2px solid ' + (isActive ? 'var(--accent)' : 'var(--border)') + ';background:' + (isActive ? '#fef2f2' : 'white') + '" onclick="selectManager(' + i + ')">';
-        html += '<div style="width:40px;height:40px;border-radius:50%;background:' + colors[i] + ';display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:14px;flex-shrink:0">' + initials + '</div>';
-        html += '<div style="flex:1;min-width:0"><div style="font-weight:700;font-size:14px;color:var(--text-primary)">' + slots[i] + '</div>';
-        html += '<div style="font-size:11px;color:var(--text-secondary)">' + (isActive ? 'Зараз працює' : 'Натисніть для входу') + '</div></div>';
-        html += '<button onclick="event.stopPropagation();renameManager(' + i + ')" style="background:none;border:1px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;font-size:11px;color:var(--text-secondary)" title="Перейменувати">✏️</button>';
-        html += '</div>';
+    if (!session) {
+        container.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text-secondary);font-size:13px">Сесія відсутня. <a href="../config-crm/" style="color:var(--accent);font-weight:600">Увійти</a></div>';
+        var closeBtnNoSess = document.getElementById('managerModalClose');
+        if (closeBtnNoSess) closeBtnNoSess.style.display = 'none';
+        return;
     }
 
-    document.getElementById('managerSlots').innerHTML = html;
-    // Показувати кнопку закриття тільки якщо вже увійшли
+    var name = session.user_name || session.user_login || '—';
+    var roleMap = { owner: 'Власник', manager: 'Менеджер', driver: 'Водій' };
+    var roleLabel = roleMap[session.role] || session.role || '';
+    var tenant = session.tenant_name || session.tenant_id || '';
+    var initials = name.trim().split(/\s+/).map(function(p) { return p[0]; }).join('').substring(0, 2).toUpperCase();
+
+    var html = '';
+    html += '<div style="display:flex;align-items:center;gap:14px;padding:16px;border-radius:12px;border:2px solid var(--border);background:var(--bg-secondary, #f9fafb);margin-bottom:12px">';
+    html += '<div style="width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,#3b82f6,#6366f1);display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:18px;flex-shrink:0">' + initials + '</div>';
+    html += '<div style="flex:1;min-width:0">';
+    html += '<div style="font-weight:700;font-size:15px;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + name + '</div>';
+    if (roleLabel) html += '<div style="font-size:12px;color:var(--text-secondary);margin-top:2px">' + roleLabel + '</div>';
+    if (tenant)    html += '<div style="font-size:11px;color:var(--text-secondary);margin-top:2px;opacity:.8">🏢 ' + tenant + '</div>';
+    html += '</div>';
+    html += '</div>';
+
+    html += '<button onclick="botiLogout()" style="width:100%;padding:12px;border:2px solid var(--border);border-radius:10px;background:white;color:#dc2626;font-weight:700;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:all .2s" onmouseover="this.style.background=\'#fef2f2\';this.style.borderColor=\'#fecaca\'" onmouseout="this.style.background=\'white\';this.style.borderColor=\'var(--border)\'">';
+    html += '<span>🚪</span><span>Вийти</span>';
+    html += '</button>';
+
+    container.innerHTML = html;
+
+    // Always allow closing — user is already logged in via config-crm
     var closeBtn = document.getElementById('managerModalClose');
-    if (closeBtn) closeBtn.style.display = hasActive ? '' : 'none';
+    if (closeBtn) closeBtn.style.display = '';
 }
 
 function selectManager(idx) {

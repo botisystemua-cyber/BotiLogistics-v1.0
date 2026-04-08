@@ -160,7 +160,7 @@
             <!-- [ПРОЕКТ] Посилання на чати Smart Sender — змінити project= для нового проекту -->
             <a href="https://messenger.smartsender.com/chats?project=esko-proek-131349" target="_blank" class="hdr-chat-btn" title="Smart Sender Чати">💬</a>
             <div class="presence-bar" id="presenceBar"></div>
-            <div class="hdr-avatar user-avatar sync-loading" id="userAvatar" onclick="openManagerModal()" title="Натисніть щоб змінити менеджера">?</div>
+            <div class="hdr-avatar user-avatar sync-loading" id="userAvatar" onclick="openManagerModal()" title="Профіль">?</div>
         </div>
     </div>
 </header>
@@ -422,12 +422,12 @@
     </div>
 </div>
 
-<!-- MANAGER LOGIN MODAL -->
-<div class="modal-overlay" id="managerModal" onclick="if(event.target===this && getManagerName())closeModal('managerModal')">
+<!-- USER PROFILE MODAL -->
+<div class="modal-overlay" id="managerModal" onclick="if(event.target===this)closeModal('managerModal')">
     <div class="modal" style="max-width:360px">
         <div class="modal-header">
-            <div class="modal-title">👤 Вхід — оберіть менеджера</div>
-            <button class="modal-close" onclick="if(getManagerName())closeModal('managerModal')" style="display:none" id="managerModalClose">✕</button>
+            <div class="modal-title">👤 Профіль</div>
+            <button class="modal-close" onclick="closeModal('managerModal')" id="managerModalClose">✕</button>
         </div>
         <div style="padding:16px" id="managerSlots"></div>
         <div id="installBanner" style="display:none;padding:0 16px 16px">
