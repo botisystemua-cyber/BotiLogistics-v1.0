@@ -10,7 +10,7 @@ export interface User {
   full_name: string | null;
   email: string | null;
   phone: string | null;
-  role: Role;
+  roles: Role[];
   is_active: boolean | null;
   last_login: string | null;
   created_at: string;
@@ -18,6 +18,21 @@ export interface User {
 }
 
 export type UserInput = Omit<User, 'id' | 'created_at' | 'updated_at' | 'last_login'>;
+
+// Role hierarchy used for primary-icon selection and badge ordering.
+// Higher = more privileged. A user with ['owner','driver'] is visually
+// presented as an owner first, because that's the "highest hat" they wear.
+const ROLE_RANK: Record<Role, number> = { owner: 3, manager: 2, driver: 1 };
+
+/** Highest role in the user's roles array. Caller guarantees non-empty. */
+export function primaryRole(roles: Role[]): Role {
+  return [...roles].sort((a, b) => ROLE_RANK[b] - ROLE_RANK[a])[0];
+}
+
+/** Sort roles from highest to lowest privilege for consistent badge order. */
+export function sortRoles(roles: Role[]): Role[] {
+  return [...roles].sort((a, b) => ROLE_RANK[b] - ROLE_RANK[a]);
+}
 
 export async function listUsersByTenant(tenantId: string): Promise<User[]> {
   const { data, error } = await supabase

@@ -1,5 +1,6 @@
 import { RefreshCw, Wifi, WifiOff, Clock } from 'lucide-react';
 import type { User, Role } from '../api/users';
+import { sortRoles } from '../api/users';
 
 const ONLINE_THRESHOLD_MS = 5 * 60 * 1000; // 5 min
 
@@ -98,9 +99,11 @@ function UserCard({ user, online }: { user: User; online: boolean }) {
           <span className="text-sm lg:text-base font-bold text-text">
             {user.full_name || user.login}
           </span>
-          <span className={`text-[10px] lg:text-xs font-bold px-2 lg:px-2.5 py-0.5 rounded-full ${roleBg(user.role)}`}>
-            {ROLE_LABEL[user.role]}
-          </span>
+          {sortRoles(user.roles ?? []).map(r => (
+            <span key={r} className={`text-[10px] lg:text-xs font-bold px-2 lg:px-2.5 py-0.5 rounded-full ${roleBg(r)}`}>
+              {ROLE_LABEL[r]}
+            </span>
+          ))}
         </div>
         <div className="flex items-center gap-2 lg:gap-3 mt-0.5 lg:mt-1 flex-wrap">
           <span className="font-mono text-[11px] lg:text-xs text-muted">{user.login}</span>

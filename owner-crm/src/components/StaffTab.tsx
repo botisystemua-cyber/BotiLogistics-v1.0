@@ -4,7 +4,7 @@ import {
   Truck as TruckIcon, Users as UsersIcon, ShieldCheck, UserCog,
 } from 'lucide-react';
 import {
-  createUserForTenant, updateUser, deleteUser,
+  createUserForTenant, updateUser, deleteUser, primaryRole, sortRoles,
   type User, type Role,
 } from '../api/users';
 
@@ -23,11 +23,15 @@ const FILTERS: { key: RoleFilter; label: string }[] = [
   { key: 'driver', label: 'Водії' },
 ];
 
-function roleIcon(role: Role, size = 'w-5 h-5', isFounder = false) {
-  if (role === 'owner') {
+// Icon shown in the card's left avatar. Uses the user's highest role; if that
+// role is 'owner' and they're the tenant founder, swap in a plain shield for
+// extra distinction.
+function avatarIcon(roles: Role[], size = 'w-5 h-5', isFounder = false) {
+  const top = primaryRole(roles);
+  if (top === 'owner') {
     return isFounder ? <ShieldCheck className={size} /> : <UserCog className={size} />;
   }
-  if (role === 'manager') return <UsersIcon className={size} />;
+  if (top === 'manager') return <UsersIcon className={size} />;
   return <TruckIcon className={size} />;
 }
 
@@ -37,13 +41,24 @@ function roleBg(role: Role) {
   return 'bg-emerald-50 text-emerald-600 border-emerald-200';
 }
 
+function roleActiveClass(role: Role) {
+  if (role === 'owner')   return 'bg-violet-500 text-white shadow-sm';
+  if (role === 'manager') return 'bg-blue-500 text-white shadow-sm';
+  return 'bg-emerald-500 text-white shadow-sm';
+}
+
+function RoleIcon({ role, className }: { role: Role; className?: string }) {
+  const Icon = role === 'driver' ? TruckIcon : role === 'manager' ? UsersIcon : ShieldCheck;
+  return <Icon className={className} />;
+}
+
 type FormState = {
   login: string;
   password: string;
   full_name: string;
   email: string;
   phone: string;
-  role: Role;
+  roles: Role[];
   is_active: boolean;
 };
 
@@ -53,7 +68,7 @@ const EMPTY_FORM: FormState = {
   full_name: '',
   email: '',
   phone: '',
-  role: 'driver',
+  roles: ['driver'],
   is_active: true,
 };
 
@@ -64,7 +79,7 @@ function userToForm(u: User): FormState {
     full_name: u.full_name ?? '',
     email: u.email ?? '',
     phone: u.phone ?? '',
-    role: u.role,
+    roles: Array.isArray(u.roles) && u.roles.length > 0 ? u.roles : ['driver'],
     is_active: u.is_active ?? true,
   };
 }
@@ -75,6 +90,9 @@ function humanizeError(e: unknown): string {
   const msg = (e as Error)?.message || String(e || '');
   if (/duplicate key/i.test(msg) || /users_login_key/i.test(msg) || /unique constraint/i.test(msg)) {
     return 'Користувач з таким логіном вже існує. Оберіть інший логін.';
+  }
+  if (/users_roles_check/i.test(msg)) {
+    return 'Оберіть хоча б одну роль.';
   }
   return msg || 'Невідома помилка';
 }
@@ -91,27 +109,37 @@ export function StaffTab({
   const [editItem, setEditItem] = useState<User | null>(null);
   const [isNew, setIsNew] = useState(false);
 
-  // Founder = first-created owner of this tenant. Can never be deleted (by anyone,
-  // including themselves). Other owners are deletable, but still can't delete themselves.
+  // Founder = first-created user whose roles array contains 'owner'.
+  // Can never be deleted (by anyone, including themselves). Other owners
+  // are deletable, but still can't delete themselves.
   const founderId = useMemo(() => {
     const owners = users
-      .filter(u => u.role === 'owner')
+      .filter(u => Array.isArray(u.roles) && u.roles.includes('owner'))
       .slice()
       .sort((a, b) => (a.created_at || '').localeCompare(b.created_at || ''));
     return owners[0]?.id ?? null;
   }, [users]);
 
-  const filtered = filter === 'all' ? users : users.filter(u => u.role === filter);
-  const countByRole = (r: Role) => users.filter(u => u.role === r).length;
+  // any-match filter: a user with ['owner','driver'] shows in both
+  // "Власники" and "Водії" tabs.
+  const filtered = filter === 'all'
+    ? users
+    : users.filter(u => Array.isArray(u.roles) && u.roles.includes(filter));
+  const countByRole = (r: Role) =>
+    users.filter(u => Array.isArray(u.roles) && u.roles.includes(r)).length;
 
   const handleSave = async (form: FormState) => {
+    if (form.roles.length === 0) {
+      alert('Оберіть хоча б одну роль');
+      return;
+    }
     const payload = {
       login: form.login.trim(),
       password: form.password.trim(),
       full_name: form.full_name.trim() || null,
       email: form.email.trim() || null,
       phone: form.phone.trim() || null,
-      role: form.role,
+      roles: sortRoles(form.roles),
       is_active: form.is_active,
     };
     try {
@@ -174,6 +202,8 @@ export function StaffTab({
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-2.5 lg:gap-4">
           {filtered.map(u => {
+            const userRoles = Array.isArray(u.roles) && u.roles.length > 0 ? sortRoles(u.roles) : [];
+            const top = userRoles.length > 0 ? primaryRole(userRoles) : 'driver';
             const isFounder = u.id === founderId;
             const isSelf = u.login === currentUserLogin;
             const deleteLocked = isFounder || isSelf;
@@ -190,17 +220,23 @@ export function StaffTab({
               }`}
             >
               <div className="p-3 lg:p-5 flex items-center gap-3 lg:gap-4">
-                <div className={`w-10 h-10 lg:w-14 lg:h-14 rounded-lg lg:rounded-xl flex items-center justify-center shrink-0 ${roleBg(u.role)}`}>
-                  {roleIcon(u.role, 'w-4 h-4 lg:w-5 lg:h-5', isFounder)}
+                <div className={`w-10 h-10 lg:w-14 lg:h-14 rounded-lg lg:rounded-xl flex items-center justify-center shrink-0 ${roleBg(top)}`}>
+                  {avatarIcon(userRoles, 'w-4 h-4 lg:w-5 lg:h-5', isFounder)}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5 lg:gap-2 flex-wrap">
                     <span className="text-sm lg:text-base font-bold text-text truncate">
                       {u.full_name || <span className="italic text-muted">без імені</span>}
                     </span>
-                    <span className={`text-[10px] lg:text-xs font-bold px-2 lg:px-2.5 py-0.5 rounded-full border ${roleBg(u.role)}`}>
-                      {ROLE_LABEL[u.role]}
-                    </span>
+                    {userRoles.map(r => (
+                      <span
+                        key={r}
+                        className={`inline-flex items-center gap-1 text-[10px] lg:text-xs font-bold px-2 lg:px-2.5 py-0.5 rounded-full border ${roleBg(r)}`}
+                      >
+                        <RoleIcon role={r} className="w-3 h-3" />
+                        {ROLE_LABEL[r]}
+                      </span>
+                    ))}
                     {isSelf && (
                       <span className="text-[10px] lg:text-xs font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-600 border border-amber-200">
                         Це ви
@@ -252,7 +288,7 @@ export function StaffTab({
         <UserModal
           initial={isNew ? EMPTY_FORM : userToForm(editItem)}
           isNew={isNew}
-          existingRole={isNew ? null : editItem.role}
+          wasOwner={!isNew && Array.isArray(editItem.roles) && editItem.roles.includes('owner')}
           onClose={() => setEditItem(null)}
           onSave={handleSave}
         />
@@ -262,11 +298,11 @@ export function StaffTab({
 }
 
 function UserModal({
-  initial, isNew, existingRole, onClose, onSave,
+  initial, isNew, wasOwner, onClose, onSave,
 }: {
   initial: FormState;
   isNew: boolean;
-  existingRole: Role | null;
+  wasOwner: boolean;
   onClose: () => void;
   onSave: (f: FormState) => Promise<void>;
 }) {
@@ -276,19 +312,37 @@ function UserModal({
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) =>
     setForm(prev => ({ ...prev, [k]: v }));
 
-  // Owner role editing rules:
-  //   - When creating new: any role allowed, including another owner.
-  //   - When editing existing owner: role is locked (can't demote). Only a
-  //     super-admin in config-crm can flip an owner to non-owner.
-  //   - When editing non-owner: can freely switch between driver/manager, but
-  //     can't promote them to owner via edit (create a new owner record instead).
-  const isExistingOwner = existingRole === 'owner';
-  const canEditRole = !isExistingOwner;
-  const availableRoles: Role[] = isNew ? ['driver', 'manager', 'owner'] : ['driver', 'manager'];
+  const ALL_ROLES: Role[] = ['driver', 'manager', 'owner'];
+
+  // Multi-role rules:
+  //   - Creating new: any role can be toggled freely, must pick at least one.
+  //   - Editing existing owner: 'owner' is locked ON (can't demote via UI).
+  //     Other roles can be added or removed freely.
+  //   - Editing non-owner: all three toggleable, but can't promote to owner
+  //     via edit (use "Додати" to create a new owner record instead).
+  const isOwnerLocked = wasOwner;
+  const isOwnerAddable = isNew; // on edit we don't let non-owners gain 'owner'
+
+  const toggleRole = (r: Role) => {
+    const has = form.roles.includes(r);
+    if (has) {
+      // Blocked: can't remove 'owner' from an existing owner.
+      if (r === 'owner' && isOwnerLocked) return;
+      set('roles', form.roles.filter(x => x !== r));
+    } else {
+      // Blocked: can't add 'owner' to a non-owner via edit.
+      if (r === 'owner' && !isOwnerAddable) return;
+      set('roles', [...form.roles, r]);
+    }
+  };
 
   const submit = async () => {
     if (!form.login.trim() || !form.password.trim()) {
       alert('Логін і пароль обов’язкові');
+      return;
+    }
+    if (form.roles.length === 0) {
+      alert('Оберіть хоча б одну роль');
       return;
     }
     setSaving(true);
@@ -309,37 +363,43 @@ function UserModal({
         </div>
 
         <div className="flex-1 overflow-y-auto px-5 lg:px-6 py-4 lg:py-5 space-y-3 lg:space-y-4">
-          {/* Role toggle */}
+          {/* Role multi-select */}
           <div>
             <label className="block text-[10px] lg:text-xs font-bold text-muted uppercase tracking-wider mb-1.5 lg:mb-2">
-              Роль {isExistingOwner && <span className="text-violet-600">(заблоковано)</span>}
+              Ролі <span className="text-muted/60 normal-case">(можна кілька)</span>
             </label>
-            <div className={`grid ${availableRoles.length === 3 ? 'grid-cols-3' : 'grid-cols-2'} gap-2`}>
-              {availableRoles.map(role => {
-                const active = form.role === role;
-                const Icon = role === 'driver' ? TruckIcon : role === 'manager' ? UsersIcon : ShieldCheck;
-                const activeClass =
-                  role === 'driver'  ? 'bg-emerald-500 text-white shadow-sm' :
-                  role === 'manager' ? 'bg-blue-500 text-white shadow-sm' :
-                                       'bg-violet-500 text-white shadow-sm';
+            <div className="grid grid-cols-3 gap-2">
+              {ALL_ROLES.map(role => {
+                const active = form.roles.includes(role);
+                const locked =
+                  (role === 'owner' && isOwnerLocked && active) ||
+                  (role === 'owner' && !isOwnerAddable && !active);
                 return (
                   <button
                     key={role}
-                    onClick={() => canEditRole && set('role', role)}
-                    disabled={!canEditRole}
+                    onClick={() => toggleRole(role)}
+                    disabled={locked}
+                    title={locked
+                      ? (active ? 'Роль «Власник» не можна зняти через UI' : 'Промоція до «Власник» тільки при створенні нового запису')
+                      : undefined}
                     className={`flex items-center justify-center gap-2 py-2.5 lg:py-3 rounded-xl text-sm font-bold transition-all ${
-                      active ? activeClass : 'bg-bg text-muted border border-border hover:bg-white'
-                    } ${canEditRole ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'}`}
+                      active ? roleActiveClass(role) : 'bg-bg text-muted border border-border hover:bg-white'
+                    } ${locked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
                   >
-                    <Icon className="w-4 h-4 lg:w-5 lg:h-5" />
+                    <RoleIcon role={role} className="w-4 h-4 lg:w-5 lg:h-5" />
                     {ROLE_LABEL[role]}
                   </button>
                 );
               })}
             </div>
-            {isExistingOwner && (
+            {isOwnerLocked && (
               <div className="mt-2 text-[11px] text-violet-600 bg-violet-50 border border-violet-200 rounded-lg px-3 py-2">
-                Роль «Власник» може змінити лише супер-адмін у config-crm.
+                Роль «Власник» заблокована. Знімається тільки супер-адміном у config-crm.
+              </div>
+            )}
+            {!isNew && !isOwnerAddable && (
+              <div className="mt-2 text-[11px] text-muted bg-bg border border-border rounded-lg px-3 py-2">
+                Додати роль «Власник» можна тільки при створенні нового запису.
               </div>
             )}
           </div>
