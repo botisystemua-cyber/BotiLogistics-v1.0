@@ -275,7 +275,17 @@ function saveManagerSlots(slots) {
 }
 
 function getManagerName() {
+    // Prefer boti_session (set by config-crm login) over legacy per-device slot
+    try {
+        var s = JSON.parse(localStorage.getItem('boti_session') || 'null');
+        if (s && s.user_name) return s.user_name;
+        if (s && s.user_login) return s.user_login;
+    } catch (_) {}
     return localStorage.getItem(MANAGER_ACTIVE_KEY) || '';
+}
+
+function getBotiSession() {
+    try { return JSON.parse(localStorage.getItem('boti_session') || 'null'); } catch (_) { return null; }
 }
 
 function setManagerName(name) {
@@ -297,27 +307,42 @@ function updateAvatarUI() {
 }
 
 function renderManagerSlots() {
-    var slots = getManagerSlots();
-    var active = getManagerName();
-    var hasActive = !!active;
-    var html = '';
+    var session = getBotiSession();
+    var container = document.getElementById('managerSlots');
+    if (!container) return;
 
-    for (var i = 0; i < slots.length; i++) {
-        var isActive = (slots[i] === active);
-        var initials = slots[i].trim().split(/\s+/).map(function(p) { return p[0]; }).join('').substring(0, 2).toUpperCase();
-        var colors = ['#3b82f6', '#10b981', '#f59e0b'];
-        html += '<div style="display:flex;align-items:center;gap:12px;padding:12px;margin-bottom:8px;border-radius:8px;cursor:pointer;border:2px solid ' + (isActive ? 'var(--accent)' : 'var(--border)') + ';background:' + (isActive ? '#fef2f2' : 'white') + '" onclick="selectManager(' + i + ')">';
-        html += '<div style="width:40px;height:40px;border-radius:50%;background:' + colors[i] + ';display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:14px;flex-shrink:0">' + initials + '</div>';
-        html += '<div style="flex:1;min-width:0"><div style="font-weight:700;font-size:14px;color:var(--text-primary)">' + slots[i] + '</div>';
-        html += '<div style="font-size:11px;color:var(--text-secondary)">' + (isActive ? 'Зараз працює' : 'Натисніть для входу') + '</div></div>';
-        html += '<button onclick="event.stopPropagation();renameManager(' + i + ')" style="background:none;border:1px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;font-size:11px;color:var(--text-secondary)" title="Перейменувати">✏️</button>';
-        html += '</div>';
+    if (!session) {
+        container.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text-secondary);font-size:13px">Сесія відсутня. <a href="../config-crm/" style="color:var(--accent);font-weight:600">Увійти</a></div>';
+        var closeBtnNoSess = document.getElementById('managerModalClose');
+        if (closeBtnNoSess) closeBtnNoSess.style.display = 'none';
+        return;
     }
 
-    document.getElementById('managerSlots').innerHTML = html;
-    // Показувати кнопку закриття тільки якщо вже увійшли
+    var name = session.user_name || session.user_login || '—';
+    var roleMap = { owner: 'Власник', manager: 'Менеджер', driver: 'Водій' };
+    var roleLabel = roleMap[session.role] || session.role || '';
+    var tenant = session.tenant_name || session.tenant_id || '';
+    var initials = name.trim().split(/\s+/).map(function(p) { return p[0]; }).join('').substring(0, 2).toUpperCase();
+
+    var html = '';
+    html += '<div style="display:flex;align-items:center;gap:14px;padding:16px;border-radius:12px;border:2px solid var(--border);background:var(--bg-secondary, #f9fafb);margin-bottom:12px">';
+    html += '<div style="width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,#3b82f6,#6366f1);display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:18px;flex-shrink:0">' + initials + '</div>';
+    html += '<div style="flex:1;min-width:0">';
+    html += '<div style="font-weight:700;font-size:15px;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + name + '</div>';
+    if (roleLabel) html += '<div style="font-size:12px;color:var(--text-secondary);margin-top:2px">' + roleLabel + '</div>';
+    if (tenant)    html += '<div style="font-size:11px;color:var(--text-secondary);margin-top:2px;opacity:.8">🏢 ' + tenant + '</div>';
+    html += '</div>';
+    html += '</div>';
+
+    html += '<button onclick="botiLogout()" style="width:100%;padding:12px;border:2px solid var(--border);border-radius:10px;background:white;color:#dc2626;font-weight:700;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:all .2s" onmouseover="this.style.background=\'#fef2f2\';this.style.borderColor=\'#fecaca\'" onmouseout="this.style.background=\'white\';this.style.borderColor=\'var(--border)\'">';
+    html += '<span>🚪</span><span>Вийти</span>';
+    html += '</button>';
+
+    container.innerHTML = html;
+
+    // Always allow closing — user is already logged in via config-crm
     var closeBtn = document.getElementById('managerModalClose');
-    if (closeBtn) closeBtn.style.display = hasActive ? '' : 'none';
+    if (closeBtn) closeBtn.style.display = '';
 }
 
 function selectManager(idx) {
@@ -546,6 +571,7 @@ function silentSync(manual, force) {
             updateTripFilterDropdown();
             updateTripAutoFilterDropdown();
             render();
+            if (currentView === 'trips') renderTrips();
             updateSyncTime();
             showToast('✅ Оновлено: ' + (passengers ? passengers.length : 0) + ' пасажирів, ' + trips.length + ' рейсів, ' + (archivedPassengers ? archivedPassengers.length : 0) + ' в архіві');
         }).catch((e) => {
@@ -601,6 +627,7 @@ function silentSync(manual, force) {
         updateTripFilterDropdown();
         updateTripAutoFilterDropdown();
         render();
+        if (currentView === 'trips') renderTrips();
         updateSyncTime();
     }).catch(() => {});
 }
@@ -3977,6 +4004,16 @@ function renderTripCalendar() {
 }
 
 function toggleTripDate(dateStr) {
+    // Edit mode is single-date: each calendar row in DB is exactly one
+    // route_date, so picking a new day must REPLACE the current one,
+    // not add to it. Otherwise saveTrip → sbUpdateTrip uses dates[0]
+    // (the old date) and the new pick is silently ignored.
+    if (editingTripCalId) {
+        tripSelectedDates = [dateStr];
+        renderTripCalendar();
+        renderSelectedDates();
+        return;
+    }
     const idx = tripSelectedDates.indexOf(dateStr);
     if (idx >= 0) tripSelectedDates.splice(idx, 1);
     else tripSelectedDates.push(dateStr);
@@ -4028,14 +4065,32 @@ async function saveTrip() {
         : { city, dir, vehicles, dates: tripSelectedDates };
 
     const res = await apiPost(action, payload);
-    hideLoader();
 
     if (res.ok) {
-        showToast('✅ Рейс ' + (editingTripCalId ? 'оновлено' : 'створено'));
+        // Optimistic merge so the new rows are visible immediately,
+        // even before silentSync resolves.
+        if (Array.isArray(res.data)) {
+            // create → array of inserted rows
+            trips = trips.concat(res.data);
+        } else if (res.data && (res.data.cal_id || res.data.CAL_ID)) {
+            // update → single row
+            const updatedId = res.data.cal_id || res.data.CAL_ID;
+            const idx = trips.findIndex(t => (t.cal_id || t.CAL_ID) === updatedId);
+            if (idx >= 0) trips[idx] = res.data;
+            else trips.push(res.data);
+        }
+
         closeTripForm();
-        silentSync();
         showTripsView();
+        hideLoader();
+        showToast('✅ Рейс ' + (editingTripCalId ? 'оновлено' : 'створено'));
+
+        // Refresh from server in background; re-render trips view when done.
+        silentSync(false, true).then(() => {
+            if (currentView === 'trips') renderTrips();
+        });
     } else {
+        hideLoader();
         showToast('❌ ' + (res.error || 'Помилка'));
     }
 }
@@ -4069,7 +4124,12 @@ function editTrip(calId) {
         if (seatsEl) seatsEl.textContent = t.max_seats || 7;
     }
 
-    tripSelectedDates = t.date ? [t.date] : [];
+    // Calendar renders dateStr as DD.MM.YYYY, so normalise the trip's
+    // date (which arrives as ISO YYYY-MM-DD from Supabase) to the same
+    // shape — otherwise the day square doesn't highlight as selected
+    // and any subsequent toggle leaves a mixed-format array that
+    // sbUpdateTrip can't save.
+    tripSelectedDates = t.date ? [formatTripDate(t.date)] : [];
     renderTripCalendar();
     renderSelectedDates();
     updateSeatPreview(1);
