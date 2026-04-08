@@ -144,7 +144,7 @@ function ClientsScreen() {
           <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
           <div>
             <div>{error}</div>
-            {error.includes('password') || error.includes('modules') ? (
+            {error.includes('modules') ? (
               <div className="mt-1 text-xs font-normal text-red-700">
                 Запусти SQL з <code className="bg-red-100 px-1 rounded">sql/2026-04-add-client-auth.sql</code> у Supabase Dashboard → SQL Editor.
               </div>
@@ -166,7 +166,6 @@ function ClientsScreen() {
               <tr className="bg-bg border-b-2 border-border">
                 <Th>Логін</Th>
                 <Th>Назва компанії</Th>
-                <Th>Пароль</Th>
                 <Th>Модулі</Th>
                 <Th className="text-right">Дії</Th>
               </tr>
@@ -176,11 +175,6 @@ function ClientsScreen() {
                 <tr key={c.id} className="border-b border-border last:border-0 hover:bg-bg/50">
                   <Td><code className="font-mono text-xs font-bold">{c.tenant_id}</code></Td>
                   <Td className="font-semibold">{c.name}</Td>
-                  <Td>
-                    {c.password
-                      ? <span className="font-mono text-xs">{'•'.repeat(Math.min(c.password.length, 8))}</span>
-                      : <span className="text-xs text-muted italic">не задано</span>}
-                  </Td>
                   <Td>
                     <div className="flex flex-wrap gap-1">
                       {(c.modules ?? []).map((m) => (
@@ -245,7 +239,6 @@ function ClientFormModal({
 }: { initial: Client | null; onClose: () => void; onSaved: () => void }) {
   const [tenantId, setTenantId] = useState(initial?.tenant_id ?? '');
   const [name, setName] = useState(initial?.name ?? '');
-  const [password, setPassword] = useState(initial?.password ?? '');
   const [logoUrl, setLogoUrl] = useState(initial?.logo_url ?? '');
   const [modules, setModules] = useState<string[]>(initial?.modules ?? ['passenger']);
   const [saving, setSaving] = useState(false);
@@ -266,7 +259,7 @@ function ClientFormModal({
       const input: ClientInput = {
         tenant_id: tenantId.trim(),
         name: name.trim(),
-        password: password.trim() || null,
+        password: null,
         logo_url: logoUrl.trim() || null,
         modules,
       };
@@ -306,14 +299,6 @@ function ClientFormModal({
               onChange={(e) => setName(e.target.value)}
               placeholder="Gresco Express"
               className="w-full px-3 py-2.5 bg-bg border-2 border-border rounded-xl text-sm focus:outline-none focus:border-violet-400"
-            />
-          </Field>
-          <Field label="Пароль">
-            <input
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="залиш пустим щоб не змінювати"
-              className="w-full px-3 py-2.5 bg-bg border-2 border-border rounded-xl text-sm font-mono focus:outline-none focus:border-violet-400"
             />
           </Field>
           <Field label="Logo URL (опційно)">

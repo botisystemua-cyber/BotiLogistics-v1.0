@@ -70,6 +70,7 @@ export async function authenticate(
     .eq('login', login)
     .eq('password', password)
     .eq('role', role)
+    .eq('is_active', true)
     .maybeSingle();
 
   if (error) throw error;

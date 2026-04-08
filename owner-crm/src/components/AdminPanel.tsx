@@ -137,6 +137,7 @@ export function AdminPanel({ session }: { session: BotiSession }) {
                 <StaffTab
                   users={users}
                   tenantId={session.tenant_id}
+                  currentUserLogin={session.user_login}
                   onReload={loadAll}
                 />
               )}

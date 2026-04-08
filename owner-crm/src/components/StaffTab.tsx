@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   RefreshCw, Pencil, Trash2, X, Save, UserPlus,
-  Truck as TruckIcon, Users as UsersIcon, ShieldCheck,
+  Truck as TruckIcon, Users as UsersIcon, ShieldCheck, Crown,
 } from 'lucide-react';
 import {
   createUserForTenant, updateUser, deleteUser,
@@ -67,16 +67,37 @@ function userToForm(u: User): FormState {
   };
 }
 
+// Friendly error mapping. Supabase/Postgres returns "duplicate key value violates
+// unique constraint ..." — surface that as a plain message instead of raw SQL.
+function humanizeError(e: unknown): string {
+  const msg = (e as Error)?.message || String(e || '');
+  if (/duplicate key/i.test(msg) || /users_login_key/i.test(msg) || /unique constraint/i.test(msg)) {
+    return 'Користувач з таким логіном вже існує. Оберіть інший логін.';
+  }
+  return msg || 'Невідома помилка';
+}
+
 export function StaffTab({
-  users, tenantId, onReload,
+  users, tenantId, currentUserLogin, onReload,
 }: {
   users: User[];
   tenantId: string;
+  currentUserLogin: string;
   onReload: () => void;
 }) {
   const [filter, setFilter] = useState<RoleFilter>('all');
   const [editItem, setEditItem] = useState<User | null>(null);
   const [isNew, setIsNew] = useState(false);
+
+  // Founder = first-created owner of this tenant. Can never be deleted (by anyone,
+  // including themselves). Other owners are deletable, but still can't delete themselves.
+  const founderId = useMemo(() => {
+    const owners = users
+      .filter(u => u.role === 'owner')
+      .slice()
+      .sort((a, b) => (a.created_at || '').localeCompare(b.created_at || ''));
+    return owners[0]?.id ?? null;
+  }, [users]);
 
   const filtered = filter === 'all' ? users : users.filter(u => u.role === filter);
   const countByRole = (r: Role) => users.filter(u => u.role === r).length;
@@ -100,17 +121,25 @@ export function StaffTab({
       setEditItem(null);
       onReload();
     } catch (e) {
-      alert('Помилка: ' + ((e as Error).message || ''));
+      alert('Помилка: ' + humanizeError(e));
     }
   };
 
   const handleDelete = async (u: User) => {
+    if (u.id === founderId) {
+      alert('Неможливо видалити першого власника (засновника). Його може змінити лише супер-адмін у config-crm.');
+      return;
+    }
+    if (u.login === currentUserLogin) {
+      alert('Ви не можете видалити власний обліковий запис.');
+      return;
+    }
     if (!confirm(`Видалити користувача ${u.full_name || u.login}?`)) return;
     try {
       await deleteUser(u.id);
       onReload();
     } catch (e) {
-      alert('Помилка: ' + ((e as Error).message || ''));
+      alert('Помилка: ' + humanizeError(e));
     }
   };
 
@@ -142,8 +171,22 @@ export function StaffTab({
         <div className="text-center py-12 lg:py-16 text-muted text-sm lg:text-base">Немає співробітників</div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-2.5 lg:gap-4">
-          {filtered.map(u => (
-            <div key={u.id} className="bg-white rounded-xl lg:rounded-2xl border border-border overflow-hidden shadow-sm">
+          {filtered.map(u => {
+            const isFounder = u.id === founderId;
+            const isSelf = u.login === currentUserLogin;
+            const deleteLocked = isFounder || isSelf;
+            const deleteTitle = isFounder
+              ? 'Першого власника видалити неможливо'
+              : isSelf
+                ? 'Не можна видалити власний обліковий запис'
+                : 'Видалити';
+            return (
+            <div
+              key={u.id}
+              className={`rounded-xl lg:rounded-2xl border overflow-hidden shadow-sm ${
+                isFounder ? 'bg-violet-50/40 border-violet-200' : 'bg-white border-border'
+              }`}
+            >
               <div className="p-3 lg:p-5 flex items-center gap-3 lg:gap-4">
                 <div className={`w-10 h-10 lg:w-14 lg:h-14 rounded-lg lg:rounded-xl flex items-center justify-center shrink-0 ${roleBg(u.role)}`}>
                   {roleIcon(u.role, 'w-4 h-4 lg:w-5 lg:h-5')}
@@ -156,6 +199,17 @@ export function StaffTab({
                     <span className={`text-[10px] lg:text-xs font-bold px-2 lg:px-2.5 py-0.5 rounded-full border ${roleBg(u.role)}`}>
                       {ROLE_LABEL[u.role]}
                     </span>
+                    {isFounder && (
+                      <span className="flex items-center gap-1 text-[10px] lg:text-xs font-bold px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 border border-violet-300">
+                        <Crown className="w-3 h-3" />
+                        Засновник
+                      </span>
+                    )}
+                    {isSelf && (
+                      <span className="text-[10px] lg:text-xs font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-600 border border-amber-200">
+                        Це ви
+                      </span>
+                    )}
                     {u.is_active === false && (
                       <span className="text-[10px] lg:text-xs font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 border border-gray-200">
                         Неактивний
@@ -178,14 +232,23 @@ export function StaffTab({
                     className="p-1.5 lg:p-2.5 rounded-lg lg:rounded-xl hover:bg-blue-50 cursor-pointer transition-all">
                     <Pencil className="w-4 h-4 lg:w-5 lg:h-5 text-blue-500" />
                   </button>
-                  <button onClick={() => handleDelete(u)}
-                    className="p-1.5 lg:p-2.5 rounded-lg lg:rounded-xl hover:bg-red-50 cursor-pointer transition-all">
+                  <button
+                    onClick={() => handleDelete(u)}
+                    disabled={deleteLocked}
+                    title={deleteTitle}
+                    className={`p-1.5 lg:p-2.5 rounded-lg lg:rounded-xl transition-all ${
+                      deleteLocked
+                        ? 'opacity-30 cursor-not-allowed'
+                        : 'hover:bg-red-50 cursor-pointer'
+                    }`}
+                  >
                     <Trash2 className="w-4 h-4 lg:w-5 lg:h-5 text-red-400" />
                   </button>
                 </div>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
