@@ -276,10 +276,15 @@ function UserModal({
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) =>
     setForm(prev => ({ ...prev, [k]: v }));
 
-  // Owner role is locked: you can't create a new owner, and you can't change
-  // an existing owner's role (only a super-admin in config-crm can do that).
+  // Owner role editing rules:
+  //   - When creating new: any role allowed, including another owner.
+  //   - When editing existing owner: role is locked (can't demote). Only a
+  //     super-admin in config-crm can flip an owner to non-owner.
+  //   - When editing non-owner: can freely switch between driver/manager, but
+  //     can't promote them to owner via edit (create a new owner record instead).
   const isExistingOwner = existingRole === 'owner';
   const canEditRole = !isExistingOwner;
+  const availableRoles: Role[] = isNew ? ['driver', 'manager', 'owner'] : ['driver', 'manager'];
 
   const submit = async () => {
     if (!form.login.trim() || !form.password.trim()) {
@@ -309,21 +314,21 @@ function UserModal({
             <label className="block text-[10px] lg:text-xs font-bold text-muted uppercase tracking-wider mb-1.5 lg:mb-2">
               Роль {isExistingOwner && <span className="text-violet-600">(заблоковано)</span>}
             </label>
-            <div className="grid grid-cols-2 gap-2">
-              {(['driver', 'manager'] as const).map(role => {
+            <div className={`grid ${availableRoles.length === 3 ? 'grid-cols-3' : 'grid-cols-2'} gap-2`}>
+              {availableRoles.map(role => {
                 const active = form.role === role;
-                const Icon = role === 'driver' ? TruckIcon : UsersIcon;
+                const Icon = role === 'driver' ? TruckIcon : role === 'manager' ? UsersIcon : ShieldCheck;
+                const activeClass =
+                  role === 'driver'  ? 'bg-emerald-500 text-white shadow-sm' :
+                  role === 'manager' ? 'bg-blue-500 text-white shadow-sm' :
+                                       'bg-violet-500 text-white shadow-sm';
                 return (
                   <button
                     key={role}
                     onClick={() => canEditRole && set('role', role)}
                     disabled={!canEditRole}
                     className={`flex items-center justify-center gap-2 py-2.5 lg:py-3 rounded-xl text-sm font-bold transition-all ${
-                      active
-                        ? role === 'driver'
-                          ? 'bg-emerald-500 text-white shadow-sm'
-                          : 'bg-blue-500 text-white shadow-sm'
-                        : 'bg-bg text-muted border border-border hover:bg-white'
+                      active ? activeClass : 'bg-bg text-muted border border-border hover:bg-white'
                     } ${canEditRole ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'}`}
                   >
                     <Icon className="w-4 h-4 lg:w-5 lg:h-5" />
