@@ -2587,9 +2587,9 @@ function openAddModal() {
     document.getElementById('fSeats').value = '1';
     document.getElementById('fDate').value = '';
     document.getElementById('fDirection').value = currentDir === 'eu-ua' ? 'eu-ua' : 'ua-eu';
-    document.getElementById('fCurrency').value = 'UAH';
-    document.getElementById('fCurrencyDeposit').value = 'UAH';
-    document.getElementById('fCurrencyWeight').value = 'UAH';
+    document.getElementById('fCurrency').value = 'EUR';
+    document.getElementById('fCurrencyDeposit').value = 'EUR';
+    document.getElementById('fCurrencyWeight').value = 'EUR';
     // Скидаємо SMS парсер
     document.getElementById('smsInput').value = '';
     document.getElementById('smsParseResult').style.display = 'none';
