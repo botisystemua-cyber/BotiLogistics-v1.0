@@ -551,8 +551,7 @@ function tripRowToFront(row) {
         layout:     row.seating_layout || '',
         max_seats:  row.total_seats != null ? row.total_seats : 0,
         occupied:   row.occupied_seats != null ? row.occupied_seats : 0,
-        free_seats: row.available_seats != null ? row.available_seats
-                    : Math.max(0, (row.total_seats || 0) - (row.occupied_seats || 0)),
+        free_seats: Math.max(0, (row.total_seats || 0) - (row.occupied_seats || 0)),
     };
 }
 
