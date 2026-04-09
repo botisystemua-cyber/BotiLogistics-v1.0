@@ -551,6 +551,8 @@ function tripRowToFront(row) {
         layout:     row.seating_layout || '',
         max_seats:  row.total_seats != null ? row.total_seats : 0,
         occupied:   row.occupied_seats != null ? row.occupied_seats : 0,
+        free_seats: row.available_seats != null ? row.available_seats
+                    : Math.max(0, (row.total_seats || 0) - (row.occupied_seats || 0)),
     };
 }
 
@@ -710,31 +712,14 @@ async function sbAssignTrip(params) {
         const paxIds = params.pax_ids || [];
 
         // Update passengers with CAL_ID
+        // DB trigger recalc_calendar_occupancy() auto-updates
+        // calendar.occupied_seats / available_seats on passengers change.
         const { error } = await sb
             .from('passengers')
             .update({ cal_id: calId, updated_at: new Date().toISOString() })
             .eq('tenant_id', TENANT_ID)
             .in('pax_id', paxIds);
         if (error) throw error;
-
-        // Update trip seat counts
-        const { data: paxCount } = await sb
-            .from('passengers')
-            .select('pax_id', { count: 'exact' })
-            .eq('tenant_id', TENANT_ID)
-            .eq('cal_id', calId)
-            .eq('is_archived', false);
-
-        if (paxCount) {
-            await sb
-                .from('calendar')
-                .update({
-                    occupied_seats: paxCount.length,
-                    updated_at: new Date().toISOString()
-                })
-                .eq('tenant_id', TENANT_ID)
-                .eq('cal_id', calId);
-        }
 
         return { ok: true };
     } catch (e) {
@@ -748,29 +733,14 @@ async function sbUnassignTrip(params) {
         const calId = params.cal_id;
         const paxIds = params.pax_ids || [];
 
+        // DB trigger recalc_calendar_occupancy() auto-updates
+        // calendar.occupied_seats / available_seats on passengers change.
         const { error } = await sb
             .from('passengers')
             .update({ cal_id: null, updated_at: new Date().toISOString() })
             .eq('tenant_id', TENANT_ID)
             .in('pax_id', paxIds);
         if (error) throw error;
-
-        // Update trip seat counts
-        const { data: remaining } = await sb
-            .from('passengers')
-            .select('pax_id')
-            .eq('tenant_id', TENANT_ID)
-            .eq('cal_id', calId)
-            .eq('is_archived', false);
-
-        await sb
-            .from('calendar')
-            .update({
-                occupied_seats: remaining ? remaining.length : 0,
-                updated_at: new Date().toISOString()
-            })
-            .eq('tenant_id', TENANT_ID)
-            .eq('cal_id', calId);
 
         return { ok: true };
     } catch (e) {
