@@ -542,7 +542,6 @@ async function sbGetArchive(params) {
 // BOTH so renderTrips/getFilteredTrips/etc. work without touching the UI.
 function tripRowToFront(row) {
     if (!row) return row;
-    console.log('[tripRowToFront] total_seats:', row.total_seats, 'occupied:', row.occupied_seats, '→ free:', (row.total_seats || 0) - (row.occupied_seats || 0));
     return {
         ...sbToGasObj(row, SB_TO_GAS_CAL),
         ...row,
