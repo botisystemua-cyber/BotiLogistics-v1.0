@@ -297,12 +297,22 @@
 
         <!-- TRIPS VIEW -->
         <div class="trips-view" id="tripsView">
-            <div class="trips-filters" style="display:flex;flex-direction:column;gap:8px;">
-                <div class="trip-filters-row">
+            <div class="trips-filters" style="display:flex;flex-direction:column;gap:6px;">
+                <div class="trip-filters-row" style="display:flex;gap:6px;align-items:center;">
+                    <span style="font-size:11px;font-weight:700;color:var(--text-secondary);white-space:nowrap;">Напрямок</span>
+                    <button class="trip-filter-btn" data-dir="all" onclick="setTripDirFilter(this,'all')">Всі</button>
+                    <button class="trip-filter-btn dir-ua-eu" data-dir="ua-eu" onclick="setTripDirFilter(this,'ua-eu')">UA → EU</button>
+                    <button class="trip-filter-btn dir-eu-ua" data-dir="eu-ua" onclick="setTripDirFilter(this,'eu-ua')">EU → UA</button>
+                </div>
+                <div class="trip-filters-row" style="display:flex;gap:6px;align-items:center;">
                     <button class="trip-filter-btn active" data-time="future" onclick="setTripTimeFilter(this,'future')">Майбутні</button>
                     <button class="trip-filter-btn" data-time="past" onclick="setTripTimeFilter(this,'past')">Минулі</button>
                     <button class="trip-filter-btn" data-time="all" onclick="setTripTimeFilter(this,'all')">Всі</button>
-                    <div style="width:1px;height:20px;background:var(--border);margin:0 4px;"></div>
+                </div>
+                <div class="trip-filters-row" style="display:flex;gap:6px;align-items:center;">
+                    <select class="trip-filter-select" id="tripAutoFilter" onchange="setTripAutoFilter(this.value)" title="Фільтр по авто">
+                        <option value="all">Всі авто</option>
+                    </select>
                     <div class="tcal-wrap" id="tcalWrap">
                         <button class="tcal-toggle" id="tcalToggle" onclick="toggleTripCalendar()">
                             <span class="tcal-icon">📅</span>
@@ -310,15 +320,7 @@
                         </button>
                         <div class="tcal-dropdown" id="tcalDropdown"></div>
                     </div>
-                    <div style="width:1px;height:20px;background:var(--border);margin:0 4px;"></div>
-                    <button class="trip-filter-btn" data-dir="all" onclick="setTripDirFilter(this,'all')">Всі</button>
-                    <button class="trip-filter-btn dir-ua-eu" data-dir="ua-eu" onclick="setTripDirFilter(this,'ua-eu')">UA → EU</button>
-                    <button class="trip-filter-btn dir-eu-ua" data-dir="eu-ua" onclick="setTripDirFilter(this,'eu-ua')">EU → UA</button>
-                    <div style="width:1px;height:20px;background:var(--border);margin:0 4px;"></div>
-                    <select class="trip-filter-select" id="tripAutoFilter" onchange="setTripAutoFilter(this.value)" title="Фільтр по авто">
-                        <option value="all">Всі авто</option>
-                    </select>
-                    <button class="bs-btn primary" style="margin-left:auto;padding:8px 16px;font-size:11px;" onclick="openNewTripForm()">➕ Новий рейс</button>
+                    <button class="bs-btn primary" style="margin-left:auto;padding:8px 16px;font-size:11px;flex-shrink:0;" onclick="openNewTripForm()">➕ Новий рейс</button>
                 </div>
             </div>
             <div class="trips-grid" id="tripsGrid"></div>
@@ -335,12 +337,11 @@
                     <span id="routeDashToggle" style="font-size:12px;opacity:0.7;transition:transform 0.2s;">▼</span>
                 </div>
                 <div id="routeDashContent" style="margin-top:10px;display:none;">
-                    <div style="display:flex;gap:6px;align-items:center;">
+                    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
                         <button id="btnRouteBack" class="bs-btn" style="display:none;background:rgba(255,255,255,0.3);color:white;font-size:11px;padding:8px 14px;border:1px solid rgba(255,255,255,0.4);font-weight:800;" onclick="event.stopPropagation();toggleRouteExpensesView()">← Назад</button>
                         <button id="btnRouteExpenses" class="bs-btn" style="background:rgba(255,255,255,0.2);color:white;font-size:11px;padding:8px 14px;border:1px solid rgba(255,255,255,0.3);" onclick="event.stopPropagation();toggleRouteExpensesView()">💰 Витрати</button>
                         <button id="btnRouteOptimize" class="bs-btn" style="background:rgba(255,255,255,0.2);color:white;font-size:11px;padding:8px 14px;border:1px solid rgba(255,255,255,0.3);" onclick="event.stopPropagation();optimizeRouteOrder()">⚡ Оптимізувати</button>
-                        <div style="flex:1;"></div>
-                        <button class="bs-btn" style="background:rgba(220,38,38,0.3);color:white;font-size:11px;padding:8px 14px;border:1px solid rgba(220,38,38,0.4);flex-shrink:0;" onclick="event.stopPropagation();confirmDeleteRoute(activeRouteIdx)">🗑️ Видалити</button>
+                        <button class="bs-btn" style="background:rgba(220,38,38,0.3);color:white;font-size:11px;padding:8px 14px;border:1px solid rgba(220,38,38,0.4);" onclick="event.stopPropagation();confirmDeleteRoute(activeRouteIdx)">🗑️ Видалити</button>
                     </div>
                 </div>
             </div>
