@@ -874,13 +874,13 @@ async function openRoute(idx, forceRefresh) {
 }
 
 // ── Згортальний дашборд маршруту ──
-function toggleRouteDashboard() {
+function toggleRouteDash() {
     var content = document.getElementById('routeDashContent');
     var toggle = document.getElementById('routeDashToggle');
     if (!content) return;
     var isOpen = content.style.display !== 'none';
     content.style.display = isOpen ? 'none' : 'block';
-    if (toggle) toggle.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(180deg)';
+    if (toggle) toggle.textContent = isOpen ? '▼' : '▲';
 }
 
 // ── Розгортальні секції фільтрів (Статуси / Фінанси) ──
@@ -4335,15 +4335,6 @@ function togglePcSection(section) {
     if (header) header.classList.toggle('collapsed');
     // Для календаря — рендеримо при відкритті
     if (section === 'paxCal' && content && !content.classList.contains('collapsed')) renderPaxCalendar();
-}
-
-function toggleRouteDash() {
-    var content = document.getElementById('routeDashContent');
-    var toggle = document.getElementById('routeDashToggle');
-    if (!content) return;
-    var isOpen = content.style.display !== 'none';
-    content.style.display = isOpen ? 'none' : 'block';
-    if (toggle) toggle.textContent = isOpen ? '▼' : '▲';
 }
 
 function togglePcSidebar() {

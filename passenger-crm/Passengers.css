@@ -276,11 +276,11 @@ select.detail-inline-edit { padding: 3px 4px; cursor: pointer; appearance: auto;
 .btn-card-action.btn-edit:hover { background: #f59e0b; color: white; }
 /* === POPUP ВИБОРУ МЕСЕНДЖЕРА: Viber, Telegram, WhatsApp, SmartSender ===
    Повноекранний overlay з popup по центру. Відкривається кнопкою "Писати" */
-.messenger-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.3); z-index: 200; align-items: center; justify-content: center; }
+.messenger-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.3); z-index: 200; align-items: flex-end; justify-content: flex-end; }
 .messenger-overlay.show { display: flex; }
-.messenger-popup { background: white; border-radius: 14px; padding: 16px; box-shadow: 0 8px 32px rgba(0,0,0,0.2); min-width: 240px; max-width: 300px; }
+.messenger-popup { background: white; border-radius: 14px; padding: 16px; box-shadow: 0 8px 32px rgba(0,0,0,0.2); min-width: 180px; max-width: 220px; margin: 0 16px 24px 0; }
 .messenger-popup-title { font-size: 13px; font-weight: 700; color: var(--text-primary); margin-bottom: 10px; text-align: center; }
-.messenger-popup-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.messenger-popup-grid { display: flex; flex-direction: column; gap: 8px; }
 .messenger-popup-item { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 12px 8px; border: 1px solid var(--border); border-radius: 10px; background: white; cursor: pointer; font-size: 12px; font-weight: 600; font-family: inherit; transition: all 0.15s; }
 .messenger-popup-item:hover { background: var(--bg-main); border-color: var(--primary); }
 .messenger-popup-cancel { display: block; width: 100%; margin-top: 10px; padding: 10px; border: none; border-radius: 10px; background: var(--bg-main); color: var(--text-secondary); font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit; }
