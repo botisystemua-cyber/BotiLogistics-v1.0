@@ -375,6 +375,9 @@ select.detail-inline-edit { padding: 3px 4px; cursor: pointer; appearance: auto;
 .rte-section-toggle.open span { display: inline-block; transform: rotate(90deg); }
 .rte-filter-hidden { display: none !important; }
 .rte-filter-visible { display: contents !important; }
+.trip-filter-btn.dir-all { border-color: #7c3aed; color: #7c3aed; font-weight: 800; }
+.trip-filter-btn.dir-all:hover { background: #ede9fe; }
+.trip-filter-btn.dir-all.active { background: #7c3aed; color: white; border-color: #7c3aed; }
 .trip-filter-btn.dir-ua-eu { border-color: #2563eb; color: #2563eb; font-weight: 800; }
 .trip-filter-btn.dir-ua-eu:hover { background: #dbeafe; }
 .trip-filter-btn.dir-ua-eu.active { background: #2563eb; color: white; border-color: #2563eb; }

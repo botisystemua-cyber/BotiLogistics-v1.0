@@ -297,11 +297,11 @@
 
         <!-- TRIPS VIEW -->
         <div class="trips-view" id="tripsView">
-            <div class="trips-filters" style="display:flex;flex-direction:column;gap:6px;align-items:flex-start;">
-                <div class="trip-filters-row" style="display:flex;gap:6px;align-items:center;justify-content:flex-start;">
-                    <button class="trip-filter-btn" data-dir="all" onclick="setTripDirFilter(this,'all')" style="padding:10px 14px;">Всі</button>
-                    <button class="trip-filter-btn dir-ua-eu" data-dir="ua-eu" onclick="setTripDirFilter(this,'ua-eu')" style="padding:10px 14px;">UA → EU</button>
-                    <button class="trip-filter-btn dir-eu-ua" data-dir="eu-ua" onclick="setTripDirFilter(this,'eu-ua')" style="padding:10px 14px;">EU → UA</button>
+            <div class="trips-filters" style="display:flex;flex-direction:column;gap:6px;">
+                <div class="trip-filters-row" style="display:flex;gap:6px;align-items:center;">
+                    <button class="trip-filter-btn dir-all" data-dir="all" onclick="setTripDirFilter(this,'all')" style="padding:10px 16px;border-radius:12px;">Всі</button>
+                    <button class="trip-filter-btn dir-ua-eu" data-dir="ua-eu" onclick="setTripDirFilter(this,'ua-eu')" style="padding:10px 16px;border-radius:12px;">UA → EU</button>
+                    <button class="trip-filter-btn dir-eu-ua" data-dir="eu-ua" onclick="setTripDirFilter(this,'eu-ua')" style="padding:10px 16px;border-radius:12px;">EU → UA</button>
                 </div>
                 <div class="trip-filters-row" style="display:flex;gap:6px;align-items:center;">
                     <button class="trip-filter-btn" data-time="all" onclick="setTripTimeFilter(this,'all')">Всі</button>
@@ -327,8 +327,8 @@
 
         <!-- ROUTES VIEW -->
         <div class="routes-view" id="routesView" style="display:none;">
-            <div id="routeHeaderBar" class="route-header-bar" style="display:none;">
-                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;cursor:pointer;" onclick="toggleRouteDash()">
+            <div id="routeHeaderBar" class="route-header-bar" style="display:none;cursor:pointer;" onclick="toggleRouteDash()">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
                     <div style="display:flex;align-items:center;gap:10px;">
                         <h2 id="routeViewTitle" style="margin:0;font-size:18px;font-weight:800;">🚐 Маршрут</h2>
                         <span class="route-subtitle" id="routeSubtitle" style="margin:0;"></span>
