@@ -305,9 +305,9 @@
                     <button class="trip-filter-btn dir-eu-ua" data-dir="eu-ua" onclick="setTripDirFilter(this,'eu-ua')">EU → UA</button>
                 </div>
                 <div class="trip-filters-row" style="display:flex;gap:6px;align-items:center;">
+                    <button class="trip-filter-btn" data-time="all" onclick="setTripTimeFilter(this,'all')">Всі</button>
                     <button class="trip-filter-btn active" data-time="future" onclick="setTripTimeFilter(this,'future')">Майбутні</button>
                     <button class="trip-filter-btn" data-time="past" onclick="setTripTimeFilter(this,'past')">Минулі</button>
-                    <button class="trip-filter-btn" data-time="all" onclick="setTripTimeFilter(this,'all')">Всі</button>
                 </div>
                 <div class="trip-filters-row" style="display:flex;gap:6px;align-items:center;">
                     <select class="trip-filter-select" id="tripAutoFilter" onchange="setTripAutoFilter(this.value)" title="Фільтр по авто">
