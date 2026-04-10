@@ -6076,7 +6076,7 @@ async function archiveFromRoute(rteId, sheetName, leadName) {
             // Знаходимо PAX_ID з даних маршруту для архівації в CRM
             var sheet = routes[activeRouteIdx];
             var row = sheet ? (sheet.rows || []).find(function(r) { return r._resolvedId === rteId || r['RTE_ID'] === rteId; }) : null;
-            var paxId = row ? (row['PAX_ID / PKG_ID'] || row['PAX_ID/PKG_ID'] || '') : '';
+            var paxId = row ? (row['PAX_ID / PKG_ID'] || row['PAX_ID/PKG_ID'] || row['PAX_ID'] || row['PKG_ID'] || '') : '';
             if (paxId) {
                 await apiPost('archivePassenger', { pax_ids: [paxId], reason: 'Архівовано з маршруту', archived_by: getManagerName() || 'Менеджер' });
             }
@@ -6107,7 +6107,7 @@ async function deleteFromRouteFull(rteId, sheetName, leadName) {
             const sheet = routes[activeRouteIdx];
             const row = sheet ? (sheet.rows || []).find(r => r._resolvedId === rteId || r['RTE_ID'] === rteId) : null;
             const idInfo = row ? getRouteRowIdInfo(row) : { id_col: 'RTE_ID', id_val: rteId };
-            const paxId = row ? (row['PAX_ID / PKG_ID'] || row['PAX_ID/PKG_ID'] || rteId) : rteId;
+            const paxId = row ? (row['PAX_ID / PKG_ID'] || row['PAX_ID/PKG_ID'] || row['PAX_ID'] || row['PKG_ID'] || rteId) : rteId;
             await apiPost('deleteFromSheet', { sheet: sheetName, id_col: idInfo.id_col, id_val: idInfo.id_val });
             await apiPost('deletePassenger', { pax_ids: [paxId], reason: 'Видалено з маршруту і CRM', archived_by: getManagerName() || 'Менеджер' });
             // Оновлюємо локальні дані
@@ -6142,7 +6142,7 @@ function routeBulkArchive() {
             for (const row of (sheet.rows || [])) {
                 const resolvedId = row._resolvedId || row['RTE_ID'];
                 if (!routeSelectedIds.has(resolvedId)) continue;
-                const paxId = row['PAX_ID / PKG_ID'] || row['PAX_ID/PKG_ID'] || '';
+                const paxId = row['PAX_ID / PKG_ID'] || row['PAX_ID/PKG_ID'] || row['PAX_ID'] || row['PKG_ID'] || '';
                 if (paxId) paxIds.push(paxId);
                 const idInfo = getRouteRowIdInfo(row);
                 if (idInfo) deleteInfos.push({ ...idInfo, resolvedId });
