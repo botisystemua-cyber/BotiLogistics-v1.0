@@ -363,7 +363,7 @@ select.detail-inline-edit { padding: 3px 4px; cursor: pointer; appearance: auto;
 .passengers-view { display: block; }
 .passengers-view.hidden { display: none; }
 
-.trips-filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; align-items: center; }
+.trips-filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; align-items: flex-start; }
 .trip-filter-btn { padding: 8px 16px; border: 1px solid var(--border); border-radius: 20px; background: white; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; white-space: nowrap; transition: all 0.2s; }
 .trip-filter-btn:hover { border-color: var(--orange); }
 .trip-filter-btn.active { background: var(--orange); color: white; border-color: var(--orange); }
