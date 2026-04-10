@@ -327,19 +327,20 @@
         <!-- ROUTES VIEW -->
         <div class="routes-view" id="routesView" style="display:none;">
             <div id="routeHeaderBar" class="route-header-bar" style="display:none;">
-                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;cursor:pointer;" onclick="toggleRouteDash()">
                     <div style="display:flex;align-items:center;gap:10px;">
                         <h2 id="routeViewTitle" style="margin:0;font-size:18px;font-weight:800;">🚐 Маршрут</h2>
                         <span class="route-subtitle" id="routeSubtitle" style="margin:0;"></span>
                     </div>
+                    <span id="routeDashToggle" style="font-size:12px;opacity:0.7;transition:transform 0.2s;">▼</span>
                 </div>
-                <div id="routeDashContent" style="margin-top:10px;">
-                    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+                <div id="routeDashContent" style="margin-top:10px;display:none;">
+                    <div style="display:flex;gap:6px;align-items:center;">
                         <button id="btnRouteBack" class="bs-btn" style="display:none;background:rgba(255,255,255,0.3);color:white;font-size:11px;padding:8px 14px;border:1px solid rgba(255,255,255,0.4);font-weight:800;" onclick="event.stopPropagation();toggleRouteExpensesView()">← Назад</button>
                         <button id="btnRouteExpenses" class="bs-btn" style="background:rgba(255,255,255,0.2);color:white;font-size:11px;padding:8px 14px;border:1px solid rgba(255,255,255,0.3);" onclick="event.stopPropagation();toggleRouteExpensesView()">💰 Витрати</button>
                         <button id="btnRouteOptimize" class="bs-btn" style="background:rgba(255,255,255,0.2);color:white;font-size:11px;padding:8px 14px;border:1px solid rgba(255,255,255,0.3);" onclick="event.stopPropagation();optimizeRouteOrder()">⚡ Оптимізувати</button>
                         <div style="flex:1;"></div>
-                        <button class="bs-btn" style="background:rgba(220,38,38,0.3);color:white;font-size:11px;padding:8px 14px;border:1px solid rgba(220,38,38,0.4);" onclick="event.stopPropagation();confirmDeleteRoute(activeRouteIdx)">🗑️ Видалити</button>
+                        <button class="bs-btn" style="background:rgba(220,38,38,0.3);color:white;font-size:11px;padding:8px 14px;border:1px solid rgba(220,38,38,0.4);flex-shrink:0;" onclick="event.stopPropagation();confirmDeleteRoute(activeRouteIdx)">🗑️ Видалити</button>
                     </div>
                 </div>
             </div>

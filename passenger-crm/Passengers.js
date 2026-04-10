@@ -4337,6 +4337,15 @@ function togglePcSection(section) {
     if (section === 'paxCal' && content && !content.classList.contains('collapsed')) renderPaxCalendar();
 }
 
+function toggleRouteDash() {
+    var content = document.getElementById('routeDashContent');
+    var toggle = document.getElementById('routeDashToggle');
+    if (!content) return;
+    var isOpen = content.style.display !== 'none';
+    content.style.display = isOpen ? 'none' : 'block';
+    if (toggle) toggle.textContent = isOpen ? '▼' : '▲';
+}
+
 function togglePcSidebar() {
     const sidebar = document.getElementById('pcSidebar');
     const btn = document.getElementById('pcSidebarCollapseBtn');
