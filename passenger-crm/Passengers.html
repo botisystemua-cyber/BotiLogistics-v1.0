@@ -297,9 +297,8 @@
 
         <!-- TRIPS VIEW -->
         <div class="trips-view" id="tripsView">
-            <div class="trips-filters" style="display:flex;flex-direction:column;gap:6px;">
-                <div class="trip-filters-row" style="display:flex;gap:6px;align-items:center;">
-                    <span style="font-size:11px;font-weight:700;color:var(--text-secondary);white-space:nowrap;">Напрямок</span>
+            <div class="trips-filters" style="display:flex;flex-direction:column;gap:6px;align-items:flex-start;">
+                <div class="trip-filters-row" style="display:flex;gap:6px;align-items:center;justify-content:flex-start;">
                     <button class="trip-filter-btn" data-dir="all" onclick="setTripDirFilter(this,'all')">Всі</button>
                     <button class="trip-filter-btn dir-ua-eu" data-dir="ua-eu" onclick="setTripDirFilter(this,'ua-eu')">UA → EU</button>
                     <button class="trip-filter-btn dir-eu-ua" data-dir="eu-ua" onclick="setTripDirFilter(this,'eu-ua')">EU → UA</button>
