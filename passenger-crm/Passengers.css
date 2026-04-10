@@ -954,6 +954,7 @@ select.detail-inline-edit { padding: 3px 4px; cursor: pointer; appearance: auto;
     .trips-filters .trip-filter-select { padding: 10px 14px; font-size: 14px; }
     .trips-filters .tcal-toggle { padding: 10px 14px; font-size: 14px; }
     .trips-filters .bs-btn { padding: 10px 20px; font-size: 13px; }
+    .trip-card-actions { flex-wrap: wrap; }
 }
 @media (min-width: 600px) {
     .bottom-sheet { border-radius: 16px; margin-bottom: 20px; }
