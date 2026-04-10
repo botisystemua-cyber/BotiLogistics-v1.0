@@ -4306,7 +4306,13 @@ function updateBulkToolbar() {
 }
 
 function openSideMenu() { document.getElementById('sideMenu').classList.add('open'); document.getElementById('sideMenuOverlay').classList.add('show'); }
-function closeSideMenu() { document.getElementById('sideMenu').classList.remove('open'); document.getElementById('sideMenuOverlay').classList.remove('show'); }
+function closeSideMenu() {
+    document.getElementById('sideMenu').classList.remove('open');
+    document.getElementById('sideMenuOverlay').classList.remove('show');
+    // Згорнути всі секції щоб при наступному відкритті меню все було закрите
+    document.querySelectorAll('.mobile-section-content').forEach(function(el) { el.style.display = 'none'; });
+    document.querySelectorAll('.mobile-section-toggle').forEach(function(el) { el.classList.remove('open'); });
+}
 
 function toggleMobileSection(section) {
     const name = section.charAt(0).toUpperCase() + section.slice(1);
