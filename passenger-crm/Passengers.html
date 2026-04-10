@@ -299,9 +299,9 @@
         <div class="trips-view" id="tripsView">
             <div class="trips-filters" style="display:flex;flex-direction:column;gap:6px;align-items:flex-start;">
                 <div class="trip-filters-row" style="display:flex;gap:6px;align-items:center;justify-content:flex-start;">
-                    <button class="trip-filter-btn" data-dir="all" onclick="setTripDirFilter(this,'all')">Всі</button>
-                    <button class="trip-filter-btn dir-ua-eu" data-dir="ua-eu" onclick="setTripDirFilter(this,'ua-eu')">UA → EU</button>
-                    <button class="trip-filter-btn dir-eu-ua" data-dir="eu-ua" onclick="setTripDirFilter(this,'eu-ua')">EU → UA</button>
+                    <button class="trip-filter-btn" data-dir="all" onclick="setTripDirFilter(this,'all')" style="padding:10px 14px;">Всі</button>
+                    <button class="trip-filter-btn dir-ua-eu" data-dir="ua-eu" onclick="setTripDirFilter(this,'ua-eu')" style="padding:10px 14px;">UA → EU</button>
+                    <button class="trip-filter-btn dir-eu-ua" data-dir="eu-ua" onclick="setTripDirFilter(this,'eu-ua')" style="padding:10px 14px;">EU → UA</button>
                 </div>
                 <div class="trip-filters-row" style="display:flex;gap:6px;align-items:center;">
                     <button class="trip-filter-btn" data-time="all" onclick="setTripTimeFilter(this,'all')">Всі</button>
@@ -378,14 +378,16 @@
             </div>
             <!-- Route bulk toolbar -->
             <div class="bulk-toolbar" id="routeBulkToolbar">
-                <span class="bulk-toolbar-count" id="routeBulkCount">0 обрано</span>
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-top:6px;">
-                    <button class="bulk-toolbar-btn select-all" onclick="toggleRouteSelectAll()">☑ Вибрати всі</button>
-                    <button class="bulk-toolbar-btn cancel" onclick="clearRouteSelection()">✕ Скасувати</button>
-                    <button class="bulk-toolbar-btn select-all" onclick="routeBulkTransfer()">🔄 Перенести</button>
-                    <button class="bulk-toolbar-btn select-all" onclick="routeBulkArchive()">📦 Архів</button>
-                    <button class="bulk-toolbar-btn select-all" onclick="optimizeRouteOrder()">⚡ Оптимізувати</button>
-                    <button class="bulk-toolbar-btn" style="background:rgba(220,38,38,0.7);color:white;" onclick="routeBulkDeleteFromRoute()">🗑️ З маршруту</button>
+                <div class="bulk-toolbar-top">
+                    <span class="bulk-toolbar-count" id="routeBulkCount">0 обрано</span>
+                    <button class="bulk-toolbar-btn select-all" style="width:auto;padding:6px 12px;" onclick="toggleRouteSelectAll()">☑ Вибрати всі</button>
+                    <button class="bulk-toolbar-btn cancel" style="width:auto;padding:6px 12px;" onclick="clearRouteSelection()">✕</button>
+                </div>
+                <div class="bulk-toolbar-grid">
+                    <button class="bulk-toolbar-btn" onclick="routeBulkTransfer()">🔄 Перенести</button>
+                    <button class="bulk-toolbar-btn" onclick="routeBulkArchive()">📦 Архів</button>
+                    <button class="bulk-toolbar-btn" onclick="optimizeRouteOrder()">⚡ Оптимізувати</button>
+                    <button class="bulk-toolbar-btn bulk-delete" onclick="routeBulkDeleteFromRoute()">🗑️ З маршруту</button>
                 </div>
             </div>
             <div id="routesLoading" style="display:none;text-align:center;padding:40px;color:var(--text-secondary);font-size:13px;">⏳ Завантаження маршрутів...</div>
