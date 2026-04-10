@@ -945,6 +945,8 @@ select.detail-inline-edit { padding: 3px 4px; cursor: pointer; appearance: auto;
     .main-content-area { padding: 16px 24px; padding-bottom: 80px; }
     .pc-sidebar-collapse-btn { display: flex; }
     .details-grid { grid-template-columns: repeat(4, 1fr); }
+    .messenger-overlay { align-items: center; justify-content: center; }
+    .messenger-popup { margin: 0; min-width: 260px; max-width: 300px; }
 }
 @media (min-width: 600px) {
     .bottom-sheet { border-radius: 16px; margin-bottom: 20px; }
