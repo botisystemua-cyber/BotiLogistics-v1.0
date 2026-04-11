@@ -216,9 +216,9 @@ body { font-family: 'Montserrat', sans-serif; background: var(--bg-main); color:
     background: var(--bg-main);
     border: 1px solid var(--border);
     border-radius: 6px;
-    width: 26px;
-    height: 26px;
-    font-size: 10px;
+    width: 28px;
+    height: 28px;
+    font-size: 11px;
     color: var(--text-secondary);
     cursor: pointer;
     padding: 0;
@@ -226,6 +226,12 @@ body { font-family: 'Montserrat', sans-serif; background: var(--bg-main); color:
     display: flex;
     align-items: center;
     justify-content: center;
+    /* z-index на випадок якщо браузер неправильно стекує абсолютно позиційовану
+       кнопку над static-інпутом (iOS Safari історично має з цим проблеми) */
+    z-index: 2;
+    /* touch-action: manipulation запобігає 300ms delay на тапи + подвійним тапам */
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: rgba(37,99,235,0.3);
 }
 .combo-box-toggle:hover { background: var(--primary); color: white; border-color: var(--primary); }
 .combo-box-toggle:active { transform: translateY(-50%) scale(0.92); }

@@ -370,6 +370,29 @@ function closeRoutePointDropdown() {
     _activeRoutePointWhich = null;
 }
 
+// Перераховує позицію dropdown (коли юзер скролить форму під ним). Якщо
+// активний інпут вийшов повністю за межі видимого екрану — закриваємо.
+function repositionRoutePointDropdown() {
+    if (!_activeRoutePointWhich) return;
+    const inputId = _activeRoutePointWhich === 'from' ? 'fFrom' : 'fTo';
+    const input = document.getElementById(inputId);
+    const dd = document.getElementById('routePointDropdown');
+    if (!input || !dd) return;
+    const rect = input.getBoundingClientRect();
+    const vh = window.innerHeight || document.documentElement.clientHeight;
+    // Якщо інпут повністю поза видимою областю — ховаємо (щоб не висіло десь зверху/знизу)
+    if (rect.bottom < 0 || rect.top > vh) {
+        closeRoutePointDropdown();
+        return;
+    }
+    const spaceBelow = vh - rect.bottom;
+    const maxH = Math.min(260, Math.max(140, spaceBelow - 12));
+    dd.style.left = rect.left + 'px';
+    dd.style.top = (rect.bottom + 2) + 'px';
+    dd.style.width = rect.width + 'px';
+    dd.style.maxHeight = maxH + 'px';
+}
+
 function toggleRoutePointDropdown(which) {
     const dd = document.getElementById('routePointDropdown');
     if (!dd) return;
@@ -465,10 +488,14 @@ function findRoutePointByText(text) {
 }
 
 // Викликається on input у fFrom/fTo.
-// - Якщо dropdown цього ж поля відкритий — перефільтровуємо його
-// - Спроба підставити ціну за каталогом
+// - Якщо dropdown поки закритий або належить іншому полю — відкрити для цього
+//   (щоб юзер бачив список коли починає друкувати)
+// - Якщо відкритий для цього самого поля — перерендер з новим фільтром
+// - У кінці — спроба підставити ціну за каталогом
 function onRoutePointTextChange(which) {
-    if (_activeRoutePointWhich === which) {
+    if (_activeRoutePointWhich !== which) {
+        openRoutePointDropdown(which);
+    } else {
         renderRoutePointDropdown(which);
     }
     suggestPriceFromRoute();
@@ -819,16 +846,23 @@ document.addEventListener('DOMContentLoaded', () => {
     const _handleOutsideRoutePoint = function (e) {
         if (!_activeRoutePointWhich) return;
         const t = e.target;
-        if (t.closest && (t.closest('.combo-box') || t.closest('#routePointDropdown'))) return;
+        if (t && t.closest && (t.closest('.combo-box') || t.closest('#routePointDropdown'))) return;
         closeRoutePointDropdown();
     };
     document.addEventListener('mousedown', _handleOutsideRoutePoint, true);
     document.addEventListener('touchstart', _handleOutsideRoutePoint, true);
 
-    // Закривати dropdown при скролі modal-body (інакше position:fixed залишається
-    // на старому місці, коли юзер прокручує форму)
-    document.addEventListener('scroll', function () {
-        if (_activeRoutePointWhich) closeRoutePointDropdown();
+    // Перепозиціонувати dropdown при скролі батьківського контейнера (напр.
+    // modal-body). НЕ закриваємо — інакше юзер не зможе прокрутити список:
+    // скрол всередині dropdown сам по собі тригерив би закриття.
+    // Scroll target — це ЗАВЖДИ елемент, в якому встановлено overflow-y: auto.
+    // У нас overflow мають два елементи: сам #routePointDropdown і modal-body.
+    // Перший ігноруємо (юзер крутить список), другий — рухає dropdown слідом.
+    document.addEventListener('scroll', function (e) {
+        if (!_activeRoutePointWhich) return;
+        const t = e.target;
+        if (t && t.id === 'routePointDropdown') return;
+        repositionRoutePointDropdown();
     }, true);
     const fCurrEl = document.getElementById('fCurrency');
     if (fCurrEl) fCurrEl.addEventListener('change', function () {
