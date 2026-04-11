@@ -542,49 +542,117 @@ document.addEventListener('DOMContentLoaded', () => {
 // ================================================================
 // SILENT SYNC
 // ================================================================
+
+// ── Перевірка чи є нова версія сайту (Service Worker).
+// Повертає true якщо знайдено нову версію і клієнт має перезавантажитись.
+// Повертає false якщо актуальна версія або SW недоступний.
+function checkAndUpdateApp() {
+    if (!('serviceWorker' in navigator)) return Promise.resolve(false);
+    return navigator.serviceWorker.getRegistration().then(function(reg) {
+        if (!reg) return false;
+        // Тригеримо перевірку sw.js на сервері.
+        // Якщо байти sw.js не збігаються — браузер інсталює нового worker'а.
+        return reg.update().then(function() {
+            var newWorker = reg.waiting || reg.installing;
+            if (!newWorker) return false; // актуальна версія
+            // Якщо worker ще installing — почекати поки стане installed.
+            var waitInstalled = new Promise(function(resolve) {
+                if (newWorker.state === 'installed' || newWorker.state === 'activated') {
+                    resolve();
+                    return;
+                }
+                newWorker.addEventListener('statechange', function handler() {
+                    if (newWorker.state === 'installed' || newWorker.state === 'activated') {
+                        newWorker.removeEventListener('statechange', handler);
+                        resolve();
+                    }
+                });
+            });
+            return waitInstalled.then(function() {
+                // Коли нова версія стане controller'ом — перезавантажити сторінку.
+                return new Promise(function(resolve) {
+                    var done = false;
+                    function onControllerChange() {
+                        if (done) return;
+                        done = true;
+                        navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange);
+                        resolve(true);
+                    }
+                    navigator.serviceWorker.addEventListener('controllerchange', onControllerChange);
+                    // Попросити waiting worker активуватись
+                    try { newWorker.postMessage({ type: 'SKIP_WAITING' }); } catch (e) {}
+                    // Safety-net: якщо controllerchange не стрельнув за 3 сек — вважати що ок
+                    setTimeout(function() {
+                        if (done) return;
+                        done = true;
+                        navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange);
+                        resolve(true);
+                    }, 3000);
+                });
+            });
+        });
+    }).catch(function(e) {
+        console.warn('checkAndUpdateApp failed:', e);
+        return false;
+    });
+}
+
 function silentSync(manual, force) {
     if (manual) {
-        // Ручна синхронізація — повна з лоадером та архівом
-        showLoader('🔄 Синхронізація всіх даних...');
-        return Promise.all([
-            apiPost('getAll', { sheet: 'all' }),
-            apiPost('getTrips', { filter: {} }),
-            apiPost('getRoutesList', {})
-        ]).then(([paxRes, tripRes, routeRes]) => {
-            hideLoader();
-            if (paxRes.ok) { passengers = paxRes.data; applyOptimizedOrder(); }
-            if (tripRes.ok) trips = tripRes.data;
-            if (routeRes.ok && routeRes.data) {
-                var newList = routeRes.data;
-                allRouteSheets = newList.map(function(s) {
-                    var existing = allRouteSheets.find(function(e) { return e.sheetName === s.sheetName; });
-                    return { sheetName: s.sheetName, rowCount: s.rowCount,
-                        paxCount: s.paxCount || 0, parcelCount: s.parcelCount || 0,
-                        headers: existing ? existing.headers : [],
-                        rows: existing ? existing.rows : null };
-                });
-                routes = allRouteSheets.filter(s => {
-                    const n = (s.sheetName || '');
-                    return n && n !== 'Маршрут_Шаблон';
-                });
-                setCount('pcCountRoutes', routes.length);
-                setCount('mobileCountRoutes', routes.length);
-                renderRouteSidebar();
-                // Перезавантажуємо дані всіх маршрутів у фоні (замінить старі rows коли прийдуть)
-                routes.forEach(function(s, idx) {
-                    loadRouteSheetData(idx, true).catch(function() {});
-                });
+        // Ручна синхронізація:
+        // 1) Перевірити чи є нова версія додатку на сервері
+        // 2) Якщо так — активувати нового Service Worker'а й перезавантажити
+        // 3) Якщо ні — зробити звичайну синхронізацію даних
+        showLoader('🔄 Перевірка оновлень...');
+        return checkAndUpdateApp().then(function(hasNew) {
+            if (hasNew) {
+                showLoader('✨ Знайдено нову версію, оновлення...');
+                // Почекати пів секунди щоб SW встиг повністю активуватись, потім reload
+                setTimeout(function() { location.reload(); }, 500);
+                return;
             }
-            updateAllCounts();
-            updateTripFilterDropdown();
-            updateTripAutoFilterDropdown();
-            render();
-            if (currentView === 'trips') renderTrips();
-            updateSyncTime();
-            showToast('✅ Оновлено: ' + (passengers ? passengers.length : 0) + ' пасажирів, ' + trips.length + ' рейсів, ' + (archivedPassengers ? archivedPassengers.length : 0) + ' в архіві');
-        }).catch((e) => {
-            hideLoader();
-            showToast('❌ Помилка синхронізації: ' + (e.message || 'мережа'));
+            // Актуальна версія — просто оновлюємо дані
+            showLoader('🔄 Синхронізація всіх даних...');
+            return Promise.all([
+                apiPost('getAll', { sheet: 'all' }),
+                apiPost('getTrips', { filter: {} }),
+                apiPost('getRoutesList', {})
+            ]).then(([paxRes, tripRes, routeRes]) => {
+                hideLoader();
+                if (paxRes.ok) { passengers = paxRes.data; applyOptimizedOrder(); }
+                if (tripRes.ok) trips = tripRes.data;
+                if (routeRes.ok && routeRes.data) {
+                    var newList = routeRes.data;
+                    allRouteSheets = newList.map(function(s) {
+                        var existing = allRouteSheets.find(function(e) { return e.sheetName === s.sheetName; });
+                        return { sheetName: s.sheetName, rowCount: s.rowCount,
+                            paxCount: s.paxCount || 0, parcelCount: s.parcelCount || 0,
+                            headers: existing ? existing.headers : [],
+                            rows: existing ? existing.rows : null };
+                    });
+                    routes = allRouteSheets.filter(s => {
+                        const n = (s.sheetName || '');
+                        return n && n !== 'Маршрут_Шаблон';
+                    });
+                    setCount('pcCountRoutes', routes.length);
+                    setCount('mobileCountRoutes', routes.length);
+                    renderRouteSidebar();
+                    // Перезавантажуємо дані всіх маршрутів у фоні (замінить старі rows коли прийдуть)
+                    routes.forEach(function(s, idx) {
+                        loadRouteSheetData(idx, true).catch(function() {});
+                    });
+                }
+                updateAllCounts();
+                updateTripFilterDropdown();
+                updateTripAutoFilterDropdown();
+                render();
+                if (currentView === 'trips') renderTrips();
+                updateSyncTime();
+                showToast('✅ Актуальна версія. Оновлено: ' + (passengers ? passengers.length : 0) + ' пасажирів, ' + trips.length + ' рейсів, ' + (archivedPassengers ? archivedPassengers.length : 0) + ' в архіві');
+            }).catch((e) => {
+                hideLoader();
+                showToast('❌ Помилка синхронізації: ' + (e.message || 'мережа'));
+            });
         });
     }
 

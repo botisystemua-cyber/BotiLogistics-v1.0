@@ -1,9 +1,17 @@
 // BotiLogistics Service Worker — потрібен для PWA встановлення
-var CACHE_NAME = 'botilogistics-crm-v1';
+// ВАЖЛИВО: бампай версію при кожному релізі щоб старий кеш видалявся автоматично.
+var CACHE_NAME = 'botilogistics-crm-v2';
 
 // Install — просто активуємось
 self.addEventListener('install', function(e) {
   self.skipWaiting();
+});
+
+// Message — клієнт може примусити SW активуватись (коли знайшли нову версію)
+self.addEventListener('message', function(e) {
+  if (e.data && e.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
 
 // Activate — очищаємо старі кеші
