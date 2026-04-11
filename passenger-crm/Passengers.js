@@ -5329,7 +5329,26 @@ function updateBulkToolbar() {
     }
 }
 
-function openSideMenu() { document.getElementById('sideMenu').classList.add('open'); document.getElementById('sideMenuOverlay').classList.add('show'); }
+function openSideMenu() {
+    // На мобільному (≤900px — той самий breakpoint що й у media-queries CSS) два
+    // тулбари масових дій (#bulkToolbar для пасажирів і #routeBulkToolbar для
+    // маршрутів) налазять один на одного внизу екрану, якщо обидва мають
+    // виділені елементи. Коли юзер відкриває ліве меню розділів — скидаємо
+    // будь-які поточні виділення, щоб обидва тулбари зникли й не плутали UI.
+    // На десктопі (≥901px) нічого не чіпаємо — там простору достатньо.
+    try {
+        if (window.matchMedia && window.matchMedia('(max-width: 900px)').matches) {
+            if (typeof selectedIds !== 'undefined' && selectedIds.size > 0) {
+                clearSelection();
+            }
+            if (typeof routeSelectedIds !== 'undefined' && routeSelectedIds.size > 0) {
+                clearRouteSelection();
+            }
+        }
+    } catch (_) { /* matchMedia недоступне в дуже старих браузерах — ігноруємо */ }
+    document.getElementById('sideMenu').classList.add('open');
+    document.getElementById('sideMenuOverlay').classList.add('show');
+}
 function closeSideMenu() {
     document.getElementById('sideMenu').classList.remove('open');
     document.getElementById('sideMenuOverlay').classList.remove('show');
