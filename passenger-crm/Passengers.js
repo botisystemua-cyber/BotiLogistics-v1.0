@@ -1101,20 +1101,22 @@ function initRouteSortable() {
     list.classList.add('sort-mode-on');
     _routeSortableInstance = Sortable.create(list, {
         animation: 150,
-        // Без handle — вся картка захоплюється. У sort mode деталі/дії приховано,
-        // випадковий клік по заголовку нічого не робить (pointer-events:none),
+        // Без handle — вся картка захоплюється. Деталі/дії приховано,
+        // короткий клік у sort mode нічого не відкриває (guard у toggleRouteDetails),
         // тож користувач безпечно тягне будь-де на картці.
         draggable: '.route-card',
         ghostClass: 'route-card-ghost',
         chosenClass: 'route-card-chosen',
         dragClass: 'route-card-drag',
-        // Мобільна затримка ~300 мс: тап не зчитується як drag,
-        // потрібно тримати палець, щоб «схопити» картку.
-        delay: 300,
+        // Мобільна затримка ~350 мс: тримай палець на місці, щоб «схопити».
+        // Якщо почнеш скролити раніше — браузер забирає touch на скрол (touch-action: pan-y).
+        delay: 350,
         delayOnTouchOnly: true,
-        touchStartThreshold: 6,
-        forceFallback: true, // Стабільніше для touch на мобільних.
-        fallbackTolerance: 4,
+        // touchStartThreshold > 0: якщо палець зрушився більше ніж на N пікселів
+        // під час delay — SortableJS СКАСОВУЄ підготовку drag, і touch лишається для скролу.
+        touchStartThreshold: 8,
+        // forceFallback вимкнено — щоб не перехоплювати touch за межами drag.
+        // На мобільних SortableJS і так використовує touch polyfill.
         onEnd: handleRouteDrop
     });
 }

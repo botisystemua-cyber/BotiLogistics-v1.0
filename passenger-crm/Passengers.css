@@ -337,14 +337,16 @@ select.detail-inline-edit { padding: 3px 4px; cursor: pointer; appearance: auto;
    ───────────────────────────────────────────────────────── */
 
 /* У режимі сортування: картки виглядають «неактивними» (приглушено-сірими),
-   вся картка є drag-handle — тапни будь-де й перетягуй. */
+   вся картка є drag-handle — тапни будь-де й утримай, щоб схопити.
+   touch-action: pan-y — дозволяє вертикальний скрол списку, але SortableJS
+   після delay=300 мс перехоплює touch і починає drag. */
 #routesList.sort-mode-on .route-card {
     background: #f3f4f6 !important;
     border-left-color: #9ca3af !important;
     box-shadow: none !important;
     opacity: 0.85;
     cursor: grab;
-    touch-action: none;
+    touch-action: pan-y;
     -webkit-user-select: none;
     user-select: none;
     filter: grayscale(0.5);
@@ -358,9 +360,6 @@ select.detail-inline-edit { padding: 3px 4px; cursor: pointer; appearance: auto;
     background: transparent !important;
 }
 #routesList.sort-mode-on .route-card-header:hover { background: transparent !important; }
-/* Заблокувати всі вкладені кнопки та інпути (щоб випадково не «клікнути» чекбокс) */
-#routesList.sort-mode-on .route-card button,
-#routesList.sort-mode-on .route-card input { pointer-events: none !important; }
 /* Приховати деталі та дії картки — зайвий шум у sort mode */
 #routesList.sort-mode-on .route-card-actions,
 #routesList.sort-mode-on .route-card-details { display: none !important; }
