@@ -7,7 +7,7 @@ export interface User {
   tenant_id: string;
   login: string;
   password: string;
-  role: Role;
+  roles: Role[];
   full_name: string | null;
   email?: string | null;
   phone?: string | null;
@@ -17,6 +17,19 @@ export interface User {
 }
 
 export type UserInput = Omit<User, 'id' | 'created_at' | 'updated_at'>;
+
+// Same hierarchy as owner-crm — used for primary-icon selection
+// and for routing after successful login (pick the "highest hat"
+// as the default active role).
+const ROLE_RANK: Record<Role, number> = { owner: 3, manager: 2, driver: 1 };
+
+export function primaryRole(roles: Role[]): Role {
+  return [...roles].sort((a, b) => ROLE_RANK[b] - ROLE_RANK[a])[0];
+}
+
+export function sortRoles(roles: Role[]): Role[] {
+  return [...roles].sort((a, b) => ROLE_RANK[b] - ROLE_RANK[a]);
+}
 
 export async function listUsers(): Promise<User[]> {
   const { data, error } = await supabase
@@ -57,7 +70,12 @@ export interface AuthSuccess {
 
 /**
  * Look up a user by login + password + role. Returns user with tenant info.
- * Throws on not found / wrong password / wrong role.
+ * Throws on not found / wrong password / picked role not in user's roles.
+ *
+ * Post multi-role migration: `users.roles` is a text[] column. We filter
+ * via `.contains('roles', [picked])` which matches any user whose roles
+ * array includes the picked role. A user with ['owner','driver'] can log
+ * in via either "Owner" or "Driver" button on the config-crm login screen.
  */
 export async function authenticate(
   role: Role,
@@ -69,11 +87,19 @@ export async function authenticate(
     .select('*')
     .eq('login', login)
     .eq('password', password)
-    .eq('role', role)
+    .contains('roles', [role])
+    .eq('is_active', true)
     .maybeSingle();
 
   if (error) throw error;
   if (!user) throw new Error('Невірний логін, пароль або роль');
+
+  // Stamp last_login so owner-crm's Online tab can show who's active.
+  // Fire-and-forget — don't block login on this.
+  void supabase
+    .from('users')
+    .update({ last_login: new Date().toISOString() })
+    .eq('id', user.id);
 
   // Fetch tenant info (name + modules) so success screen can show app links
   const { data: client, error: cErr } = await supabase

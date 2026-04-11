@@ -127,13 +127,17 @@ function App() {
         tenantName: result.tenantName,
         modules: result.modules,
       };
-      // Store in localStorage so passenger-crm/cargo-crm/etc can read tenant_id on load
+      // Store in localStorage so passenger-crm/cargo-crm/etc can read tenant_id on load.
+      // `role` is the ACTIVE role the user picked at login (single string,
+      //    consumed by passenger-crm/driver-crm which expect a string).
+      // `roles` is the FULL set from DB — owner-crm uses it for multi-hat UX.
       localStorage.setItem('boti_session', JSON.stringify({
         tenant_id: session.tenantId,
         tenant_name: session.tenantName,
         user_login: result.user.login,
         user_name: session.name,
-        role: result.user.role,
+        role: selectedRole!.key,
+        roles: result.user.roles ?? [selectedRole!.key],
         modules: session.modules,
       }));
       setUser(session);

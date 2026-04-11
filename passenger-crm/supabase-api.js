@@ -230,6 +230,29 @@ window.botiLogout = function () {
     location.href = '../config-crm/';
 };
 
+// ── HEARTBEAT ──
+// Writes users.last_login = now() every 60s while this tab is visible, so that
+// owner-crm's Online tab (5-min threshold on last_login) can see managers that
+// are actively sitting in passenger-crm — not just those who logged in within
+// the last 5 minutes. Fire-and-forget, errors are swallowed.
+(function startHeartbeat() {
+    if (!BOTI_SESSION || !BOTI_SESSION.tenant_id || !BOTI_SESSION.user_login) return;
+    if (typeof sb === 'undefined' || !sb) return;
+    const beat = function () {
+        if (document.visibilityState !== 'visible') return;
+        try {
+            sb.from('users')
+                .update({ last_login: new Date().toISOString() })
+                .eq('tenant_id', BOTI_SESSION.tenant_id)
+                .eq('login', BOTI_SESSION.user_login)
+                .then(function () { /* ok */ }, function () { /* ignore */ });
+        } catch (_) { /* ignore */ }
+    };
+    beat(); // immediate
+    setInterval(beat, 60000);
+    document.addEventListener('visibilitychange', beat);
+})();
+
 // ================================================================
 // PASSENGERS API
 // ================================================================
@@ -528,6 +551,7 @@ function tripRowToFront(row) {
         layout:     row.seating_layout || '',
         max_seats:  row.total_seats != null ? row.total_seats : 0,
         occupied:   row.occupied_seats != null ? row.occupied_seats : 0,
+        free_seats: Math.max(0, (row.total_seats || 0) - (row.occupied_seats || 0)),
     };
 }
 
@@ -635,7 +659,44 @@ async function sbUpdateTrip(params) {
             .select();
         if (error) throw error;
 
-        return { ok: true, data: data[0] ? tripRowToFront(data[0]) : null };
+        // If the user added extra vehicles while editing, create a new calendar
+        // row per additional vehicle. First vehicle already updated the existing
+        // cal_id above so existing passengers stay attached. Extra vehicles become
+        // sibling trips on the same date/direction/city.
+        let extraTrips = [];
+        if (Array.isArray(p.vehicles) && p.vehicles.length > 1) {
+            const existing = data[0] || {};
+            const extraRows = [];
+            for (let i = 1; i < p.vehicles.length; i++) {
+                const v = p.vehicles[i];
+                const ts = parseInt(v.seats) || 0;
+                extraRows.push({
+                    tenant_id: TENANT_ID,
+                    cal_id: 'CAL' + Date.now() + Math.floor(Math.random() * 1000) + i,
+                    route_date: sbData.route_date ?? existing.route_date,
+                    direction: sbData.direction ?? existing.direction,
+                    city: sbData.city ?? existing.city,
+                    status: existing.status || 'Активний',
+                    total_seats: ts,
+                    available_seats: ts,
+                    occupied_seats: 0,
+                    available_seats_list: '',
+                    occupied_seats_list: '',
+                    vehicle_name: v.name || '',
+                    seating_layout: v.layout || '',
+                });
+            }
+            if (extraRows.length) {
+                const { data: extraData, error: extraErr } = await sb
+                    .from('calendar')
+                    .insert(extraRows)
+                    .select();
+                if (extraErr) throw extraErr;
+                extraTrips = (extraData || []).map(tripRowToFront);
+            }
+        }
+
+        return { ok: true, data: data[0] ? tripRowToFront(data[0]) : null, extraTrips };
     } catch (e) {
         console.error('sbUpdateTrip error:', e);
         return { ok: false, error: e.message };
@@ -687,31 +748,14 @@ async function sbAssignTrip(params) {
         const paxIds = params.pax_ids || [];
 
         // Update passengers with CAL_ID
+        // DB trigger recalc_calendar_occupancy() auto-updates
+        // calendar.occupied_seats / available_seats on passengers change.
         const { error } = await sb
             .from('passengers')
             .update({ cal_id: calId, updated_at: new Date().toISOString() })
             .eq('tenant_id', TENANT_ID)
             .in('pax_id', paxIds);
         if (error) throw error;
-
-        // Update trip seat counts
-        const { data: paxCount } = await sb
-            .from('passengers')
-            .select('pax_id', { count: 'exact' })
-            .eq('tenant_id', TENANT_ID)
-            .eq('cal_id', calId)
-            .eq('is_archived', false);
-
-        if (paxCount) {
-            await sb
-                .from('calendar')
-                .update({
-                    occupied_seats: paxCount.length,
-                    updated_at: new Date().toISOString()
-                })
-                .eq('tenant_id', TENANT_ID)
-                .eq('cal_id', calId);
-        }
 
         return { ok: true };
     } catch (e) {
@@ -725,29 +769,14 @@ async function sbUnassignTrip(params) {
         const calId = params.cal_id;
         const paxIds = params.pax_ids || [];
 
+        // DB trigger recalc_calendar_occupancy() auto-updates
+        // calendar.occupied_seats / available_seats on passengers change.
         const { error } = await sb
             .from('passengers')
             .update({ cal_id: null, updated_at: new Date().toISOString() })
             .eq('tenant_id', TENANT_ID)
             .in('pax_id', paxIds);
         if (error) throw error;
-
-        // Update trip seat counts
-        const { data: remaining } = await sb
-            .from('passengers')
-            .select('pax_id')
-            .eq('tenant_id', TENANT_ID)
-            .eq('cal_id', calId)
-            .eq('is_archived', false);
-
-        await sb
-            .from('calendar')
-            .update({
-                occupied_seats: remaining ? remaining.length : 0,
-                updated_at: new Date().toISOString()
-            })
-            .eq('tenant_id', TENANT_ID)
-            .eq('cal_id', calId);
 
         return { ok: true };
     } catch (e) {

@@ -9,7 +9,7 @@ import {
   type Client, type ClientInput,
 } from '../api/clients';
 import {
-  listUsers, createUser, updateUser, deleteUser,
+  listUsers, createUser, updateUser, deleteUser, sortRoles,
   type User, type UserInput, type Role,
 } from '../api/users';
 
@@ -144,7 +144,7 @@ function ClientsScreen() {
           <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
           <div>
             <div>{error}</div>
-            {error.includes('password') || error.includes('modules') ? (
+            {error.includes('modules') ? (
               <div className="mt-1 text-xs font-normal text-red-700">
                 Запусти SQL з <code className="bg-red-100 px-1 rounded">sql/2026-04-add-client-auth.sql</code> у Supabase Dashboard → SQL Editor.
               </div>
@@ -166,7 +166,6 @@ function ClientsScreen() {
               <tr className="bg-bg border-b-2 border-border">
                 <Th>Логін</Th>
                 <Th>Назва компанії</Th>
-                <Th>Пароль</Th>
                 <Th>Модулі</Th>
                 <Th className="text-right">Дії</Th>
               </tr>
@@ -176,11 +175,6 @@ function ClientsScreen() {
                 <tr key={c.id} className="border-b border-border last:border-0 hover:bg-bg/50">
                   <Td><code className="font-mono text-xs font-bold">{c.tenant_id}</code></Td>
                   <Td className="font-semibold">{c.name}</Td>
-                  <Td>
-                    {c.password
-                      ? <span className="font-mono text-xs">{'•'.repeat(Math.min(c.password.length, 8))}</span>
-                      : <span className="text-xs text-muted italic">не задано</span>}
-                  </Td>
                   <Td>
                     <div className="flex flex-wrap gap-1">
                       {(c.modules ?? []).map((m) => (
@@ -245,7 +239,6 @@ function ClientFormModal({
 }: { initial: Client | null; onClose: () => void; onSaved: () => void }) {
   const [tenantId, setTenantId] = useState(initial?.tenant_id ?? '');
   const [name, setName] = useState(initial?.name ?? '');
-  const [password, setPassword] = useState(initial?.password ?? '');
   const [logoUrl, setLogoUrl] = useState(initial?.logo_url ?? '');
   const [modules, setModules] = useState<string[]>(initial?.modules ?? ['passenger']);
   const [saving, setSaving] = useState(false);
@@ -266,7 +259,7 @@ function ClientFormModal({
       const input: ClientInput = {
         tenant_id: tenantId.trim(),
         name: name.trim(),
-        password: password.trim() || null,
+        password: null,
         logo_url: logoUrl.trim() || null,
         modules,
       };
@@ -306,14 +299,6 @@ function ClientFormModal({
               onChange={(e) => setName(e.target.value)}
               placeholder="Gresco Express"
               className="w-full px-3 py-2.5 bg-bg border-2 border-border rounded-xl text-sm focus:outline-none focus:border-violet-400"
-            />
-          </Field>
-          <Field label="Пароль">
-            <input
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="залиш пустим щоб не змінювати"
-              className="w-full px-3 py-2.5 bg-bg border-2 border-border rounded-xl text-sm font-mono focus:outline-none focus:border-violet-400"
             />
           </Field>
           <Field label="Logo URL (опційно)">
@@ -463,7 +448,7 @@ function UsersScreen() {
               <tr className="bg-bg border-b-2 border-border">
                 <Th>Логін</Th>
                 <Th>ПІБ</Th>
-                <Th>Роль</Th>
+                <Th>Ролі</Th>
                 <Th>Компанія</Th>
                 <Th>Пароль</Th>
                 <Th className="text-right">Дії</Th>
@@ -475,14 +460,18 @@ function UsersScreen() {
                   <Td><code className="font-mono text-xs font-bold">{u.login}</code></Td>
                   <Td className="font-semibold">{u.full_name || <span className="text-muted italic">—</span>}</Td>
                   <Td>
-                    <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase border ${
-                      u.role === 'owner'   ? 'bg-violet-50 border-violet-200 text-violet-700' :
-                      u.role === 'manager' ? 'bg-blue-50 border-blue-200 text-blue-700' :
-                                             'bg-emerald-50 border-emerald-200 text-emerald-700'
-                    }`}>{ROLE_LABEL[u.role]}</span>
+                    <div className="flex flex-wrap gap-1">
+                      {sortRoles(u.roles ?? []).map((r) => (
+                        <span key={r} className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase border ${
+                          r === 'owner'   ? 'bg-violet-50 border-violet-200 text-violet-700' :
+                          r === 'manager' ? 'bg-blue-50 border-blue-200 text-blue-700' :
+                                            'bg-emerald-50 border-emerald-200 text-emerald-700'
+                        }`}>{ROLE_LABEL[r]}</span>
+                      ))}
+                    </div>
                   </Td>
                   <Td className="text-text-secondary">{tenantName(u.tenant_id)}</Td>
-                  <Td><span className="font-mono text-xs">{'•'.repeat(Math.min(u.password.length, 8))}</span></Td>
+                  <Td><span className="font-mono text-xs text-text-secondary">{u.password}</span></Td>
                   <Td className="text-right">
                     <div className="inline-flex gap-2">
                       <IconBtn icon={Pencil} onClick={() => setEditing(u)} title="Редагувати" />
@@ -514,14 +503,24 @@ function UserFormModal({
   const [login, setLogin] = useState(initial?.login ?? '');
   const [password, setPassword] = useState(initial?.password ?? '');
   const [fullName, setFullName] = useState(initial?.full_name ?? '');
-  const [role, setRole] = useState<Role>(initial?.role ?? 'manager');
+  const [roles, setRoles] = useState<Role[]>(
+    initial?.roles && initial.roles.length > 0 ? initial.roles : ['manager'],
+  );
   const [tenantId, setTenantId] = useState(initial?.tenant_id ?? clients[0]?.tenant_id ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
+  const toggleRole = (r: Role) => {
+    setRoles((cur) => (cur.includes(r) ? cur.filter((x) => x !== r) : [...cur, r]));
+  };
+
   const handleSave = async () => {
     if (!login.trim() || !password.trim() || !tenantId) {
       setError('Логін, пароль і компанія обов’язкові');
+      return;
+    }
+    if (roles.length === 0) {
+      setError('Обери хоча б одну роль');
       return;
     }
     setSaving(true);
@@ -531,7 +530,7 @@ function UserFormModal({
         tenant_id: tenantId,
         login: login.trim(),
         password: password.trim(),
-        role,
+        roles: sortRoles(roles),
         full_name: fullName.trim() || null,
       };
       if (initial) await updateUser(initial.id, input);
@@ -573,16 +572,19 @@ function UserFormModal({
               className="w-full px-3 py-2.5 bg-bg border-2 border-border rounded-xl text-sm focus:outline-none focus:border-violet-400"
             />
           </Field>
-          <Field label="Роль">
+          <Field label="Ролі (можна декілька)">
             <div className="flex gap-2">
-              {ROLES.map((r) => (
-                <button
-                  key={r} type="button" onClick={() => setRole(r)}
-                  className={`flex-1 px-3 py-2 rounded-lg text-xs font-bold border-2 cursor-pointer transition-all ${
-                    role === r ? 'bg-violet-50 border-violet-300 text-violet-700' : 'bg-bg border-border text-muted hover:border-violet-200'
-                  }`}
-                >{ROLE_LABEL[r]}</button>
-              ))}
+              {ROLES.map((r) => {
+                const on = roles.includes(r);
+                return (
+                  <button
+                    key={r} type="button" onClick={() => toggleRole(r)}
+                    className={`flex-1 px-3 py-2 rounded-lg text-xs font-bold border-2 cursor-pointer transition-all ${
+                      on ? 'bg-violet-50 border-violet-300 text-violet-700' : 'bg-bg border-border text-muted hover:border-violet-200'
+                    }`}
+                  >{ROLE_LABEL[r]}</button>
+                );
+              })}
             </div>
           </Field>
           <Field label="Компанія">

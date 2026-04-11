@@ -874,13 +874,13 @@ async function openRoute(idx, forceRefresh) {
 }
 
 // ── Згортальний дашборд маршруту ──
-function toggleRouteDashboard() {
+function toggleRouteDash() {
     var content = document.getElementById('routeDashContent');
     var toggle = document.getElementById('routeDashToggle');
     if (!content) return;
     var isOpen = content.style.display !== 'none';
     content.style.display = isOpen ? 'none' : 'block';
-    if (toggle) toggle.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(180deg)';
+    if (toggle) toggle.textContent = isOpen ? '▼' : '▲';
 }
 
 // ── Розгортальні секції фільтрів (Статуси / Фінанси) ──
@@ -1520,6 +1520,75 @@ function cleanRowForApi(row) {
     return clean;
 }
 
+// ── Нормалізація телефону для пошуку дублікатів ──
+// 0671234567 = +380671234567 = 380671234567 → 671234567
+function normalizePhoneForDup(s) {
+    var digits = String(s || '').replace(/\D/g, '');
+    if (!digits) return '';
+    if (digits.indexOf('380') === 0) digits = digits.slice(3);
+    else if (digits.charAt(0) === '0') digits = digits.slice(1);
+    return digits;
+}
+
+// ── Знайти дублікати в маршруті ──
+// Перевіряє: 1) PAX_ID збіг, 2) телефон збіг (нормалізований)
+// Повертає масив { name, phone, reason } для кожного дубля
+function findRouteDuplicates(targetSheet, leadsToAdd, excludeRteIds) {
+    if (!targetSheet || !Array.isArray(targetSheet.rows)) return [];
+    var skip = excludeRteIds instanceof Set ? excludeRteIds : new Set(excludeRteIds || []);
+
+    var existingPaxIds = new Set();
+    var existingPhones = {}; // phone → name
+    for (var i = 0; i < targetSheet.rows.length; i++) {
+        var r = targetSheet.rows[i];
+        if (!(String(r['Тип запису'] || '').indexOf('Пасажир') !== -1)) continue;
+        // Пропустити рядки які зараз пересаджуємо (пересадка в той самий маршрут)
+        var rid = r._resolvedId || r['RTE_ID'];
+        if (rid && skip.has(rid)) continue;
+        var pid = r['PAX_ID / PKG_ID'] || r['PAX_ID/PKG_ID'] || r['PAX_ID'] || r['PKG_ID'] || '';
+        if (pid) existingPaxIds.add(String(pid));
+        var ph = normalizePhoneForDup(r['Телефон пасажира']);
+        if (ph && !existingPhones[ph]) existingPhones[ph] = r['Піб пасажира'] || '';
+    }
+
+    var dups = [];
+    for (var j = 0; j < leadsToAdd.length; j++) {
+        var lead = leadsToAdd[j];
+        var leadPid = lead['PAX_ID'] || lead['PAX_ID / PKG_ID'] || lead['PAX_ID/PKG_ID'] || '';
+        var leadPhone = normalizePhoneForDup(lead['Телефон пасажира']);
+        var leadName = lead['Піб пасажира'] || lead['Піб'] || 'Без імені';
+        var reason = null;
+        if (leadPid && existingPaxIds.has(String(leadPid))) {
+            reason = 'вже в цьому маршруті';
+        } else if (leadPhone && existingPhones[leadPhone]) {
+            var matchName = existingPhones[leadPhone];
+            reason = matchName && matchName !== leadName
+                ? 'телефон збігається з: ' + matchName
+                : 'телефон вже в маршруті';
+        }
+        if (reason) dups.push({ name: leadName, reason: reason });
+        // Додаємо лід в існуючі сети, щоб наступні ліди в цьому ж пакеті
+        // могли бути виявлені як дублі (важливо для bulk додавання трьох
+        // однакових лідів у пустий маршрут)
+        if (leadPid) existingPaxIds.add(String(leadPid));
+        if (leadPhone && !existingPhones[leadPhone]) existingPhones[leadPhone] = leadName;
+    }
+    return dups;
+}
+
+// ── Перевірити дублі і запитати підтвердження ──
+// Повертає Promise<boolean>: true = можна продовжити, false = скасовано
+function checkAndConfirmDuplicates(targetSheet, leadsData, excludeRteIds) {
+    return new Promise(function(resolve) {
+        var dups = findRouteDuplicates(targetSheet, leadsData, excludeRteIds);
+        if (!dups.length) { resolve(true); return; }
+        var list = dups.map(function(d) { return '• <b>' + d.name + '</b> — ' + d.reason; }).join('<br>');
+        var word = dups.length === 1 ? 'дублікат' : (dups.length < 5 ? 'дублікати' : 'дублікатів');
+        var msg = '⚠️ Знайдено ' + dups.length + ' ' + word + ' у маршруті:\n\n' + list + '\n\nВсе одно додати?';
+        showConfirm(msg, function(yes) { resolve(!!yes); });
+    });
+}
+
 // ── Пересадити лід в інший маршрут ──
 function transferRouteLeadModal(rteId, sheetName) {
     const otherRoutes = routes.filter((r, i) => i !== activeRouteIdx);
@@ -1546,6 +1615,19 @@ async function doTransferRouteLead(rteId, fromSheet, toSheet) {
     // Визначаємо правильну колонку і значення для видалення
     const idInfo = getRouteRowIdInfo(row);
     if (!idInfo) { showToast('❌ Не вдалося визначити ID запису'); return; }
+
+    // Перевірка дублікатів у цільовому маршруті
+    const targetIdx = routes.findIndex(function(r) { return r.sheetName === toSheet; });
+    if (targetIdx !== -1) {
+        const targetSheet = routes[targetIdx];
+        if (targetSheet.rows === null || targetSheet.rows === undefined) {
+            showLoader('Перевірка маршруту...');
+            await loadRouteSheetData(targetIdx, false);
+            hideLoader();
+        }
+        const canProceed = await checkAndConfirmDuplicates(targetSheet, [cleanRowForApi(row)]);
+        if (!canProceed) return;
+    }
 
     showLoader('Пересадка...');
     // Add to new route (без фронтенд-властивостей)
@@ -1590,7 +1672,6 @@ async function doBulkTransfer(toSheet) {
     closeMessengerPopup();
     const sheet = routes[activeRouteIdx];
     if (!sheet) return;
-    showLoader('Пересадка ' + routeSelectedIds.size + ' записів...');
 
     // Збираємо рядки для переносу та їхні ID-дані для видалення
     const leadsToMove = [];
@@ -1603,8 +1684,22 @@ async function doBulkTransfer(toSheet) {
         if (idInfo) deleteInfos.push({ ...idInfo, resolvedId });
     }
 
-    if (leadsToMove.length === 0) { hideLoader(); showToast('⚠️ Не знайдено записів для переносу'); return; }
+    if (leadsToMove.length === 0) { showToast('⚠️ Не знайдено записів для переносу'); return; }
 
+    // Перевірка дублікатів у цільовому маршруті
+    const targetIdx = routes.findIndex(function(r) { return r.sheetName === toSheet; });
+    if (targetIdx !== -1) {
+        const targetSheet = routes[targetIdx];
+        if (targetSheet.rows === null || targetSheet.rows === undefined) {
+            showLoader('Перевірка маршруту...');
+            await loadRouteSheetData(targetIdx, false);
+            hideLoader();
+        }
+        const canProceed = await checkAndConfirmDuplicates(targetSheet, leadsToMove);
+        if (!canProceed) return;
+    }
+
+    showLoader('Пересадка ' + leadsToMove.length + ' записів...');
     const addRes = await apiPost('addToRoute', { sheetName: toSheet, leads: leadsToMove });
     if (!addRes.ok) { hideLoader(); showToast('❌ ' + (addRes.error || 'Помилка додавання')); return; }
 
@@ -2587,9 +2682,9 @@ function openAddModal() {
     document.getElementById('fSeats').value = '1';
     document.getElementById('fDate').value = '';
     document.getElementById('fDirection').value = currentDir === 'eu-ua' ? 'eu-ua' : 'ua-eu';
-    document.getElementById('fCurrency').value = 'UAH';
-    document.getElementById('fCurrencyDeposit').value = 'UAH';
-    document.getElementById('fCurrencyWeight').value = 'UAH';
+    document.getElementById('fCurrency').value = 'EUR';
+    document.getElementById('fCurrencyDeposit').value = 'EUR';
+    document.getElementById('fCurrencyWeight').value = 'EUR';
     // Скидаємо SMS парсер
     document.getElementById('smsInput').value = '';
     document.getElementById('smsParseResult').style.display = 'none';
@@ -4246,6 +4341,7 @@ async function assignToRoute(routeIdx) {
         if (!p) return null;
         return {
             'RTE_ID': p['PAX_ID'],
+            'PAX_ID': p['PAX_ID'],
             'Тип запису': 'Пасажир',
             'Піб пасажира': p['Піб'] || '',
             'Телефон пасажира': p['Телефон пасажира'] || '',
@@ -4273,6 +4369,16 @@ async function assignToRoute(routeIdx) {
     if (leadsData.length === 0) return;
 
     closeModal('routeAssignModal');
+
+    // Перевірка дублікатів — підвантажити дані маршруту якщо ще не завантажено
+    if (sheet.rows === null || sheet.rows === undefined) {
+        showLoader('Перевірка маршруту...');
+        await loadRouteSheetData(routeIdx, false);
+        hideLoader();
+    }
+    const canProceed = await checkAndConfirmDuplicates(sheet, leadsData);
+    if (!canProceed) return;
+
     showLoader('Переносимо ' + leadsData.length + ' лід(ів) в маршрут...');
 
     try {
@@ -4306,7 +4412,13 @@ function updateBulkToolbar() {
 }
 
 function openSideMenu() { document.getElementById('sideMenu').classList.add('open'); document.getElementById('sideMenuOverlay').classList.add('show'); }
-function closeSideMenu() { document.getElementById('sideMenu').classList.remove('open'); document.getElementById('sideMenuOverlay').classList.remove('show'); }
+function closeSideMenu() {
+    document.getElementById('sideMenu').classList.remove('open');
+    document.getElementById('sideMenuOverlay').classList.remove('show');
+    // Згорнути всі секції щоб при наступному відкритті меню все було закрите
+    document.querySelectorAll('.mobile-section-content').forEach(function(el) { el.style.display = 'none'; });
+    document.querySelectorAll('.mobile-section-toggle').forEach(function(el) { el.classList.remove('open'); });
+}
 
 function toggleMobileSection(section) {
     const name = section.charAt(0).toUpperCase() + section.slice(1);
@@ -5513,6 +5625,7 @@ async function saveOptimizedToRoute(routeIdx) {
         if (!p) return null;
         return {
             'RTE_ID': p['PAX_ID'],
+            'PAX_ID': p['PAX_ID'],
             'Тип запису': 'Пасажир',
             'Піб пасажира': p['Піб'] || '',
             'Телефон пасажира': p['Телефон пасажира'] || '',
@@ -5540,6 +5653,16 @@ async function saveOptimizedToRoute(routeIdx) {
     if (!leadsData.length) return showToast('Не знайдено пасажирів');
 
     closeModal('optimizeModal');
+
+    // Перевірка дублікатів
+    if (sheet.rows === null || sheet.rows === undefined) {
+        showLoader('Перевірка маршруту...');
+        await loadRouteSheetData(routeIdx, false);
+        hideLoader();
+    }
+    const canProceed = await checkAndConfirmDuplicates(sheet, leadsData);
+    if (!canProceed) return;
+
     showLoader('Переносимо ' + leadsData.length + ' лід(ів) в маршрут...');
 
     try {
@@ -5740,8 +5863,9 @@ function renderArchive() {
         const isSelected = archiveSelectedIds.has(id);
         const dirLabel = dir.includes('ua-eu') || dir.includes('UA→EU') ? 'UA→EU' : dir.includes('eu-ua') || dir.includes('EU→UA') ? 'EU→UA' : '';
         const dirCls = dirLabel === 'UA→EU' ? 'dir-badge-ua-eu' : dirLabel === 'EU→UA' ? 'dir-badge-eu-ua' : '';
+        const isFromRoute = reason.indexOf('маршрут') !== -1;
 
-        return `<div class="pax-card ${isSelected ? 'selected' : ''}" style="border-left:3px solid #9ca3af;opacity:0.85;" id="arc-${id}">
+        return `<div class="pax-card ${isSelected ? 'selected' : ''}" style="border-left:3px solid ${isFromRoute ? '#f59e0b' : '#9ca3af'};opacity:0.85;" id="arc-${id}">
             <div class="card-top">
                 <div class="card-checkbox-wrap" onclick="event.stopPropagation()">
                     <input class="card-checkbox" type="checkbox" ${isSelected ? 'checked' : ''} onchange="toggleArchiveSelect('${id}',this.checked)">
@@ -5752,7 +5876,9 @@ function renderArchive() {
             </div>
             <div class="card-info">
                 <span class="card-name">${name}</span>
-                <span style="font-size:9px;background:#f3f4f6;color:#6b7280;padding:2px 6px;border-radius:4px;">📦 Архів</span>
+                ${isFromRoute
+                    ? '<span style="font-size:9px;background:#fef3c7;color:#b45309;padding:2px 6px;border-radius:4px;font-weight:700;">🚐 З маршруту</span>'
+                    : '<span style="font-size:9px;background:#f3f4f6;color:#6b7280;padding:2px 6px;border-radius:4px;">📦 Архів</span>'}
             </div>
             ${(from || to) ? '<div class="card-route">📍 ' + (from || '—') + ' → ' + (to || '—') + '</div>' : ''}
             <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px;">
@@ -5760,9 +5886,9 @@ function renderArchive() {
                 ${archivedBy ? '<span style="font-size:10px;color:#6b7280;">👤 ' + archivedBy + '</span>' : ''}
                 ${reason ? '<span style="font-size:10px;color:#6b7280;">💬 ' + reason + '</span>' : ''}
             </div>
-            <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
+            ${isFromRoute ? '' : `<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
                 <button class="btn-card-action" style="background:#d1fae5;color:#059669;" onclick="event.stopPropagation(); restorePax('${id}','${name}')">♻️ Відновити</button>
-            </div>
+            </div>`}
         </div>`;
     }).join('');
 
@@ -6018,9 +6144,22 @@ function updateArchiveBulkToolbar() {
 
 // ── Масове відновлення з архіву ──
 function archiveBulkRestore() {
-    const ids = Array.from(archiveSelectedIds);
-    if (!ids.length) return;
-    showConfirm('Відновити ' + ids.length + ' записів з архіву?', async function(yes) {
+    const allIds = Array.from(archiveSelectedIds);
+    if (!allIds.length) return;
+    // Exclude passengers archived from a route — they can't be restored from
+    // here (their route row is already gone, so restoring would leave a
+    // ghost lead with stale trip data). User must add them back manually.
+    const ids = allIds.filter(id => {
+        const p = archivedPassengers.find(x => x['PAX_ID'] === id);
+        const reason = p ? String(p['ARCHIVE_REASON'] || '') : '';
+        return reason.indexOf('маршрут') === -1;
+    });
+    const skipped = allIds.length - ids.length;
+    if (!ids.length) {
+        showToast('⚠️ Архівовані з маршруту не можна відновити');
+        return;
+    }
+    showConfirm('Відновити ' + ids.length + ' записів з архіву?' + (skipped ? ' (' + skipped + ' з маршруту пропущено)' : ''), async function(yes) {
         if (!yes) return;
         showLoader('Відновлення ' + ids.length + ' записів...');
         const res = await apiPost('restorePassenger', { pax_ids: ids });
@@ -6070,9 +6209,25 @@ async function archiveFromRoute(rteId, sheetName, leadName) {
             // Знаходимо PAX_ID з даних маршруту для архівації в CRM
             var sheet = routes[activeRouteIdx];
             var row = sheet ? (sheet.rows || []).find(function(r) { return r._resolvedId === rteId || r['RTE_ID'] === rteId; }) : null;
-            var paxId = row ? (row['PAX_ID / PKG_ID'] || row['PAX_ID/PKG_ID'] || '') : '';
+            var paxId = row ? (row['PAX_ID / PKG_ID'] || row['PAX_ID/PKG_ID'] || row['PAX_ID'] || row['PKG_ID'] || '') : '';
+            // Fallback: find passenger by phone+name if legacy route row has empty pax_id
+            if (!paxId && row) {
+                var normPhone = function(s) { return String(s || '').replace(/\D/g, ''); };
+                var phone = normPhone(row['Телефон пасажира'] || row['Телефон отримувача'] || row['Телефон відправника']);
+                var name = String(row['Піб пасажира'] || row['Піб отримувача'] || row['Піб відправника'] || '').trim().toLowerCase();
+                if (phone) {
+                    var found = passengers.find(function(p) {
+                        if (normPhone(p['Телефон пасажира']) !== phone) return false;
+                        if (name && String(p['Піб'] || '').trim().toLowerCase() !== name) return false;
+                        return true;
+                    });
+                    if (found && found['PAX_ID']) paxId = found['PAX_ID'];
+                }
+            }
             if (paxId) {
                 await apiPost('archivePassenger', { pax_ids: [paxId], reason: 'Архівовано з маршруту', archived_by: getManagerName() || 'Менеджер' });
+            } else {
+                console.warn('[archive] no pax_id for route row', row);
             }
             // Видаляємо з маршруту з правильним id_col
             var idInfo = row ? getRouteRowIdInfo(row) : { id_col: 'RTE_ID', id_val: rteId };
@@ -6101,7 +6256,7 @@ async function deleteFromRouteFull(rteId, sheetName, leadName) {
             const sheet = routes[activeRouteIdx];
             const row = sheet ? (sheet.rows || []).find(r => r._resolvedId === rteId || r['RTE_ID'] === rteId) : null;
             const idInfo = row ? getRouteRowIdInfo(row) : { id_col: 'RTE_ID', id_val: rteId };
-            const paxId = row ? (row['PAX_ID / PKG_ID'] || row['PAX_ID/PKG_ID'] || rteId) : rteId;
+            const paxId = row ? (row['PAX_ID / PKG_ID'] || row['PAX_ID/PKG_ID'] || row['PAX_ID'] || row['PKG_ID'] || rteId) : rteId;
             await apiPost('deleteFromSheet', { sheet: sheetName, id_col: idInfo.id_col, id_val: idInfo.id_val });
             await apiPost('deletePassenger', { pax_ids: [paxId], reason: 'Видалено з маршруту і CRM', archived_by: getManagerName() || 'Менеджер' });
             // Оновлюємо локальні дані
@@ -6133,13 +6288,33 @@ function routeBulkArchive() {
             // Збираємо реальні PAX_ID та інфо для видалення
             const paxIds = [];
             const deleteInfos = [];
+            const normPhone = (s) => String(s || '').replace(/\D/g, '');
             for (const row of (sheet.rows || [])) {
                 const resolvedId = row._resolvedId || row['RTE_ID'];
                 if (!routeSelectedIds.has(resolvedId)) continue;
-                const paxId = row['PAX_ID / PKG_ID'] || row['PAX_ID/PKG_ID'] || '';
+                let paxId = row['PAX_ID / PKG_ID'] || row['PAX_ID/PKG_ID'] || row['PAX_ID'] || row['PKG_ID'] || '';
+                // Fallback for legacy route rows with empty pax_id_or_pkg_id:
+                // look up the passenger by phone (+ name) in the local list.
+                if (!paxId) {
+                    const phone = normPhone(row['Телефон пасажира'] || row['Телефон отримувача'] || row['Телефон відправника']);
+                    const name = String(row['Піб пасажира'] || row['Піб отримувача'] || row['Піб відправника'] || '').trim().toLowerCase();
+                    if (phone) {
+                        const found = passengers.find(p => {
+                            if (normPhone(p['Телефон пасажира']) !== phone) return false;
+                            if (name && String(p['Піб'] || '').trim().toLowerCase() !== name) return false;
+                            return true;
+                        });
+                        if (found && found['PAX_ID']) paxId = found['PAX_ID'];
+                    }
+                }
                 if (paxId) paxIds.push(paxId);
                 const idInfo = getRouteRowIdInfo(row);
                 if (idInfo) deleteInfos.push({ ...idInfo, resolvedId });
+            }
+            if (paxIds.length === 0) {
+                hideLoader();
+                showToast('⚠️ Не вдалося знайти PAX_ID — архівація неможлива. Додайте пасажира в маршрут заново.');
+                return;
             }
             // Архівуємо в CRM по реальних PAX_ID
             if (paxIds.length > 0) {

@@ -34,7 +34,8 @@ begin
            available_seats = greatest(0, coalesce(c.total_seats, 0) - sub.cnt),
            updated_at      = now()
       from (
-        select cal_id, count(*)::int as cnt
+        select cal_id,
+               coalesce(sum(greatest(1, coalesce(seats_count, 1))), 0)::int as cnt
           from passengers
          where cal_id = any(affected)
            and is_archived = false
