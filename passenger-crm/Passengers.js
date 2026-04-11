@@ -1520,6 +1520,70 @@ function cleanRowForApi(row) {
     return clean;
 }
 
+// ── Нормалізація телефону для пошуку дублікатів ──
+// 0671234567 = +380671234567 = 380671234567 → 671234567
+function normalizePhoneForDup(s) {
+    var digits = String(s || '').replace(/\D/g, '');
+    if (!digits) return '';
+    if (digits.indexOf('380') === 0) digits = digits.slice(3);
+    else if (digits.charAt(0) === '0') digits = digits.slice(1);
+    return digits;
+}
+
+// ── Знайти дублікати в маршруті ──
+// Перевіряє: 1) PAX_ID збіг, 2) телефон збіг (нормалізований)
+// Повертає масив { name, phone, reason } для кожного дубля
+function findRouteDuplicates(targetSheet, leadsToAdd, excludeRteIds) {
+    if (!targetSheet || !Array.isArray(targetSheet.rows)) return [];
+    var skip = excludeRteIds instanceof Set ? excludeRteIds : new Set(excludeRteIds || []);
+
+    var existingPaxIds = new Set();
+    var existingPhones = {}; // phone → name
+    for (var i = 0; i < targetSheet.rows.length; i++) {
+        var r = targetSheet.rows[i];
+        if (!(String(r['Тип запису'] || '').indexOf('Пасажир') !== -1)) continue;
+        // Пропустити рядки які зараз пересаджуємо (пересадка в той самий маршрут)
+        var rid = r._resolvedId || r['RTE_ID'];
+        if (rid && skip.has(rid)) continue;
+        var pid = r['PAX_ID / PKG_ID'] || r['PAX_ID/PKG_ID'] || r['PAX_ID'] || r['PKG_ID'] || '';
+        if (pid) existingPaxIds.add(String(pid));
+        var ph = normalizePhoneForDup(r['Телефон пасажира']);
+        if (ph && !existingPhones[ph]) existingPhones[ph] = r['Піб пасажира'] || '';
+    }
+
+    var dups = [];
+    for (var j = 0; j < leadsToAdd.length; j++) {
+        var lead = leadsToAdd[j];
+        var leadPid = lead['PAX_ID'] || lead['PAX_ID / PKG_ID'] || lead['PAX_ID/PKG_ID'] || '';
+        var leadPhone = normalizePhoneForDup(lead['Телефон пасажира']);
+        var leadName = lead['Піб пасажира'] || lead['Піб'] || 'Без імені';
+        var reason = null;
+        if (leadPid && existingPaxIds.has(String(leadPid))) {
+            reason = 'вже в цьому маршруті';
+        } else if (leadPhone && existingPhones[leadPhone]) {
+            var matchName = existingPhones[leadPhone];
+            reason = matchName && matchName !== leadName
+                ? 'телефон збігається з: ' + matchName
+                : 'телефон вже в маршруті';
+        }
+        if (reason) dups.push({ name: leadName, reason: reason });
+    }
+    return dups;
+}
+
+// ── Перевірити дублі і запитати підтвердження ──
+// Повертає Promise<boolean>: true = можна продовжити, false = скасовано
+function checkAndConfirmDuplicates(targetSheet, leadsData, excludeRteIds) {
+    return new Promise(function(resolve) {
+        var dups = findRouteDuplicates(targetSheet, leadsData, excludeRteIds);
+        if (!dups.length) { resolve(true); return; }
+        var list = dups.map(function(d) { return '• <b>' + d.name + '</b> — ' + d.reason; }).join('<br>');
+        var word = dups.length === 1 ? 'дублікат' : (dups.length < 5 ? 'дублікати' : 'дублікатів');
+        var msg = '⚠️ Знайдено ' + dups.length + ' ' + word + ' у маршруті:\n\n' + list + '\n\nВсе одно додати?';
+        showConfirm(msg, function(yes) { resolve(!!yes); });
+    });
+}
+
 // ── Пересадити лід в інший маршрут ──
 function transferRouteLeadModal(rteId, sheetName) {
     const otherRoutes = routes.filter((r, i) => i !== activeRouteIdx);
@@ -1546,6 +1610,19 @@ async function doTransferRouteLead(rteId, fromSheet, toSheet) {
     // Визначаємо правильну колонку і значення для видалення
     const idInfo = getRouteRowIdInfo(row);
     if (!idInfo) { showToast('❌ Не вдалося визначити ID запису'); return; }
+
+    // Перевірка дублікатів у цільовому маршруті
+    const targetIdx = routes.findIndex(function(r) { return r.sheetName === toSheet; });
+    if (targetIdx !== -1) {
+        const targetSheet = routes[targetIdx];
+        if (targetSheet.rows === null || targetSheet.rows === undefined) {
+            showLoader('Перевірка маршруту...');
+            await loadRouteSheetData(targetIdx, false);
+            hideLoader();
+        }
+        const canProceed = await checkAndConfirmDuplicates(targetSheet, [cleanRowForApi(row)]);
+        if (!canProceed) return;
+    }
 
     showLoader('Пересадка...');
     // Add to new route (без фронтенд-властивостей)
@@ -1590,7 +1667,6 @@ async function doBulkTransfer(toSheet) {
     closeMessengerPopup();
     const sheet = routes[activeRouteIdx];
     if (!sheet) return;
-    showLoader('Пересадка ' + routeSelectedIds.size + ' записів...');
 
     // Збираємо рядки для переносу та їхні ID-дані для видалення
     const leadsToMove = [];
@@ -1603,8 +1679,22 @@ async function doBulkTransfer(toSheet) {
         if (idInfo) deleteInfos.push({ ...idInfo, resolvedId });
     }
 
-    if (leadsToMove.length === 0) { hideLoader(); showToast('⚠️ Не знайдено записів для переносу'); return; }
+    if (leadsToMove.length === 0) { showToast('⚠️ Не знайдено записів для переносу'); return; }
 
+    // Перевірка дублікатів у цільовому маршруті
+    const targetIdx = routes.findIndex(function(r) { return r.sheetName === toSheet; });
+    if (targetIdx !== -1) {
+        const targetSheet = routes[targetIdx];
+        if (targetSheet.rows === null || targetSheet.rows === undefined) {
+            showLoader('Перевірка маршруту...');
+            await loadRouteSheetData(targetIdx, false);
+            hideLoader();
+        }
+        const canProceed = await checkAndConfirmDuplicates(targetSheet, leadsToMove);
+        if (!canProceed) return;
+    }
+
+    showLoader('Пересадка ' + leadsToMove.length + ' записів...');
     const addRes = await apiPost('addToRoute', { sheetName: toSheet, leads: leadsToMove });
     if (!addRes.ok) { hideLoader(); showToast('❌ ' + (addRes.error || 'Помилка додавання')); return; }
 
@@ -4274,6 +4364,16 @@ async function assignToRoute(routeIdx) {
     if (leadsData.length === 0) return;
 
     closeModal('routeAssignModal');
+
+    // Перевірка дублікатів — підвантажити дані маршруту якщо ще не завантажено
+    if (sheet.rows === null || sheet.rows === undefined) {
+        showLoader('Перевірка маршруту...');
+        await loadRouteSheetData(routeIdx, false);
+        hideLoader();
+    }
+    const canProceed = await checkAndConfirmDuplicates(sheet, leadsData);
+    if (!canProceed) return;
+
     showLoader('Переносимо ' + leadsData.length + ' лід(ів) в маршрут...');
 
     try {
@@ -5548,6 +5648,16 @@ async function saveOptimizedToRoute(routeIdx) {
     if (!leadsData.length) return showToast('Не знайдено пасажирів');
 
     closeModal('optimizeModal');
+
+    // Перевірка дублікатів
+    if (sheet.rows === null || sheet.rows === undefined) {
+        showLoader('Перевірка маршруту...');
+        await loadRouteSheetData(routeIdx, false);
+        hideLoader();
+    }
+    const canProceed = await checkAndConfirmDuplicates(sheet, leadsData);
+    if (!canProceed) return;
+
     showLoader('Переносимо ' + leadsData.length + ' лід(ів) в маршрут...');
 
     try {
