@@ -1567,6 +1567,11 @@ function findRouteDuplicates(targetSheet, leadsToAdd, excludeRteIds) {
                 : 'телефон вже в маршруті';
         }
         if (reason) dups.push({ name: leadName, reason: reason });
+        // Додаємо лід в існуючі сети, щоб наступні ліди в цьому ж пакеті
+        // могли бути виявлені як дублі (важливо для bulk додавання трьох
+        // однакових лідів у пустий маршрут)
+        if (leadPid) existingPaxIds.add(String(leadPid));
+        if (leadPhone && !existingPhones[leadPhone]) existingPhones[leadPhone] = leadName;
     }
     return dups;
 }
