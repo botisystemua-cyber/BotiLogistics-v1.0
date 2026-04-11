@@ -4246,6 +4246,7 @@ async function assignToRoute(routeIdx) {
         if (!p) return null;
         return {
             'RTE_ID': p['PAX_ID'],
+            'PAX_ID': p['PAX_ID'],
             'Тип запису': 'Пасажир',
             'Піб пасажира': p['Піб'] || '',
             'Телефон пасажира': p['Телефон пасажира'] || '',
@@ -5519,6 +5520,7 @@ async function saveOptimizedToRoute(routeIdx) {
         if (!p) return null;
         return {
             'RTE_ID': p['PAX_ID'],
+            'PAX_ID': p['PAX_ID'],
             'Тип запису': 'Пасажир',
             'Піб пасажира': p['Піб'] || '',
             'Телефон пасажира': p['Телефон пасажира'] || '',
