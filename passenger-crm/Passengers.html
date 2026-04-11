@@ -23,7 +23,7 @@
     <link rel="manifest" href="manifest.json">
     <title>BotiLogistics CRM Пасажири v2</title>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="Passengers.css">
+    <link rel="stylesheet" href="Passengers.css?v=6">
 </head>
 <body>
 
@@ -42,11 +42,11 @@
                 <span class="mobile-section-toggle" id="mobileTogglePax">►</span>
             </div>
             <div class="mobile-section-content" id="mobileSectionPax" style="display:none;">
-                <div class="side-menu-item active" id="mobileAllPax" onclick="showPaxView('all'); closeSideMenu();">
+                <div class="side-menu-item" id="mobileAllPax" onclick="showPaxView('all'); closeSideMenu();">
                     <span class="side-menu-item-left">📊 Всі пасажири</span>
                     <span class="side-menu-item-count" id="mobileCountAll">0</span>
                 </div>
-                <div class="side-menu-item" id="mobileNew24" onclick="showPaxView('new24'); closeSideMenu();">
+                <div class="side-menu-item active" id="mobileNew24" onclick="showPaxView('new24'); closeSideMenu();">
                     <span class="side-menu-item-left">🆕 Нові (24 год)</span>
                     <span class="side-menu-item-count" id="mobileCountNew24" style="background:#fef3c7;color:#d97706;">0</span>
                 </div>
@@ -175,11 +175,11 @@
                 <span class="pc-sidebar-toggle" id="pcTogglePax">▼</span>
             </div>
             <div class="pc-sidebar-content collapsed" id="pcSectionPax">
-                <div class="pc-sidebar-item active" id="pcAllPax" onclick="showPaxView('all')">
+                <div class="pc-sidebar-item" id="pcAllPax" onclick="showPaxView('all')">
                     <span><span class="item-icon">📊</span><span class="item-text">Всі</span></span>
                     <span class="item-count" id="pcCountAll">0</span>
                 </div>
-                <div class="pc-sidebar-item" id="pcNew24" onclick="showPaxView('new24')">
+                <div class="pc-sidebar-item active" id="pcNew24" onclick="showPaxView('new24')">
                     <span><span class="item-icon">🆕</span><span class="item-text">Нові (24 год)</span></span>
                     <span class="item-count" id="pcCountNew24" style="background:#fef3c7;color:#d97706;">0</span>
                 </div>
@@ -336,17 +336,22 @@
                     <span id="routeDashToggle" style="font-size:12px;opacity:0.7;transition:transform 0.2s;">▼</span>
                 </div>
                 <div id="routeDashContent" style="margin-top:10px;display:none;">
-                    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;">
-                        <button id="btnRouteBack" class="bs-btn" style="display:none;grid-column:1/-1;background:rgba(255,255,255,0.3);color:white;font-size:11px;padding:8px 0;border:1px solid rgba(255,255,255,0.4);font-weight:800;" onclick="event.stopPropagation();toggleRouteExpensesView()">← Назад</button>
-                        <button id="btnRouteExpenses" class="bs-btn" style="background:rgba(255,255,255,0.2);color:white;font-size:11px;padding:8px 0;border:1px solid rgba(255,255,255,0.3);" onclick="event.stopPropagation();toggleRouteExpensesView()">💰 Витрати</button>
-                        <button id="btnRouteOptimize" class="bs-btn" style="background:rgba(255,255,255,0.2);color:white;font-size:11px;padding:8px 0;border:1px solid rgba(255,255,255,0.3);" onclick="event.stopPropagation();optimizeRouteOrder()">⚡ Оптимізувати</button>
-                        <button class="bs-btn" style="background:rgba(220,38,38,0.3);color:white;font-size:11px;padding:8px 0;border:1px solid rgba(220,38,38,0.4);" onclick="event.stopPropagation();confirmDeleteRoute(activeRouteIdx)">🗑️ Видалити</button>
+                    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;">
+                        <button id="btnRouteBack" class="route-dash-btn" style="display:none;grid-column:1/-1;" onclick="event.stopPropagation();toggleRouteExpensesView()">← Назад</button>
+                        <button id="btnRouteExpenses" class="route-dash-btn" onclick="event.stopPropagation();toggleRouteExpensesView()">💰 <span class="lbl-full">Витрати</span><span class="lbl-short">Витрати</span></button>
+                        <button id="btnRouteOptimize" class="route-dash-btn" onclick="event.stopPropagation();optimizeRouteOrder()">⚡ <span class="lbl-full">Оптимізувати</span><span class="lbl-short">Оптим.</span></button>
+                        <button id="btnRouteSort" class="route-dash-btn" onclick="event.stopPropagation();enterRouteSortMode()">🔧 <span class="lbl-full">Сортувати</span><span class="lbl-short">Сорт.</span></button>
+                        <button id="btnRouteDelete" class="route-dash-btn danger" onclick="event.stopPropagation();confirmDeleteRoute(activeRouteIdx)">🗑️ <span class="lbl-full">Видалити</span><span class="lbl-short">Видал.</span></button>
                     </div>
                 </div>
             </div>
             <div id="routeHeaderEmpty" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px;">
                 <h2 style="margin:0;font-size:18px;color:var(--text-primary);">🗺️ Маршрути</h2>
                 <button class="bs-btn" style="background:var(--primary);color:white;font-size:11px;padding:8px 14px;" onclick="loadRoutes(true)">🔄 Оновити</button>
+            </div>
+            <!-- Sort Mode: мінімальний банер (видно лише в режимі сортування) -->
+            <div id="routeSortBanner" class="route-sort-banner" style="display:none;">
+                <span id="routeSortBannerLabel">🔧 Режим сортування</span>
             </div>
             <!-- Route filters — 1 рядок + розгортальні секції -->
             <div id="routeFiltersBar" style="display:none;margin-bottom:8px;">
@@ -365,6 +370,12 @@
                         <button class="trip-filter-btn" id="rteStatusWork" onclick="setRouteStatusFilter('В роботі',this)" style="border-color:#3b82f6;color:#1d4ed8;">⚙️ В роботі</button>
                         <button class="trip-filter-btn" id="rteStatusConfirmed" onclick="setRouteStatusFilter('Підтверджено',this)" style="border-color:#10b981;color:#059669;">✅ Підтверджено</button>
                         <button class="trip-filter-btn" id="rteStatusRefused" onclick="setRouteStatusFilter('Відмова',this)" style="border-color:#ef4444;color:#dc2626;">❌ Відмова</button>
+                    </div>
+                    <!-- Режим порядку: Збір / Висадка — схований сюди, використовується рідко -->
+                    <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;margin-top:8px;padding-top:8px;border-top:1px dashed var(--border);">
+                        <span style="font-size:10px;color:var(--text-secondary);margin-right:4px;">Порядок:</span>
+                        <button class="trip-filter-btn active" id="rteSortPickup"  onclick="setRouteSortMode('pickup',  this)" style="flex-shrink:0;">📥 Збір</button>
+                        <button class="trip-filter-btn"        id="rteSortDropoff" onclick="setRouteSortMode('dropoff', this)" style="flex-shrink:0;">📤 Висадка</button>
                     </div>
                 </div>
                 <!-- Фінанси (згорнуті за замовчуванням) -->
@@ -393,6 +404,11 @@
             <div id="routesLoading" style="display:none;text-align:center;padding:40px;color:var(--text-secondary);font-size:13px;">⏳ Завантаження маршрутів...</div>
             <div id="routesError" style="display:none;text-align:center;padding:40px;color:#dc2626;font-size:13px;"></div>
             <div id="routesList"></div>
+            <!-- Sort Mode: фіксована панель внизу з кнопками Зберегти / Скасувати -->
+            <div id="routeSortActionBar" style="display:none;">
+                <button type="button" class="sort-cancel-btn" onclick="cancelRouteSortChanges()">❌ Скасувати</button>
+                <button type="button" class="sort-save-btn" onclick="saveRouteSortChanges()">💾 Зберегти порядок</button>
+            </div>
         </div>
 
         <!-- ARCHIVE VIEW -->
@@ -872,11 +888,14 @@
 
 <!-- Supabase -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="supabase-config.js"></script>
-<script src="supabase-api.js"></script>
+<script src="supabase-config.js?v=6"></script>
+<script src="supabase-api.js?v=6"></script>
+
+<!-- SortableJS — drag-and-drop for route stops ordering -->
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 
 <!-- PWA + Main Logic -->
-<script src="Passengers.js"></script>
+<script src="Passengers.js?v=6"></script>
 
 <!-- Google Maps API -->
 <script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDbSS6XSCJ3MafbrSp-rIX1-x130bwzevo&callback=initMapsAPI"></script>

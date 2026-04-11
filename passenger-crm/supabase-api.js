@@ -937,12 +937,107 @@ async function sbGetRouteSheet(params) {
             .order('created_at', { ascending: true });
         if (error) throw error;
 
+        // Fetch placeholder row to get pickup_order / dropoff_order arrays.
+        // Order is stored per-route on the placeholder (header) row.
+        const { data: phData } = await sb
+            .from('routes')
+            .select('pickup_order, dropoff_order')
+            .eq('tenant_id', TENANT_ID)
+            .eq('rte_id', sheetName)
+            .eq('is_placeholder', true)
+            .maybeSingle();
+
+        const pickupOrder  = (phData && Array.isArray(phData.pickup_order))  ? phData.pickup_order  : [];
+        const dropoffOrder = (phData && Array.isArray(phData.dropoff_order)) ? phData.dropoff_order : [];
+
         const rows = (data || []).map(routeRowToGas);
         const headers = rows.length > 0 ? Object.keys(rows[0]) : [];
 
-        return { ok: true, data: { rows: rows, headers: headers, sheetName: sheetName }, rows: rows, headers: headers, sheetName: sheetName };
+        return {
+            ok: true,
+            data: { rows, headers, sheetName, pickup_order: pickupOrder, dropoff_order: dropoffOrder },
+            rows, headers, sheetName,
+            pickup_order: pickupOrder,
+            dropoff_order: dropoffOrder
+        };
     } catch (e) {
         console.error('sbGetRouteSheet error:', e);
+        return { ok: false, error: e.message };
+    }
+}
+
+// Read pickup_order / dropoff_order arrays for a given route (by sheetName)
+async function sbGetRouteOrder(params) {
+    try {
+        const sheetName = params.sheetName || params.sheet;
+        if (!sheetName) return { ok: false, error: 'sheetName required' };
+
+        const { data, error } = await sb
+            .from('routes')
+            .select('pickup_order, dropoff_order')
+            .eq('tenant_id', TENANT_ID)
+            .eq('rte_id', sheetName)
+            .eq('is_placeholder', true)
+            .maybeSingle();
+        if (error) throw error;
+
+        return {
+            ok: true,
+            pickup_order:  (data && Array.isArray(data.pickup_order))  ? data.pickup_order  : [],
+            dropoff_order: (data && Array.isArray(data.dropoff_order)) ? data.dropoff_order : []
+        };
+    } catch (e) {
+        console.error('sbGetRouteOrder error:', e);
+        return { ok: false, error: e.message };
+    }
+}
+
+// Write pickup_order / dropoff_order arrays for a route to its placeholder row.
+// If the placeholder row is missing (legacy route) — create it.
+async function sbSetRouteOrder(params) {
+    try {
+        const sheetName = params.sheetName || params.sheet;
+        if (!sheetName) return { ok: false, error: 'sheetName required' };
+
+        const updateObj = { updated_at: new Date().toISOString() };
+        if (params.pickup_order  !== undefined) updateObj.pickup_order  = params.pickup_order  || [];
+        if (params.dropoff_order !== undefined) updateObj.dropoff_order = params.dropoff_order || [];
+
+        // Try to find placeholder row first
+        const { data: existing, error: selErr } = await sb
+            .from('routes')
+            .select('id')
+            .eq('tenant_id', TENANT_ID)
+            .eq('rte_id', sheetName)
+            .eq('is_placeholder', true)
+            .maybeSingle();
+        if (selErr) throw selErr;
+
+        if (existing && existing.id) {
+            const { error: upErr } = await sb
+                .from('routes')
+                .update(updateObj)
+                .eq('id', existing.id);
+            if (upErr) throw upErr;
+        } else {
+            // No placeholder yet — create one with the order arrays
+            const insertObj = {
+                tenant_id: TENANT_ID,
+                rte_id: sheetName,
+                is_placeholder: true,
+                record_type: 'Пасажир',
+                status: 'scheduled',
+                crm_status: 'active',
+                route_date: new Date().toISOString().split('T')[0],
+                ...updateObj
+            };
+            const { error: insErr } = await sb.from('routes').insert(insertObj);
+            if (insErr) throw insErr;
+        }
+
+        return { ok: true };
+    } catch (e) {
+        console.error('sbSetRouteOrder error:', e);
         return { ok: false, error: e.message };
     }
 }
@@ -1217,6 +1312,8 @@ async function apiPostSupabase(action, data) {
         updateRouteFields:  sbUpdateRouteField,
         addToRoute:         sbAddToRoute,
         deleteFromSheet:    sbDeleteFromSheet,
+        getRouteOrder:      sbGetRouteOrder,
+        setRouteOrder:      sbSetRouteOrder,
         createRoute:        async (p) => {
             // Create a placeholder route row so getRoutesList returns it
             const name = (p.name || ('Маршрут_' + Date.now())).trim();

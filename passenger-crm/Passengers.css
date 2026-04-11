@@ -328,7 +328,122 @@ select.detail-inline-edit { padding: 3px 4px; cursor: pointer; appearance: auto;
 .route-sheet-table tr:hover td { background:#f8fafc; }
 
 /* Route card styles */
-.route-card { background:white; border-radius:8px; box-shadow:var(--shadow); border-left:4px solid var(--primary); margin-bottom:10px; overflow:hidden; }
+.route-card { background:white; border-radius:8px; box-shadow:var(--shadow); border-left:4px solid var(--primary); margin-bottom:10px; overflow:hidden; position:relative; }
+
+/* ─────────────────────────────────────────────────────────
+   SORT MODE — Режим сортування маршруту
+   Компоненти видимі/активні тільки коли #routesList має клас .sort-mode-on
+   або <body> має клас .route-sort-active.
+   ───────────────────────────────────────────────────────── */
+
+/* У режимі сортування: картки виглядають «неактивними» (приглушено-сірими),
+   вся картка є drag-handle — тапни будь-де й утримай, щоб схопити.
+   touch-action: pan-y — дозволяє вертикальний скрол списку, але SortableJS
+   після delay=300 мс перехоплює touch і починає drag. */
+#routesList.sort-mode-on .route-card {
+    background: #f3f4f6 !important;
+    border-left-color: #9ca3af !important;
+    box-shadow: none !important;
+    opacity: 0.85;
+    cursor: grab;
+    touch-action: pan-y;
+    -webkit-user-select: none;
+    user-select: none;
+    filter: grayscale(0.5);
+    transition: none !important;
+}
+#routesList.sort-mode-on .route-card:active { cursor: grabbing; }
+#routesList.sort-mode-on .route-card.selected { outline: none !important; }
+/* Уся картка — drag handle. Заголовок не має «hover»-ефекту. */
+#routesList.sort-mode-on .route-card-header {
+    cursor: grab !important;
+    background: transparent !important;
+}
+#routesList.sort-mode-on .route-card-header:hover { background: transparent !important; }
+/* Приховати деталі та дії картки — зайвий шум у sort mode */
+#routesList.sort-mode-on .route-card-actions,
+#routesList.sort-mode-on .route-card-details { display: none !important; }
+/* Приховати чекбокси — щоб не плутати з режимом вибору */
+#routesList.sort-mode-on .card-checkbox-wrap { display: none !important; }
+
+/* SortableJS drag-and-drop visual states (активні тільки в sort mode) */
+.route-card-ghost { opacity:0.3; background:#e5e7eb !important; border:2px dashed #9ca3af !important; filter:none !important; }
+.route-card-chosen { box-shadow:0 0 0 2px #6b7280, 0 8px 20px rgba(0,0,0,0.18) !important; filter:none !important; opacity:1 !important; }
+.route-card-drag { opacity:0.95 !important; cursor:grabbing !important; filter:none !important; }
+#routesList .route-card-header { user-select:none; }
+
+/* Мінімальна плашка над списком — лише напис і «живий» маркер dirty */
+.route-sort-banner {
+    background: #f9fafb;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 10px;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-secondary);
+}
+
+/* Фіксована панель знизу з кнопками Save / Cancel */
+#routeSortActionBar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    background: white;
+    border-top: 3px solid #f59e0b;
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px)) 16px;
+    display: flex;
+    gap: 10px;
+    box-shadow: 0 -6px 20px rgba(0,0,0,0.15);
+}
+#routeSortActionBar button {
+    flex: 1;
+    padding: 14px 10px;
+    font-size: 14px;
+    font-weight: 800;
+    border-radius: 10px;
+    border: none;
+    cursor: pointer;
+    font-family: inherit;
+    min-height: 50px;
+    transition: transform 0.1s, box-shadow 0.1s;
+}
+#routeSortActionBar button:active { transform: scale(0.97); }
+#routeSortActionBar .sort-cancel-btn {
+    background: #f3f4f6;
+    color: #374151;
+    border: 2px solid #d1d5db;
+    max-width: 40%;
+}
+#routeSortActionBar .sort-cancel-btn:hover { background: #e5e7eb; }
+#routeSortActionBar .sort-save-btn {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    color: white;
+    box-shadow: 0 4px 12px rgba(16,185,129,0.35);
+}
+#routeSortActionBar .sort-save-btn:hover { box-shadow: 0 6px 18px rgba(16,185,129,0.5); }
+
+/* Коли режим активний — зсуваємо нижній край контенту щоб фікс-панель не накривала картки */
+body.route-sort-active .main-content-area { padding-bottom: 110px !important; }
+
+/* Блокування інших дій у режимі сортування.
+   УВАГА: #rteToggleStatus лишається активним, бо всередині нього тепер
+   захований перемикач Збір/Висадка, потрібний у режимі сортування. */
+body.route-sort-active #btnRouteExpenses,
+body.route-sort-active #btnRouteOptimize,
+body.route-sort-active #btnRouteDelete,
+body.route-sort-active #btnRouteSort,
+body.route-sort-active .bulk-toolbar,
+body.route-sort-active #rteTogglePay {
+    opacity: 0.35 !important;
+    pointer-events: none !important;
+    filter: grayscale(1);
+}
 .route-card.status-confirmed { border-left-color:var(--success); }
 .route-card.status-new { border-left-color:var(--warning); }
 .route-card.status-work { border-left-color:var(--info); }
@@ -355,6 +470,63 @@ select.detail-inline-edit { padding: 3px 4px; cursor: pointer; appearance: auto;
 .route-header-bar { background:linear-gradient(135deg,#7c3aed 0%,#6d28d9 100%); color:white; border-radius:12px; padding:16px 20px; margin-bottom:16px; }
 .route-header-bar h2 { margin:0; font-size:20px; font-weight:800; }
 .route-header-bar .route-subtitle { font-size:12px; opacity:0.85; margin-top:4px; }
+
+/* Кнопки в шапці маршруту — білі pill-кнопки у стилі фільтрів «Всі/Статуси/Фінанси».
+   Біле тло, округлі (border-radius: 20px), з чітким тап-фідбеком.
+   ПК: великий текст 14px з повними підписами.
+   Моб: дрібний 11px + скорочений підпис «Оптим.» щоб поміщалось у 4-колоночну сітку. */
+.route-dash-btn {
+    padding: 12px 16px;
+    min-height: 46px;
+    background: white;
+    color: #1f2937;
+    font-size: 14px;
+    line-height: 1.15;
+    font-weight: 700;
+    border: 1px solid #e5e7eb;
+    border-radius: 20px;
+    cursor: pointer;
+    font-family: inherit;
+    -webkit-tap-highlight-color: rgba(124,58,237,0.2);
+    transition: transform 0.1s ease, background 0.15s ease, box-shadow 0.15s ease;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.12);
+    position: relative;
+    z-index: 2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    min-width: 0;
+}
+/* Перемикач між повним та скороченим написом у кнопці. За замовчуванням (ПК)
+   показуємо повний, на вузьких екранах — скорочений. */
+.route-dash-btn .lbl-short { display: none; }
+.route-dash-btn:hover { background: #f9fafb; border-color: #d1d5db; }
+.route-dash-btn:active {
+    transform: scale(0.95);
+    background: #ede9fe !important;
+    box-shadow: inset 0 2px 6px rgba(124,58,237,0.2);
+}
+.route-dash-btn.danger {
+    background: #fef2f2;
+    color: #dc2626;
+    border-color: #fecaca;
+}
+.route-dash-btn.danger:hover { background: #fee2e2; border-color: #fca5a5; }
+.route-dash-btn.danger:active { background: #fecaca !important; }
+@media (max-width: 600px) {
+    .route-dash-btn {
+        font-size: 11px;
+        padding: 8px 6px;
+        min-height: 40px;
+        gap: 3px;
+    }
+    .route-dash-btn .lbl-full { display: none; }
+    .route-dash-btn .lbl-short { display: inline; }
+}
 .route-card.selected { background:#f0f7ff; border-left-color:var(--primary); }
 .route-card .card-checkbox-wrap { flex-shrink:0; }
 .route-card .detail-block-actions { margin-top:4px; }
