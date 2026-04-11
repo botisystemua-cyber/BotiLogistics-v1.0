@@ -259,6 +259,10 @@ body { font-family: 'Montserrat', sans-serif; background: var(--bg-main); color:
     box-sizing: border-box;
     user-select: none;
     -webkit-tap-highlight-color: transparent;
+    /* Дозволяємо браузеру обробляти вертикальний свайп як скрол контейнера,
+       замість пересилати click в елемент. Без цього мобільний iOS/Android
+       вважає будь-який дотик до .combo-box-item клацанням. */
+    touch-action: pan-y;
 }
 .combo-box-item:last-child { border-bottom: none; }
 .combo-box-item:hover { background: #eff6ff; }

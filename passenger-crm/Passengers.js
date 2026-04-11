@@ -445,12 +445,12 @@ function renderRoutePointDropdown(which) {
     dd.innerHTML = filtered.map(p => {
         const flag = flagByCountry[p.country_code] || '';
         const loc = p.location_name ? `<span class="combo-box-loc">${p.location_name}</span>` : '';
-        const safeName = String(p.name_ua).replace(/'/g, "\\'");
-        // onmousedown (не onclick!) щоб обробка пройшла ДО blur input'а, який
-        // інакше закриє dropdown раніше ніж клік дійде до елемента.
-        return `<div class="combo-box-item"
-                     onmousedown="event.preventDefault(); pickRoutePointOption('${which}','${safeName}')"
-                     ontouchend="event.preventDefault(); pickRoutePointOption('${which}','${safeName}')">
+        // Inline обробників немає — використовуємо делегований click listener
+        // на контейнері #routePointDropdown (wired у DOMContentLoaded), який
+        // вміє відрізнити свайп (scroll) від тапу (select) через трекінг
+        // touchmove дельти > 8px по вертикалі. Дані про елемент у data-*.
+        const escapedName = String(p.name_ua).replace(/"/g, '&quot;');
+        return `<div class="combo-box-item" data-which="${which}" data-name="${escapedName}">
                     <span class="combo-box-flag">${flag}</span>
                     <span class="combo-box-name">${p.name_ua}</span>
                     ${loc}
@@ -851,6 +851,44 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     document.addEventListener('mousedown', _handleOutsideRoutePoint, true);
     document.addEventListener('touchstart', _handleOutsideRoutePoint, true);
+
+    // Делегований click на елементах списку з відрізненням tap/swipe на мобільних.
+    // Проблема: якщо вішати onclick на кожен .combo-box-item, мобільний браузер
+    // фаєрить click навіть коли юзер робив свайп (скрол списку) — бо дельта
+    // руху < браузерного порогу кліку. Результат: при спробі прокрутити список
+    // одразу вибирається перший елемент.
+    // Рішення: трекати touchstart/touchmove, і у click-хендлері перевіряти
+    // наш власний прапорець «рухався» (поріг 8px вертикально) — якщо так,
+    // ігноруємо клік (юзер скролив).
+    let _ddTouchStartY = 0;
+    let _ddTouchMoved = false;
+    const _ddElForListeners = document.getElementById('routePointDropdown');
+    if (_ddElForListeners) {
+        _ddElForListeners.addEventListener('touchstart', function (e) {
+            if (!e.touches || !e.touches.length) return;
+            _ddTouchStartY = e.touches[0].clientY;
+            _ddTouchMoved = false;
+        }, { passive: true });
+        _ddElForListeners.addEventListener('touchmove', function (e) {
+            if (!e.touches || !e.touches.length) return;
+            const dy = Math.abs(e.touches[0].clientY - _ddTouchStartY);
+            if (dy > 8) _ddTouchMoved = true;
+        }, { passive: true });
+        _ddElForListeners.addEventListener('click', function (e) {
+            const item = e.target && e.target.closest && e.target.closest('.combo-box-item');
+            if (!item) return;
+            if (_ddTouchMoved) {
+                // Скрол, не вибираємо — просто скидаємо стан
+                _ddTouchMoved = false;
+                return;
+            }
+            const which = item.getAttribute('data-which');
+            const name = item.getAttribute('data-name');
+            if (which && name) {
+                pickRoutePointOption(which, name);
+            }
+        });
+    }
 
     // Перепозиціонувати dropdown при скролі батьківського контейнера (напр.
     // modal-body). НЕ закриваємо — інакше юзер не зможе прокрутити список:
