@@ -336,17 +336,31 @@
                     <span id="routeDashToggle" style="font-size:12px;opacity:0.7;transition:transform 0.2s;">▼</span>
                 </div>
                 <div id="routeDashContent" style="margin-top:10px;display:none;">
-                    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;">
+                    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px;">
                         <button id="btnRouteBack" class="bs-btn" style="display:none;grid-column:1/-1;background:rgba(255,255,255,0.3);color:white;font-size:11px;padding:8px 0;border:1px solid rgba(255,255,255,0.4);font-weight:800;" onclick="event.stopPropagation();toggleRouteExpensesView()">← Назад</button>
                         <button id="btnRouteExpenses" class="bs-btn" style="background:rgba(255,255,255,0.2);color:white;font-size:11px;padding:8px 0;border:1px solid rgba(255,255,255,0.3);" onclick="event.stopPropagation();toggleRouteExpensesView()">💰 Витрати</button>
                         <button id="btnRouteOptimize" class="bs-btn" style="background:rgba(255,255,255,0.2);color:white;font-size:11px;padding:8px 0;border:1px solid rgba(255,255,255,0.3);" onclick="event.stopPropagation();optimizeRouteOrder()">⚡ Оптимізувати</button>
-                        <button class="bs-btn" style="background:rgba(220,38,38,0.3);color:white;font-size:11px;padding:8px 0;border:1px solid rgba(220,38,38,0.4);" onclick="event.stopPropagation();confirmDeleteRoute(activeRouteIdx)">🗑️ Видалити</button>
+                        <button id="btnRouteSort" class="bs-btn" style="background:rgba(255,255,255,0.2);color:white;font-size:11px;padding:8px 0;border:1px solid rgba(255,255,255,0.3);font-weight:700;" onclick="event.stopPropagation();enterRouteSortMode()">🔧 Сортувати</button>
+                        <button id="btnRouteDelete" class="bs-btn" style="background:rgba(220,38,38,0.3);color:white;font-size:11px;padding:8px 0;border:1px solid rgba(220,38,38,0.4);" onclick="event.stopPropagation();confirmDeleteRoute(activeRouteIdx)">🗑️ Видалити</button>
                     </div>
                 </div>
             </div>
             <div id="routeHeaderEmpty" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px;">
                 <h2 style="margin:0;font-size:18px;color:var(--text-primary);">🗺️ Маршрути</h2>
                 <button class="bs-btn" style="background:var(--primary);color:white;font-size:11px;padding:8px 14px;" onclick="loadRoutes(true)">🔄 Оновити</button>
+            </div>
+            <!-- Sort Mode: Warning banner (видно лише в режимі сортування) -->
+            <div id="routeSortBanner" class="route-sort-banner" style="display:none;">
+                <div class="route-sort-banner-main">
+                    <span class="route-sort-banner-icon">🔧</span>
+                    <div class="route-sort-banner-text">
+                        <div class="route-sort-banner-title">Режим сортування активний</div>
+                        <div class="route-sort-banner-sub">Перетягуйте картки за ручку <b>⋮⋮</b> зліва. Зміни <b>не збережено</b> поки не натиснете «💾 Зберегти».</div>
+                    </div>
+                </div>
+                <div class="route-sort-banner-mode">
+                    <span id="routeSortBannerMode">📥 Порядок збору</span>
+                </div>
             </div>
             <!-- Route filters — 1 рядок + розгортальні секції -->
             <div id="routeFiltersBar" style="display:none;margin-bottom:8px;">
@@ -399,6 +413,11 @@
             <div id="routesLoading" style="display:none;text-align:center;padding:40px;color:var(--text-secondary);font-size:13px;">⏳ Завантаження маршрутів...</div>
             <div id="routesError" style="display:none;text-align:center;padding:40px;color:#dc2626;font-size:13px;"></div>
             <div id="routesList"></div>
+            <!-- Sort Mode: фіксована панель внизу з кнопками Зберегти / Скасувати -->
+            <div id="routeSortActionBar" style="display:none;">
+                <button type="button" class="sort-cancel-btn" onclick="cancelRouteSortChanges()">❌ Скасувати</button>
+                <button type="button" class="sort-save-btn" onclick="saveRouteSortChanges()">💾 Зберегти порядок</button>
+            </div>
         </div>
 
         <!-- ARCHIVE VIEW -->

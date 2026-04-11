@@ -236,6 +236,12 @@ let routeStatusFilter = 'all'; // all | Новий | Підтверджено | 
 let routePayFilter = 'all'; // all | Не оплачено | Частково | Оплачено
 let routeSortMode = 'pickup'; // pickup | dropoff — який порядок застосовується (збір чи висадка)
 let _routeSortableInstance = null; // Активний SortableJS instance на #routesList
+// ── Sort Mode (режим ручного сортування маршруту) ──
+// Увімкнення = явна дія менеджера через кнопку 🔧 Сортувати.
+// Поза режимом drag-and-drop ВИМКНЕНО, клік по картці розгортає деталі як зазвичай.
+let routeSortModeActive = false; // true коли користувач у режимі сортування
+let _sortSnapshot = null;        // { mode, order[] } — зафіксований порядок на момент входу в режим (для rollback)
+let _sortDirty = false;          // true якщо зроблено хоча б один drag у режимі (незбережені зміни)
 let routeSelectedIds = new Set();
 let routeOpenDetailsId = null;
 let routeOpenActionsId = null;
@@ -996,7 +1002,72 @@ function sortRowsByStoredOrder(rows, orderIds) {
 // ── Перемикач режиму порядку (Збір / Висадка) ──
 function setRouteSortMode(mode, btn) {
     if (mode !== 'pickup' && mode !== 'dropoff') return;
+    if (mode === routeSortMode) return;
+
+    // Якщо ми в sort mode і попередній режим має незбережені зміни —
+    // не можна мовчки перемкнутись, бо це втратить дані.
+    if (routeSortModeActive && _sortDirty) {
+        const prevLabel = routeSortMode === 'dropoff' ? 'ВИСАДКИ' : 'ЗБОРУ';
+        showConfirm(
+            'У вас є незбережені зміни порядку <b>' + prevLabel + '</b>.<br><br>' +
+            '<b>Так</b> — зберегти і перейти<br>' +
+            '<b>Ні</b> — скасувати зміни і перейти',
+            async function(yes) {
+                const sheet = routes[activeRouteIdx];
+                if (yes) {
+                    // Save (silent — без confirm-діалогу всередині)
+                    const savingMode = (_sortSnapshot && _sortSnapshot.mode) || routeSortMode;
+                    const orderToSave = savingMode === 'dropoff'
+                        ? (sheet.dropoffOrder || [])
+                        : (sheet.pickupOrder  || []);
+                    const payload = { sheetName: sheet.sheetName };
+                    if (savingMode === 'dropoff') payload.dropoff_order = orderToSave;
+                    else payload.pickup_order = orderToSave;
+                    showLoader('Збереження порядку...');
+                    try {
+                        const res = await apiPost('setRouteOrder', payload);
+                        hideLoader();
+                        if (!res || !res.ok) {
+                            showToast('❌ ' + ((res && res.error) || 'Не вдалося зберегти'));
+                            return; // лишаємось у попередньому режимі
+                        }
+                        showToast('✅ Порядок ' + (savingMode === 'dropoff' ? 'висадки' : 'збору') + ' збережено');
+                    } catch (e) {
+                        hideLoader();
+                        showToast('❌ ' + e.message);
+                        return;
+                    }
+                } else {
+                    // Discard — відкат до snapshot попереднього режиму
+                    if (sheet && _sortSnapshot) _rollbackToSnapshot(sheet, _sortSnapshot);
+                    showToast('↩️ Зміни попереднього режиму скасовано');
+                }
+                // Перемкнути режим + зробити новий snapshot для нового режиму
+                routeSortMode = mode;
+                _sortSnapshot = _takeSortSnapshot(sheet, mode);
+                _sortDirty = false;
+                _applySortModeUI(mode);
+                updateSortBanner();
+                renderRoutes();
+            }
+        );
+        return;
+    }
+
     routeSortMode = mode;
+    // Якщо в режимі сортування (без dirty) — просто перезняти snapshot для нового режиму.
+    if (routeSortModeActive) {
+        const sheet = routes[activeRouteIdx];
+        if (sheet) _sortSnapshot = _takeSortSnapshot(sheet, mode);
+        _sortDirty = false;
+        updateSortBanner();
+    }
+    _applySortModeUI(mode);
+    renderRoutes();
+}
+
+// ── Синхронізувати UI-стан кнопок Збір/Висадка + хінт ──
+function _applySortModeUI(mode) {
     const pickupBtn  = document.getElementById('rteSortPickup');
     const dropoffBtn = document.getElementById('rteSortDropoff');
     if (pickupBtn)  pickupBtn.classList.toggle('active', mode === 'pickup');
@@ -1005,57 +1076,67 @@ function setRouteSortMode(mode, btn) {
     if (hint) hint.textContent = mode === 'pickup'
         ? 'Порядок забору пасажирів та посилок'
         : 'Порядок висадки пасажирів та посилок';
-    renderRoutes();
 }
 
 // ── Ініціалізація drag-and-drop (SortableJS) на списку маршруту ──
-// Викликається з renderRoutes() після innerHTML. Знищує попередній instance.
+// Викликається ТІЛЬКИ у sort mode (коли routeSortModeActive === true).
+// Поза sort mode drag-and-drop повністю вимкнено — картки read-only.
 function initRouteSortable() {
     const list = document.getElementById('routesList');
     if (!list) return;
+    // Якщо sort mode не активний — знищити instance (якщо був) і вийти.
+    if (!routeSortModeActive) {
+        if (_routeSortableInstance && typeof _routeSortableInstance.destroy === 'function') {
+            try { _routeSortableInstance.destroy(); } catch (e) { /* ignore */ }
+            _routeSortableInstance = null;
+        }
+        list.classList.remove('sort-mode-on');
+        return;
+    }
     if (typeof Sortable === 'undefined') {
         console.warn('SortableJS not loaded — drag-and-drop disabled');
         return;
     }
-    // Знищити попередній instance (якщо є)
+    // Знищити попередній instance (якщо є) — завжди перестворюємо після renderRoutes.
     if (_routeSortableInstance && typeof _routeSortableInstance.destroy === 'function') {
         try { _routeSortableInstance.destroy(); } catch (e) { /* ignore */ }
         _routeSortableInstance = null;
     }
+    list.classList.add('sort-mode-on');
     _routeSortableInstance = Sortable.create(list, {
         animation: 150,
-        handle: '.route-card-header',
+        handle: '.sort-grip', // Тягнути ТІЛЬКИ за явну ручку-грип — не за весь заголовок.
         draggable: '.route-card',
-        filter: 'input, button, .card-checkbox, .card-checkbox-wrap, .detail-block',
-        preventOnFilter: false,
         ghostClass: 'route-card-ghost',
         chosenClass: 'route-card-chosen',
         dragClass: 'route-card-drag',
+        // На мобільних: невелика затримка + поріг, щоб випадковий тап не зчитувався як drag.
+        delay: 150,
+        delayOnTouchOnly: true,
+        touchStartThreshold: 5,
         onEnd: handleRouteDrop
     });
 }
 
-// ── Обробник завершення drag'n'drop (filter-aware) ──
-// Враховує активні фільтри: у DOM лежать тільки видимі картки, але ми
-// оновлюємо повний порядок, зберігаючи позиції прихованих елементів.
-async function handleRouteDrop(evt) {
+// ── Обробник завершення drag'n'drop (filter-aware, ЛОКАЛЬНИЙ) ──
+// У sort mode НЕ зберігає на сервер — лише оновлює локальний порядок
+// у sheet.pickupOrder / sheet.dropoffOrder і позначає _sortDirty=true.
+// Збереження на сервер відбувається через saveRouteSortChanges().
+function handleRouteDrop(evt) {
     try {
+        if (!routeSortModeActive) return; // Параноя: drop поза sort mode — ігнорувати.
         if (activeRouteIdx < 0 || !routes[activeRouteIdx]) return;
         const sheet = routes[activeRouteIdx];
-        const sheetName = sheet.sheetName || sheet.name;
-        if (!sheetName) return;
 
-        // Збережений порядок для поточного режиму (повний список)
+        // Повний старий порядок для поточного режиму.
         const activeOrder = routeSortMode === 'dropoff'
             ? (sheet.dropoffOrder || [])
             : (sheet.pickupOrder  || []);
-
-        // Повний список рядків у поточному логічному порядку (стабільний fallback)
         const rawRows = sheet.rows || [];
         const fullOrdered = sortRowsByStoredOrder(rawRows, activeOrder);
         const fullOldIds = fullOrdered.map(getRowLeadId).filter(Boolean);
 
-        // Новий порядок видимих карток з DOM
+        // Новий порядок видимих карток у DOM (після drag).
         const list = document.getElementById('routesList');
         if (!list) return;
         const visibleCards = list.querySelectorAll('.route-card[data-lead-id]');
@@ -1066,9 +1147,8 @@ async function handleRouteDrop(evt) {
         });
         if (newVisibleIds.length === 0) return;
 
-        // Пройти повний старий порядок; на позиціях, які належать видимим
-        // елементам, підставити ID з newVisibleIds (по черзі).
-        // Приховані (невидимі в поточному фільтрі) залишаються на своїх місцях.
+        // Walk-and-substitute: на позиціях видимих елементів підставляємо новий порядок.
+        // Приховані (через фільтр) залишаються на своїх місцях.
         const visibleSet = new Set(newVisibleIds);
         const fullNewIds = [];
         let vCursor = 0;
@@ -1081,44 +1161,186 @@ async function handleRouteDrop(evt) {
             }
         }
 
-        // Перевірка: порядок не змінився — нічого не робити
+        // Якщо порядок не змінився — нічого не робити.
         if (fullNewIds.length === fullOldIds.length &&
             fullNewIds.every((id, i) => id === fullOldIds[i])) {
             return;
         }
 
-        // Зберегти на сервер
-        const payload = { sheetName };
-        if (routeSortMode === 'dropoff') {
-            payload.dropoff_order = fullNewIds;
-        } else {
-            payload.pickup_order = fullNewIds;
-        }
-
-        // Оптимістичне локальне оновлення (щоб картки не "стрибали" назад)
+        // ЛОКАЛЬНЕ оновлення (НЕ API!) — фактичне збереження буде по кнопці «💾 Зберегти».
         if (routeSortMode === 'dropoff') {
             sheet.dropoffOrder = fullNewIds;
         } else {
             sheet.pickupOrder = fullNewIds;
         }
-
-        const res = await apiPost('setRouteOrder', payload);
-        if (!res || !res.ok) {
-            showToast('❌ Не вдалося зберегти порядок: ' + ((res && res.error) || 'невідома помилка'), 'error');
-            // Відкотити локальний стан
-            if (routeSortMode === 'dropoff') {
-                sheet.dropoffOrder = activeOrder;
-            } else {
-                sheet.pickupOrder = activeOrder;
-            }
-            renderRoutes();
-            return;
-        }
-        showToast(routeSortMode === 'dropoff' ? '✅ Порядок висадки збережено' : '✅ Порядок збору збережено', 'success');
+        _sortDirty = true;
+        updateSortBanner();
     } catch (e) {
         console.error('handleRouteDrop error:', e);
         showToast('❌ Помилка drag-and-drop: ' + e.message, 'error');
     }
+}
+
+// ── SORT MODE: вхід у режим сортування ──
+function enterRouteSortMode() {
+    if (routeSortModeActive) return;
+    if (activeRouteIdx === null || activeRouteIdx < 0 || !routes[activeRouteIdx]) {
+        showToast('Оберіть маршрут');
+        return;
+    }
+    const sheet = routes[activeRouteIdx];
+    const rawRows = sheet.rows || [];
+    if (rawRows.length < 2) {
+        showToast('У маршруті менше 2 записів — нема що сортувати');
+        return;
+    }
+    // Зняти snapshot ПОТОЧНОГО режиму (pickup або dropoff) для можливого rollback.
+    _sortSnapshot = _takeSortSnapshot(sheet, routeSortMode);
+    _sortDirty = false;
+    routeSortModeActive = true;
+    document.body.classList.add('route-sort-active');
+    // Встановити beforeunload щоб не втратити зміни при закритті вкладки.
+    window.addEventListener('beforeunload', _sortBeforeUnloadHandler);
+    // Показати банер + нижню панель, оновити хінт.
+    const banner = document.getElementById('routeSortBanner');
+    const actionBar = document.getElementById('routeSortActionBar');
+    if (banner) banner.style.display = 'flex';
+    if (actionBar) actionBar.style.display = 'flex';
+    updateSortBanner();
+    // Перерендерити — renderRoutes() сам викличе initRouteSortable() з увімкненим SortableJS.
+    renderRoutes();
+    showToast('🔧 Режим сортування увімкнено. Тягніть за ручку ⋮⋮');
+}
+
+// ── Зняти snapshot порядку для заданого режиму (pickup | dropoff) ──
+function _takeSortSnapshot(sheet, mode) {
+    const order = mode === 'dropoff'
+        ? (sheet.dropoffOrder || [])
+        : (sheet.pickupOrder  || []);
+    return { mode, order: order.slice() };
+}
+
+// ── Відкотити порядок до snapshot'а ──
+function _rollbackToSnapshot(sheet, snap) {
+    if (!snap) return;
+    if (snap.mode === 'dropoff') {
+        sheet.dropoffOrder = (snap.order || []).slice();
+    } else {
+        sheet.pickupOrder  = (snap.order || []).slice();
+    }
+}
+
+// ── beforeunload handler (встановлюється/знімається при вході/виході з sort mode) ──
+function _sortBeforeUnloadHandler(e) {
+    if (_sortDirty) {
+        e.preventDefault();
+        e.returnValue = 'У вас незбережені зміни порядку в маршруті. Закрити сторінку?';
+        return e.returnValue;
+    }
+}
+
+// ── Оновити текст/банер режиму (коли міняється режим або dirty) ──
+function updateSortBanner() {
+    const modeEl = document.getElementById('routeSortBannerMode');
+    if (modeEl) {
+        const dirty = _sortDirty ? ' ●' : '';
+        modeEl.textContent = (routeSortMode === 'dropoff'
+            ? '📤 Порядок висадки'
+            : '📥 Порядок збору') + dirty;
+    }
+}
+
+// ── SORT MODE: вихід з режиму (внутрішня чистка) ──
+function _exitSortModeInternal() {
+    routeSortModeActive = false;
+    _sortSnapshot = null;
+    _sortDirty = false;
+    document.body.classList.remove('route-sort-active');
+    window.removeEventListener('beforeunload', _sortBeforeUnloadHandler);
+    const banner = document.getElementById('routeSortBanner');
+    const actionBar = document.getElementById('routeSortActionBar');
+    if (banner) banner.style.display = 'none';
+    if (actionBar) actionBar.style.display = 'none';
+    if (_routeSortableInstance && typeof _routeSortableInstance.destroy === 'function') {
+        try { _routeSortableInstance.destroy(); } catch (e) { /* ignore */ }
+        _routeSortableInstance = null;
+    }
+    const list = document.getElementById('routesList');
+    if (list) list.classList.remove('sort-mode-on');
+}
+
+// ── SORT MODE: Зберегти зміни на сервер ──
+async function saveRouteSortChanges() {
+    if (!routeSortModeActive) return;
+    if (activeRouteIdx === null || !routes[activeRouteIdx]) { _exitSortModeInternal(); renderRoutes(); return; }
+    const sheet = routes[activeRouteIdx];
+    const sheetName = sheet.sheetName || sheet.name;
+    // Якщо нічого не мінялось — просто вихід без API-запиту.
+    if (!_sortDirty) {
+        _exitSortModeInternal();
+        renderRoutes();
+        showToast('Режим сортування вимкнено (без змін)');
+        return;
+    }
+    const savingMode = (_sortSnapshot && _sortSnapshot.mode) || routeSortMode;
+    const orderToSave = savingMode === 'dropoff'
+        ? (sheet.dropoffOrder || [])
+        : (sheet.pickupOrder  || []);
+    const modeLabel = savingMode === 'dropoff' ? 'ВИСАДКИ' : 'ЗБОРУ';
+    showConfirm(
+        'Зберегти новий порядок <b>' + modeLabel + '</b> у маршруті «' + sheetName + '»?<br><br>' +
+        '<span style="color:var(--text-secondary);font-size:11px;">Цей порядок побачать водії й інші менеджери після синхронізації.</span>',
+        async function(yes) {
+            if (!yes) return; // лишаємось у режимі сортування
+            showLoader('Збереження порядку...');
+            try {
+                const payload = { sheetName };
+                if (savingMode === 'dropoff') {
+                    payload.dropoff_order = orderToSave;
+                } else {
+                    payload.pickup_order = orderToSave;
+                }
+                const res = await apiPost('setRouteOrder', payload);
+                hideLoader();
+                if (!res || !res.ok) {
+                    showToast('❌ ' + ((res && res.error) || 'Не вдалося зберегти порядок'));
+                    return;
+                }
+                _exitSortModeInternal();
+                renderRoutes();
+                showToast(savingMode === 'dropoff'
+                    ? '✅ Порядок висадки збережено'
+                    : '✅ Порядок збору збережено');
+            } catch (e) {
+                hideLoader();
+                showToast('❌ Помилка: ' + e.message);
+            }
+        }
+    );
+}
+
+// ── SORT MODE: Скасувати зміни та вийти з режиму ──
+function cancelRouteSortChanges() {
+    if (!routeSortModeActive) return;
+    const sheet = routes[activeRouteIdx];
+    // Якщо не було змін — просто вихід.
+    if (!_sortDirty) {
+        _exitSortModeInternal();
+        renderRoutes();
+        showToast('Режим сортування вимкнено');
+        return;
+    }
+    showConfirm(
+        'Скасувати всі зміни порядку?<br><br>' +
+        '<span style="color:var(--danger);font-size:11px;">Незбережений порядок буде втрачено.</span>',
+        function(yes) {
+            if (!yes) return; // лишаємось у режимі редагування
+            if (sheet && _sortSnapshot) _rollbackToSnapshot(sheet, _sortSnapshot);
+            _exitSortModeInternal();
+            renderRoutes();
+            showToast('↩️ Зміни порядку скасовано');
+        }
+    );
 }
 
 // ── Рендер вмісту обраного маршруту ──
@@ -1408,7 +1630,9 @@ function renderRouteCard(r, idx, sheetName) {
         {label: 'Примітка', key: 'Примітка', value: note}
     ];
 
-    return `<div class="route-card ${statusClass} ${isSelected ? 'selected' : ''}" id="rte-card-${rteId}" data-rte-id="${rteId}" data-lead-id="${leadId}">
+    return `<div class="route-card ${statusClass} ${isSelected ? 'selected' : ''}" id="rte-card-${rteId}" data-rte-id="${rteId}" data-lead-id="${leadId}" style="display:flex;flex-direction:row;align-items:stretch;">
+        <span class="sort-grip" title="Перетягнути для зміни порядку" aria-label="drag handle">⋮⋮</span>
+        <div style="flex:1;min-width:0;">
         <div class="route-card-header" onclick="toggleRouteDetails('${rteId}')">
             <div class="route-card-top">
                 <div class="card-checkbox-wrap" onclick="event.stopPropagation()">
@@ -1459,6 +1683,7 @@ function renderRouteCard(r, idx, sheetName) {
                 <button class="btn-card-action" style="flex:1 1 calc(33% - 6px);background:#f3f4f6;color:#6b7280;" onclick="event.stopPropagation(); archiveFromRoute('${rteId}','${safeSheet}','${name.replace(/'/g,"\\'")}')">📦 Архів</button>
                 <button class="btn-card-action btn-delete" style="flex:1 1 calc(33% - 6px)" onclick="event.stopPropagation(); deleteFromRoute('${rteId}','${safeSheet}','${name.replace(/'/g,"\\'")}')">🗑️ Видалити</button>
             </div>
+        </div>
         </div>
     </div>`;
 }
