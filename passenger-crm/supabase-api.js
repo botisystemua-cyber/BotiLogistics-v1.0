@@ -659,7 +659,44 @@ async function sbUpdateTrip(params) {
             .select();
         if (error) throw error;
 
-        return { ok: true, data: data[0] ? tripRowToFront(data[0]) : null };
+        // If the user added extra vehicles while editing, create a new calendar
+        // row per additional vehicle. First vehicle already updated the existing
+        // cal_id above so existing passengers stay attached. Extra vehicles become
+        // sibling trips on the same date/direction/city.
+        let extraTrips = [];
+        if (Array.isArray(p.vehicles) && p.vehicles.length > 1) {
+            const existing = data[0] || {};
+            const extraRows = [];
+            for (let i = 1; i < p.vehicles.length; i++) {
+                const v = p.vehicles[i];
+                const ts = parseInt(v.seats) || 0;
+                extraRows.push({
+                    tenant_id: TENANT_ID,
+                    cal_id: 'CAL' + Date.now() + Math.floor(Math.random() * 1000) + i,
+                    route_date: sbData.route_date ?? existing.route_date,
+                    direction: sbData.direction ?? existing.direction,
+                    city: sbData.city ?? existing.city,
+                    status: existing.status || 'Активний',
+                    total_seats: ts,
+                    available_seats: ts,
+                    occupied_seats: 0,
+                    available_seats_list: '',
+                    occupied_seats_list: '',
+                    vehicle_name: v.name || '',
+                    seating_layout: v.layout || '',
+                });
+            }
+            if (extraRows.length) {
+                const { data: extraData, error: extraErr } = await sb
+                    .from('calendar')
+                    .insert(extraRows)
+                    .select();
+                if (extraErr) throw extraErr;
+                extraTrips = (extraData || []).map(tripRowToFront);
+            }
+        }
+
+        return { ok: true, data: data[0] ? tripRowToFront(data[0]) : null, extraTrips };
     } catch (e) {
         console.error('sbUpdateTrip error:', e);
         return { ok: false, error: e.message };
