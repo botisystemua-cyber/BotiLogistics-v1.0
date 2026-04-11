@@ -23,7 +23,7 @@
     <link rel="manifest" href="manifest.json">
     <title>BotiLogistics CRM Пасажири v2</title>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="Passengers.css?v=4">
+    <link rel="stylesheet" href="Passengers.css?v=5">
 </head>
 <body>
 
@@ -338,10 +338,10 @@
                 <div id="routeDashContent" style="margin-top:10px;display:none;">
                     <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;">
                         <button id="btnRouteBack" class="route-dash-btn" style="display:none;grid-column:1/-1;" onclick="event.stopPropagation();toggleRouteExpensesView()">← Назад</button>
-                        <button id="btnRouteExpenses" class="route-dash-btn" onclick="event.stopPropagation();toggleRouteExpensesView()">💰 Витрати</button>
-                        <button id="btnRouteOptimize" class="route-dash-btn" onclick="event.stopPropagation();optimizeRouteOrder()">⚡ Оптимізувати</button>
-                        <button id="btnRouteSort" class="route-dash-btn" onclick="event.stopPropagation();enterRouteSortMode()">🔧 Сортувати</button>
-                        <button id="btnRouteDelete" class="route-dash-btn danger" onclick="event.stopPropagation();confirmDeleteRoute(activeRouteIdx)">🗑️ Видалити</button>
+                        <button id="btnRouteExpenses" class="route-dash-btn" onclick="event.stopPropagation();toggleRouteExpensesView()">💰 <span class="lbl-full">Витрати</span><span class="lbl-short">Витрати</span></button>
+                        <button id="btnRouteOptimize" class="route-dash-btn" onclick="event.stopPropagation();optimizeRouteOrder()">⚡ <span class="lbl-full">Оптимізувати</span><span class="lbl-short">Оптим.</span></button>
+                        <button id="btnRouteSort" class="route-dash-btn" onclick="event.stopPropagation();enterRouteSortMode()">🔧 <span class="lbl-full">Сортувати</span><span class="lbl-short">Сорт.</span></button>
+                        <button id="btnRouteDelete" class="route-dash-btn danger" onclick="event.stopPropagation();confirmDeleteRoute(activeRouteIdx)">🗑️ <span class="lbl-full">Видалити</span><span class="lbl-short">Видал.</span></button>
                     </div>
                 </div>
             </div>
@@ -888,14 +888,14 @@
 
 <!-- Supabase -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="supabase-config.js?v=4"></script>
-<script src="supabase-api.js?v=4"></script>
+<script src="supabase-config.js?v=5"></script>
+<script src="supabase-api.js?v=5"></script>
 
 <!-- SortableJS — drag-and-drop for route stops ordering -->
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 
 <!-- PWA + Main Logic -->
-<script src="Passengers.js?v=4"></script>
+<script src="Passengers.js?v=5"></script>
 
 <!-- Google Maps API -->
 <script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDbSS6XSCJ3MafbrSp-rIX1-x130bwzevo&callback=initMapsAPI"></script>

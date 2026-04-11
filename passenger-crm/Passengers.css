@@ -473,14 +473,14 @@ body.route-sort-active #rteTogglePay {
 
 /* Кнопки в шапці маршруту — білі pill-кнопки у стилі фільтрів «Всі/Статуси/Фінанси».
    Біле тло, округлі (border-radius: 20px), з чітким тап-фідбеком.
-   Текст навмисно дрібний (10px), щоб «Оптимізувати» поміщалось у 4-колоночну
-   сітку на мобільному без обрізання. */
+   ПК: великий текст 13px з повними підписами.
+   Моб: дрібний 11px + скорочений підпис «Оптим.» щоб поміщалось у 4-колоночну сітку. */
 .route-dash-btn {
-    padding: 8px 6px;
-    min-height: 40px;
+    padding: 10px 12px;
+    min-height: 42px;
     background: white;
     color: #1f2937;
-    font-size: 10px;
+    font-size: 13px;
     line-height: 1.15;
     font-weight: 700;
     border: 1px solid #e5e7eb;
@@ -498,9 +498,12 @@ body.route-sort-active #rteTogglePay {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 3px;
+    gap: 4px;
     min-width: 0;
 }
+/* Перемикач між повним та скороченим написом у кнопці. За замовчуванням (ПК)
+   показуємо повний, на вузьких екранах — скорочений. */
+.route-dash-btn .lbl-short { display: none; }
 .route-dash-btn:hover { background: #f9fafb; border-color: #d1d5db; }
 .route-dash-btn:active {
     transform: scale(0.95);
@@ -514,6 +517,16 @@ body.route-sort-active #rteTogglePay {
 }
 .route-dash-btn.danger:hover { background: #fee2e2; border-color: #fca5a5; }
 .route-dash-btn.danger:active { background: #fecaca !important; }
+@media (max-width: 600px) {
+    .route-dash-btn {
+        font-size: 11px;
+        padding: 8px 6px;
+        min-height: 40px;
+        gap: 3px;
+    }
+    .route-dash-btn .lbl-full { display: none; }
+    .route-dash-btn .lbl-short { display: inline; }
+}
 .route-card.selected { background:#f0f7ff; border-left-color:var(--primary); }
 .route-card .card-checkbox-wrap { flex-shrink:0; }
 .route-card .detail-block-actions { margin-top:4px; }
