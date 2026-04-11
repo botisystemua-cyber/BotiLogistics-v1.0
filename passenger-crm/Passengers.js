@@ -6079,8 +6079,24 @@ async function archiveFromRoute(rteId, sheetName, leadName) {
             var sheet = routes[activeRouteIdx];
             var row = sheet ? (sheet.rows || []).find(function(r) { return r._resolvedId === rteId || r['RTE_ID'] === rteId; }) : null;
             var paxId = row ? (row['PAX_ID / PKG_ID'] || row['PAX_ID/PKG_ID'] || row['PAX_ID'] || row['PKG_ID'] || '') : '';
+            // Fallback: find passenger by phone+name if legacy route row has empty pax_id
+            if (!paxId && row) {
+                var normPhone = function(s) { return String(s || '').replace(/\D/g, ''); };
+                var phone = normPhone(row['Телефон пасажира'] || row['Телефон отримувача'] || row['Телефон відправника']);
+                var name = String(row['Піб пасажира'] || row['Піб отримувача'] || row['Піб відправника'] || '').trim().toLowerCase();
+                if (phone) {
+                    var found = passengers.find(function(p) {
+                        if (normPhone(p['Телефон пасажира']) !== phone) return false;
+                        if (name && String(p['Піб'] || '').trim().toLowerCase() !== name) return false;
+                        return true;
+                    });
+                    if (found && found['PAX_ID']) paxId = found['PAX_ID'];
+                }
+            }
             if (paxId) {
                 await apiPost('archivePassenger', { pax_ids: [paxId], reason: 'Архівовано з маршруту', archived_by: getManagerName() || 'Менеджер' });
+            } else {
+                console.warn('[archive] no pax_id for route row', row);
             }
             // Видаляємо з маршруту з правильним id_col
             var idInfo = row ? getRouteRowIdInfo(row) : { id_col: 'RTE_ID', id_val: rteId };
@@ -6141,13 +6157,33 @@ function routeBulkArchive() {
             // Збираємо реальні PAX_ID та інфо для видалення
             const paxIds = [];
             const deleteInfos = [];
+            const normPhone = (s) => String(s || '').replace(/\D/g, '');
             for (const row of (sheet.rows || [])) {
                 const resolvedId = row._resolvedId || row['RTE_ID'];
                 if (!routeSelectedIds.has(resolvedId)) continue;
-                const paxId = row['PAX_ID / PKG_ID'] || row['PAX_ID/PKG_ID'] || row['PAX_ID'] || row['PKG_ID'] || '';
+                let paxId = row['PAX_ID / PKG_ID'] || row['PAX_ID/PKG_ID'] || row['PAX_ID'] || row['PKG_ID'] || '';
+                // Fallback for legacy route rows with empty pax_id_or_pkg_id:
+                // look up the passenger by phone (+ name) in the local list.
+                if (!paxId) {
+                    const phone = normPhone(row['Телефон пасажира'] || row['Телефон отримувача'] || row['Телефон відправника']);
+                    const name = String(row['Піб пасажира'] || row['Піб отримувача'] || row['Піб відправника'] || '').trim().toLowerCase();
+                    if (phone) {
+                        const found = passengers.find(p => {
+                            if (normPhone(p['Телефон пасажира']) !== phone) return false;
+                            if (name && String(p['Піб'] || '').trim().toLowerCase() !== name) return false;
+                            return true;
+                        });
+                        if (found && found['PAX_ID']) paxId = found['PAX_ID'];
+                    }
+                }
                 if (paxId) paxIds.push(paxId);
                 const idInfo = getRouteRowIdInfo(row);
                 if (idInfo) deleteInfos.push({ ...idInfo, resolvedId });
+            }
+            if (paxIds.length === 0) {
+                hideLoader();
+                showToast('⚠️ Не вдалося знайти PAX_ID — архівація неможлива. Додайте пасажира в маршрут заново.');
+                return;
             }
             // Архівуємо в CRM по реальних PAX_ID
             if (paxIds.length > 0) {
