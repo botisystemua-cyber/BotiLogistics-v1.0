@@ -471,40 +471,45 @@ body.route-sort-active #rteTogglePay {
 .route-header-bar h2 { margin:0; font-size:20px; font-weight:800; }
 .route-header-bar .route-subtitle { font-size:12px; opacity:0.85; margin-top:4px; }
 
-/* Кнопки в шапці маршруту — заокруглені, великі, з тап-фідбеком.
-   min-height 44px — рекомендований розмір для тач-цілі на мобільному. */
+/* Кнопки в шапці маршруту — білі pill-кнопки у стилі фільтрів «Всі/Статуси/Фінанси».
+   Біле тло, округлі (border-radius: 20px), з чітким тап-фідбеком. */
 .route-dash-btn {
-    background: rgba(255,255,255,0.2);
-    color: white;
+    padding: 10px 14px;
+    min-height: 44px;
+    background: white;
+    color: #1f2937;
     font-size: 12px;
     font-weight: 700;
-    padding: 11px 6px;
-    min-height: 44px;
-    border: 1px solid rgba(255,255,255,0.35);
-    border-radius: 12px;
+    border: 1px solid #e5e7eb;
+    border-radius: 20px;
     cursor: pointer;
     font-family: inherit;
-    -webkit-tap-highlight-color: rgba(255,255,255,0.4);
+    -webkit-tap-highlight-color: rgba(124,58,237,0.2);
     transition: transform 0.1s ease, background 0.15s ease, box-shadow 0.15s ease;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+    box-shadow: 0 2px 5px rgba(0,0,0,0.12);
     position: relative;
     z-index: 2;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
 }
-.route-dash-btn:hover { background: rgba(255,255,255,0.3); }
+.route-dash-btn:hover { background: #f9fafb; border-color: #d1d5db; }
 .route-dash-btn:active {
-    transform: scale(0.94);
-    background: rgba(255,255,255,0.45) !important;
-    box-shadow: inset 0 2px 6px rgba(0,0,0,0.25);
+    transform: scale(0.95);
+    background: #ede9fe !important;
+    box-shadow: inset 0 2px 6px rgba(124,58,237,0.2);
 }
 .route-dash-btn.danger {
-    background: rgba(220,38,38,0.38);
-    border-color: rgba(220,38,38,0.55);
+    background: #fef2f2;
+    color: #dc2626;
+    border-color: #fecaca;
 }
-.route-dash-btn.danger:hover { background: rgba(220,38,38,0.55); }
-.route-dash-btn.danger:active { background: rgba(220,38,38,0.7) !important; }
+.route-dash-btn.danger:hover { background: #fee2e2; border-color: #fca5a5; }
+.route-dash-btn.danger:active { background: #fecaca !important; }
 .route-card.selected { background:#f0f7ff; border-left-color:var(--primary); }
 .route-card .card-checkbox-wrap { flex-shrink:0; }
 .route-card .detail-block-actions { margin-top:4px; }
