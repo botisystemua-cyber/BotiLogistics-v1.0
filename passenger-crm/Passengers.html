@@ -536,8 +536,34 @@
                 </button>
                 <div id="tripSuggestResult" style="display:none; margin-top:6px; padding:8px 12px; background:#ecfdf5; border-radius:8px; font-size:11px; font-weight:700; color:#059669;"></div>
             </div>
-            <div class="form-group"><label>Адреса відправки</label><input type="text" id="fFrom"></div>
-            <div class="form-group"><label>Адреса прибуття</label><input type="text" id="fTo"></div>
+            <!-- Точка відправки: select з каталога passenger_route_points + опційна адреса для міст delivery_mode='address_and_point' -->
+            <div class="form-group">
+                <label>Точка відправки</label>
+                <select id="fFromPoint" onchange="onRoutePointChange('from')">
+                    <option value="">— виберіть місто —</option>
+                </select>
+                <div id="fFromAddressWrap" class="route-addr-wrap" style="display:none;margin-top:6px;">
+                    <label class="route-addr-label">Адреса забору (адресна доставка)</label>
+                    <input type="text" id="fFromAddress" list="fFromAddressHistory" placeholder="вул., буд., орієнтир…">
+                    <datalist id="fFromAddressHistory"></datalist>
+                    <div id="fFromAddressHint" class="route-addr-hint"></div>
+                </div>
+                <!-- Legacy-сумісне поле для збереження фінального значення адреси -->
+                <input type="hidden" id="fFrom">
+            </div>
+            <div class="form-group">
+                <label>Точка прибуття</label>
+                <select id="fToPoint" onchange="onRoutePointChange('to')">
+                    <option value="">— виберіть місто —</option>
+                </select>
+                <div id="fToAddressWrap" class="route-addr-wrap" style="display:none;margin-top:6px;">
+                    <label class="route-addr-label">Адреса доставки</label>
+                    <input type="text" id="fToAddress" list="fToAddressHistory" placeholder="вул., буд., орієнтир…">
+                    <datalist id="fToAddressHistory"></datalist>
+                    <div id="fToAddressHint" class="route-addr-hint"></div>
+                </div>
+                <input type="hidden" id="fTo">
+            </div>
             <div class="form-row">
                 <div class="form-group"><label>Ціна квитка</label><input type="text" id="fPrice"></div>
                 <div class="form-group"><label>Валюта квитка</label>

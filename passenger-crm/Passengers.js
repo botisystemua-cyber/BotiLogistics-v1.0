@@ -267,6 +267,253 @@ let editingTripCalId = null;
 let paymentsCache = {}; // Кеш платежів: { PAX_ID: [...] }
 
 // ================================================================
+// ROUTE POINTS CATALOG — точки маршруту Україна ↔ Іспанія (середа)
+// ================================================================
+// Довідник підтягується з passenger_route_points при старті CRM. Використовується
+// у формі додавання/редагування ліда: замість вільного тексту менеджер обирає
+// точку зі списку. Для міст з delivery_mode='address_and_point' (Бенідорм, Малага,
+// Фуенхерола, Марбея, Сан-Педро, Естепона) додатково відкривається поле адреси.
+let routePoints = [];                // Масив точок (sort_order ASC), як у БД
+let routePointsById = {};            // {id → point} — швидкий доступ
+let routePointsByNameNorm = {};      // {normName → point} — для матчингу SMS / legacy даних
+
+function _normCityName(s) {
+    return String(s || '')
+        .toLowerCase()
+        .replace(/\s+/g, ' ')
+        .replace(/[.,;:!?'"«»()]/g, '')
+        .trim();
+}
+
+async function loadRoutePointsCatalog() {
+    try {
+        const res = await apiPost('getRoutePoints', { route_group: 'ua-es-wed' });
+        if (!res.ok || !Array.isArray(res.data)) return;
+        routePoints = res.data;
+        routePointsById = {};
+        routePointsByNameNorm = {};
+        for (const p of routePoints) {
+            routePointsById[p.id] = p;
+            routePointsByNameNorm[_normCityName(p.name_ua)] = p;
+        }
+    } catch (e) {
+        console.warn('loadRoutePointsCatalog failed:', e);
+    }
+}
+
+// Заповнює селекти точок відправки/прибуття у формі пасажира залежно від напрямку.
+// UA→EU: порядок 1→23 (Чернівці …→ Естепона)
+// EU→UA: порядок 23→1 (Естепона …→ Чернівці) — це той самий список реверснутий.
+function populateRoutePointSelects(direction) {
+    const fromSel = document.getElementById('fFromPoint');
+    const toSel   = document.getElementById('fToPoint');
+    if (!fromSel || !toSel) return;
+
+    const ordered = routePoints.slice();
+    if (direction === 'eu-ua') ordered.reverse();
+
+    const flagByCountry = {
+        UA: '🇺🇦', RO: '🇷🇴', SK: '🇸🇰', CZ: '🇨🇿', DE: '🇩🇪', ES: '🇪🇸',
+        PL: '🇵🇱', AT: '🇦🇹', HU: '🇭🇺', CH: '🇨🇭', IT: '🇮🇹', FR: '🇫🇷'
+    };
+    const optsHtml = ordered.map(p => {
+        const flag = flagByCountry[p.country_code] || '';
+        const addrMark = p.delivery_mode === 'address_and_point' ? ' 🏠' : '';
+        return `<option value="${p.id}">${flag} ${p.name_ua}${addrMark}</option>`;
+    }).join('');
+
+    fromSel.innerHTML = '<option value="">— виберіть місто —</option>' + optsHtml;
+    toSel.innerHTML   = '<option value="">— виберіть місто —</option>' + optsHtml;
+}
+
+// Підставляє значення у селект точки з існуючого ліда (режим редагування чи SMS парсер).
+// Приймає або числовий id, або ім'я міста (legacy-текст). Повертає matched point або null.
+function setRoutePointByValue(which, rawValue) {
+    const selId = which === 'from' ? 'fFromPoint' : 'fToPoint';
+    const addrId = which === 'from' ? 'fFromAddress' : 'fToAddress';
+    const sel = document.getElementById(selId);
+    if (!sel || !rawValue) return null;
+
+    const str = String(rawValue).trim();
+    // 1. Точний збіг за id
+    if (/^\d+$/.test(str) && routePointsById[str]) {
+        sel.value = str;
+        onRoutePointChange(which, { skipPriceSuggest: true });
+        return routePointsById[str];
+    }
+
+    // 2. Парсимо текст: "Чернівці" або "Бенідорм — вул. Коста Бланка 15"
+    const sepMatch = str.split(/\s+[—–-]\s+/); // em/en/дефіс із пробілами
+    const cityPart = (sepMatch[0] || str).trim();
+    const addrPart = sepMatch.length > 1 ? sepMatch.slice(1).join(' — ').trim() : '';
+    const matched = routePointsByNameNorm[_normCityName(cityPart)];
+
+    if (matched) {
+        sel.value = String(matched.id);
+        onRoutePointChange(which, { skipPriceSuggest: true });
+        if (addrPart) {
+            const addrEl = document.getElementById(addrId);
+            if (addrEl) addrEl.value = addrPart;
+        }
+        return matched;
+    }
+
+    // 3. Немає збігу — залишаємо select порожнім, кидаємо текст у приховане поле.
+    // Legacy-ліди з адресами яких немає в каталозі не ламаються: savePassenger
+    // читає з прихованого fFrom/fTo як fallback.
+    const hiddenId = which === 'from' ? 'fFrom' : 'fTo';
+    const h = document.getElementById(hiddenId);
+    if (h) h.value = str;
+    return null;
+}
+
+// Викликається onchange селекта fFromPoint/fToPoint.
+// - показує/ховає блок адреси залежно від delivery_mode обраної точки
+// - підтягує історію адрес клієнта для цієї точки (якщо телефон введений)
+// - якщо обидва боки вибрані — пропонує ціну з passenger_route_prices
+function onRoutePointChange(which, opts) {
+    opts = opts || {};
+    const selId = which === 'from' ? 'fFromPoint' : 'fToPoint';
+    const wrapId = which === 'from' ? 'fFromAddressWrap' : 'fToAddressWrap';
+    const addrId = which === 'from' ? 'fFromAddress' : 'fToAddress';
+    const hintId = which === 'from' ? 'fFromAddressHint' : 'fToAddressHint';
+
+    const sel = document.getElementById(selId);
+    const wrap = document.getElementById(wrapId);
+    const addrEl = document.getElementById(addrId);
+    const hintEl = document.getElementById(hintId);
+    if (!sel || !wrap) return;
+
+    const pointId = sel.value;
+    const point = pointId ? routePointsById[pointId] : null;
+
+    if (point && point.delivery_mode === 'address_and_point') {
+        wrap.style.display = 'block';
+        if (hintEl) {
+            hintEl.textContent = '🏠 У ' + point.name_ua + ' забір/привоз по адресі клієнта. Точка за замовчуванням: ' + (point.location_name || '—') + '.';
+        }
+        // Завантажуємо історію адрес для цього телефону+точки
+        loadClientAddressHistory(which, point.id);
+    } else {
+        wrap.style.display = 'none';
+        if (addrEl) addrEl.value = '';
+        if (hintEl) hintEl.textContent = '';
+    }
+
+    if (!opts.skipPriceSuggest) {
+        suggestPriceFromRoute();
+    }
+}
+
+// Підтягує історію адрес у <datalist> для автодоповнення
+async function loadClientAddressHistory(which, pointId) {
+    const phoneEl = document.getElementById('fPhone');
+    const listId = which === 'from' ? 'fFromAddressHistory' : 'fToAddressHistory';
+    const list = document.getElementById(listId);
+    if (!list || !phoneEl) return;
+    const phone = phoneEl.value.trim();
+    if (!phone || phone.length < 6) { list.innerHTML = ''; return; }
+
+    try {
+        const res = await apiPost('getClientAddresses', {
+            phone,
+            point_id: pointId,
+            address_type: which
+        });
+        if (res.ok && Array.isArray(res.data)) {
+            list.innerHTML = res.data
+                .map(r => `<option value="${String(r.address_text || '').replace(/"/g,'&quot;')}">`)
+                .join('');
+        }
+    } catch (e) {
+        console.warn('loadClientAddressHistory:', e);
+    }
+}
+
+// Якщо обрано обидві точки + валюту — шукаємо збіг у матриці passenger_route_prices.
+// При збігу підставляємо ціну у #fPrice (менеджер може виправити вручну).
+// Якщо збігу немає (напр. Сучава→Валенсія) — не чіпаємо існуюче значення.
+async function suggestPriceFromRoute() {
+    const fromPoint = document.getElementById('fFromPoint');
+    const toPoint = document.getElementById('fToPoint');
+    const currSel = document.getElementById('fCurrency');
+    const priceEl = document.getElementById('fPrice');
+    if (!fromPoint || !toPoint || !priceEl) return;
+
+    const fromId = fromPoint.value;
+    const toId = toPoint.value;
+    if (!fromId || !toId) return;
+    if (fromId === toId) return; // та сама точка — пропускаємо
+
+    const currency = (currSel && currSel.value) || 'EUR';
+    try {
+        const res = await apiPost('getRoutePrice', {
+            from_point_id: fromId,
+            to_point_id: toId,
+            currency
+        });
+        if (res.ok && res.data && res.data.price != null) {
+            // Підставляємо тільки якщо поле порожнє або містить попередньо підставлену ціну
+            const prev = priceEl.value.trim();
+            const wasAutoFilled = priceEl.dataset.autoFilled === '1';
+            if (!prev || wasAutoFilled) {
+                priceEl.value = res.data.price;
+                priceEl.dataset.autoFilled = '1';
+                priceEl.classList.add('price-auto-suggested');
+                setTimeout(() => priceEl.classList.remove('price-auto-suggested'), 1500);
+            }
+        }
+    } catch (e) {
+        console.warn('suggestPriceFromRoute:', e);
+    }
+}
+
+// Зчитує обраний у формі селект точки + адресу і повертає рядок, що зберігається
+// у passengers.departure_address / arrival_address для беквард-сумісності. Формат:
+//   "Чернівці"                                (point mode)
+//   "Бенідорм — вул. Коста Бланка 15, 12"    (address_and_point, з адресою)
+//   "Бенідорм"                                (address_and_point без адреси — дозволено)
+// Якщо точку не вибрано — повертає вміст прихованого fFrom/fTo (legacy/SMS).
+function readRoutePointCombined(which) {
+    const selId = which === 'from' ? 'fFromPoint' : 'fToPoint';
+    const addrId = which === 'from' ? 'fFromAddress' : 'fToAddress';
+    const hiddenId = which === 'from' ? 'fFrom' : 'fTo';
+
+    const sel = document.getElementById(selId);
+    const pointId = sel ? sel.value : '';
+    const point = pointId ? routePointsById[pointId] : null;
+
+    if (!point) {
+        const h = document.getElementById(hiddenId);
+        return { text: (h && h.value || '').trim(), pointId: null, point: null, address: '' };
+    }
+
+    const addrEl = document.getElementById(addrId);
+    const addr = addrEl ? addrEl.value.trim() : '';
+
+    const text = addr ? (point.name_ua + ' — ' + addr) : point.name_ua;
+    return { text, pointId: point.id, point, address: addr };
+}
+
+// Скидає селекти і поля адрес у формі
+function resetRoutePointInputs() {
+    ['fFromPoint','fToPoint'].forEach(id => {
+        const el = document.getElementById(id); if (el) el.value = '';
+    });
+    ['fFromAddress','fToAddress','fFrom','fTo'].forEach(id => {
+        const el = document.getElementById(id); if (el) el.value = '';
+    });
+    ['fFromAddressWrap','fToAddressWrap'].forEach(id => {
+        const el = document.getElementById(id); if (el) el.style.display = 'none';
+    });
+    ['fFromAddressHint','fToAddressHint'].forEach(id => {
+        const el = document.getElementById(id); if (el) el.textContent = '';
+    });
+    const priceEl = document.getElementById('fPrice');
+    if (priceEl) { priceEl.dataset.autoFilled = ''; priceEl.classList.remove('price-auto-suggested'); }
+}
+
+// ================================================================
 // MANAGER LOGIN — 3 слоти, без пароля, localStorage
 // ================================================================
 var MANAGER_SLOTS_KEY = 'oksi_manager_slots';
@@ -522,7 +769,8 @@ document.addEventListener('DOMContentLoaded', () => {
     showLoader('Завантаження...');
     Promise.all([
         apiPost('getAll', { sheet: 'all' }),
-        apiPost('getTrips', { filter: {} })
+        apiPost('getTrips', { filter: {} }),
+        loadRoutePointsCatalog()
     ]).then(([paxRes, tripRes]) => {
         hideLoader();
         if (paxRes.ok) passengers = paxRes.data;
@@ -536,6 +784,46 @@ document.addEventListener('DOMContentLoaded', () => {
     }).catch(() => { hideLoader(); render(); });
 
     setInterval(silentSync, 30000);
+
+    // Route points form listeners: перепопуляція селектів при зміні напрямку +
+    // автопідставка ціни при зміні валюти; завантаження історії адрес при зміні телефону.
+    const fDirEl = document.getElementById('fDirection');
+    if (fDirEl) {
+        fDirEl.addEventListener('change', function () {
+            const prevFrom = (document.getElementById('fFromPoint') || {}).value || '';
+            const prevTo = (document.getElementById('fToPoint') || {}).value || '';
+            populateRoutePointSelects(fDirEl.value);
+            // Після реверсу списку значення у select очиститься — відновлюємо якщо та сама опція існує
+            const fromSel = document.getElementById('fFromPoint');
+            const toSel = document.getElementById('fToPoint');
+            if (fromSel && prevFrom && routePointsById[prevFrom]) fromSel.value = prevFrom;
+            if (toSel && prevTo && routePointsById[prevTo]) toSel.value = prevTo;
+        });
+    }
+    const fCurrEl = document.getElementById('fCurrency');
+    if (fCurrEl) fCurrEl.addEventListener('change', function () {
+        const priceEl = document.getElementById('fPrice');
+        if (priceEl) priceEl.dataset.autoFilled = ''; // валюта змінилась — дозволяємо перезапис
+        suggestPriceFromRoute();
+    });
+    const fPhoneEl = document.getElementById('fPhone');
+    if (fPhoneEl) fPhoneEl.addEventListener('blur', function () {
+        const fromSel = document.getElementById('fFromPoint');
+        const toSel = document.getElementById('fToPoint');
+        if (fromSel && fromSel.value) {
+            const pt = routePointsById[fromSel.value];
+            if (pt && pt.delivery_mode === 'address_and_point') loadClientAddressHistory('from', pt.id);
+        }
+        if (toSel && toSel.value) {
+            const pt = routePointsById[toSel.value];
+            if (pt && pt.delivery_mode === 'address_and_point') loadClientAddressHistory('to', pt.id);
+        }
+    });
+    // Якщо менеджер збив авто-ціну вручну — знімаємо прапорець, щоб ми не перезаписали знову
+    const fPriceEl = document.getElementById('fPrice');
+    if (fPriceEl) fPriceEl.addEventListener('input', function () {
+        fPriceEl.dataset.autoFilled = '';
+    });
 
     // Автозапуск навчання якщо вже залогінений і ще не проходив
     checkOnboardingAutoStart();
@@ -1906,8 +2194,11 @@ function openRouteEditModal(rteId, sheetName) {
     document.getElementById('fPhone').value = r['Телефон пасажира'] || '';
     document.getElementById('fPhoneReg').value = r['Телефон реєстратора'] || '';
     document.getElementById('fSeats').value = r['Кількість місць'] || 1;
-    document.getElementById('fFrom').value = r['Адреса відправки'] || '';
-    document.getElementById('fTo').value = r['Адреса прибуття'] || '';
+    // Route points: заповнюємо селекти + підставляємо існуючі адреси
+    resetRoutePointInputs();
+    populateRoutePointSelects(isEuUa ? 'eu-ua' : 'ua-eu');
+    setRoutePointByValue('from', r['Адреса відправки'] || '');
+    setRoutePointByValue('to', r['Адреса прибуття'] || '');
     document.getElementById('fPrice').value = r['Сума'] || '';
     document.getElementById('fDeposit').value = r['Завдаток'] || '';
     document.getElementById('fTiming').value = '';
@@ -2569,9 +2860,16 @@ function renderCard(p) {
     const isOpen = openDetailsId === id;
     const isActionsOpen = openActionsId === id;
 
-    // --- Маршрут: рядок "📍 Львів → Bratislava..." на картці ---
+    // --- Маршрут: рядок "📍 Львів 🗺 → Бенідорм 🗺" на картці ---
+    // Кожна адреса клікабельна — відкриває Google Maps. Для точок з каталогу
+    // (passenger_route_points) підтягнуться координати; для вільного тексту
+    // Google сам спробує знайти.
+    const safeFromAddr = fromAddr.replace(/'/g, "\\'");
+    const safeToAddr = toAddr.replace(/'/g, "\\'");
+    const fromMapBtn = fromAddr ? `<button class="card-route-map-btn" onclick="event.stopPropagation(); openRoutePointMap('${safeFromAddr}')" title="Відкрити в картах">🗺</button>` : '';
+    const toMapBtn = toAddr ? `<button class="card-route-map-btn" onclick="event.stopPropagation(); openRoutePointMap('${safeToAddr}')" title="Відкрити в картах">🗺</button>` : '';
     const routeHtml = (fromAddr || toAddr)
-        ? `<div class="card-route"><span class="card-route-icon">📍</span> ${fromAddr || '?'} → ${toAddr || '?'}</div>`
+        ? `<div class="card-route"><span class="card-route-icon">📍</span> <span class="card-route-text">${fromAddr || '?'}</span>${fromMapBtn} → <span class="card-route-text">${toAddr || '?'}</span>${toMapBtn}</div>`
         : '';
 
     // Trip strip — повна ширина внизу картки
@@ -2702,7 +3000,7 @@ function renderDetailFields(p, fields, isReadonly) {
             displayVal = `<span class="card-direction ${dCls}" style="font-size:13px;padding:4px 12px;">${dLabel}</span>`;
         }
         const mapBtn = (ADDRESS_FIELDS.includes(key) && val)
-            ? `<button class="detail-micro-btn" onclick="event.stopPropagation(); openMap('${safeVal}')" title="Карта">🗺️</button>`
+            ? `<button class="detail-micro-btn" onclick="event.stopPropagation(); openRoutePointMap('${safeVal}')" title="Карта">🗺️</button>`
             : '';
         html += `<div class="detail-block">
             <div class="detail-block-label">${colName}</div>
@@ -2875,6 +3173,31 @@ function openMap(address) {
     window.open('https://www.google.com/maps/search/' + encodeURIComponent(address), '_blank');
 }
 
+// Відкриває адресу у Google Maps. Якщо адреса починається з назви каталожної
+// точки (passenger_route_points) — переходимо за збереженими координатами
+// (точніше й швидше, ніж текстовий пошук). Інакше — звичайний пошук за текстом.
+function openRoutePointMap(address) {
+    if (!address) return;
+    const str = String(address).trim();
+    // Витягуємо "Місто" з "Місто — вул. ..." якщо є роздільник
+    const cityPart = str.split(/\s+[—–-]\s+/)[0].trim();
+    const point = routePointsByNameNorm[_normCityName(cityPart)];
+    if (point && point.lat != null && point.lon != null) {
+        // Для точок з адресною доставкою, якщо менеджер дописав адресу, відкриваємо
+        // пошук за повним рядком адреси (щоб карта знайшла конкретний будинок),
+        // інакше — прив'язуємось до координат локації (АЗС/вокзал).
+        const hasExtraAddr = str !== cityPart;
+        if (hasExtraAddr && point.delivery_mode === 'address_and_point') {
+            window.open('https://www.google.com/maps/search/' + encodeURIComponent(str), '_blank');
+        } else {
+            window.open('https://www.google.com/maps/search/?api=1&query=' + point.lat + ',' + point.lon, '_blank');
+        }
+        return;
+    }
+    // Fallback — звичайний пошук за текстом (legacy ліди)
+    window.open('https://www.google.com/maps/search/' + encodeURIComponent(str), '_blank');
+}
+
 // Розумний клік — не розгортати якщо юзер виділив текст або клікнув на інтерактивний елемент
 function smartToggleDetails(e, id) {
     // Якщо є виділений текст — не розгортати (юзер копіює)
@@ -3014,9 +3337,16 @@ function openEditPax(id) {
     document.getElementById('fPhone').value = p['Телефон пасажира'] || '';
     document.getElementById('fPhoneReg').value = p['Телефон реєстратора'] || '';
     document.getElementById('fSeats').value = p['Кількість місць'] || 1;
-    document.getElementById('fFrom').value = p['Адреса відправки'] || '';
-    document.getElementById('fTo').value = p['Адреса прибуття'] || '';
+    // Route points: заповнюємо селекти та підставляємо існуючі адреси.
+    // Якщо текст збігається з каталожним містом — вибираємо точку; інакше
+    // текст лишається у прихованому fFrom/fTo як fallback.
+    resetRoutePointInputs();
+    populateRoutePointSelects(isEuUa ? 'eu-ua' : 'ua-eu');
+    setRoutePointByValue('from', p['Адреса відправки'] || '');
+    setRoutePointByValue('to', p['Адреса прибуття'] || '');
     document.getElementById('fPrice').value = p['Ціна квитка'] || '';
+    // Позначаємо ціну як введену вручну, щоб авто-підстановка не перезаписала
+    const _fp = document.getElementById('fPrice'); if (_fp) _fp.dataset.autoFilled = '';
     document.getElementById('fDeposit').value = p['Завдаток'] || '';
     document.getElementById('fTiming').value = p['Таймінг'] || '';
     document.getElementById('fWeight').value = p['Вага багажу'] || '';
@@ -3180,6 +3510,9 @@ function openAddModal() {
     document.getElementById('fCurrency').value = 'EUR';
     document.getElementById('fCurrencyDeposit').value = 'EUR';
     document.getElementById('fCurrencyWeight').value = 'EUR';
+    // Route points: заповнюємо селекти відповідно до обраного напрямку
+    resetRoutePointInputs();
+    populateRoutePointSelects(document.getElementById('fDirection').value);
     // Скидаємо SMS парсер
     document.getElementById('smsInput').value = '';
     document.getElementById('smsParseResult').style.display = 'none';
@@ -3337,6 +3670,9 @@ function parseSmsText() {
             fromVal = fromCity.charAt(0).toUpperCase() + fromCity.slice(1);
         }
         document.getElementById('fFrom').value = fromVal;
+        // Пробуємо співставити з каталогом — якщо місто є у списку, підставимо
+        // обрану точку у селект (fFromPoint) і трігернемо авто-ціну/поле адреси.
+        setRoutePointByValue('from', fromVal);
         result.push('📍 Звідки: ' + fromVal);
     }
     if (toCity || toAddress) {
@@ -3347,8 +3683,11 @@ function parseSmsText() {
             toVal = toCity.charAt(0).toUpperCase() + toCity.slice(1);
         }
         document.getElementById('fTo').value = toVal;
+        setRoutePointByValue('to', toVal);
         result.push('📍 Куди: ' + toVal);
     }
+    // Якщо SMS розпізнало обидві точки — спробуємо авто-ціну
+    suggestPriceFromRoute();
 
     // 5. Час: шукаємо HH:MM
     const timeMatch = text.match(/(\d{1,2}):(\d{2})(?!\d)/);
@@ -3497,12 +3836,16 @@ async function savePassenger() {
     saveBtn.style.opacity = '0.7';
 
     const date = document.getElementById('fDate').value || '';
+    // Route points: збираємо "Місто — Адреса" з селектів + input-ів адреси.
+    // Якщо точку не вибрано — fallback на текст у прихованому fFrom/fTo.
+    const fromCombined = readRoutePointCombined('from');
+    const toCombined = readRoutePointCombined('to');
     const formData = {
         name, phone,
         phoneReg: document.getElementById('fPhoneReg').value.trim(),
         seats: document.getElementById('fSeats').value || 1,
-        from: document.getElementById('fFrom').value.trim(),
-        to: document.getElementById('fTo').value.trim(),
+        from: fromCombined.text,
+        to: toCombined.text,
         date,
         timing: document.getElementById('fTiming').value.trim(),
         price: document.getElementById('fPrice').value.trim(),
@@ -3566,6 +3909,30 @@ async function savePassenger() {
         return;
     }
 
+    // Зберігаємо історію адрес клієнта для точок з адресною доставкою.
+    // Викликається після успішного create/update — fire-and-forget, не блокує UI.
+    const persistRouteAddressHistory = () => {
+        const pn = phone;
+        if (fromCombined.point && fromCombined.point.delivery_mode === 'address_and_point' && fromCombined.address) {
+            apiPost('saveClientAddress', {
+                phone: pn,
+                full_name: name,
+                point_id: fromCombined.point.id,
+                address_text: fromCombined.address,
+                address_type: 'from'
+            });
+        }
+        if (toCombined.point && toCombined.point.delivery_mode === 'address_and_point' && toCombined.address) {
+            apiPost('saveClientAddress', {
+                phone: pn,
+                full_name: name,
+                point_id: toCombined.point.id,
+                address_text: toCombined.address,
+                address_type: 'to'
+            });
+        }
+    };
+
     // === РЕЖИМ РЕДАГУВАННЯ: оновлюємо існуючого пасажира через updatePassenger API ===
     // Пропускає перевірку дублікатів, оновлює локальні дані після успіху
     if (editingPaxId) {
@@ -3599,6 +3966,7 @@ async function savePassenger() {
             closeModal('passengerModal');
             render();
             showToast('✅ Пасажира оновлено');
+            persistRouteAddressHistory();
             // Фонова синхронізація
             silentSync(false, true);
         } else {
@@ -3700,6 +4068,7 @@ async function savePassenger() {
         }, 100);
 
         showToast('✅ Пасажир додано: ' + res.pax_id);
+        persistRouteAddressHistory();
 
         // Фонова синхронізація — підтягне точні дані з сервера
         silentSync(false, true);

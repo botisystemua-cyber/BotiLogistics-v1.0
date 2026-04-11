@@ -1251,6 +1251,162 @@ async function sbGetExpenses(params) {
 }
 
 // ================================================================
+// ROUTE POINTS CATALOG (passenger_route_points)
+// ================================================================
+// Довідник точок маршруту (Україна ↔ Іспанія, середа). Кожна точка — це
+// місто + локація (АЗС, вокзал, центр) + координати + режим доставки.
+//   delivery_mode='point'             — фіксована точка посадки/висадки
+//   delivery_mode='address_and_point' — менеджер додатково вводить адресу клієнта
+// Порядок повертається у напрямку UA→ES (sort_order ASC). Для EU→UA
+// фронтенд розгортає список у зворотному порядку на клієнті.
+
+async function sbGetRoutePoints(params) {
+    try {
+        const routeGroup = (params && params.route_group) || 'ua-es-wed';
+        const { data, error } = await sb
+            .from('passenger_route_points')
+            .select('id, route_group, name_ua, country_code, sort_order, location_name, lat, lon, maps_url, delivery_mode, active')
+            .eq('tenant_id', TENANT_ID)
+            .eq('route_group', routeGroup)
+            .eq('active', true)
+            .order('sort_order', { ascending: true });
+        if (error) throw error;
+        return { ok: true, data: data || [] };
+    } catch (e) {
+        console.error('sbGetRoutePoints error:', e);
+        // Не фатально: CRM має працювати й без каталога (fallback — вільний текст)
+        return { ok: true, data: [] };
+    }
+}
+
+// Повертає ціну квитка за маршрутом {from_point_id → to_point_id} у заданій
+// валюті (за замовчуванням EUR). Якщо збігу немає — data=null (менеджер вводить
+// ціну руками). Проміжні сегменти на кшталт "Сучава→Валенсія" свідомо не
+// заповнені у матриці — за рішенням замовника.
+async function sbGetRoutePrice(params) {
+    try {
+        const fromId = params && (params.from_point_id || params.from);
+        const toId   = params && (params.to_point_id   || params.to);
+        const currency = (params && params.currency) || 'EUR';
+        if (!fromId || !toId) return { ok: true, data: null };
+
+        const { data, error } = await sb
+            .from('passenger_route_prices')
+            .select('price, currency')
+            .eq('tenant_id', TENANT_ID)
+            .eq('from_point_id', fromId)
+            .eq('to_point_id', toId)
+            .eq('currency', currency)
+            .eq('active', true)
+            .limit(1)
+            .maybeSingle();
+        if (error) throw error;
+        return { ok: true, data: data || null };
+    } catch (e) {
+        console.error('sbGetRoutePrice error:', e);
+        return { ok: true, data: null };
+    }
+}
+
+// Нормалізатор телефону для ключа історії: зберігаємо лише цифри (опційно "+")
+function _normPhone(raw) {
+    if (!raw) return '';
+    const s = String(raw).trim();
+    const digits = s.replace(/[^\d+]/g, '');
+    // уніфікуємо 380..., +380..., 0... → +380...
+    if (/^0\d{9}$/.test(digits)) return '+38' + digits;
+    if (/^380\d{9}$/.test(digits)) return '+' + digits;
+    return digits;
+}
+
+// Історія адрес клієнта у межах однієї точки (наприклад, Малага). Використовується
+// для автопідставки: менеджер вводить телефон → якщо клієнт уже їздив, адреса
+// пропонується одразу. Повертається впорядкованим списком (останнє використання зверху).
+async function sbGetClientAddresses(params) {
+    try {
+        const phone = _normPhone(params && params.phone);
+        if (!phone) return { ok: true, data: [] };
+
+        let query = sb
+            .from('passenger_client_addresses')
+            .select('id, point_id, address_text, address_type, last_used_at, use_count, full_name')
+            .eq('tenant_id', TENANT_ID)
+            .eq('phone', phone);
+
+        if (params && params.point_id) query = query.eq('point_id', params.point_id);
+        if (params && params.address_type) query = query.eq('address_type', params.address_type);
+
+        const { data, error } = await query
+            .order('last_used_at', { ascending: false })
+            .limit(10);
+        if (error) throw error;
+        return { ok: true, data: data || [] };
+    } catch (e) {
+        console.error('sbGetClientAddresses error:', e);
+        return { ok: true, data: [] };
+    }
+}
+
+// Зберігає адресу клієнта у історію. Якщо запис існує — інкрементує лічильник
+// і оновлює last_used_at. Викликається з savePassenger() ТІЛЬКИ для точок
+// з delivery_mode='address_and_point' і коли адреса справді введена.
+async function sbSaveClientAddress(params) {
+    try {
+        const phone = _normPhone(params && params.phone);
+        const pointId = params && (params.point_id || params.pointId);
+        const addressText = (params && (params.address_text || params.address) || '').trim();
+        const addressType = params && params.address_type;
+        const fullName = params && params.full_name;
+
+        if (!phone || !pointId || !addressText || !addressType) {
+            return { ok: true, skipped: true };
+        }
+
+        // Спочатку пробуємо оновити існуючий запис
+        const { data: existing } = await sb
+            .from('passenger_client_addresses')
+            .select('id, use_count')
+            .eq('tenant_id', TENANT_ID)
+            .eq('phone', phone)
+            .eq('point_id', pointId)
+            .eq('address_type', addressType)
+            .eq('address_text', addressText)
+            .maybeSingle();
+
+        if (existing && existing.id) {
+            const { error } = await sb
+                .from('passenger_client_addresses')
+                .update({
+                    use_count: (existing.use_count || 0) + 1,
+                    last_used_at: new Date().toISOString(),
+                    full_name: fullName || null,
+                })
+                .eq('id', existing.id);
+            if (error) throw error;
+            return { ok: true, updated: true };
+        }
+
+        const { error } = await sb
+            .from('passenger_client_addresses')
+            .insert({
+                tenant_id: TENANT_ID,
+                phone,
+                full_name: fullName || null,
+                point_id: pointId,
+                address_text: addressText,
+                address_type: addressType,
+                use_count: 1,
+                last_used_at: new Date().toISOString(),
+            });
+        if (error) throw error;
+        return { ok: true, inserted: true };
+    } catch (e) {
+        console.error('sbSaveClientAddress error:', e);
+        return { ok: false, error: e.message };
+    }
+}
+
+// ================================================================
 // MAIN ROUTER — replaces apiPost()
 // ================================================================
 
@@ -1351,6 +1507,12 @@ async function apiPostSupabase(action, data) {
 
         // Expenses
         getExpenses:        sbGetExpenses,
+
+        // Route points catalog + pricing + client address history
+        getRoutePoints:     sbGetRoutePoints,
+        getRoutePrice:      sbGetRoutePrice,
+        getClientAddresses: sbGetClientAddresses,
+        saveClientAddress:  sbSaveClientAddress,
 
         // Misc
         logOnboarding:      async (p) => ({ ok: true }), // TODO: implement logging
