@@ -472,13 +472,16 @@ body.route-sort-active #rteTogglePay {
 .route-header-bar .route-subtitle { font-size:12px; opacity:0.85; margin-top:4px; }
 
 /* Кнопки в шапці маршруту — білі pill-кнопки у стилі фільтрів «Всі/Статуси/Фінанси».
-   Біле тло, округлі (border-radius: 20px), з чітким тап-фідбеком. */
+   Біле тло, округлі (border-radius: 20px), з чітким тап-фідбеком.
+   Текст навмисно дрібний (10px), щоб «Оптимізувати» поміщалось у 4-колоночну
+   сітку на мобільному без обрізання. */
 .route-dash-btn {
-    padding: 10px 14px;
-    min-height: 44px;
+    padding: 8px 6px;
+    min-height: 40px;
     background: white;
     color: #1f2937;
-    font-size: 12px;
+    font-size: 10px;
+    line-height: 1.15;
     font-weight: 700;
     border: 1px solid #e5e7eb;
     border-radius: 20px;
@@ -495,7 +498,8 @@ body.route-sort-active #rteTogglePay {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 4px;
+    gap: 3px;
+    min-width: 0;
 }
 .route-dash-btn:hover { background: #f9fafb; border-color: #d1d5db; }
 .route-dash-btn:active {
