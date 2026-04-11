@@ -329,6 +329,11 @@ select.detail-inline-edit { padding: 3px 4px; cursor: pointer; appearance: auto;
 
 /* Route card styles */
 .route-card { background:white; border-radius:8px; box-shadow:var(--shadow); border-left:4px solid var(--primary); margin-bottom:10px; overflow:hidden; }
+/* SortableJS drag-and-drop visual states */
+.route-card-ghost { opacity:0.4; background:#e0e7ff !important; border:2px dashed var(--primary) !important; }
+.route-card-chosen { box-shadow:0 0 0 2px var(--primary), 0 8px 20px rgba(0,0,0,0.18) !important; }
+.route-card-drag { opacity:0.9; cursor:grabbing !important; }
+#routesList .route-card-header { user-select:none; }
 .route-card.status-confirmed { border-left-color:var(--success); }
 .route-card.status-new { border-left-color:var(--warning); }
 .route-card.status-work { border-left-color:var(--info); }

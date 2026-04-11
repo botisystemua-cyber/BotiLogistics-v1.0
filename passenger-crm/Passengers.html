@@ -350,6 +350,12 @@
             </div>
             <!-- Route filters — 1 рядок + розгортальні секції -->
             <div id="routeFiltersBar" style="display:none;margin-bottom:8px;">
+                <!-- Режим порядку: Збір / Висадка -->
+                <div style="display:flex;gap:5px;align-items:center;padding:4px 0 2px 0;">
+                    <button class="trip-filter-btn active" id="rteSortPickup"  onclick="setRouteSortMode('pickup',  this)" style="flex-shrink:0;">📥 Збір</button>
+                    <button class="trip-filter-btn"        id="rteSortDropoff" onclick="setRouteSortMode('dropoff', this)" style="flex-shrink:0;">📤 Висадка</button>
+                    <span id="rteSortHint" style="font-size:10px;color:var(--text-secondary);margin-left:6px;">Порядок забору пасажирів та посилок</span>
+                </div>
                 <!-- Головний рядок: Всі | 👤 | 📦 | Статуси | Фінанси -->
                 <div style="display:flex;gap:5px;align-items:center;flex-wrap:nowrap;overflow-x:auto;padding:6px 0;">
                     <button class="trip-filter-btn active" id="rteFilterAll" onclick="rteResetAll(this)" style="flex-shrink:0;">Всі</button>
@@ -874,6 +880,9 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="supabase-config.js"></script>
 <script src="supabase-api.js"></script>
+
+<!-- SortableJS — drag-and-drop for route stops ordering -->
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 
 <!-- PWA + Main Logic -->
 <script src="Passengers.js"></script>
