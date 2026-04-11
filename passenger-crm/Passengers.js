@@ -285,10 +285,29 @@ function _normCityName(s) {
         .trim();
 }
 
+// Стан завантаження каталога точок: 'idle' → 'loading' → 'ready' | 'empty' | 'error'
+let routePointsLoadState = 'idle';
+let routePointsLoadError = '';
+
 async function loadRoutePointsCatalog() {
+    routePointsLoadState = 'loading';
+    routePointsLoadError = '';
     try {
         const res = await apiPost('getRoutePoints', { route_group: 'ua-es-wed' });
-        if (!res.ok || !Array.isArray(res.data)) return;
+        if (!res.ok) {
+            routePointsLoadState = 'error';
+            routePointsLoadError = res.error || 'API error';
+            console.warn('[routePoints] API error:', res.error);
+            return;
+        }
+        if (!Array.isArray(res.data) || res.data.length === 0) {
+            routePoints = [];
+            routePointsById = {};
+            routePointsByNameNorm = {};
+            routePointsLoadState = 'empty';
+            console.warn('[routePoints] каталог порожній — ймовірно SQL-міграцію 2026-04-passenger-route-points.sql ще не запущено на Supabase (або seed для іншого tenant_id)');
+            return;
+        }
         routePoints = res.data;
         routePointsById = {};
         routePointsByNameNorm = {};
@@ -296,7 +315,11 @@ async function loadRoutePointsCatalog() {
             routePointsById[p.id] = p;
             routePointsByNameNorm[_normCityName(p.name_ua)] = p;
         }
+        routePointsLoadState = 'ready';
+        console.log('[routePoints] завантажено точок:', routePoints.length);
     } catch (e) {
+        routePointsLoadState = 'error';
+        routePointsLoadError = e && e.message ? e.message : String(e);
         console.warn('loadRoutePointsCatalog failed:', e);
     }
 }
@@ -308,6 +331,22 @@ function populateRoutePointSelects(direction) {
     const fromSel = document.getElementById('fFromPoint');
     const toSel   = document.getElementById('fToPoint');
     if (!fromSel || !toSel) return;
+
+    // Якщо каталог ще не готовий — показуємо діагностичну опцію у селектах
+    if (routePointsLoadState !== 'ready' || !routePoints.length) {
+        let hint = '— виберіть місто —';
+        if (routePointsLoadState === 'loading' || routePointsLoadState === 'idle') {
+            hint = '⏳ завантажується…';
+        } else if (routePointsLoadState === 'empty') {
+            hint = '⚠️ каталог порожній — запустіть SQL-міграцію';
+        } else if (routePointsLoadState === 'error') {
+            hint = '❌ помилка: ' + (routePointsLoadError || 'невідомо');
+        }
+        const emptyHtml = `<option value="">${hint}</option>`;
+        fromSel.innerHTML = emptyHtml;
+        toSel.innerHTML = emptyHtml;
+        return;
+    }
 
     const ordered = routePoints.slice();
     if (direction === 'eu-ua') ordered.reverse();
@@ -324,6 +363,14 @@ function populateRoutePointSelects(direction) {
 
     fromSel.innerHTML = '<option value="">— виберіть місто —</option>' + optsHtml;
     toSel.innerHTML   = '<option value="">— виберіть місто —</option>' + optsHtml;
+}
+
+// Гарантує завантаження каталога перед використанням. Викликається з openAddModal/
+// openEditPax, щоб уникнути race condition якщо модалка відкрита до init-Promise.all.
+async function ensureRoutePointsLoaded() {
+    if (routePointsLoadState === 'ready') return;
+    if (routePointsLoadState === 'loading') return; // init вже в роботі
+    await loadRoutePointsCatalog();
 }
 
 // Підставляє значення у селект точки з існуючого ліда (режим редагування чи SMS парсер).
@@ -3510,9 +3557,16 @@ function openAddModal() {
     document.getElementById('fCurrency').value = 'EUR';
     document.getElementById('fCurrencyDeposit').value = 'EUR';
     document.getElementById('fCurrencyWeight').value = 'EUR';
-    // Route points: заповнюємо селекти відповідно до обраного напрямку
+    // Route points: заповнюємо селекти відповідно до обраного напрямку.
+    // Якщо каталог не готовий (init ще не відпрацював або міграцію не запущено) —
+    // ре-завантажуємо і перемальовуємо після успіху.
     resetRoutePointInputs();
     populateRoutePointSelects(document.getElementById('fDirection').value);
+    if (routePointsLoadState !== 'ready') {
+        ensureRoutePointsLoaded().then(() => {
+            populateRoutePointSelects(document.getElementById('fDirection').value);
+        });
+    }
     // Скидаємо SMS парсер
     document.getElementById('smsInput').value = '';
     document.getElementById('smsParseResult').style.display = 'none';

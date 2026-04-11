@@ -10,6 +10,12 @@
 -- Ідемпотентний: повторний запуск не створить дублікатів (ON CONFLICT DO NOTHING).
 -- ================================================================
 
+-- ─── 0. Очистити PostgREST schema cache після DDL (в кінці файлу) ──
+--
+-- ВАЖЛИВО: Supabase кешує схему REST API. Після CREATE TABLE потрібно
+-- виконати NOTIFY pgrst, 'reload schema' (це робимо в кінці міграції),
+-- інакше /rest/v1/passenger_route_points даватиме 404 або 401 на anon.
+
 -- ─── 1. Каталог точок маршруту ─────────────────────────────────────
 CREATE TABLE IF NOT EXISTS passenger_route_points (
     id             BIGSERIAL PRIMARY KEY,
@@ -206,3 +212,24 @@ BEGIN
     END LOOP;
 END
 $seed$;
+
+-- ================================================================
+-- GRANTS + RLS: узгоджено з іншими таблицями проєкту (security off, anon full).
+-- Без цих grants CRM отримує 401 з REST API навіть коли таблиця існує.
+-- Патерн скопійовано з sql/2026-04-create-users.sql.
+-- ================================================================
+
+GRANT ALL ON passenger_route_points     TO anon, authenticated, service_role;
+GRANT ALL ON passenger_route_prices     TO anon, authenticated, service_role;
+GRANT ALL ON passenger_client_addresses TO anon, authenticated, service_role;
+
+GRANT USAGE, SELECT ON SEQUENCE passenger_route_points_id_seq     TO anon, authenticated, service_role;
+GRANT USAGE, SELECT ON SEQUENCE passenger_route_prices_id_seq     TO anon, authenticated, service_role;
+GRANT USAGE, SELECT ON SEQUENCE passenger_client_addresses_id_seq TO anon, authenticated, service_role;
+
+ALTER TABLE passenger_route_points     DISABLE ROW LEVEL SECURITY;
+ALTER TABLE passenger_route_prices     DISABLE ROW LEVEL SECURITY;
+ALTER TABLE passenger_client_addresses DISABLE ROW LEVEL SECURITY;
+
+-- Перезавантажити кеш схеми PostgREST, щоб нові таблиці стали доступні через /rest/v1
+NOTIFY pgrst, 'reload schema';
