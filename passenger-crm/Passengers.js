@@ -1684,6 +1684,9 @@ function renderRouteCard(r, idx, sheetName) {
 
 // ── Деталі картки маршруту ──
 function toggleRouteDetails(rteId) {
+    // У режимі сортування картки — клік нічого не робить.
+    // Тап + утримання → drag, короткий тап → ігнор (щоб не відкривати деталі).
+    if (routeSortModeActive) return;
     if (routeOpenDetailsId === rteId) {
         routeOpenDetailsId = null;
     } else {

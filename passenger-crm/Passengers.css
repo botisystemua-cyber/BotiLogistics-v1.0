@@ -352,11 +352,15 @@ select.detail-inline-edit { padding: 3px 4px; cursor: pointer; appearance: auto;
 }
 #routesList.sort-mode-on .route-card:active { cursor: grabbing; }
 #routesList.sort-mode-on .route-card.selected { outline: none !important; }
-/* Заголовок картки не клікабельний — лише захоплення для drag */
+/* Уся картка — drag handle. Заголовок не має «hover»-ефекту. */
 #routesList.sort-mode-on .route-card-header {
     cursor: grab !important;
-    pointer-events: none;
+    background: transparent !important;
 }
+#routesList.sort-mode-on .route-card-header:hover { background: transparent !important; }
+/* Заблокувати всі вкладені кнопки та інпути (щоб випадково не «клікнути» чекбокс) */
+#routesList.sort-mode-on .route-card button,
+#routesList.sort-mode-on .route-card input { pointer-events: none !important; }
 /* Приховати деталі та дії картки — зайвий шум у sort mode */
 #routesList.sort-mode-on .route-card-actions,
 #routesList.sort-mode-on .route-card-details { display: none !important; }
