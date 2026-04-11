@@ -327,41 +327,121 @@ async function loadRoutePointsCatalog() {
 // Заповнює селекти точок відправки/прибуття у формі пасажира залежно від напрямку.
 // UA→EU: порядок 1→23 (Чернівці …→ Естепона)
 // EU→UA: порядок 23→1 (Естепона …→ Чернівці) — це той самий список реверснутий.
-// Наповнює <datalist> автопідказок для полів fFrom/fTo за обраним напрямком.
-// UA→EU: порядок 1→23 (Чернівці → Естепона)
-// EU→UA: порядок 23→1 (Естепона → Чернівці)
-// Якщо каталог не готовий — залишаємо datalist порожнім (юзер все одно може
-// писати вільний текст — поле це звичайний input, не select).
-function populateRoutePointDatalists(direction) {
-    const fromList = document.getElementById('fFromPointList');
-    const toList   = document.getElementById('fToPointList');
-    if (!fromList || !toList) return;
+// ================================================================
+// ROUTE POINTS COMBO-BOX (власний dropdown, НЕ нативний datalist)
+// ================================================================
+// Нативний <datalist> нестабільно працює на мобільних (особливо iOS Safari),
+// тому ми робимо свій dropdown. Один контейнер #routePointDropdown на сторінку
+// позиціонується position:fixed під активним полем (escape з modal overflow).
+//
+// API:
+//   openRoutePointDropdown(which)    — показати список (which='from'|'to')
+//   closeRoutePointDropdown()        — сховати
+//   toggleRoutePointDropdown(which)  — для кнопки ▼
+//   pickRoutePointOption(which,name) — обрати елемент списку
+//   renderRoutePointDropdown(which)  — перебудувати html усередині (фільтр+сортування)
 
+let _activeRoutePointWhich = null; // 'from' | 'to' | null
+
+function openRoutePointDropdown(which) {
+    const inputId = which === 'from' ? 'fFrom' : 'fTo';
+    const input = document.getElementById(inputId);
+    const dd = document.getElementById('routePointDropdown');
+    if (!input || !dd) return;
+
+    _activeRoutePointWhich = which;
+    renderRoutePointDropdown(which);
+
+    // position:fixed — екранує modal-body overflow
+    const rect = input.getBoundingClientRect();
+    const vh = window.innerHeight || document.documentElement.clientHeight;
+    const spaceBelow = vh - rect.bottom;
+    const maxH = Math.min(260, Math.max(140, spaceBelow - 12));
+    dd.style.left = rect.left + 'px';
+    dd.style.top = (rect.bottom + 2) + 'px';
+    dd.style.width = rect.width + 'px';
+    dd.style.maxHeight = maxH + 'px';
+    dd.classList.add('open');
+}
+
+function closeRoutePointDropdown() {
+    const dd = document.getElementById('routePointDropdown');
+    if (dd) dd.classList.remove('open');
+    _activeRoutePointWhich = null;
+}
+
+function toggleRoutePointDropdown(which) {
+    const dd = document.getElementById('routePointDropdown');
+    if (!dd) return;
+    if (dd.classList.contains('open') && _activeRoutePointWhich === which) {
+        closeRoutePointDropdown();
+    } else {
+        openRoutePointDropdown(which);
+    }
+}
+
+function renderRoutePointDropdown(which) {
+    const dd = document.getElementById('routePointDropdown');
+    if (!dd) return;
+
+    // Стан каталога
     if (routePointsLoadState !== 'ready' || !routePoints.length) {
-        fromList.innerHTML = '';
-        toList.innerHTML = '';
+        let msg = '— немає даних —';
+        if (routePointsLoadState === 'loading' || routePointsLoadState === 'idle') msg = '⏳ завантажується…';
+        else if (routePointsLoadState === 'empty') msg = '⚠️ каталог порожній — запустіть SQL міграцію';
+        else if (routePointsLoadState === 'error') msg = '❌ ' + (routePointsLoadError || 'помилка');
+        dd.innerHTML = `<div class="combo-box-empty">${msg}</div>`;
         return;
     }
 
+    // Порядок списку за напрямком
+    const dir = (document.getElementById('fDirection') || {}).value || 'ua-eu';
     const ordered = routePoints.slice();
-    if (direction === 'eu-ua') ordered.reverse();
+    if (dir === 'eu-ua') ordered.reverse();
+
+    // Фільтр за введеним у поле текстом: беремо перше слово (до коми/тире),
+    // нормалізуємо й шукаємо підрядок у назвах каталогу
+    const inputId = which === 'from' ? 'fFrom' : 'fTo';
+    const input = document.getElementById(inputId);
+    const raw = input ? input.value : '';
+    const firstToken = raw.split(/[,;/]|\s+[—–-]\s+/)[0] || '';
+    const normFilter = _normCityName(firstToken);
+    const filtered = normFilter
+        ? ordered.filter(p => _normCityName(p.name_ua).includes(normFilter))
+        : ordered;
+
+    if (filtered.length === 0) {
+        dd.innerHTML = '<div class="combo-box-empty">Немає збігів у каталозі — можна написати своє</div>';
+        return;
+    }
 
     const flagByCountry = {
         UA: '🇺🇦', RO: '🇷🇴', SK: '🇸🇰', CZ: '🇨🇿', DE: '🇩🇪', ES: '🇪🇸',
         PL: '🇵🇱', AT: '🇦🇹', HU: '🇭🇺', CH: '🇨🇭', IT: '🇮🇹', FR: '🇫🇷'
     };
-    // value = name_ua щоб при виборі в поле потрапляла чиста назва міста
-    // (а не id), яка потім легко матчиться при збереженні/пошуку ціни.
-    // label (показується у деяких браузерах поруч із value) — прапор + локація.
-    const optsHtml = ordered.map(p => {
+    dd.innerHTML = filtered.map(p => {
         const flag = flagByCountry[p.country_code] || '';
-        const loc = p.location_name ? ` — ${p.location_name}` : '';
-        const label = `${flag} ${p.name_ua}${loc}`;
-        return `<option value="${p.name_ua}" label="${label}"></option>`;
+        const loc = p.location_name ? `<span class="combo-box-loc">${p.location_name}</span>` : '';
+        const safeName = String(p.name_ua).replace(/'/g, "\\'");
+        // onmousedown (не onclick!) щоб обробка пройшла ДО blur input'а, який
+        // інакше закриє dropdown раніше ніж клік дійде до елемента.
+        return `<div class="combo-box-item"
+                     onmousedown="event.preventDefault(); pickRoutePointOption('${which}','${safeName}')"
+                     ontouchend="event.preventDefault(); pickRoutePointOption('${which}','${safeName}')">
+                    <span class="combo-box-flag">${flag}</span>
+                    <span class="combo-box-name">${p.name_ua}</span>
+                    ${loc}
+                </div>`;
     }).join('');
+}
 
-    fromList.innerHTML = optsHtml;
-    toList.innerHTML = optsHtml;
+function pickRoutePointOption(which, name) {
+    const inputId = which === 'from' ? 'fFrom' : 'fTo';
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    input.value = name;
+    closeRoutePointDropdown();
+    suggestPriceFromRoute();
 }
 
 // Гарантує завантаження каталога перед використанням. Викликається з openAddModal/
@@ -384,10 +464,13 @@ function findRoutePointByText(text) {
     return routePointsByNameNorm[_normCityName(cityPart)] || null;
 }
 
-// Викликається on input у fFrom/fTo. Якщо обидва поля мають тексти, що
-// матчаться з каталогом — пробує підставити ціну. Нічого не ховає і не
-// прибирає — це просто combo-box, а не конструктор.
-function onRoutePointTextChange(_which) {
+// Викликається on input у fFrom/fTo.
+// - Якщо dropdown цього ж поля відкритий — перефільтровуємо його
+// - Спроба підставити ціну за каталогом
+function onRoutePointTextChange(which) {
+    if (_activeRoutePointWhich === which) {
+        renderRoutePointDropdown(which);
+    }
     suggestPriceFromRoute();
 }
 
@@ -722,15 +805,31 @@ document.addEventListener('DOMContentLoaded', () => {
 
     setInterval(silentSync, 30000);
 
-    // Route points form listeners: перепопуляція datalist при зміні напрямку +
-    // спроба авто-ціни при зміні валюти. Тексти у fFrom/fTo не чіпаємо —
-    // це combo-box з вільним вводом.
+    // Route points form listeners: перемалювати dropdown якщо він відкритий
+    // при зміні напрямку (порядок точок реверсується). Тексти у fFrom/fTo не
+    // чіпаємо — це combo-box з вільним вводом.
     const fDirEl = document.getElementById('fDirection');
     if (fDirEl) {
         fDirEl.addEventListener('change', function () {
-            populateRoutePointDatalists(fDirEl.value);
+            if (_activeRoutePointWhich) renderRoutePointDropdown(_activeRoutePointWhich);
         });
     }
+
+    // Закривати dropdown при кліку/тапі поза combo-box і поза самим dropdown
+    const _handleOutsideRoutePoint = function (e) {
+        if (!_activeRoutePointWhich) return;
+        const t = e.target;
+        if (t.closest && (t.closest('.combo-box') || t.closest('#routePointDropdown'))) return;
+        closeRoutePointDropdown();
+    };
+    document.addEventListener('mousedown', _handleOutsideRoutePoint, true);
+    document.addEventListener('touchstart', _handleOutsideRoutePoint, true);
+
+    // Закривати dropdown при скролі modal-body (інакше position:fixed залишається
+    // на старому місці, коли юзер прокручує форму)
+    document.addEventListener('scroll', function () {
+        if (_activeRoutePointWhich) closeRoutePointDropdown();
+    }, true);
     const fCurrEl = document.getElementById('fCurrency');
     if (fCurrEl) fCurrEl.addEventListener('change', function () {
         const priceEl = document.getElementById('fPrice');
@@ -2115,7 +2214,6 @@ function openRouteEditModal(rteId, sheetName) {
     // Route points: заповнюємо datalist автопідказок + ставимо текст як є.
     // Вільний текст для legacy-лідів одразу видно й можна редагувати.
     resetRoutePointInputs();
-    populateRoutePointDatalists(isEuUa ? 'eu-ua' : 'ua-eu');
     document.getElementById('fFrom').value = r['Адреса відправки'] || '';
     document.getElementById('fTo').value = r['Адреса прибуття'] || '';
     document.getElementById('fPrice').value = r['Сума'] || '';
@@ -3256,11 +3354,9 @@ function openEditPax(id) {
     document.getElementById('fPhone').value = p['Телефон пасажира'] || '';
     document.getElementById('fPhoneReg').value = p['Телефон реєстратора'] || '';
     document.getElementById('fSeats').value = p['Кількість місць'] || 1;
-    // Route points: заповнюємо селекти та підставляємо існуючі адреси.
-    // Якщо текст збігається з каталожним містом — вибираємо точку; інакше
-    // текст лишається у прихованому fFrom/fTo як fallback.
+    // Route points: просто виставляємо збережений текст у combo-box поля.
+    // Вільний текст (legacy або кастомний) одразу видно й можна редагувати.
     resetRoutePointInputs();
-    populateRoutePointDatalists(isEuUa ? 'eu-ua' : 'ua-eu');
     document.getElementById('fFrom').value = p['Адреса відправки'] || '';
     document.getElementById('fTo').value = p['Адреса прибуття'] || '';
     document.getElementById('fPrice').value = p['Ціна квитка'] || '';
@@ -3429,16 +3525,12 @@ function openAddModal() {
     document.getElementById('fCurrency').value = 'EUR';
     document.getElementById('fCurrencyDeposit').value = 'EUR';
     document.getElementById('fCurrencyWeight').value = 'EUR';
-    // Route points: наповнюємо datalist автопідказок за обраним напрямком.
-    // Якщо каталог не готовий (init ще не відпрацював або міграцію не запущено) —
-    // ре-завантажуємо і перенаповнюємо після успіху. Юзер все одно може писати
-    // вільний текст, навіть якщо каталог порожній.
+    // Route points: нічого попередньо рендерити не треба — dropdown
+    // будується на open. Якщо каталог не готовий — фоново підтягнемо,
+    // щоб при натиску ▼ одразу показати список.
     resetRoutePointInputs();
-    populateRoutePointDatalists(document.getElementById('fDirection').value);
     if (routePointsLoadState !== 'ready') {
-        ensureRoutePointsLoaded().then(() => {
-            populateRoutePointDatalists(document.getElementById('fDirection').value);
-        });
+        ensureRoutePointsLoaded();
     }
     // Скидаємо SMS парсер
     document.getElementById('smsInput').value = '';
