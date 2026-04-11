@@ -349,27 +349,12 @@
                 <h2 style="margin:0;font-size:18px;color:var(--text-primary);">🗺️ Маршрути</h2>
                 <button class="bs-btn" style="background:var(--primary);color:white;font-size:11px;padding:8px 14px;" onclick="loadRoutes(true)">🔄 Оновити</button>
             </div>
-            <!-- Sort Mode: Warning banner (видно лише в режимі сортування) -->
+            <!-- Sort Mode: мінімальний банер (видно лише в режимі сортування) -->
             <div id="routeSortBanner" class="route-sort-banner" style="display:none;">
-                <div class="route-sort-banner-main">
-                    <span class="route-sort-banner-icon">🔧</span>
-                    <div class="route-sort-banner-text">
-                        <div class="route-sort-banner-title">Режим сортування активний</div>
-                        <div class="route-sort-banner-sub">Перетягуйте картки за ручку <b>⋮⋮</b> зліва. Зміни <b>не збережено</b> поки не натиснете «💾 Зберегти».</div>
-                    </div>
-                </div>
-                <div class="route-sort-banner-mode">
-                    <span id="routeSortBannerMode">📥 Порядок збору</span>
-                </div>
+                <span id="routeSortBannerLabel">🔧 Режим сортування</span>
             </div>
             <!-- Route filters — 1 рядок + розгортальні секції -->
             <div id="routeFiltersBar" style="display:none;margin-bottom:8px;">
-                <!-- Режим порядку: Збір / Висадка -->
-                <div style="display:flex;gap:5px;align-items:center;padding:4px 0 2px 0;">
-                    <button class="trip-filter-btn active" id="rteSortPickup"  onclick="setRouteSortMode('pickup',  this)" style="flex-shrink:0;">📥 Збір</button>
-                    <button class="trip-filter-btn"        id="rteSortDropoff" onclick="setRouteSortMode('dropoff', this)" style="flex-shrink:0;">📤 Висадка</button>
-                    <span id="rteSortHint" style="font-size:10px;color:var(--text-secondary);margin-left:6px;">Порядок забору пасажирів та посилок</span>
-                </div>
                 <!-- Головний рядок: Всі | 👤 | 📦 | Статуси | Фінанси -->
                 <div style="display:flex;gap:5px;align-items:center;flex-wrap:nowrap;overflow-x:auto;padding:6px 0;">
                     <button class="trip-filter-btn active" id="rteFilterAll" onclick="rteResetAll(this)" style="flex-shrink:0;">Всі</button>
@@ -385,6 +370,12 @@
                         <button class="trip-filter-btn" id="rteStatusWork" onclick="setRouteStatusFilter('В роботі',this)" style="border-color:#3b82f6;color:#1d4ed8;">⚙️ В роботі</button>
                         <button class="trip-filter-btn" id="rteStatusConfirmed" onclick="setRouteStatusFilter('Підтверджено',this)" style="border-color:#10b981;color:#059669;">✅ Підтверджено</button>
                         <button class="trip-filter-btn" id="rteStatusRefused" onclick="setRouteStatusFilter('Відмова',this)" style="border-color:#ef4444;color:#dc2626;">❌ Відмова</button>
+                    </div>
+                    <!-- Режим порядку: Збір / Висадка — схований сюди, використовується рідко -->
+                    <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;margin-top:8px;padding-top:8px;border-top:1px dashed var(--border);">
+                        <span style="font-size:10px;color:var(--text-secondary);margin-right:4px;">Порядок:</span>
+                        <button class="trip-filter-btn active" id="rteSortPickup"  onclick="setRouteSortMode('pickup',  this)" style="flex-shrink:0;">📥 Збір</button>
+                        <button class="trip-filter-btn"        id="rteSortDropoff" onclick="setRouteSortMode('dropoff', this)" style="flex-shrink:0;">📤 Висадка</button>
                     </div>
                 </div>
                 <!-- Фінанси (згорнуті за замовчуванням) -->

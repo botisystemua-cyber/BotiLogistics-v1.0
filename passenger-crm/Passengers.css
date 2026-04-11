@@ -336,80 +336,52 @@ select.detail-inline-edit { padding: 3px 4px; cursor: pointer; appearance: auto;
    або <body> має клас .route-sort-active.
    ───────────────────────────────────────────────────────── */
 
-/* Ручка-грип на картці (невидима за замовчуванням) */
-.sort-grip {
-    display: none;
-    align-items: center;
-    justify-content: center;
-    width: 34px;
-    min-height: 48px;
-    color: #92400e;
-    font-size: 22px;
-    font-weight: 900;
+/* У режимі сортування: картки виглядають «неактивними» (приглушено-сірими),
+   вся картка є drag-handle — тапни будь-де й перетягуй. */
+#routesList.sort-mode-on .route-card {
+    background: #f3f4f6 !important;
+    border-left-color: #9ca3af !important;
+    box-shadow: none !important;
+    opacity: 0.85;
     cursor: grab;
     touch-action: none;
     -webkit-user-select: none;
     user-select: none;
-    background: #fef3c7;
-    border-right: 2px dashed #f59e0b;
-    flex-shrink: 0;
-    line-height: 1;
-    letter-spacing: -2px;
+    filter: grayscale(0.5);
+    transition: none !important;
 }
-.sort-grip:active { cursor: grabbing; background: #fde68a; }
-
-/* У режимі сортування: показуємо грипи, блокуємо клік по заголовку */
-#routesList.sort-mode-on .sort-grip { display: flex; }
-#routesList.sort-mode-on .route-card {
-    border: 2px dashed #f59e0b !important;
-    background: #fffbeb !important;
-    box-shadow: 0 2px 8px rgba(245,158,11,0.15) !important;
-}
+#routesList.sort-mode-on .route-card:active { cursor: grabbing; }
+#routesList.sort-mode-on .route-card.selected { outline: none !important; }
+/* Заголовок картки не клікабельний — лише захоплення для drag */
 #routesList.sort-mode-on .route-card-header {
-    cursor: default !important;
+    cursor: grab !important;
     pointer-events: none;
 }
-/* Грип всередині disabled-заголовка повинен лишитись активним */
-#routesList.sort-mode-on .sort-grip { pointer-events: auto; }
-/* Приховати дії картки в режимі сортування — зайвий шум */
+/* Приховати деталі та дії картки — зайвий шум у sort mode */
 #routesList.sort-mode-on .route-card-actions,
 #routesList.sort-mode-on .route-card-details { display: none !important; }
 /* Приховати чекбокси — щоб не плутати з режимом вибору */
 #routesList.sort-mode-on .card-checkbox-wrap { display: none !important; }
 
 /* SortableJS drag-and-drop visual states (активні тільки в sort mode) */
-.route-card-ghost { opacity:0.4; background:#fde68a !important; border:2px dashed #b45309 !important; }
-.route-card-chosen { box-shadow:0 0 0 3px #f59e0b, 0 8px 20px rgba(0,0,0,0.22) !important; }
-.route-card-drag { opacity:0.95; cursor:grabbing !important; }
+.route-card-ghost { opacity:0.3; background:#e5e7eb !important; border:2px dashed #9ca3af !important; filter:none !important; }
+.route-card-chosen { box-shadow:0 0 0 2px #6b7280, 0 8px 20px rgba(0,0,0,0.18) !important; filter:none !important; opacity:1 !important; }
+.route-card-drag { opacity:0.95 !important; cursor:grabbing !important; filter:none !important; }
 #routesList .route-card-header { user-select:none; }
 
-/* Жовта плашка-попередження над фільтрами */
+/* Мінімальна плашка над списком — лише напис і «живий» маркер dirty */
 .route-sort-banner {
-    background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
-    border: 2px solid #f59e0b;
-    border-radius: 10px;
-    padding: 10px 14px;
-    margin-bottom: 10px;
+    background: #f9fafb;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 10px;
+    margin-bottom: 8px;
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    box-shadow: 0 2px 8px rgba(245,158,11,0.25);
-    animation: sortBannerPulse 2s ease-in-out infinite;
-}
-@keyframes sortBannerPulse {
-    0%, 100% { box-shadow: 0 2px 8px rgba(245,158,11,0.25); }
-    50% { box-shadow: 0 2px 14px rgba(245,158,11,0.45); }
-}
-.route-sort-banner-main { display:flex; align-items:center; gap:10px; flex:1; min-width:0; }
-.route-sort-banner-icon { font-size:22px; flex-shrink:0; }
-.route-sort-banner-text { flex:1; min-width:0; }
-.route-sort-banner-title { font-size:12px; font-weight:800; color:#92400e; }
-.route-sort-banner-sub { font-size:10px; color:#78350f; margin-top:2px; line-height:1.3; }
-.route-sort-banner-mode {
-    font-size:11px; font-weight:800; color:#92400e;
-    background:white; padding:6px 10px; border-radius:6px;
-    border:1px solid #f59e0b; flex-shrink:0; white-space:nowrap;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-secondary);
 }
 
 /* Фіксована панель знизу з кнопками Save / Cancel */
@@ -456,13 +428,14 @@ select.detail-inline-edit { padding: 3px 4px; cursor: pointer; appearance: auto;
 /* Коли режим активний — зсуваємо нижній край контенту щоб фікс-панель не накривала картки */
 body.route-sort-active .main-content-area { padding-bottom: 110px !important; }
 
-/* Блокування інших дій у режимі сортування */
+/* Блокування інших дій у режимі сортування.
+   УВАГА: #rteToggleStatus лишається активним, бо всередині нього тепер
+   захований перемикач Збір/Висадка, потрібний у режимі сортування. */
 body.route-sort-active #btnRouteExpenses,
 body.route-sort-active #btnRouteOptimize,
 body.route-sort-active #btnRouteDelete,
 body.route-sort-active #btnRouteSort,
 body.route-sort-active .bulk-toolbar,
-body.route-sort-active #rteToggleStatus,
 body.route-sort-active #rteTogglePay {
     opacity: 0.35 !important;
     pointer-events: none !important;

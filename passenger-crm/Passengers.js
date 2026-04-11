@@ -1066,16 +1066,12 @@ function setRouteSortMode(mode, btn) {
     renderRoutes();
 }
 
-// ── Синхронізувати UI-стан кнопок Збір/Висадка + хінт ──
+// ── Синхронізувати UI-стан кнопок Збір/Висадка (захований в меню Статуси) ──
 function _applySortModeUI(mode) {
     const pickupBtn  = document.getElementById('rteSortPickup');
     const dropoffBtn = document.getElementById('rteSortDropoff');
     if (pickupBtn)  pickupBtn.classList.toggle('active', mode === 'pickup');
     if (dropoffBtn) dropoffBtn.classList.toggle('active', mode === 'dropoff');
-    const hint = document.getElementById('rteSortHint');
-    if (hint) hint.textContent = mode === 'pickup'
-        ? 'Порядок забору пасажирів та посилок'
-        : 'Порядок висадки пасажирів та посилок';
 }
 
 // ── Ініціалізація drag-and-drop (SortableJS) на списку маршруту ──
@@ -1105,15 +1101,20 @@ function initRouteSortable() {
     list.classList.add('sort-mode-on');
     _routeSortableInstance = Sortable.create(list, {
         animation: 150,
-        handle: '.sort-grip', // Тягнути ТІЛЬКИ за явну ручку-грип — не за весь заголовок.
+        // Без handle — вся картка захоплюється. У sort mode деталі/дії приховано,
+        // випадковий клік по заголовку нічого не робить (pointer-events:none),
+        // тож користувач безпечно тягне будь-де на картці.
         draggable: '.route-card',
         ghostClass: 'route-card-ghost',
         chosenClass: 'route-card-chosen',
         dragClass: 'route-card-drag',
-        // На мобільних: невелика затримка + поріг, щоб випадковий тап не зчитувався як drag.
-        delay: 150,
+        // Мобільна затримка ~300 мс: тап не зчитується як drag,
+        // потрібно тримати палець, щоб «схопити» картку.
+        delay: 300,
         delayOnTouchOnly: true,
-        touchStartThreshold: 5,
+        touchStartThreshold: 6,
+        forceFallback: true, // Стабільніше для touch на мобільних.
+        fallbackTolerance: 4,
         onEnd: handleRouteDrop
     });
 }
@@ -1209,7 +1210,6 @@ function enterRouteSortMode() {
     updateSortBanner();
     // Перерендерити — renderRoutes() сам викличе initRouteSortable() з увімкненим SortableJS.
     renderRoutes();
-    showToast('🔧 Режим сортування увімкнено. Тягніть за ручку ⋮⋮');
 }
 
 // ── Зняти snapshot порядку для заданого режиму (pickup | dropoff) ──
@@ -1239,15 +1239,12 @@ function _sortBeforeUnloadHandler(e) {
     }
 }
 
-// ── Оновити текст/банер режиму (коли міняється режим або dirty) ──
+// ── Оновити текст банера (мінімальний: іконка + позначка dirty) ──
 function updateSortBanner() {
-    const modeEl = document.getElementById('routeSortBannerMode');
-    if (modeEl) {
-        const dirty = _sortDirty ? ' ●' : '';
-        modeEl.textContent = (routeSortMode === 'dropoff'
-            ? '📤 Порядок висадки'
-            : '📥 Порядок збору') + dirty;
-    }
+    const el = document.getElementById('routeSortBannerLabel');
+    if (!el) return;
+    const dot = _sortDirty ? ' ●' : '';
+    el.textContent = '🔧 Режим сортування' + dot;
 }
 
 // ── SORT MODE: вихід з режиму (внутрішня чистка) ──
@@ -1630,9 +1627,7 @@ function renderRouteCard(r, idx, sheetName) {
         {label: 'Примітка', key: 'Примітка', value: note}
     ];
 
-    return `<div class="route-card ${statusClass} ${isSelected ? 'selected' : ''}" id="rte-card-${rteId}" data-rte-id="${rteId}" data-lead-id="${leadId}" style="display:flex;flex-direction:row;align-items:stretch;">
-        <span class="sort-grip" title="Перетягнути для зміни порядку" aria-label="drag handle">⋮⋮</span>
-        <div style="flex:1;min-width:0;">
+    return `<div class="route-card ${statusClass} ${isSelected ? 'selected' : ''}" id="rte-card-${rteId}" data-rte-id="${rteId}" data-lead-id="${leadId}">
         <div class="route-card-header" onclick="toggleRouteDetails('${rteId}')">
             <div class="route-card-top">
                 <div class="card-checkbox-wrap" onclick="event.stopPropagation()">
@@ -1683,7 +1678,6 @@ function renderRouteCard(r, idx, sheetName) {
                 <button class="btn-card-action" style="flex:1 1 calc(33% - 6px);background:#f3f4f6;color:#6b7280;" onclick="event.stopPropagation(); archiveFromRoute('${rteId}','${safeSheet}','${name.replace(/'/g,"\\'")}')">📦 Архів</button>
                 <button class="btn-card-action btn-delete" style="flex:1 1 calc(33% - 6px)" onclick="event.stopPropagation(); deleteFromRoute('${rteId}','${safeSheet}','${name.replace(/'/g,"\\'")}')">🗑️ Видалити</button>
             </div>
-        </div>
         </div>
     </div>`;
 }
