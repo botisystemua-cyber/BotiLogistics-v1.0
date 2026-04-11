@@ -23,7 +23,7 @@
     <link rel="manifest" href="manifest.json">
     <title>BotiLogistics CRM Пасажири v2</title>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="Passengers.css?v=5">
+    <link rel="stylesheet" href="Passengers.css?v=6">
 </head>
 <body>
 
@@ -42,11 +42,11 @@
                 <span class="mobile-section-toggle" id="mobileTogglePax">►</span>
             </div>
             <div class="mobile-section-content" id="mobileSectionPax" style="display:none;">
-                <div class="side-menu-item active" id="mobileAllPax" onclick="showPaxView('all'); closeSideMenu();">
+                <div class="side-menu-item" id="mobileAllPax" onclick="showPaxView('all'); closeSideMenu();">
                     <span class="side-menu-item-left">📊 Всі пасажири</span>
                     <span class="side-menu-item-count" id="mobileCountAll">0</span>
                 </div>
-                <div class="side-menu-item" id="mobileNew24" onclick="showPaxView('new24'); closeSideMenu();">
+                <div class="side-menu-item active" id="mobileNew24" onclick="showPaxView('new24'); closeSideMenu();">
                     <span class="side-menu-item-left">🆕 Нові (24 год)</span>
                     <span class="side-menu-item-count" id="mobileCountNew24" style="background:#fef3c7;color:#d97706;">0</span>
                 </div>
@@ -175,11 +175,11 @@
                 <span class="pc-sidebar-toggle" id="pcTogglePax">▼</span>
             </div>
             <div class="pc-sidebar-content collapsed" id="pcSectionPax">
-                <div class="pc-sidebar-item active" id="pcAllPax" onclick="showPaxView('all')">
+                <div class="pc-sidebar-item" id="pcAllPax" onclick="showPaxView('all')">
                     <span><span class="item-icon">📊</span><span class="item-text">Всі</span></span>
                     <span class="item-count" id="pcCountAll">0</span>
                 </div>
-                <div class="pc-sidebar-item" id="pcNew24" onclick="showPaxView('new24')">
+                <div class="pc-sidebar-item active" id="pcNew24" onclick="showPaxView('new24')">
                     <span><span class="item-icon">🆕</span><span class="item-text">Нові (24 год)</span></span>
                     <span class="item-count" id="pcCountNew24" style="background:#fef3c7;color:#d97706;">0</span>
                 </div>
@@ -888,14 +888,14 @@
 
 <!-- Supabase -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="supabase-config.js?v=5"></script>
-<script src="supabase-api.js?v=5"></script>
+<script src="supabase-config.js?v=6"></script>
+<script src="supabase-api.js?v=6"></script>
 
 <!-- SortableJS — drag-and-drop for route stops ordering -->
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 
 <!-- PWA + Main Logic -->
-<script src="Passengers.js?v=5"></script>
+<script src="Passengers.js?v=6"></script>
 
 <!-- Google Maps API -->
 <script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDbSS6XSCJ3MafbrSp-rIX1-x130bwzevo&callback=initMapsAPI"></script>

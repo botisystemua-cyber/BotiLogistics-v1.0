@@ -246,7 +246,9 @@ let routeSelectedIds = new Set();
 let routeOpenDetailsId = null;
 let routeOpenActionsId = null;
 let currentView = 'pax'; // 'pax' | 'trips' | 'routes'
-let currentDir = 'all';
+// За замовчуванням при вході у CRM показуємо «Нові (24 год)», а не всіх.
+// Якщо користувач захоче всіх — натискає «📊 Всі» в сайдбарі.
+let currentDir = 'new24';
 let tripTimeFilter = 'future';
 let tripDirFilter = 'all';
 let tripDateFilter = '';

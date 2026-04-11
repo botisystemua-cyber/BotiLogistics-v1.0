@@ -473,14 +473,14 @@ body.route-sort-active #rteTogglePay {
 
 /* Кнопки в шапці маршруту — білі pill-кнопки у стилі фільтрів «Всі/Статуси/Фінанси».
    Біле тло, округлі (border-radius: 20px), з чітким тап-фідбеком.
-   ПК: великий текст 13px з повними підписами.
+   ПК: великий текст 14px з повними підписами.
    Моб: дрібний 11px + скорочений підпис «Оптим.» щоб поміщалось у 4-колоночну сітку. */
 .route-dash-btn {
-    padding: 10px 12px;
-    min-height: 42px;
+    padding: 12px 16px;
+    min-height: 46px;
     background: white;
     color: #1f2937;
-    font-size: 13px;
+    font-size: 14px;
     line-height: 1.15;
     font-weight: 700;
     border: 1px solid #e5e7eb;
@@ -498,7 +498,7 @@ body.route-sort-active #rteTogglePay {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 4px;
+    gap: 5px;
     min-width: 0;
 }
 /* Перемикач між повним та скороченим написом у кнопці. За замовчуванням (ПК)
