@@ -5748,8 +5748,9 @@ function renderArchive() {
         const isSelected = archiveSelectedIds.has(id);
         const dirLabel = dir.includes('ua-eu') || dir.includes('UA→EU') ? 'UA→EU' : dir.includes('eu-ua') || dir.includes('EU→UA') ? 'EU→UA' : '';
         const dirCls = dirLabel === 'UA→EU' ? 'dir-badge-ua-eu' : dirLabel === 'EU→UA' ? 'dir-badge-eu-ua' : '';
+        const isFromRoute = reason.indexOf('маршрут') !== -1;
 
-        return `<div class="pax-card ${isSelected ? 'selected' : ''}" style="border-left:3px solid #9ca3af;opacity:0.85;" id="arc-${id}">
+        return `<div class="pax-card ${isSelected ? 'selected' : ''}" style="border-left:3px solid ${isFromRoute ? '#f59e0b' : '#9ca3af'};opacity:0.85;" id="arc-${id}">
             <div class="card-top">
                 <div class="card-checkbox-wrap" onclick="event.stopPropagation()">
                     <input class="card-checkbox" type="checkbox" ${isSelected ? 'checked' : ''} onchange="toggleArchiveSelect('${id}',this.checked)">
@@ -5760,7 +5761,9 @@ function renderArchive() {
             </div>
             <div class="card-info">
                 <span class="card-name">${name}</span>
-                <span style="font-size:9px;background:#f3f4f6;color:#6b7280;padding:2px 6px;border-radius:4px;">📦 Архів</span>
+                ${isFromRoute
+                    ? '<span style="font-size:9px;background:#fef3c7;color:#b45309;padding:2px 6px;border-radius:4px;font-weight:700;">🚐 З маршруту</span>'
+                    : '<span style="font-size:9px;background:#f3f4f6;color:#6b7280;padding:2px 6px;border-radius:4px;">📦 Архів</span>'}
             </div>
             ${(from || to) ? '<div class="card-route">📍 ' + (from || '—') + ' → ' + (to || '—') + '</div>' : ''}
             <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px;">
@@ -5768,9 +5771,9 @@ function renderArchive() {
                 ${archivedBy ? '<span style="font-size:10px;color:#6b7280;">👤 ' + archivedBy + '</span>' : ''}
                 ${reason ? '<span style="font-size:10px;color:#6b7280;">💬 ' + reason + '</span>' : ''}
             </div>
-            <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
+            ${isFromRoute ? '' : `<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
                 <button class="btn-card-action" style="background:#d1fae5;color:#059669;" onclick="event.stopPropagation(); restorePax('${id}','${name}')">♻️ Відновити</button>
-            </div>
+            </div>`}
         </div>`;
     }).join('');
 
@@ -6026,9 +6029,22 @@ function updateArchiveBulkToolbar() {
 
 // ── Масове відновлення з архіву ──
 function archiveBulkRestore() {
-    const ids = Array.from(archiveSelectedIds);
-    if (!ids.length) return;
-    showConfirm('Відновити ' + ids.length + ' записів з архіву?', async function(yes) {
+    const allIds = Array.from(archiveSelectedIds);
+    if (!allIds.length) return;
+    // Exclude passengers archived from a route — they can't be restored from
+    // here (their route row is already gone, so restoring would leave a
+    // ghost lead with stale trip data). User must add them back manually.
+    const ids = allIds.filter(id => {
+        const p = archivedPassengers.find(x => x['PAX_ID'] === id);
+        const reason = p ? String(p['ARCHIVE_REASON'] || '') : '';
+        return reason.indexOf('маршрут') === -1;
+    });
+    const skipped = allIds.length - ids.length;
+    if (!ids.length) {
+        showToast('⚠️ Архівовані з маршруту не можна відновити');
+        return;
+    }
+    showConfirm('Відновити ' + ids.length + ' записів з архіву?' + (skipped ? ' (' + skipped + ' з маршруту пропущено)' : ''), async function(yes) {
         if (!yes) return;
         showLoader('Відновлення ' + ids.length + ' записів...');
         const res = await apiPost('restorePassenger', { pax_ids: ids });
