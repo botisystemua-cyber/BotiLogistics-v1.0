@@ -336,12 +336,12 @@
                     <span id="routeDashToggle" style="font-size:12px;opacity:0.7;transition:transform 0.2s;">▼</span>
                 </div>
                 <div id="routeDashContent" style="margin-top:10px;display:none;">
-                    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px;">
-                        <button id="btnRouteBack" class="bs-btn" style="display:none;grid-column:1/-1;background:rgba(255,255,255,0.3);color:white;font-size:11px;padding:8px 0;border:1px solid rgba(255,255,255,0.4);font-weight:800;" onclick="event.stopPropagation();toggleRouteExpensesView()">← Назад</button>
-                        <button id="btnRouteExpenses" class="bs-btn" style="background:rgba(255,255,255,0.2);color:white;font-size:11px;padding:8px 0;border:1px solid rgba(255,255,255,0.3);" onclick="event.stopPropagation();toggleRouteExpensesView()">💰 Витрати</button>
-                        <button id="btnRouteOptimize" class="bs-btn" style="background:rgba(255,255,255,0.2);color:white;font-size:11px;padding:8px 0;border:1px solid rgba(255,255,255,0.3);" onclick="event.stopPropagation();optimizeRouteOrder()">⚡ Оптимізувати</button>
-                        <button id="btnRouteSort" class="bs-btn" style="background:rgba(255,255,255,0.2);color:white;font-size:11px;padding:8px 0;border:1px solid rgba(255,255,255,0.3);font-weight:700;" onclick="event.stopPropagation();enterRouteSortMode()">🔧 Сортувати</button>
-                        <button id="btnRouteDelete" class="bs-btn" style="background:rgba(220,38,38,0.3);color:white;font-size:11px;padding:8px 0;border:1px solid rgba(220,38,38,0.4);" onclick="event.stopPropagation();confirmDeleteRoute(activeRouteIdx)">🗑️ Видалити</button>
+                    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;">
+                        <button id="btnRouteBack" class="route-dash-btn" style="display:none;grid-column:1/-1;" onclick="event.stopPropagation();toggleRouteExpensesView()">← Назад</button>
+                        <button id="btnRouteExpenses" class="route-dash-btn" onclick="event.stopPropagation();toggleRouteExpensesView()">💰 Витрати</button>
+                        <button id="btnRouteOptimize" class="route-dash-btn" onclick="event.stopPropagation();optimizeRouteOrder()">⚡ Оптимізувати</button>
+                        <button id="btnRouteSort" class="route-dash-btn" onclick="event.stopPropagation();enterRouteSortMode()">🔧 Сортувати</button>
+                        <button id="btnRouteDelete" class="route-dash-btn danger" onclick="event.stopPropagation();confirmDeleteRoute(activeRouteIdx)">🗑️ Видалити</button>
                     </div>
                 </div>
             </div>

@@ -1253,20 +1253,33 @@ function handleRouteDrop(evt) {
 }
 
 // ── SORT MODE: вхід у режим сортування ──
-function enterRouteSortMode() {
+async function enterRouteSortMode() {
     if (routeSortModeActive) return;
     if (activeRouteIdx === null || activeRouteIdx < 0 || !routes[activeRouteIdx]) {
         showToast('Оберіть маршрут');
         return;
     }
     const sheet = routes[activeRouteIdx];
-    const rawRows = sheet.rows || [];
+    // Lazy-load: якщо рядки ще не підвантажені (напр. користувач натиснув
+    // Сортувати одразу після відкриття маршруту), підтягнути їх з API.
+    if (!sheet.rows) {
+        showLoader('Завантаження маршруту...');
+        try {
+            await loadRouteSheetData(activeRouteIdx, true);
+        } catch (e) {
+            hideLoader();
+            showToast('❌ Не вдалося завантажити маршрут: ' + (e && e.message || 'мережа'));
+            return;
+        }
+        hideLoader();
+    }
+    const rawRows = (routes[activeRouteIdx] && routes[activeRouteIdx].rows) || [];
     if (rawRows.length < 2) {
         showToast('У маршруті менше 2 записів — нема що сортувати');
         return;
     }
     // Зняти snapshot ПОТОЧНОГО режиму (pickup або dropoff) для можливого rollback.
-    _sortSnapshot = _takeSortSnapshot(sheet, routeSortMode);
+    _sortSnapshot = _takeSortSnapshot(routes[activeRouteIdx], routeSortMode);
     _sortDirty = false;
     routeSortModeActive = true;
     document.body.classList.add('route-sort-active');
@@ -1280,6 +1293,7 @@ function enterRouteSortMode() {
     updateSortBanner();
     // Перерендерити — renderRoutes() сам викличе initRouteSortable() з увімкненим SortableJS.
     renderRoutes();
+    showToast('🔧 Режим сортування активний');
 }
 
 // ── Зняти snapshot порядку для заданого режиму (pickup | dropoff) ──
