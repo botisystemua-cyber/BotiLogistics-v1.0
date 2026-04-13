@@ -72,41 +72,11 @@
     manifestLink.rel = 'manifest';
 
     if (_tenantName) {
-        // Dynamic manifest with tenant branding + PHP-generated icons (absolute URLs)
-        var _baseDir = location.href.replace(/[^/]*$/, '');
-        var _iconBase = _baseDir + 'icon.php?name=' + encodeURIComponent(_tenantName);
-        var m = {
-            name: _appName, short_name: _shortName,
-            description: 'CRM Пасажири — ' + _shortName,
-            start_url: _baseDir, display: 'standalone',
-            orientation: 'portrait', theme_color: '#1a3a5e', background_color: '#f5f7fa',
-            icons: [
-                { src: _iconBase + '&s=192', sizes: '192x192', type: 'image/png' },
-                { src: _iconBase + '&s=512', sizes: '512x512', type: 'image/png' }
-            ]
-        };
-        manifestLink.href = 'data:application/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(m));
+        // Real PHP manifest URL — browsers handle this reliably for PWA install
+        manifestLink.href = 'manifest.php?name=' + encodeURIComponent(_tenantName);
     } else {
-        // No session — try static file, fallback to inline
-        fetch('manifest.json', { method: 'HEAD' }).then(function(r) {
-            if (r.ok) {
-                manifestLink.href = 'manifest.json';
-            } else {
-                throw new Error('no file');
-            }
-        }).catch(function() {
-            var m = {
-                name: 'BotiLogistics CRM', short_name: 'BotiLogistics',
-                description: 'CRM Пасажири — BotiLogistics',
-                start_url: location.href, display: 'standalone',
-                orientation: 'portrait', theme_color: '#1a3a5e', background_color: '#f5f7fa',
-                icons: [
-                    { src: icon192, sizes: '192x192', type: 'image/png' },
-                    { src: icon512, sizes: '512x512', type: 'image/png' }
-                ]
-            };
-            manifestLink.href = 'data:application/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(m));
-        });
+        // No session — use static manifest or inline fallback
+        manifestLink.href = 'manifest.php';
     }
     document.head.appendChild(manifestLink);
 
