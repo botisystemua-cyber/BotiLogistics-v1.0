@@ -807,6 +807,13 @@ async function apiPost(action, data) {
 // INIT
 // ================================================================
 document.addEventListener('DOMContentLoaded', () => {
+    // Replace BotiLogistics logo with company name from session
+    var _bs = getBotiSession();
+    if (_bs && _bs.tenant_name) {
+        var logoEl = document.querySelector('.logo');
+        if (logoEl) logoEl.textContent = _bs.tenant_name;
+    }
+
     // Запит менеджера при першому відкритті
     updateAvatarUI();
     if (!getManagerName()) {
@@ -2762,7 +2769,8 @@ function updateAppBadge(count) {
         }
     }
     // 2. Оновлюємо title сторінки — видно в табах і на деяких платформах
-    const baseTitle = 'BotiLogistics CRM';
+    const _s = getBotiSession();
+    const baseTitle = (_s && _s.tenant_name) ? _s.tenant_name + ' CRM' : 'BotiLogistics CRM';
     document.title = count > 0 ? '(' + count + ') ' + baseTitle : baseTitle;
 
     // 3. Динамічний favicon з лічильником (працює скрізь)

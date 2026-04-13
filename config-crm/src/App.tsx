@@ -233,69 +233,72 @@ function App() {
               </div>
             </div>
 
-            <div className="space-y-4 sm:space-y-5">
-              <div>
-                <label className="block text-[11px] sm:text-xs font-bold text-muted uppercase tracking-wider mb-2">Логін</label>
-                <input
-                  type="text"
-                  value={login}
-                  onChange={(e) => { setLogin(e.target.value); setError(''); }}
-                  onKeyDown={(e) => e.key === 'Enter' && document.getElementById('pwd')?.focus()}
-                  placeholder="Введіть ваш логін"
-                  autoFocus
-                  autoComplete="username"
-                  className="w-full px-4 py-3.5 sm:py-4 bg-bg border-2 border-border rounded-xl sm:rounded-2xl text-sm sm:text-base text-text placeholder:text-muted/50 focus:outline-none focus:border-brand focus:ring-3 focus:ring-brand/10 transition-all"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] sm:text-xs font-bold text-muted uppercase tracking-wider mb-2">Пароль</label>
-                <div className="relative">
+            <form onSubmit={(e) => { e.preventDefault(); handleLogin(); }} autoComplete="on">
+              <div className="space-y-4 sm:space-y-5">
+                <div>
+                  <label className="block text-[11px] sm:text-xs font-bold text-muted uppercase tracking-wider mb-2">Логін</label>
                   <input
-                    id="pwd"
-                    type={showPassword ? 'text' : 'password'}
-                    value={password}
-                    onChange={(e) => { setPassword(e.target.value); setError(''); }}
-                    onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
-                    placeholder="Введіть пароль"
-                    autoComplete="current-password"
-                    className="w-full px-4 py-3.5 sm:py-4 pr-12 bg-bg border-2 border-border rounded-xl sm:rounded-2xl text-sm sm:text-base text-text placeholder:text-muted/50 focus:outline-none focus:border-brand focus:ring-3 focus:ring-brand/10 transition-all"
+                    type="text"
+                    name="username"
+                    value={login}
+                    onChange={(e) => { setLogin(e.target.value); setError(''); }}
+                    onKeyDown={(e) => e.key === 'Enter' && document.getElementById('pwd')?.focus()}
+                    placeholder="Введіть ваш логін"
+                    autoFocus
+                    autoComplete="username"
+                    className="w-full px-4 py-3.5 sm:py-4 bg-bg border-2 border-border rounded-xl sm:rounded-2xl text-sm sm:text-base text-text placeholder:text-muted/50 focus:outline-none focus:border-brand focus:ring-3 focus:ring-brand/10 transition-all"
                   />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-muted hover:text-text cursor-pointer transition-colors"
-                  >
-                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                  </button>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] sm:text-xs font-bold text-muted uppercase tracking-wider mb-2">Пароль</label>
+                  <div className="relative">
+                    <input
+                      id="pwd"
+                      type={showPassword ? 'text' : 'password'}
+                      name="password"
+                      value={password}
+                      onChange={(e) => { setPassword(e.target.value); setError(''); }}
+                      placeholder="Введіть пароль"
+                      autoComplete="current-password"
+                      className="w-full px-4 py-3.5 sm:py-4 pr-12 bg-bg border-2 border-border rounded-xl sm:rounded-2xl text-sm sm:text-base text-text placeholder:text-muted/50 focus:outline-none focus:border-brand focus:ring-3 focus:ring-brand/10 transition-all"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-muted hover:text-text cursor-pointer transition-colors"
+                    >
+                      {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            {error && (
-              <div className="mt-4 sm:mt-5 px-4 py-3 bg-red-50 border-2 border-red-200 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-semibold text-error flex items-center gap-2.5 animate-[scaleIn_0.2s_ease-out]">
-                <AlertCircle className="w-4 h-4 shrink-0" />
-                {error}
-              </div>
-            )}
-
-            <button
-              onClick={handleLogin}
-              disabled={loading || !login.trim() || !password.trim()}
-              className={`w-full mt-5 sm:mt-6 py-3.5 sm:py-4 rounded-xl sm:rounded-2xl text-white text-sm sm:text-base font-bold flex items-center justify-center gap-2.5 cursor-pointer transition-all active:scale-[0.97] disabled:opacity-40 disabled:cursor-not-allowed bg-gradient-to-r ${selectedRole.gradient} shadow-lg ${selectedRole.shadow} hover:shadow-xl hover:brightness-110`}
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  Перевірка...
-                </>
-              ) : (
-                <>
-                  <LogIn className="w-5 h-5" />
-                  Увійти
-                </>
+              {error && (
+                <div className="mt-4 sm:mt-5 px-4 py-3 bg-red-50 border-2 border-red-200 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-semibold text-error flex items-center gap-2.5 animate-[scaleIn_0.2s_ease-out]">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  {error}
+                </div>
               )}
-            </button>
+
+              <button
+                type="submit"
+                disabled={loading || !login.trim() || !password.trim()}
+                className={`w-full mt-5 sm:mt-6 py-3.5 sm:py-4 rounded-xl sm:rounded-2xl text-white text-sm sm:text-base font-bold flex items-center justify-center gap-2.5 cursor-pointer transition-all active:scale-[0.97] disabled:opacity-40 disabled:cursor-not-allowed bg-gradient-to-r ${selectedRole.gradient} shadow-lg ${selectedRole.shadow} hover:shadow-xl hover:brightness-110`}
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    Перевірка...
+                  </>
+                ) : (
+                  <>
+                    <LogIn className="w-5 h-5" />
+                    Увійти
+                  </>
+                )}
+              </button>
+            </form>
           </div>
         </div>
       )}

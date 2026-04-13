@@ -84,7 +84,7 @@ export function AdminPanel({ session }: { session: BotiSession }) {
       {/* ═══ Sidebar — desktop ═══ */}
       <aside className="hidden lg:flex w-[280px] shrink-0 flex-col bg-white border-r border-border sticky top-0 h-[100dvh]">
         <div className="px-6 py-6 border-b border-border">
-          <Logo size="md" />
+          <Logo size="md" tenantName={session.tenant_name} />
           <div className="mt-3 text-xs font-bold text-text truncate">{session.tenant_name}</div>
           <div className="text-[11px] text-muted truncate">{session.user_name}</div>
         </div>
@@ -120,7 +120,7 @@ export function AdminPanel({ session }: { session: BotiSession }) {
           </button>
         </div>
         <div className="px-6 pb-5 text-xs text-muted/50 font-medium">
-          <span className="text-text/40 font-bold">Boti</span><span className="text-success/40 font-bold">Logistics</span> Owner v1.0
+          <span className="text-text/40 font-bold">{session.tenant_name}</span> <span className="text-muted/40">v1.0</span>
         </div>
       </aside>
 
@@ -128,7 +128,7 @@ export function AdminPanel({ session }: { session: BotiSession }) {
       <div className="flex-1 flex flex-col min-w-0">
         {/* Mobile header */}
         <header className="lg:hidden flex items-center justify-between px-4 py-3 bg-white border-b border-border sticky top-0 z-30">
-          <Logo size="sm" />
+          <Logo size="sm" tenantName={session.tenant_name} />
           <div className="flex items-center gap-2">
             <span className="text-xs font-bold text-text truncate max-w-[120px]">{session.tenant_name}</span>
             <button onClick={logout} className="p-2 rounded-lg hover:bg-red-50 cursor-pointer">
