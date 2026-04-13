@@ -9,6 +9,14 @@
     var _logoUrl = (_sess && _sess.logo_url) ? _sess.logo_url : '';
     window.__botiTenantName = _tenantName;
 
+    // Set cookie so PHP can read tenant name for Safari meta tags
+    if (_tenantName) {
+        document.cookie = 'boti_tenant=' + encodeURIComponent(_tenantName) + ';path=/;max-age=31536000;SameSite=Lax';
+    }
+    if (_logoUrl) {
+        document.cookie = 'boti_logo=' + encodeURIComponent(_logoUrl) + ';path=/;max-age=31536000;SameSite=Lax';
+    }
+
     // Update manifest link (defined in HTML as <link rel="manifest" href="manifest.php" id="pwaManifest">)
     var manifestLink = document.getElementById('pwaManifest') || document.querySelector('link[rel="manifest"]');
     if (manifestLink && _tenantName) {
