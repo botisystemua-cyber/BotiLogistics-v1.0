@@ -85,8 +85,7 @@ export function AdminPanel({ session }: { session: BotiSession }) {
       <aside className="hidden lg:flex w-[280px] shrink-0 flex-col bg-white border-r border-border sticky top-0 h-[100dvh]">
         <div className="px-6 py-6 border-b border-border">
           <Logo size="md" tenantName={session.tenant_name} />
-          <div className="mt-3 text-xs font-bold text-text truncate">{session.tenant_name}</div>
-          <div className="text-[11px] text-muted truncate">{session.user_name}</div>
+          <div className="mt-3 text-sm font-bold text-text truncate">{session.user_name}</div>
         </div>
         <nav className="flex-1 px-4 py-5 space-y-1.5">
           {MENU_ITEMS.map(item => {
@@ -130,7 +129,6 @@ export function AdminPanel({ session }: { session: BotiSession }) {
         <header className="lg:hidden flex items-center justify-between px-4 py-3 bg-white border-b border-border sticky top-0 z-30">
           <Logo size="sm" tenantName={session.tenant_name} />
           <div className="flex items-center gap-2">
-            <span className="text-xs font-bold text-text truncate max-w-[120px]">{session.tenant_name}</span>
             <button onClick={logout} className="p-2 rounded-lg hover:bg-red-50 cursor-pointer">
               <LogOut className="w-4 h-4 text-muted" />
             </button>
