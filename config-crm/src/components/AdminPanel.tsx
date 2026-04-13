@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   Users, UserCog, BarChart3, CreditCard, Settings, LogOut, Plus, Pencil, Trash2,
-  Loader2, AlertCircle, X, Save, ShieldCheck,
+  Loader2, AlertCircle, X, Save, ShieldCheck, ChevronDown, ChevronRight,
 } from 'lucide-react';
 import { Logo } from './shared';
 import {
@@ -379,6 +379,7 @@ function UsersScreen() {
   const [error, setError] = useState('');
   const [editing, setEditing] = useState<User | null>(null);
   const [creating, setCreating] = useState(false);
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
   const reload = async () => {
     setLoading(true);
@@ -406,7 +407,20 @@ function UsersScreen() {
     }
   };
 
-  const tenantName = (tid: string) => clients.find((c) => c.tenant_id === tid)?.name ?? tid;
+  const toggleGroup = (tid: string) =>
+    setCollapsed((prev) => ({ ...prev, [tid]: !prev[tid] }));
+
+  // Group users by tenant, keep client order
+  const grouped = clients
+    .map((c) => ({
+      client: c,
+      users: users.filter((u) => u.tenant_id === c.tenant_id),
+    }))
+    .filter((g) => g.users.length > 0);
+
+  // Users with unknown tenant (shouldn't happen, but just in case)
+  const knownTenants = new Set(clients.map((c) => c.tenant_id));
+  const orphans = users.filter((u) => !knownTenants.has(u.tenant_id));
 
   return (
     <div className="w-full">
@@ -438,53 +452,127 @@ function UsersScreen() {
         </div>
       )}
 
-      <div className="bg-card border-2 border-border rounded-2xl overflow-hidden">
-        {loading ? (
-          <div className="p-12 flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-muted" /></div>
-        ) : users.length === 0 ? (
-          <div className="p-12 text-center text-muted text-sm">Користувачів немає</div>
-        ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-bg border-b-2 border-border">
-                <Th>Логін</Th>
-                <Th>ПІБ</Th>
-                <Th>Ролі</Th>
-                <Th>Компанія</Th>
-                <Th>Пароль</Th>
-                <Th className="text-right">Дії</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {users.map((u) => (
-                <tr key={u.id} className="border-b border-border last:border-0 hover:bg-bg/50">
-                  <Td><code className="font-mono text-xs font-bold">{u.login}</code></Td>
-                  <Td className="font-semibold">{u.full_name || <span className="text-muted italic">—</span>}</Td>
-                  <Td>
-                    <div className="flex flex-wrap gap-1">
-                      {sortRoles(u.roles ?? []).map((r) => (
-                        <span key={r} className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase border ${
-                          r === 'owner'   ? 'bg-violet-50 border-violet-200 text-violet-700' :
-                          r === 'manager' ? 'bg-blue-50 border-blue-200 text-blue-700' :
-                                            'bg-emerald-50 border-emerald-200 text-emerald-700'
-                        }`}>{ROLE_LABEL[r]}</span>
+      {loading ? (
+        <div className="bg-card border-2 border-border rounded-2xl p-12 flex items-center justify-center">
+          <Loader2 className="w-6 h-6 animate-spin text-muted" />
+        </div>
+      ) : users.length === 0 ? (
+        <div className="bg-card border-2 border-border rounded-2xl p-12 text-center text-muted text-sm">Користувачів немає</div>
+      ) : (
+        <div className="space-y-3">
+          {grouped.map(({ client, users: groupUsers }) => {
+            const isOpen = !collapsed[client.tenant_id];
+            return (
+              <div key={client.tenant_id} className="bg-card border-2 border-border rounded-2xl overflow-hidden">
+                <button
+                  onClick={() => toggleGroup(client.tenant_id)}
+                  className="w-full flex items-center gap-3 px-5 py-4 hover:bg-bg/50 cursor-pointer transition-colors"
+                >
+                  {isOpen
+                    ? <ChevronDown className="w-5 h-5 text-muted shrink-0" />
+                    : <ChevronRight className="w-5 h-5 text-muted shrink-0" />
+                  }
+                  <span className="text-base font-black text-text">{client.name}</span>
+                  <span className="px-2.5 py-0.5 rounded-full bg-violet-50 border border-violet-200 text-xs font-bold text-violet-700">
+                    {groupUsers.length}
+                  </span>
+                </button>
+
+                {isOpen && (
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-bg border-t-2 border-b-2 border-border">
+                        <Th>Логін</Th>
+                        <Th>ПІБ</Th>
+                        <Th>Ролі</Th>
+                        <Th>Пароль</Th>
+                        <Th className="text-right">Дії</Th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {groupUsers.map((u) => (
+                        <tr key={u.id} className="border-b border-border last:border-0 hover:bg-bg/50">
+                          <Td><code className="font-mono text-xs font-bold">{u.login}</code></Td>
+                          <Td className="font-semibold">{u.full_name || <span className="text-muted italic">—</span>}</Td>
+                          <Td>
+                            <div className="flex flex-wrap gap-1">
+                              {sortRoles(u.roles ?? []).map((r) => (
+                                <span key={r} className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase border ${
+                                  r === 'owner'   ? 'bg-violet-50 border-violet-200 text-violet-700' :
+                                  r === 'manager' ? 'bg-blue-50 border-blue-200 text-blue-700' :
+                                                    'bg-emerald-50 border-emerald-200 text-emerald-700'
+                                }`}>{ROLE_LABEL[r]}</span>
+                              ))}
+                            </div>
+                          </Td>
+                          <Td><span className="font-mono text-xs text-text-secondary">{u.password}</span></Td>
+                          <Td className="text-right">
+                            <div className="inline-flex gap-2">
+                              <IconBtn icon={Pencil} onClick={() => setEditing(u)} title="Редагувати" />
+                              <IconBtn icon={Trash2} onClick={() => handleDelete(u)} title="Видалити" danger />
+                            </div>
+                          </Td>
+                        </tr>
                       ))}
-                    </div>
-                  </Td>
-                  <Td className="text-text-secondary">{tenantName(u.tenant_id)}</Td>
-                  <Td><span className="font-mono text-xs text-text-secondary">{u.password}</span></Td>
-                  <Td className="text-right">
-                    <div className="inline-flex gap-2">
-                      <IconBtn icon={Pencil} onClick={() => setEditing(u)} title="Редагувати" />
-                      <IconBtn icon={Trash2} onClick={() => handleDelete(u)} title="Видалити" danger />
-                    </div>
-                  </Td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            );
+          })}
+
+          {orphans.length > 0 && (
+            <div className="bg-card border-2 border-orange-200 rounded-2xl overflow-hidden">
+              <div className="px-5 py-4 flex items-center gap-3">
+                <AlertCircle className="w-5 h-5 text-orange-500 shrink-0" />
+                <span className="text-base font-black text-text">Без компанії</span>
+                <span className="px-2.5 py-0.5 rounded-full bg-orange-50 border border-orange-200 text-xs font-bold text-orange-700">
+                  {orphans.length}
+                </span>
+              </div>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-bg border-t-2 border-b-2 border-border">
+                    <Th>Логін</Th>
+                    <Th>ПІБ</Th>
+                    <Th>Ролі</Th>
+                    <Th>tenant_id</Th>
+                    <Th>Пароль</Th>
+                    <Th className="text-right">Дії</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {orphans.map((u) => (
+                    <tr key={u.id} className="border-b border-border last:border-0 hover:bg-bg/50">
+                      <Td><code className="font-mono text-xs font-bold">{u.login}</code></Td>
+                      <Td className="font-semibold">{u.full_name || <span className="text-muted italic">—</span>}</Td>
+                      <Td>
+                        <div className="flex flex-wrap gap-1">
+                          {sortRoles(u.roles ?? []).map((r) => (
+                            <span key={r} className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase border ${
+                              r === 'owner'   ? 'bg-violet-50 border-violet-200 text-violet-700' :
+                              r === 'manager' ? 'bg-blue-50 border-blue-200 text-blue-700' :
+                                                'bg-emerald-50 border-emerald-200 text-emerald-700'
+                            }`}>{ROLE_LABEL[r]}</span>
+                          ))}
+                        </div>
+                      </Td>
+                      <Td><code className="font-mono text-xs text-orange-600">{u.tenant_id}</code></Td>
+                      <Td><span className="font-mono text-xs text-text-secondary">{u.password}</span></Td>
+                      <Td className="text-right">
+                        <div className="inline-flex gap-2">
+                          <IconBtn icon={Pencil} onClick={() => setEditing(u)} title="Редагувати" />
+                          <IconBtn icon={Trash2} onClick={() => handleDelete(u)} title="Видалити" danger />
+                        </div>
+                      </Td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
 
       {(creating || editing) && (
         <UserFormModal
