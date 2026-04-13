@@ -72,12 +72,13 @@
     manifestLink.rel = 'manifest';
 
     if (_tenantName) {
-        // Dynamic manifest with tenant branding + PHP-generated icons (real URLs)
-        var _iconBase = 'icon.php?name=' + encodeURIComponent(_tenantName);
+        // Dynamic manifest with tenant branding + PHP-generated icons (absolute URLs)
+        var _baseDir = location.href.replace(/[^/]*$/, '');
+        var _iconBase = _baseDir + 'icon.php?name=' + encodeURIComponent(_tenantName);
         var m = {
             name: _appName, short_name: _shortName,
             description: 'CRM Пасажири — ' + _shortName,
-            start_url: location.href.split('?')[0], display: 'standalone',
+            start_url: _baseDir, display: 'standalone',
             orientation: 'portrait', theme_color: '#1a3a5e', background_color: '#f5f7fa',
             icons: [
                 { src: _iconBase + '&s=192', sizes: '192x192', type: 'image/png' },
