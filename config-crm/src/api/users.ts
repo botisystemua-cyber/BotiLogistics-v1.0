@@ -111,14 +111,9 @@ export async function authenticate(
   if (cErr) throw cErr;
   if (!client) throw new Error('Компанію не знайдено');
 
-  const modules = (client.modules as string[]) ?? [];
-  if (role === 'driver' && !modules.includes('driver')) {
-    throw new Error('Модуль «Водій» не підключений для цієї компанії');
-  }
-
   return {
     user: user as User,
     tenantName: client.name,
-    modules,
+    modules: (client.modules as string[]) ?? [],
   };
 }
