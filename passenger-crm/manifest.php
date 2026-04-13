@@ -18,10 +18,9 @@ $dir = rtrim(dirname($_SERVER['SCRIPT_NAME']), '/') . '/';
 $base = $proto . '://' . $host . $dir;
 
 if ($logo) {
-    // Custom logo URL provided by client
+    // Custom logo URL — one 512x512 works for all devices
     $icons = [
-        ['src' => $logo, 'sizes' => '192x192', 'type' => 'image/png'],
-        ['src' => $logo, 'sizes' => '512x512', 'type' => 'image/png'],
+        ['src' => $logo, 'sizes' => '512x512', 'type' => 'image/png', 'purpose' => 'any'],
     ];
 } elseif ($name) {
     // Auto-generated icon from icon.php

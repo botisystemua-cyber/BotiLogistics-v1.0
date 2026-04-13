@@ -14,23 +14,19 @@
         .form-row input:focus { border-color: #10b981; }
         .form-row button { padding: 12px 24px; font-size: 14px; font-weight: 800; background: #10b981; color: white; border: none; border-radius: 12px; cursor: pointer; font-family: inherit; white-space: nowrap; }
         .form-row button:hover { background: #059669; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; width: 100%; max-width: 800px; margin-bottom: 24px; }
-        .card { background: white; border-radius: 12px; padding: 16px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); text-align: center; }
-        .card h3 { font-size: 14px; color: #1a3a5e; margin-bottom: 4px; }
-        .card p { font-size: 11px; color: #888; margin-bottom: 12px; }
+        .card { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); text-align: center; max-width: 400px; width: 100%; margin-bottom: 20px; }
+        .card p { font-size: 12px; color: #888; margin-bottom: 12px; }
         .card canvas { border: 1px solid #e2e8f0; border-radius: 12px; max-width: 100%; }
-        .btn { display: inline-block; margin-top: 10px; padding: 10px 20px; font-size: 13px; font-weight: 700; background: #1a3a5e; color: white; border: none; border-radius: 8px; cursor: pointer; font-family: inherit; }
+        .btn { display: inline-block; margin-top: 12px; padding: 12px 32px; font-size: 14px; font-weight: 700; background: #1a3a5e; color: white; border: none; border-radius: 10px; cursor: pointer; font-family: inherit; }
         .btn:hover { background: #0d1f3c; }
-        .btn-all { padding: 14px 36px; font-size: 15px; background: #10b981; border-radius: 12px; }
-        .btn-all:hover { background: #059669; }
         .hidden { display: none; }
-        .note { color: #888; font-size: 12px; margin-top: 20px; max-width: 500px; text-align: center; line-height: 1.6; }
+        .note { color: #888; font-size: 12px; margin-top: 16px; max-width: 500px; text-align: center; line-height: 1.6; }
     </style>
 </head>
 <body>
 
 <h1>Генератор іконок для клієнтів</h1>
-<p class="subtitle">Введи назву компанії — отримай іконки для PWA</p>
+<p class="subtitle">Введи назву компанії — отримай іконку для PWA (iPhone + Android)</p>
 
 <div class="form-row">
     <input type="text" id="companyName" placeholder="Назва компанії, напр. Fly" autofocus>
@@ -38,29 +34,16 @@
 </div>
 
 <div id="results" class="hidden">
-    <div class="grid">
-        <div class="card">
-            <h3>icon-192.png</h3>
-            <p>Android / PWA іконка</p>
-            <canvas id="icon192" width="192" height="192"></canvas>
-            <br><button class="btn" onclick="dl('icon192','icon-192.png')">Скачати</button>
-        </div>
-        <div class="card">
-            <h3>icon-512.png</h3>
-            <p>PWA Splash / Store</p>
-            <canvas id="icon512" width="512" height="512"></canvas>
-            <br><button class="btn" onclick="dl('icon512','icon-512.png')">Скачати</button>
-        </div>
-    </div>
-
-    <div style="text-align:center; margin-bottom: 20px;">
-        <button class="btn btn-all" onclick="downloadBoth()">Скачати обидва</button>
+    <div class="card">
+        <p>Універсальна іконка 512x512 (iPhone + Android)</p>
+        <canvas id="icon512" width="512" height="512"></canvas>
+        <br><button class="btn" onclick="dl()">Скачати PNG</button>
     </div>
 
     <p class="note">
-        1. Скачай іконки<br>
-        2. Залий на хостинг (напр. в папку <b>/logos/</b>)<br>
-        3. Скопіюй URL і встав в адмінці в поле <b>Logo URL</b>
+        1. Скачай іконку<br>
+        2. Залий на хостинг в папку <b>/logos/</b><br>
+        3. В адмінці встав URL в поле <b>Logo URL</b>
     </p>
 </div>
 
@@ -70,7 +53,6 @@ function generate() {
     if (!name) return;
 
     document.fonts.ready.then(function() {
-        drawIcon('icon192', 192, name);
         drawIcon('icon512', 512, name);
         document.getElementById('results').classList.remove('hidden');
     });
@@ -84,17 +66,16 @@ function drawIcon(canvasId, size, name) {
     var c = document.getElementById(canvasId);
     var ctx = c.getContext('2d');
 
-    // ── Dark blue background ──
+    // Dark blue background with rounded corners
     ctx.fillStyle = '#1a3a5e';
     ctx.fillRect(0, 0, size, size);
-    // Rounded corners mask
     ctx.globalCompositeOperation = 'destination-in';
     ctx.beginPath();
     ctx.roundRect(0, 0, size, size, size * 0.18);
     ctx.fill();
     ctx.globalCompositeOperation = 'source-over';
 
-    // ── Decorative subtle circles (like OG image) ──
+    // Subtle decorative circles
     ctx.fillStyle = 'rgba(255,255,255,0.04)';
     ctx.beginPath();
     ctx.arc(size * 0.8, size * 0.15, size * 0.3, 0, Math.PI * 2);
@@ -103,21 +84,16 @@ function drawIcon(canvasId, size, name) {
     ctx.arc(size * 0.15, size * 0.85, size * 0.2, 0, Math.PI * 2);
     ctx.fill();
 
-    // ── Green accent line at top ──
-    ctx.fillStyle = '#10b981';
-    ctx.fillRect(0, 0, size, size * 0.02);
-
-    // ── Bus emoji ──
+    // Bus emoji
     ctx.font = (size * 0.28) + 'px serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText('🚐', size / 2, size * 0.30);
 
-    // ── Company name (auto-size to fit) ──
+    // Company name — white, auto-sized to fit
     ctx.fillStyle = '#ffffff';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    // Start with large font, shrink until it fits within 85% of icon width
     var maxW = size * 0.85;
     var fontSize = size * 0.18;
     ctx.font = '800 ' + fontSize + 'px Montserrat, Arial, sans-serif';
@@ -127,27 +103,19 @@ function drawIcon(canvasId, size, name) {
     }
     ctx.fillText(name, size / 2, size * 0.58);
 
-    // ── "CRM" subtitle in green ──
+    // "CRM" in green
     ctx.fillStyle = '#10b981';
     ctx.font = '800 ' + (size * 0.10) + 'px Montserrat, Arial, sans-serif';
     ctx.fillText('CRM', size / 2, size * 0.76);
-
-    // ── Green accent line at bottom ──
-    ctx.fillStyle = '#10b981';
-    ctx.fillRect(0, size - size * 0.02, size, size * 0.02);
 }
 
-function dl(canvasId, filename) {
-    var c = document.getElementById(canvasId);
+function dl() {
+    var name = document.getElementById('companyName').value.trim().toLowerCase().replace(/\s+/g, '-') || 'icon';
+    var c = document.getElementById('icon512');
     var a = document.createElement('a');
-    a.download = filename;
+    a.download = name + '-512.png';
     a.href = c.toDataURL('image/png');
     a.click();
-}
-
-function downloadBoth() {
-    dl('icon192', 'icon-192.png');
-    setTimeout(function() { dl('icon512', 'icon-512.png'); }, 300);
 }
 </script>
 </body>
