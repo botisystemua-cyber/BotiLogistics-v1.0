@@ -162,7 +162,9 @@ function App() {
   // Which apps to show on success screen — based on selected role + tenant's enabled modules
   const availableApps = (u: SessionUser): string[] => {
     if (!u) return [];
-    if (u.role === ROLES.find((r) => r.key === 'driver')?.label) return ['driver'];
+    if (u.role === ROLES.find((r) => r.key === 'driver')?.label) {
+      return u.modules.includes('driver') ? ['driver'] : [];
+    }
     if (u.role === ROLES.find((r) => r.key === 'owner')?.label)  return ['owner'];
     // manager → all data modules tenant has enabled (passenger / cargo)
     return u.modules.filter((m) => m === 'passenger' || m === 'cargo');
