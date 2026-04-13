@@ -98,5 +98,7 @@ export function beatHeartbeat(s: BotiSession): void {
     .from('users')
     .update({ last_login: new Date().toISOString() })
     .eq('tenant_id', s.tenant_id)
-    .eq('login', s.user_login);
+    .eq('login', s.user_login)
+    .select()
+    .then(() => {}, () => {});
 }
