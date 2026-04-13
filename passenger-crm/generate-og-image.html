@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>Генератор іконок для клієнтів</title>
-    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@1,700;1,800&family=Montserrat:wght@700;800;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;800;900&display=swap" rel="stylesheet">
     <style>
         * { box-sizing: border-box; margin: 0; }
         body { display: flex; flex-direction: column; align-items: center; padding: 30px 20px; background: #f0f2f5; font-family: Montserrat, sans-serif; }
@@ -66,43 +66,75 @@
 
 <script>
 function generate() {
-    var name = document.getElementById('companyName').value.trim();
+    var name = document.getElementById('companyName').value.trim().toUpperCase();
     if (!name) return;
-    var letter = name[0].toUpperCase();
 
     document.fonts.ready.then(function() {
-        drawIcon('icon192', 192, letter);
-        drawIcon('icon512', 512, letter);
+        drawIcon('icon192', 192, name);
+        drawIcon('icon512', 512, name);
         document.getElementById('results').classList.remove('hidden');
     });
 }
 
-// Enter key triggers generate
 document.getElementById('companyName').addEventListener('keydown', function(e) {
     if (e.key === 'Enter') generate();
 });
 
-function drawIcon(canvasId, size, letter) {
+function drawIcon(canvasId, size, name) {
     var c = document.getElementById(canvasId);
     var ctx = c.getContext('2d');
 
-    // Green gradient background
-    var grad = ctx.createLinearGradient(0, 0, 0, size);
-    grad.addColorStop(0, '#10b981');
-    grad.addColorStop(1, '#058a5e');
-    ctx.fillStyle = grad;
-
-    // Rounded rect
+    // ── Dark blue background ──
+    ctx.fillStyle = '#1a3a5e';
+    ctx.fillRect(0, 0, size, size);
+    // Rounded corners mask
+    ctx.globalCompositeOperation = 'destination-in';
     ctx.beginPath();
     ctx.roundRect(0, 0, size, size, size * 0.18);
     ctx.fill();
+    ctx.globalCompositeOperation = 'source-over';
 
-    // Black italic serif letter — centered
-    ctx.fillStyle = '#151515';
-    ctx.font = 'italic 800 ' + (size * 0.6) + 'px "Playfair Display", Georgia, serif';
+    // ── Decorative subtle circles (like OG image) ──
+    ctx.fillStyle = 'rgba(255,255,255,0.04)';
+    ctx.beginPath();
+    ctx.arc(size * 0.8, size * 0.15, size * 0.3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(size * 0.15, size * 0.85, size * 0.2, 0, Math.PI * 2);
+    ctx.fill();
+
+    // ── Green accent line at top ──
+    ctx.fillStyle = '#10b981';
+    ctx.fillRect(0, 0, size, size * 0.02);
+
+    // ── Bus emoji ──
+    ctx.font = (size * 0.28) + 'px serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(letter, size / 2, size * 0.48);
+    ctx.fillText('🚐', size / 2, size * 0.30);
+
+    // ── Company name (auto-size to fit) ──
+    ctx.fillStyle = '#ffffff';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    // Start with large font, shrink until it fits within 85% of icon width
+    var maxW = size * 0.85;
+    var fontSize = size * 0.18;
+    ctx.font = '800 ' + fontSize + 'px Montserrat, Arial, sans-serif';
+    while (ctx.measureText(name).width > maxW && fontSize > size * 0.06) {
+        fontSize -= 1;
+        ctx.font = '800 ' + fontSize + 'px Montserrat, Arial, sans-serif';
+    }
+    ctx.fillText(name, size / 2, size * 0.58);
+
+    // ── "CRM" subtitle in green ──
+    ctx.fillStyle = '#10b981';
+    ctx.font = '800 ' + (size * 0.10) + 'px Montserrat, Arial, sans-serif';
+    ctx.fillText('CRM', size / 2, size * 0.76);
+
+    // ── Green accent line at bottom ──
+    ctx.fillStyle = '#10b981';
+    ctx.fillRect(0, size - size * 0.02, size, size * 0.02);
 }
 
 function dl(canvasId, filename) {
