@@ -1,84 +1,21 @@
 // ================================================================
-// PWA: Icon + Manifest + Install
+// PWA: Manifest + Install
 // ================================================================
 (function() {
-    // Read tenant name from session (runs before DOMContentLoaded, localStorage is available)
+    // Read session
     var _sess = null;
     try { _sess = JSON.parse(localStorage.getItem('boti_session') || 'null'); } catch(_) {}
     var _tenantName = (_sess && _sess.tenant_name) ? _sess.tenant_name : '';
-    var _initials = _tenantName
-        ? _tenantName.trim().split(/\s+/).map(function(w) { return w[0]; }).join('').substring(0, 2).toUpperCase()
-        : '';
-    // Expose for install toast
+    var _logoUrl = (_sess && _sess.logo_url) ? _sess.logo_url : '';
     window.__botiTenantName = _tenantName;
 
-    function generateAppIcon(size) {
-        var c = document.createElement('canvas');
-        c.width = size; c.height = size;
-        var ctx = c.getContext('2d');
-        // Фон
-        ctx.fillStyle = '#1a3a5e';
-        ctx.beginPath();
-        ctx.roundRect(0, 0, size, size, size * 0.18);
-        ctx.fill();
-        // Автобус emoji
-        ctx.font = (size * 0.35) + 'px serif';
-        ctx.textAlign = 'center';
-        ctx.fillText('🚐', size / 2, size * 0.42);
-
-        if (_initials) {
-            // Tenant initials — white, large
-            ctx.fillStyle = '#ffffff';
-            ctx.font = '800 ' + (size * 0.28) + 'px Montserrat, Arial, sans-serif';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(_initials, size / 2, size * 0.72);
-        } else {
-            // Default BotiLogistics
-            ctx.fillStyle = '#000000';
-            ctx.font = '800 ' + (size * 0.18) + 'px Montserrat, Arial, sans-serif';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText('BOTI', size / 2, size * 0.62);
-            ctx.fillStyle = '#10b981';
-            ctx.font = '800 ' + (size * 0.15) + 'px Montserrat, Arial, sans-serif';
-            ctx.fillText('LOGISTICS', size / 2, size * 0.82);
-        }
-        return c.toDataURL('image/png');
+    // Update manifest link (defined in HTML as <link rel="manifest" href="manifest.php" id="pwaManifest">)
+    var manifestLink = document.getElementById('pwaManifest') || document.querySelector('link[rel="manifest"]');
+    if (manifestLink && _tenantName) {
+        var params = 'name=' + encodeURIComponent(_tenantName);
+        if (_logoUrl) params += '&logo=' + encodeURIComponent(_logoUrl);
+        manifestLink.href = 'manifest.php?' + params;
     }
-
-    var icon192 = generateAppIcon(192);
-    var icon512 = generateAppIcon(512);
-
-    // Apple touch icon
-    var appleIcon = document.createElement('link');
-    appleIcon.rel = 'apple-touch-icon';
-    appleIcon.href = icon192;
-    document.head.appendChild(appleIcon);
-
-    // Favicon
-    var favicon = document.createElement('link');
-    favicon.rel = 'icon';
-    favicon.type = 'image/png';
-    favicon.href = icon192;
-    document.head.appendChild(favicon);
-
-    // App name for manifest
-    var _appName = _tenantName ? _tenantName + ' CRM' : 'BotiLogistics CRM';
-    var _shortName = _tenantName || 'BotiLogistics';
-
-    // Web App Manifest
-    var manifestLink = document.createElement('link');
-    manifestLink.rel = 'manifest';
-
-    if (_tenantName) {
-        // Real PHP manifest URL — browsers handle this reliably for PWA install
-        manifestLink.href = 'manifest.php?name=' + encodeURIComponent(_tenantName);
-    } else {
-        // No session — use static manifest or inline fallback
-        manifestLink.href = 'manifest.php';
-    }
-    document.head.appendChild(manifestLink);
 
     // Update meta tags with tenant name
     if (_tenantName) {
@@ -88,11 +25,15 @@
         if (metaAppName) metaAppName.setAttribute('content', _tenantName + ' CRM');
     }
 
-    // Service Worker — реєструємо якщо доступний
+    // Update apple-touch-icon if custom logo exists
+    if (_logoUrl) {
+        var appleIcon = document.querySelector('link[rel="apple-touch-icon"]');
+        if (appleIcon) appleIcon.href = _logoUrl;
+    }
+
+    // Service Worker
     if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('sw.js').catch(function() {
-            // SW недоступний (напр. Google Apps Script) — ігноруємо
-        });
+        navigator.serviceWorker.register('sw.js').catch(function() {});
     }
 })();
 

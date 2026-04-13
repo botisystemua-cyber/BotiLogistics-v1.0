@@ -134,6 +134,7 @@ function App() {
       localStorage.setItem('boti_session', JSON.stringify({
         tenant_id: session.tenantId,
         tenant_name: session.tenantName,
+        logo_url: result.logoUrl || '',
         user_login: result.user.login,
         user_name: session.name,
         role: selectedRole!.key,
