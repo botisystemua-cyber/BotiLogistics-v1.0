@@ -22,10 +22,8 @@ $manifest = 'manifest.php' . ($t ? '?name=' . rawurlencode($t) . ($l ? '&logo=' 
     <meta property="og:type" content="website">
     <?php if ($l): ?>
     <link rel="apple-touch-icon" href="<?= $l ?>">
-    <?php else: ?>
-    <link rel="apple-touch-icon" sizes="180x180" href="icon-180.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="<?= $l ?>">
     <?php endif; ?>
-    <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
     <link rel="manifest" href="<?= $manifest ?>" id="pwaManifest">
     <title><?= $appName ?></title>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
