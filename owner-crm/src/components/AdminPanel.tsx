@@ -185,14 +185,16 @@ export function AdminPanel({ session }: { session: BotiSession }) {
               <button key={item.key} onClick={() => handleTabClick(item)}
                 className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl min-w-[60px] cursor-pointer transition-all ${active ? 'text-brand' : 'text-muted'}`}>
                 <div className="relative">
-                  <Icon className="w-5 h-5" />
+                  <Icon className={item.key === 'settings' ? 'w-6 h-6' : 'w-5 h-5'} />
                   {item.key === 'online' && onlineCount > 0 && (
                     <span className="absolute -top-1 -right-2 w-4 h-4 rounded-full text-[8px] font-bold flex items-center justify-center bg-green-500 text-white">
                       {onlineCount}
                     </span>
                   )}
                 </div>
-                <span className="text-[10px] font-bold">{item.shortLabel}</span>
+                {item.key !== 'settings' && (
+                  <span className="text-[10px] font-bold">{item.shortLabel}</span>
+                )}
               </button>
             );
           })}

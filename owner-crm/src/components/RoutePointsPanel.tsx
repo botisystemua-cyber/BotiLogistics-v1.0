@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import {
   Plus, Pencil, Trash2, ChevronUp, ChevronDown,
-  X, Save, RefreshCw, MapPin,
+  ChevronRight,
+  X, Save, RefreshCw,
 } from 'lucide-react';
 import {
   createRoutePoint,
@@ -67,15 +68,17 @@ function pointToForm(p: RoutePoint): PointForm {
 }
 
 function formToInput(f: PointForm): RoutePointInput {
+  const mapsUrl = f.maps_url.trim() || null;
+  const coords = mapsUrl ? extractLatLonFromMapsUrl(mapsUrl) : null;
   return {
     route_group: 'ua-es-wed',
     name_ua: f.name_ua.trim(),
     country_code: f.country_code,
     sort_order: f.sort_order,
     location_name: f.location_name.trim() || null,
-    lat: f.lat ? parseFloat(f.lat) : null,
-    lon: f.lon ? parseFloat(f.lon) : null,
-    maps_url: f.maps_url.trim() || null,
+    lat: coords ? coords[0] : (f.lat ? parseFloat(f.lat) : null),
+    lon: coords ? coords[1] : (f.lon ? parseFloat(f.lon) : null),
+    maps_url: mapsUrl,
     active: f.active,
   };
 }
@@ -89,6 +92,7 @@ export function RoutePointsPanel({
   tenantId: string;
   onReload: () => void;
 }) {
+  const [open, setOpen] = useState(false);
   const [editPoint, setEditPoint] = useState<RoutePoint | null>(null);
   const [isNew, setIsNew] = useState(false);
   const [swapping, setSwapping] = useState(false);
@@ -145,24 +149,32 @@ export function RoutePointsPanel({
 
   return (
     <section>
-      {/* Section header */}
-      <div className="flex items-center justify-between gap-2 pb-3 lg:pb-4 border-b border-border mb-4 lg:mb-5">
-        <div>
-          <h2 className="text-base lg:text-lg font-extrabold text-text">Адреси</h2>
-          <p className="text-xs lg:text-sm text-muted mt-0.5">
-            Точки маршруту, які з'являються як підказки при додаванні пасажира
-          </p>
-        </div>
+      {/* Section header — clickable to toggle */}
+      <div className="border-b border-border pb-3 lg:pb-4 mb-4 lg:mb-5">
         <button
-          onClick={openNew}
-          className="flex items-center gap-1.5 lg:gap-2 px-3 lg:px-4 py-2 lg:py-2.5 rounded-lg lg:rounded-xl bg-brand text-white text-xs lg:text-sm font-bold cursor-pointer hover:brightness-110 transition-all shrink-0"
+          onClick={() => setOpen(prev => !prev)}
+          className="flex items-center gap-2 w-full text-left cursor-pointer group"
         >
-          <Plus className="w-4 h-4 lg:w-5 lg:h-5" /> Додати
+          <ChevronRight className={`w-4 h-4 lg:w-5 lg:h-5 text-muted transition-transform ${open ? 'rotate-90' : ''}`} />
+          <div className="flex-1 min-w-0">
+            <h2 className="text-base lg:text-lg font-extrabold text-text">Адреси</h2>
+            <p className="text-xs lg:text-sm text-muted mt-0.5">
+              Точки маршруту, які з'являються як підказки при додаванні пасажира
+            </p>
+          </div>
+          {open && (
+            <span
+              onClick={e => { e.stopPropagation(); openNew(); }}
+              className="flex items-center gap-1.5 lg:gap-2 px-3 lg:px-4 py-2 lg:py-2.5 rounded-lg lg:rounded-xl bg-brand text-white text-xs lg:text-sm font-bold cursor-pointer hover:brightness-110 transition-all shrink-0"
+            >
+              <Plus className="w-4 h-4 lg:w-5 lg:h-5" /> Додати
+            </span>
+          )}
         </button>
       </div>
 
-      {/* Content */}
-      {points.length === 0 ? (
+      {/* Content — only when open */}
+      {!open ? null : points.length === 0 ? (
         <div className="text-center py-12 lg:py-16 text-muted text-sm lg:text-base">
           Немає адрес. Натисніть «Додати» щоб створити першу.
         </div>
@@ -243,16 +255,6 @@ function PointModal({
   const set = <K extends keyof PointForm>(k: K, v: PointForm[K]) =>
     setForm(prev => ({ ...prev, [k]: v }));
 
-  const extractCoords = () => {
-    const result = extractLatLonFromMapsUrl(form.maps_url);
-    if (result) {
-      set('lat', String(result[0]));
-      setForm(prev => ({ ...prev, lat: String(result[0]), lon: String(result[1]) }));
-    } else {
-      alert('Не вдалося витягти координати з URL. Вставте повне посилання Google Maps (не скорочене goo.gl).');
-    }
-  };
-
   const submit = async () => {
     if (!form.name_ua.trim()) {
       alert('Назва міста обов\u0027язкова');
@@ -296,22 +298,7 @@ function PointModal({
 
           <F label="Локація (АЗС, автовокзал тощо)" value={form.location_name} onChange={v => set('location_name', v)} />
 
-          <div className="grid grid-cols-2 gap-3 lg:gap-4">
-            <F label="Широта (lat)" value={form.lat} onChange={v => set('lat', v)} type="number" />
-            <F label="Довгота (lon)" value={form.lon} onChange={v => set('lon', v)} type="number" />
-          </div>
-
-          <div>
-            <F label="Google Maps URL" value={form.maps_url} onChange={v => set('maps_url', v)} />
-            {form.maps_url.trim() && (
-              <button
-                onClick={extractCoords}
-                className="mt-1.5 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 cursor-pointer hover:bg-emerald-100 transition-all"
-              >
-                <MapPin className="w-3.5 h-3.5" /> Витягти координати
-              </button>
-            )}
-          </div>
+          <F label="Google Maps URL (необов'язково)" value={form.maps_url} onChange={v => set('maps_url', v)} />
 
           <label className="flex items-center gap-3 px-4 py-3 bg-bg rounded-xl cursor-pointer">
             <input
