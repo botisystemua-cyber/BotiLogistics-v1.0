@@ -66,21 +66,9 @@ function drawIcon(canvasId, size, name) {
     var c = document.getElementById(canvasId);
     var ctx = c.getContext('2d');
 
-    // Dark blue background with rounded corners
-    ctx.beginPath();
-    ctx.roundRect(0, 0, size, size, size * 0.18);
-    ctx.clip();
+    // Solid dark blue background (OS applies its own rounded mask)
     ctx.fillStyle = '#1a3a5e';
     ctx.fillRect(0, 0, size, size);
-
-    // Subtle decorative circles
-    ctx.fillStyle = 'rgba(255,255,255,0.04)';
-    ctx.beginPath();
-    ctx.arc(size * 0.8, size * 0.15, size * 0.3, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(size * 0.15, size * 0.85, size * 0.2, 0, Math.PI * 2);
-    ctx.fill();
 
     // Bus emoji
     ctx.font = (size * 0.28) + 'px serif';
