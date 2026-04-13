@@ -12,7 +12,7 @@ type Tab = 'staff' | 'online' | 'settings' | 'finances' | 'crm';
 const MENU_ITEMS: { key: Tab; label: string; shortLabel: string; icon: typeof Users; external?: string }[] = [
   { key: 'staff', label: 'Співробітники', shortLabel: 'Команда', icon: Users },
   { key: 'online', label: 'Онлайн', shortLabel: 'Онлайн', icon: Wifi },
-  { key: 'settings', label: 'Налаштування', shortLabel: 'Маршрути', icon: Settings },
+  { key: 'settings', label: 'Налаштування', shortLabel: 'Налашт.', icon: Settings },
   { key: 'finances', label: 'Фінанси', shortLabel: 'Фінанси', icon: DollarSign },
   { key: 'crm', label: 'CRM', shortLabel: 'CRM', icon: ExternalLink, external: '../passenger-crm/' },
 ];
