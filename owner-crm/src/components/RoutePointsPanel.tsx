@@ -140,12 +140,8 @@ export function RoutePointsPanel({
   };
 
   const openNew = () => {
-    const nextOrder = points.length > 0
-      ? Math.max(...points.map(p => p.sort_order)) + 1
-      : 1;
     setEditPoint({} as RoutePoint);
     setIsNew(true);
-    EMPTY_FORM.sort_order = nextOrder;
   };
 
   return (
@@ -231,7 +227,7 @@ export function RoutePointsPanel({
 
       {editPoint && (
         <PointModal
-          initial={isNew ? { ...EMPTY_FORM } : pointToForm(editPoint)}
+          initial={isNew ? { ...EMPTY_FORM, sort_order: points.length > 0 ? Math.max(...points.map(p => p.sort_order)) + 1 : 1 } : pointToForm(editPoint)}
           isNew={isNew}
           onClose={() => setEditPoint(null)}
           onSave={handleSave}
