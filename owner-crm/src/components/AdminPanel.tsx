@@ -1,16 +1,18 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Users, Wifi, RefreshCw, ExternalLink, DollarSign, LogOut } from 'lucide-react';
+import { Users, Wifi, RefreshCw, ExternalLink, DollarSign, LogOut, Settings } from 'lucide-react';
 import { Logo } from './shared';
 import { StaffTab } from './StaffTab';
 import { OnlineTab } from './OnlineTab';
+import { SettingsTab } from './SettingsTab';
 import { listUsersByTenant, type User } from '../api/users';
 import { logout, beatHeartbeat, type BotiSession } from '../lib/session';
 
-type Tab = 'staff' | 'online' | 'finances' | 'crm';
+type Tab = 'staff' | 'online' | 'settings' | 'finances' | 'crm';
 
 const MENU_ITEMS: { key: Tab; label: string; shortLabel: string; icon: typeof Users; external?: string }[] = [
   { key: 'staff', label: 'Співробітники', shortLabel: 'Команда', icon: Users },
   { key: 'online', label: 'Онлайн', shortLabel: 'Онлайн', icon: Wifi },
+  { key: 'settings', label: 'Налаштування', shortLabel: 'Маршрути', icon: Settings },
   { key: 'finances', label: 'Фінанси', shortLabel: 'Фінанси', icon: DollarSign },
   { key: 'crm', label: 'CRM', shortLabel: 'CRM', icon: ExternalLink, external: '../passenger-crm/' },
 ];
@@ -158,6 +160,7 @@ export function AdminPanel({ session }: { session: BotiSession }) {
                 />
               )}
               {tab === 'online' && <OnlineTab users={users} onReload={loadAll} />}
+              {tab === 'settings' && <SettingsTab tenantId={session.tenant_id} />}
               {tab === 'finances' && (
                 <div className="flex items-center justify-center min-h-[60vh]">
                   <div className="text-center">

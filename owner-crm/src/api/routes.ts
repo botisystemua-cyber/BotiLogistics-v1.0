@@ -1,11 +1,8 @@
 import { supabase } from '../lib/supabase';
-import { UA_ES_TEMPLATE } from '../data/uaEsTemplate';
 
 // ================================================================
 // Типи
 // ================================================================
-
-export type DeliveryMode = 'point' | 'address_and_point';
 
 export interface RoutePoint {
   id: number;
@@ -18,7 +15,6 @@ export interface RoutePoint {
   lat: number | null;
   lon: number | null;
   maps_url: string | null;
-  delivery_mode: DeliveryMode;
   active: boolean;
   created_at: string;
   updated_at: string;
@@ -51,7 +47,7 @@ export type RoutePriceInput = Omit<
 
 export async function listRoutePointsByTenant(
   tenantId: string,
-  routeGroup = 'ua-es-wed',
+  routeGroup = 'default',
 ): Promise<RoutePoint[]> {
   const { data, error } = await supabase
     .from('passenger_route_points')
@@ -193,100 +189,6 @@ export async function deleteRoutePrice(id: number): Promise<void> {
     .delete()
     .eq('id', id);
   if (error) throw error;
-}
-
-// ================================================================
-// Шаблон UA→ES: швидке заповнення порожнього тенанта
-// ================================================================
-
-// Імпортує 23 точки + всі цінові правила (з реверсом) з константного шаблону.
-// Ідемпотентний: якщо точка з тим самим name_ua вже існує у тенанті/групі,
-// вона пропускається (унікальний ключ спрацьовує на UNIQUE(tenant,group,name_ua)).
-// Ціни так само пропускаються за UNIQUE(tenant,from,to,currency).
-// Повертає скільки точок і цін було додано.
-export async function importUaEsTemplate(
-  tenantId: string,
-): Promise<{ pointsCreated: number; pricesCreated: number }> {
-  const routeGroup = 'ua-es-wed';
-
-  // 1) Вставляємо точки. Використовуємо upsert з ignoreDuplicates щоб повторний
-  // імпорт не падав, а лише пропускав уже існуючі.
-  const pointRows = UA_ES_TEMPLATE.points.map(p => ({
-    tenant_id: tenantId,
-    route_group: routeGroup,
-    name_ua: p.name_ua,
-    country_code: p.country_code,
-    sort_order: p.sort_order,
-    location_name: p.location_name,
-    lat: p.lat,
-    lon: p.lon,
-    maps_url: p.maps_url,
-    delivery_mode: p.delivery_mode,
-    active: true,
-  }));
-
-  const { data: insertedPoints, error: pointErr } = await supabase
-    .from('passenger_route_points')
-    .upsert(pointRows, {
-      onConflict: 'tenant_id,route_group,name_ua',
-      ignoreDuplicates: true,
-    })
-    .select();
-  if (pointErr) throw pointErr;
-  const pointsCreated = (insertedPoints ?? []).length;
-
-  // 2) Витягуємо всі точки цього тенанта (щоб мати name_ua → id мапінг для цін)
-  const allPoints = await listRoutePointsByTenant(tenantId, routeGroup);
-  const idByName: Record<string, number> = {};
-  for (const p of allPoints) idByName[p.name_ua] = p.id;
-
-  // 3) Будуємо цінові правила за шаблоном. Кожне правило описане як
-  // `{ from: "Чернівці", to: "Малага", price: 200 }` — ми його мапимо на id
-  // і дублюємо для реверса.
-  const priceRows: Array<{
-    tenant_id: string;
-    from_point_id: number;
-    to_point_id: number;
-    currency: string;
-    price: number;
-    active: boolean;
-  }> = [];
-  for (const rule of UA_ES_TEMPLATE.prices) {
-    const fromId = idByName[rule.from];
-    const toId = idByName[rule.to];
-    if (!fromId || !toId) continue; // точки не імпортовані — пропускаємо
-    priceRows.push({
-      tenant_id: tenantId,
-      from_point_id: fromId,
-      to_point_id: toId,
-      currency: 'EUR',
-      price: rule.price,
-      active: true,
-    });
-    if (rule.reverse !== false) {
-      priceRows.push({
-        tenant_id: tenantId,
-        from_point_id: toId,
-        to_point_id: fromId,
-        currency: 'EUR',
-        price: rule.price,
-        active: true,
-      });
-    }
-  }
-
-  if (priceRows.length === 0) return { pointsCreated, pricesCreated: 0 };
-
-  const { data: insertedPrices, error: priceErr } = await supabase
-    .from('passenger_route_prices')
-    .upsert(priceRows, {
-      onConflict: 'tenant_id,from_point_id,to_point_id,currency',
-      ignoreDuplicates: true,
-    })
-    .select();
-  if (priceErr) throw priceErr;
-
-  return { pointsCreated, pricesCreated: (insertedPrices ?? []).length };
 }
 
 // ================================================================
