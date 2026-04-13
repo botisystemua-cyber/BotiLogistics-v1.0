@@ -193,7 +193,6 @@ export function RoutePointsPanel({
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5 lg:gap-2">
-                    <span className="text-xs lg:text-sm font-bold text-muted/50">#{p.sort_order}</span>
                     <span className="text-sm lg:text-base font-bold text-text truncate">{p.name_ua}</span>
                     {!p.active && (
                       <span className="text-[10px] lg:text-xs font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 border border-gray-200">
@@ -280,20 +279,17 @@ function PointModal({
         <div className="flex-1 overflow-y-auto px-5 lg:px-6 py-4 lg:py-5 space-y-3 lg:space-y-4">
           <F label="Назва міста" value={form.name_ua} onChange={v => set('name_ua', v)} autoFocus />
 
-          <div className="grid grid-cols-2 gap-3 lg:gap-4">
-            <div>
-              <label className="block text-[10px] lg:text-xs font-bold text-muted uppercase tracking-wider mb-1 lg:mb-1.5">Країна</label>
-              <select
-                value={form.country_code}
-                onChange={e => set('country_code', e.target.value)}
-                className="w-full px-3 lg:px-4 py-2.5 lg:py-3 bg-bg border border-border rounded-xl text-sm text-text focus:outline-none focus:border-brand transition-all"
-              >
-                {COUNTRIES.map(c => (
-                  <option key={c.code} value={c.code}>{c.label}</option>
-                ))}
-              </select>
-            </div>
-            <F label="Порядок" value={String(form.sort_order)} onChange={v => set('sort_order', parseInt(v) || 0)} type="number" />
+          <div>
+            <label className="block text-[10px] lg:text-xs font-bold text-muted uppercase tracking-wider mb-1 lg:mb-1.5">Країна</label>
+            <select
+              value={form.country_code}
+              onChange={e => set('country_code', e.target.value)}
+              className="w-full px-3 lg:px-4 py-2.5 lg:py-3 bg-bg border border-border rounded-xl text-sm text-text focus:outline-none focus:border-brand transition-all"
+            >
+              {COUNTRIES.map(c => (
+                <option key={c.code} value={c.code}>{c.label}</option>
+              ))}
+            </select>
           </div>
 
           <F label="Локація (АЗС, автовокзал тощо)" value={form.location_name} onChange={v => set('location_name', v)} />
