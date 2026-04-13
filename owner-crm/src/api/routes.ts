@@ -47,7 +47,7 @@ export type RoutePriceInput = Omit<
 
 export async function listRoutePointsByTenant(
   tenantId: string,
-  routeGroup = 'default',
+  routeGroup = 'ua-es-wed',
 ): Promise<RoutePoint[]> {
   const { data, error } = await supabase
     .from('passenger_route_points')

@@ -68,7 +68,7 @@ function pointToForm(p: RoutePoint): PointForm {
 
 function formToInput(f: PointForm): RoutePointInput {
   return {
-    route_group: 'default',
+    route_group: 'ua-es-wed',
     name_ua: f.name_ua.trim(),
     country_code: f.country_code,
     sort_order: f.sort_order,
@@ -144,22 +144,27 @@ export function RoutePointsPanel({
   };
 
   return (
-    <div className="space-y-3 lg:space-y-4">
-      <div className="flex items-center justify-between gap-2 flex-wrap">
-        <span className="text-xs lg:text-sm text-muted font-bold">
-          {points.length} {points.length === 1 ? 'точка' : points.length < 5 ? 'точки' : 'точок'}
-        </span>
+    <section>
+      {/* Section header */}
+      <div className="flex items-center justify-between gap-2 pb-3 lg:pb-4 border-b border-border mb-4 lg:mb-5">
+        <div>
+          <h2 className="text-base lg:text-lg font-extrabold text-text">Адреси</h2>
+          <p className="text-xs lg:text-sm text-muted mt-0.5">
+            Точки маршруту, які з'являються як підказки при додаванні пасажира
+          </p>
+        </div>
         <button
           onClick={openNew}
-          className="flex items-center gap-1.5 lg:gap-2 px-3 lg:px-4 py-2 lg:py-2.5 rounded-lg lg:rounded-xl bg-brand text-white text-xs lg:text-sm font-bold cursor-pointer hover:brightness-110 transition-all"
+          className="flex items-center gap-1.5 lg:gap-2 px-3 lg:px-4 py-2 lg:py-2.5 rounded-lg lg:rounded-xl bg-brand text-white text-xs lg:text-sm font-bold cursor-pointer hover:brightness-110 transition-all shrink-0"
         >
-          <Plus className="w-4 h-4 lg:w-5 lg:h-5" /> Додати точку
+          <Plus className="w-4 h-4 lg:w-5 lg:h-5" /> Додати
         </button>
       </div>
 
+      {/* Content */}
       {points.length === 0 ? (
         <div className="text-center py-12 lg:py-16 text-muted text-sm lg:text-base">
-          Немає точок маршруту. Натисніть «Додати точку» щоб створити першу.
+          Немає адрес. Натисніть «Додати» щоб створити першу.
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-2.5 lg:gap-4">
@@ -220,7 +225,7 @@ export function RoutePointsPanel({
           onSave={handleSave}
         />
       )}
-    </div>
+    </section>
   );
 }
 
