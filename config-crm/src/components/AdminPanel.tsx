@@ -239,7 +239,8 @@ function ClientFormModal({
 }: { initial: Client | null; onClose: () => void; onSaved: () => void }) {
   const [tenantId, setTenantId] = useState(initial?.tenant_id ?? '');
   const [name, setName] = useState(initial?.name ?? '');
-  const [logoUrl, setLogoUrl] = useState(initial?.logo_url ?? '');
+  const LOGO_BASE = 'https://botisystem.com/BotiLogistics-v1.0/logos/';
+  const [logoUrl, setLogoUrl] = useState(initial?.logo_url || LOGO_BASE);
   const [modules, setModules] = useState<string[]>(initial?.modules ?? ['passenger']);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
