@@ -2,7 +2,16 @@
 // PWA: Icon + Manifest + Install
 // ================================================================
 (function() {
-    // Генеруємо іконку 192x192 з canvas
+    // Read tenant name from session (runs before DOMContentLoaded, localStorage is available)
+    var _sess = null;
+    try { _sess = JSON.parse(localStorage.getItem('boti_session') || 'null'); } catch(_) {}
+    var _tenantName = (_sess && _sess.tenant_name) ? _sess.tenant_name : '';
+    var _initials = _tenantName
+        ? _tenantName.trim().split(/\s+/).map(function(w) { return w[0]; }).join('').substring(0, 2).toUpperCase()
+        : '';
+    // Expose for install toast
+    window.__botiTenantName = _tenantName;
+
     function generateAppIcon(size) {
         var c = document.createElement('canvas');
         c.width = size; c.height = size;
@@ -16,19 +25,28 @@
         ctx.font = (size * 0.35) + 'px serif';
         ctx.textAlign = 'center';
         ctx.fillText('🚐', size / 2, size * 0.42);
-        // Текст BotiLogistics
-        ctx.fillStyle = '#000000';
-        ctx.font = '800 ' + (size * 0.18) + 'px Montserrat, Arial, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('BOTI', size / 2, size * 0.62);
-        ctx.fillStyle = '#10b981';
-        ctx.font = '800 ' + (size * 0.15) + 'px Montserrat, Arial, sans-serif';
-        ctx.fillText('LOGISTICS', size / 2, size * 0.82);
+
+        if (_initials) {
+            // Tenant initials — white, large
+            ctx.fillStyle = '#ffffff';
+            ctx.font = '800 ' + (size * 0.28) + 'px Montserrat, Arial, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(_initials, size / 2, size * 0.72);
+        } else {
+            // Default BotiLogistics
+            ctx.fillStyle = '#000000';
+            ctx.font = '800 ' + (size * 0.18) + 'px Montserrat, Arial, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('BOTI', size / 2, size * 0.62);
+            ctx.fillStyle = '#10b981';
+            ctx.font = '800 ' + (size * 0.15) + 'px Montserrat, Arial, sans-serif';
+            ctx.fillText('LOGISTICS', size / 2, size * 0.82);
+        }
         return c.toDataURL('image/png');
     }
 
-    // Створюємо іконки
     var icon192 = generateAppIcon(192);
     var icon512 = generateAppIcon(512);
 
@@ -45,22 +63,20 @@
     favicon.href = icon192;
     document.head.appendChild(favicon);
 
-    // Web App Manifest — спочатку пробуємо файл, fallback на inline
+    // App name for manifest
+    var _appName = _tenantName ? _tenantName + ' CRM' : 'BotiLogistics CRM';
+    var _shortName = _tenantName || 'BotiLogistics';
+
+    // Web App Manifest
     var manifestLink = document.createElement('link');
     manifestLink.rel = 'manifest';
-    // Перевіряємо чи manifest.json доступний
-    fetch('manifest.json', { method: 'HEAD' }).then(function(r) {
-        if (r.ok) {
-            manifestLink.href = 'manifest.json';
-        } else {
-            throw new Error('no file');
-        }
-    }).catch(function() {
-        // Fallback — inline manifest (для Google Apps Script)
+
+    if (_tenantName) {
+        // Dynamic manifest with tenant branding + custom icons
         var m = {
-            name: 'BotiLogistics CRM', short_name: 'BotiLogistics',
-            description: 'CRM Пасажири — BotiLogistics',
-            start_url: location.href, display: 'standalone',
+            name: _appName, short_name: _shortName,
+            description: 'CRM Пасажири — ' + _shortName,
+            start_url: location.href.split('?')[0], display: 'standalone',
             orientation: 'portrait', theme_color: '#1a3a5e', background_color: '#f5f7fa',
             icons: [
                 { src: icon192, sizes: '192x192', type: 'image/png' },
@@ -68,8 +84,37 @@
             ]
         };
         manifestLink.href = 'data:application/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(m));
-    });
+    } else {
+        // No session — try static file, fallback to inline
+        fetch('manifest.json', { method: 'HEAD' }).then(function(r) {
+            if (r.ok) {
+                manifestLink.href = 'manifest.json';
+            } else {
+                throw new Error('no file');
+            }
+        }).catch(function() {
+            var m = {
+                name: 'BotiLogistics CRM', short_name: 'BotiLogistics',
+                description: 'CRM Пасажири — BotiLogistics',
+                start_url: location.href, display: 'standalone',
+                orientation: 'portrait', theme_color: '#1a3a5e', background_color: '#f5f7fa',
+                icons: [
+                    { src: icon192, sizes: '192x192', type: 'image/png' },
+                    { src: icon512, sizes: '512x512', type: 'image/png' }
+                ]
+            };
+            manifestLink.href = 'data:application/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(m));
+        });
+    }
     document.head.appendChild(manifestLink);
+
+    // Update meta tags with tenant name
+    if (_tenantName) {
+        var metaAppTitle = document.querySelector('meta[name="apple-mobile-web-app-title"]');
+        if (metaAppTitle) metaAppTitle.setAttribute('content', _tenantName);
+        var metaAppName = document.querySelector('meta[name="application-name"]');
+        if (metaAppName) metaAppName.setAttribute('content', _tenantName + ' CRM');
+    }
 
     // Service Worker — реєструємо якщо доступний
     if ('serviceWorker' in navigator) {
@@ -98,7 +143,7 @@ function installApp() {
         deferredInstallPrompt.prompt();
         deferredInstallPrompt.userChoice.then(function(result) {
             if (result.outcome === 'accepted') {
-                showToast('BotiLogistics встановлено!');
+                showToast((window.__botiTenantName || 'BotiLogistics') + ' встановлено!');
                 var banner = document.getElementById('installBanner');
                 if (banner) banner.style.display = 'none';
             }
