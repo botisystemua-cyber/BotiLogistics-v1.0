@@ -122,9 +122,19 @@ export function StaffTab({
 
   // any-match filter: a user with ['owner','driver'] shows in both
   // "Власники" and "Водії" tabs.
-  const filtered = filter === 'all'
-    ? users
-    : users.filter(u => Array.isArray(u.roles) && u.roles.includes(filter));
+  // Sort: owners first, then managers, then drivers (by primary role).
+  const ROLE_ORDER: Record<Role, number> = { owner: 0, manager: 1, driver: 2 };
+  const sortByRole = (list: User[]) =>
+    [...list].sort((a, b) => {
+      const ra = Array.isArray(a.roles) && a.roles.length ? primaryRole(a.roles) : 'driver';
+      const rb = Array.isArray(b.roles) && b.roles.length ? primaryRole(b.roles) : 'driver';
+      return ROLE_ORDER[ra] - ROLE_ORDER[rb];
+    });
+  const filtered = sortByRole(
+    filter === 'all'
+      ? users
+      : users.filter(u => Array.isArray(u.roles) && u.roles.includes(filter)),
+  );
   const countByRole = (r: Role) =>
     users.filter(u => Array.isArray(u.roles) && u.roles.includes(r)).length;
 
@@ -317,21 +327,18 @@ function UserModal({
   // Multi-role rules:
   //   - Creating new: any role can be toggled freely, must pick at least one.
   //   - Editing existing owner: 'owner' is locked ON (can't demote via UI).
-  //     Other roles can be added or removed freely.
-  //   - Editing non-owner: all three toggleable, but can't promote to owner
-  //     via edit (use "Додати" to create a new owner record instead).
+  //   - Editing non-owner: 'owner' can be added with confirmation.
   const isOwnerLocked = wasOwner;
-  const isOwnerAddable = isNew; // on edit we don't let non-owners gain 'owner'
 
   const toggleRole = (r: Role) => {
     const has = form.roles.includes(r);
     if (has) {
-      // Blocked: can't remove 'owner' from an existing owner.
       if (r === 'owner' && isOwnerLocked) return;
       set('roles', form.roles.filter(x => x !== r));
     } else {
-      // Blocked: can't add 'owner' to a non-owner via edit.
-      if (r === 'owner' && !isOwnerAddable) return;
+      if (r === 'owner' && !isNew) {
+        if (!confirm('Ви впевнені? Ця людина отримає повний доступ до власницької панелі.')) return;
+      }
       set('roles', [...form.roles, r]);
     }
   };
@@ -371,17 +378,13 @@ function UserModal({
             <div className="grid grid-cols-3 gap-2">
               {ALL_ROLES.map(role => {
                 const active = form.roles.includes(role);
-                const locked =
-                  (role === 'owner' && isOwnerLocked && active) ||
-                  (role === 'owner' && !isOwnerAddable && !active);
+                const locked = role === 'owner' && isOwnerLocked && active;
                 return (
                   <button
                     key={role}
                     onClick={() => toggleRole(role)}
                     disabled={locked}
-                    title={locked
-                      ? (active ? 'Роль «Власник» не можна зняти через UI' : 'Промоція до «Власник» тільки при створенні нового запису')
-                      : undefined}
+                    title={locked ? 'Роль «Власник» не можна зняти через UI' : undefined}
                     className={`flex items-center justify-center gap-2 py-2.5 lg:py-3 rounded-xl text-sm font-bold transition-all ${
                       active ? roleActiveClass(role) : 'bg-bg text-muted border border-border hover:bg-white'
                     } ${locked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
@@ -395,11 +398,6 @@ function UserModal({
             {isOwnerLocked && (
               <div className="mt-2 text-[11px] text-violet-600 bg-violet-50 border border-violet-200 rounded-lg px-3 py-2">
                 Роль «Власник» заблокована. Знімається тільки супер-адміном у config-crm.
-              </div>
-            )}
-            {!isNew && !isOwnerAddable && (
-              <div className="mt-2 text-[11px] text-muted bg-bg border border-border rounded-lg px-3 py-2">
-                Додати роль «Власник» можна тільки при створенні нового запису.
               </div>
             )}
           </div>
