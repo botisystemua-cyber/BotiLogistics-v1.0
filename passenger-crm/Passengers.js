@@ -604,6 +604,14 @@ function renderManagerSlots() {
     html += '</div>';
     html += '</div>';
 
+    // "Owner Panel" button — only if user has owner role
+    var roles = session.roles || [session.role];
+    if (roles.indexOf('owner') !== -1) {
+        html += '<button onclick="goToOwnerPanel()" style="width:100%;padding:12px;border:2px solid var(--border);border-radius:10px;background:white;color:#6d28d9;font-weight:700;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:8px;transition:all .2s" onmouseover="this.style.background=\'#f5f3ff\';this.style.borderColor=\'#c4b5fd\'" onmouseout="this.style.background=\'white\';this.style.borderColor=\'var(--border)\'">';
+        html += '<span>👑</span><span>Власницька панель</span>';
+        html += '</button>';
+    }
+
     html += '<button onclick="botiLogout()" style="width:100%;padding:12px;border:2px solid var(--border);border-radius:10px;background:white;color:#dc2626;font-weight:700;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:all .2s" onmouseover="this.style.background=\'#fef2f2\';this.style.borderColor=\'#fecaca\'" onmouseout="this.style.background=\'white\';this.style.borderColor=\'var(--border)\'">';
     html += '<span>🚪</span><span>Вийти</span>';
     html += '</button>';
