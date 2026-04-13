@@ -16,6 +16,7 @@ import {
 
 const COUNTRIES = [
   { code: 'UA', flag: '\u{1F1FA}\u{1F1E6}', label: '\u{1F1FA}\u{1F1E6} \u0423\u043A\u0440\u0430\u0457\u043D\u0430' },
+  { code: 'MD', flag: '\u{1F1F2}\u{1F1E9}', label: '\u{1F1F2}\u{1F1E9} \u041C\u043E\u043B\u0434\u043E\u0432\u0430' },
   { code: 'RO', flag: '\u{1F1F7}\u{1F1F4}', label: '\u{1F1F7}\u{1F1F4} \u0420\u0443\u043C\u0443\u043D\u0456\u044F' },
   { code: 'SK', flag: '\u{1F1F8}\u{1F1F0}', label: '\u{1F1F8}\u{1F1F0} \u0421\u043B\u043E\u0432\u0430\u0447\u0447\u0438\u043D\u0430' },
   { code: 'CZ', flag: '\u{1F1E8}\u{1F1FF}', label: '\u{1F1E8}\u{1F1FF} \u0427\u0435\u0445\u0456\u044F' },

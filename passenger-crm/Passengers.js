@@ -439,7 +439,7 @@ function renderRoutePointDropdown(which) {
     }
 
     const flagByCountry = {
-        UA: '🇺🇦', RO: '🇷🇴', SK: '🇸🇰', CZ: '🇨🇿', DE: '🇩🇪', ES: '🇪🇸',
+        UA: '🇺🇦', MD: '🇲🇩', RO: '🇷🇴', SK: '🇸🇰', CZ: '🇨🇿', DE: '🇩🇪', ES: '🇪🇸',
         PL: '🇵🇱', AT: '🇦🇹', HU: '🇭🇺', CH: '🇨🇭', IT: '🇮🇹', FR: '🇫🇷'
     };
     dd.innerHTML = filtered.map(p => {
