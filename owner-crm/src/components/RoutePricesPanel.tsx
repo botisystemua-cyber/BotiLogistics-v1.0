@@ -33,7 +33,7 @@ export function RoutePricesPanel({
     const to = pointName(p.to_point_id);
     if (!confirm(`Видалити ціну "${from} \u2192 ${to}"?`)) return;
     try {
-      await deleteRoutePrice(p.id);
+      await deleteRoutePrice(tenantId, p.id);
       onReload();
     } catch (e) {
       alert('Помилка: ' + (e as Error).message);
@@ -43,7 +43,7 @@ export function RoutePricesPanel({
   const handleEditSave = async (price: number, currency: string) => {
     if (!editPrice) return;
     try {
-      await updateRoutePrice(editPrice.id, { price, currency });
+      await updateRoutePrice(tenantId, editPrice.id, { price, currency });
       setEditPrice(null);
       onReload();
     } catch (e) {

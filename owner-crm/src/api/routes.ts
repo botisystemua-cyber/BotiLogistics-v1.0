@@ -73,6 +73,7 @@ export async function createRoutePoint(
 }
 
 export async function updateRoutePoint(
+  tenantId: string,
   id: number,
   patch: Partial<RoutePointInput>,
 ): Promise<RoutePoint> {
@@ -80,23 +81,26 @@ export async function updateRoutePoint(
     .from('passenger_route_points')
     .update({ ...patch, updated_at: new Date().toISOString() })
     .eq('id', id)
+    .eq('tenant_id', tenantId)
     .select()
     .single();
   if (error) throw error;
   return data as RoutePoint;
 }
 
-export async function deleteRoutePoint(id: number): Promise<void> {
+export async function deleteRoutePoint(tenantId: string, id: number): Promise<void> {
   const { error } = await supabase
     .from('passenger_route_points')
     .delete()
-    .eq('id', id);
+    .eq('id', id)
+    .eq('tenant_id', tenantId);
   if (error) throw error;
 }
 
 // Піднімає точку на одну позицію вгору (міняє sort_order з сусідньою точкою).
 // Повертає true якщо swap відбувся, false якщо точка вже зверху.
 export async function swapRoutePointOrder(
+  tenantId: string,
   points: RoutePoint[],
   idx: number,
   direction: 'up' | 'down',
@@ -108,9 +112,9 @@ export async function swapRoutePointOrder(
   // Тимчасове значення щоб уникнути конфлікту унікальності по (tenant,route_group,sort_order)
   // якщо такий індекс колись додамо. Зараз UNIQUE тільки по name_ua, але перестраховуємось.
   const tmp = -Math.abs(a.sort_order) - 1;
-  await updateRoutePoint(a.id, { sort_order: tmp });
-  await updateRoutePoint(b.id, { sort_order: a.sort_order });
-  await updateRoutePoint(a.id, { sort_order: b.sort_order });
+  await updateRoutePoint(tenantId, a.id, { sort_order: tmp });
+  await updateRoutePoint(tenantId, b.id, { sort_order: a.sort_order });
+  await updateRoutePoint(tenantId, a.id, { sort_order: b.sort_order });
   return true;
 }
 
@@ -170,6 +174,7 @@ export async function createRoutePriceWithReverse(
 }
 
 export async function updateRoutePrice(
+  tenantId: string,
   id: number,
   patch: Partial<RoutePriceInput>,
 ): Promise<RoutePrice> {
@@ -177,17 +182,19 @@ export async function updateRoutePrice(
     .from('passenger_route_prices')
     .update(patch)
     .eq('id', id)
+    .eq('tenant_id', tenantId)
     .select()
     .single();
   if (error) throw error;
   return data as RoutePrice;
 }
 
-export async function deleteRoutePrice(id: number): Promise<void> {
+export async function deleteRoutePrice(tenantId: string, id: number): Promise<void> {
   const { error } = await supabase
     .from('passenger_route_prices')
     .delete()
-    .eq('id', id);
+    .eq('id', id)
+    .eq('tenant_id', tenantId);
   if (error) throw error;
 }
 

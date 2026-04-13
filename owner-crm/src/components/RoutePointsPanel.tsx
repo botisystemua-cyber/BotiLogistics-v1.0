@@ -97,7 +97,7 @@ export function RoutePointsPanel({
     if (swapping) return;
     setSwapping(true);
     try {
-      await swapRoutePointOrder(points, idx, dir);
+      await swapRoutePointOrder(tenantId, points, idx, dir);
       onReload();
     } catch (e) {
       alert('Помилка: ' + (e as Error).message);
@@ -108,7 +108,7 @@ export function RoutePointsPanel({
   const handleDelete = async (p: RoutePoint) => {
     if (!confirm(`Видалити точку "${p.name_ua}"?`)) return;
     try {
-      await deleteRoutePoint(p.id);
+      await deleteRoutePoint(tenantId, p.id);
       onReload();
     } catch (e) {
       alert('Помилка: ' + (e as Error).message);
@@ -125,7 +125,7 @@ export function RoutePointsPanel({
       if (isNew) {
         await createRoutePoint(tenantId, input);
       } else if (editPoint) {
-        await updateRoutePoint(editPoint.id, input);
+        await updateRoutePoint(tenantId, editPoint.id, input);
       }
       setEditPoint(null);
       onReload();
