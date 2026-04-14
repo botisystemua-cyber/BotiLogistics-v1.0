@@ -1,12 +1,16 @@
 import { useState } from 'react';
 import {
   Phone, MapPin, RotateCw, CheckCircle2, XCircle, Undo2,
-  CreditCard, Info, ChevronUp, Calendar, Pencil,
+  CreditCard, Info, ChevronUp, Calendar, Pencil, MessageCircle,
 } from 'lucide-react';
 import type { Package, ItemStatus } from '../types';
 import { useApp } from '../store/useAppStore';
 import { updateItemStatus } from '../api';
 import { Highlight } from './Highlight';
+import { isUaEu, isEuUa } from '../utils/smsParser';
+import { MessengerPopup } from './MessengerPopup';
+import { AddressPicker } from './AddressPicker';
+import { TipsButton } from './TipsButton';
 
 interface Props { pkg: Package; index: number; searchQuery?: string; onEdit?: (p: Package) => void; }
 
@@ -21,12 +25,24 @@ const stLabel: Record<ItemStatus, { t: string; c: string }> = {
   cancelled: { t: 'Скасов.', c: 'text-red-700 bg-red-50' },
 };
 
+function derivePayStatus(payForm?: string): { label: string; cls: string } {
+  const f = (payForm || '').toLowerCase().trim();
+  if (f === 'готівка' || f === 'картка') return { label: 'Оплачено', cls: 'text-emerald-700 bg-emerald-50' };
+  if (f === 'частково') return { label: 'Частково', cls: 'text-amber-700 bg-amber-50' };
+  if (f === 'наложка') return { label: 'Наложка', cls: 'text-red-600 bg-red-50' };
+  return { label: 'Борг', cls: 'text-red-600 bg-red-50' };
+}
+
 export function PackageCard({ pkg: p, index, searchQuery = '', onEdit }: Props) {
   const hl = (text: string) => <Highlight text={text} query={searchQuery} />;
   const { getStatus, setStatus, hiddenCols, driverName, currentSheet, isUnifiedView, showToast } = useApp();
   const [showCancel, setShowCancel] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
   const [expanded, setExpanded] = useState(false);
+  const [showMessenger, setShowMessenger] = useState(false);
+  const [showAddrPicker, setShowAddrPicker] = useState(false);
+  const [localTips, setLocalTips] = useState(p.tips);
+  const [localTipsCur, setLocalTipsCur] = useState(p.tipsCurrency);
 
   const show = (col: string) => !hiddenCols.has(col);
   const rawStatus = getStatus(p._statusKey);
@@ -34,6 +50,12 @@ export function PackageCard({ pkg: p, index, searchQuery = '', onEdit }: Props) 
   const canUndo = status === 'completed' || status === 'cancelled';
   const routeName = isUnifiedView && p._sourceRoute ? p._sourceRoute : currentSheet;
   const sl = stLabel[status];
+  const dirKind: 'ua-eu' | 'eu-ua' | null = isUaEu(p.direction) ? 'ua-eu' : isEuUa(p.direction) ? 'eu-ua' : null;
+  const dirBadge = dirKind === 'ua-eu'
+    ? { label: 'UA → EU', cls: 'bg-emerald-100 text-emerald-700 border-emerald-300' }
+    : dirKind === 'eu-ua'
+    ? { label: 'EU → UA', cls: 'bg-orange-100 text-orange-700 border-orange-300' }
+    : null;
 
   const doStatus = async (ns: ItemStatus) => {
     setStatus(p._statusKey, ns);
@@ -51,14 +73,17 @@ export function PackageCard({ pkg: p, index, searchQuery = '', onEdit }: Props) 
     try { await updateItemStatus(driverName, routeName, p, 'pending', 'Відміна'); showToast('Відмінено'); }
     catch (e) { showToast('Помилка: ' + (e as Error).message); setStatus(p._statusKey, prev); }
   };
-  const navigate = () => {
-    if (p.recipientAddr) window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(p.recipientAddr)}&travelmode=driving`, '_blank');
-    else showToast('Немає адреси');
-  };
 
   return (
     <div className={`bg-card rounded-2xl border-2 border-gray-300 ${borderColor[status]} border-l-4 shadow-[0_2px_8px_rgba(0,0,0,0.06)] overflow-hidden`}>
       <div className="px-3 py-2.5">
+        {dirBadge && (
+          <div className="mb-1.5">
+            <span className={`inline-flex items-center px-2 py-0.5 rounded-md border text-[10px] font-black tracking-wide ${dirBadge.cls}`}>
+              {dirBadge.label}
+            </span>
+          </div>
+        )}
         <div className="flex items-center gap-2 mb-1">
           <span className="relative w-7 h-7 rounded-lg bg-gray-100 text-secondary flex items-center justify-center text-[11px] font-black shrink-0">
             {index + 1}
@@ -69,20 +94,29 @@ export function PackageCard({ pkg: p, index, searchQuery = '', onEdit }: Props) 
             {show('recipientAddr') && <div className="font-bold text-text text-[13px] leading-snug truncate">{hl(p.recipientAddr || '—')}</div>}
             {show('recipientName') && p.recipientName && <div className="text-xs text-secondary truncate">{hl(p.recipientName)}</div>}
           </div>
+          <TipsButton
+            tips={localTips}
+            tipsCurrency={localTipsCur}
+            routeName={routeName}
+            itemId={p.itemId}
+            onUpdated={(t, c) => { setLocalTips(t); setLocalTipsCur(c); }}
+          />
           <span className={`shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold ${sl.c}`}>{sl.t}</span>
         </div>
 
         <div className="flex items-center gap-2 ml-9 mb-2 flex-wrap">
           {show('recipientPhone') && p.recipientPhone && <Chip icon={Phone} c="green">{hl(p.recipientPhone)}</Chip>}
           {show('amount') && p.amount && <Chip icon={CreditCard} c="green" b>{p.amount} {p.currency}</Chip>}
-          {show('payStatus') && p.payStatus && <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${p.payStatus === 'Оплачено' ? 'text-emerald-700 bg-emerald-50' : 'text-red-600 bg-red-50'}`}>{p.payStatus}</span>}
+          {show('payStatus') && (() => { const ps = derivePayStatus(p.payForm); return (
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${ps.cls}`}>{ps.label}</span>
+          ); })()}
           {show('dateTrip') && p.dateTrip && <Chip icon={Calendar} c="gray">{p.dateTrip}</Chip>}
         </div>
 
         <div className="flex gap-2 mb-2">
           <Btn icon={Phone} label="Дзвонити" color="bg-green-50 text-green-700" onClick={() => { if (p.recipientPhone) window.location.href = `tel:${p.recipientPhone}`; else showToast('Немає телефону'); }} />
-          <Btn icon={MapPin} label="Звідки" color="bg-blue-50 text-blue-700" onClick={() => { if (p.addrFrom) window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(p.addrFrom)}&travelmode=driving`, '_blank'); else showToast('Немає адреси відправки'); }} />
-          <Btn icon={MapPin} label="Куди" color="bg-blue-50 text-blue-700" onClick={navigate} />
+          <Btn icon={MessageCircle} label="Написати" color="bg-purple-50 text-purple-700" onClick={() => { if (p.recipientPhone) setShowMessenger(true); else showToast('Немає телефону'); }} />
+          <Btn icon={MapPin} label="Адреси" color="bg-blue-50 text-blue-700" onClick={() => { if (p.addrFrom || p.recipientAddr) setShowAddrPicker(true); else showToast('Немає адрес'); }} />
           <Btn icon={expanded ? ChevronUp : Info} label={expanded ? 'Згорнути' : 'Деталі'} color={expanded ? 'bg-brand/10 text-brand' : 'bg-gray-50 text-gray-600'} onClick={() => setExpanded(!expanded)} />
         </div>
 
@@ -118,7 +152,7 @@ export function PackageCard({ pkg: p, index, searchQuery = '', onEdit }: Props) 
             <Cell label="Напрям" value={p.direction} />
             <Cell label="Сума" value={p.amount ? p.amount + ' ' + p.currency : ''} bold accent="green" />
             <Cell label="Оплата" value={p.payForm} />
-            <Cell label="Ст. оплати" value={p.payStatus} bold accent={p.payStatus === 'Оплачено' ? 'green' : 'red'} />
+            <Cell label="Ст. оплати" value={derivePayStatus(p.payForm).label} bold accent={derivePayStatus(p.payForm).label === 'Оплачено' ? 'green' : derivePayStatus(p.payForm).label === 'Частково' ? 'amber' : 'red'} />
             <Cell label="Борг" value={p.debt} accent="red" />
             <Cell label="Тег" value={p.tag} />
           </div>
@@ -126,6 +160,9 @@ export function PackageCard({ pkg: p, index, searchQuery = '', onEdit }: Props) 
           {p.smsNote && <div className="mt-1.5 px-2.5 py-1.5 rounded-lg bg-blue-50 text-[11px] text-text"><span className="text-blue-600 font-bold">SMS: </span>{p.smsNote}</div>}
         </div>
       )}
+
+      {showMessenger && <MessengerPopup phone={p.recipientPhone} onClose={() => setShowMessenger(false)} />}
+      {showAddrPicker && <AddressPicker addrFrom={p.addrFrom} addrTo={p.recipientAddr} onClose={() => setShowAddrPicker(false)} />}
 
       {showCancel && (
         <div className="border-t border-red-100 bg-red-50/60 p-3.5">
@@ -138,9 +175,9 @@ export function PackageCard({ pkg: p, index, searchQuery = '', onEdit }: Props) 
   );
 }
 
-function Cell({ label, value, bold, accent, full }: { label: string; value?: string; bold?: boolean; accent?: 'green' | 'red'; full?: boolean }) {
+function Cell({ label, value, bold, accent, full }: { label: string; value?: string; bold?: boolean; accent?: 'green' | 'red' | 'amber'; full?: boolean }) {
   if (!value) return null;
-  const vc = accent === 'green' ? 'text-emerald-700' : accent === 'red' ? 'text-red-600' : 'text-text';
+  const vc = accent === 'green' ? 'text-emerald-700' : accent === 'red' ? 'text-red-600' : accent === 'amber' ? 'text-amber-700' : 'text-text';
   return (<div className={`py-1 min-w-0 ${full ? 'col-span-2' : ''}`}><div className="text-[9px] text-muted font-semibold uppercase tracking-wide">{label}</div><div className={`text-[11px] ${bold ? 'font-bold' : 'font-medium'} ${vc} truncate`}>{value}</div></div>);
 }
 function Chip({ icon: I, c, b, children }: { icon: typeof Phone; c: string; b?: boolean; children: React.ReactNode }) {

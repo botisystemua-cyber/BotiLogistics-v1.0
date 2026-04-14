@@ -1,12 +1,16 @@
 import { useState } from 'react';
 import {
   Phone, MapPin, RotateCw, CheckCircle2, XCircle, Undo2,
-  Car, ArrowRight, Info, ChevronUp, CreditCard, Calendar, Clock, Users, User, Pencil,
+  Car, ArrowRight, Info, ChevronUp, CreditCard, Calendar, Clock, Users, User, Pencil, MessageCircle,
 } from 'lucide-react';
 import type { Passenger, ItemStatus } from '../types';
 import { useApp } from '../store/useAppStore';
 import { updateItemStatus } from '../api';
 import { Highlight } from './Highlight';
+import { isUaEu, isEuUa } from '../utils/smsParser';
+import { MessengerPopup } from './MessengerPopup';
+import { AddressPicker } from './AddressPicker';
+import { TipsButton } from './TipsButton';
 
 interface Props { passenger: Passenger; index: number; searchQuery?: string; onEdit?: (p: Passenger) => void; }
 
@@ -27,6 +31,10 @@ export function PassengerCard({ passenger: p, index, searchQuery = '', onEdit }:
   const [showCancel, setShowCancel] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
   const [expanded, setExpanded] = useState(false);
+  const [showMessenger, setShowMessenger] = useState(false);
+  const [showAddrPicker, setShowAddrPicker] = useState(false);
+  const [localTips, setLocalTips] = useState(p.tips);
+  const [localTipsCur, setLocalTipsCur] = useState(p.tipsCurrency);
 
   const show = (col: string) => !hiddenCols.has(col);
   const rawStatus = getStatus(p._statusKey);
@@ -34,6 +42,12 @@ export function PassengerCard({ passenger: p, index, searchQuery = '', onEdit }:
   const canUndo = status === 'completed' || status === 'cancelled';
   const routeName = isUnifiedView && p._sourceRoute ? p._sourceRoute : currentSheet;
   const sl = stLabel[status];
+  const dirKind: 'ua-eu' | 'eu-ua' | null = isUaEu(p.direction) ? 'ua-eu' : isEuUa(p.direction) ? 'eu-ua' : null;
+  const dirBadge = dirKind === 'ua-eu'
+    ? { label: 'UA → EU', cls: 'bg-emerald-100 text-emerald-700 border-emerald-300' }
+    : dirKind === 'eu-ua'
+    ? { label: 'EU → UA', cls: 'bg-orange-100 text-orange-700 border-orange-300' }
+    : null;
 
   const doStatus = async (ns: ItemStatus) => {
     setStatus(p._statusKey, ns);
@@ -51,14 +65,17 @@ export function PassengerCard({ passenger: p, index, searchQuery = '', onEdit }:
     try { await updateItemStatus(driverName, routeName, p, 'pending', 'Відміна'); showToast('Відмінено'); }
     catch (e) { showToast('Помилка: ' + (e as Error).message); setStatus(p._statusKey, prev); }
   };
-  const nav = (addr: string) => {
-    if (addr) window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(addr)}&travelmode=driving`, '_blank');
-    else showToast('Немає адреси');
-  };
 
   return (
     <div className={`bg-card rounded-2xl border-2 border-gray-300 ${borderColor[status]} border-l-4 shadow-[0_2px_8px_rgba(0,0,0,0.06)] overflow-hidden`}>
       <div className="p-3.5">
+        {dirBadge && (
+          <div className="mb-1.5">
+            <span className={`inline-flex items-center px-2 py-0.5 rounded-md border text-[10px] font-black tracking-wide ${dirBadge.cls}`}>
+              {dirBadge.label}
+            </span>
+          </div>
+        )}
         <div className="flex items-center gap-2.5 mb-2">
           <span className="relative w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center text-xs font-black shrink-0">
             {index + 1}
@@ -75,6 +92,13 @@ export function PassengerCard({ passenger: p, index, searchQuery = '', onEdit }:
               </div>
             )}
           </div>
+          <TipsButton
+            tips={localTips}
+            tipsCurrency={localTipsCur}
+            routeName={routeName}
+            itemId={p.itemId}
+            onUpdated={(t, c) => { setLocalTips(t); setLocalTipsCur(c); }}
+          />
           <span className={`shrink-0 px-2.5 py-1 rounded-full text-[10px] font-bold ${sl.c}`}>{sl.t}</span>
         </div>
 
@@ -88,8 +112,8 @@ export function PassengerCard({ passenger: p, index, searchQuery = '', onEdit }:
 
         <div className="flex gap-2 mb-2">
           <Btn icon={Phone} label="Дзвонити" color="bg-green-50 text-green-700" onClick={() => { if (p.phone) window.location.href = `tel:${p.phone}`; else showToast('Немає телефону'); }} />
-          <Btn icon={Car} label="Звідки" color="bg-blue-50 text-blue-700" onClick={() => nav(p.addrFrom)} />
-          <Btn icon={MapPin} label="Куди" color="bg-blue-50 text-blue-700" onClick={() => nav(p.addrTo)} />
+          <Btn icon={MessageCircle} label="Написати" color="bg-purple-50 text-purple-700" onClick={() => { if (p.phone) setShowMessenger(true); else showToast('Немає телефону'); }} />
+          <Btn icon={MapPin} label="Куди" color="bg-blue-50 text-blue-700" onClick={() => { if (p.addrFrom || p.addrTo) setShowAddrPicker(true); else showToast('Немає адрес'); }} />
           <Btn icon={expanded ? ChevronUp : Info} label={expanded ? 'Згорнути' : 'Деталі'} color={expanded ? 'bg-brand/10 text-brand' : 'bg-gray-50 text-gray-600'} onClick={() => setExpanded(!expanded)} />
         </div>
 
@@ -132,6 +156,9 @@ export function PassengerCard({ passenger: p, index, searchQuery = '', onEdit }:
           {p.smsNote && <div className="mt-1.5 px-2.5 py-1.5 rounded-lg bg-blue-50 text-[11px] text-text"><span className="text-blue-600 font-bold">SMS: </span>{p.smsNote}</div>}
         </div>
       )}
+
+      {showMessenger && <MessengerPopup phone={p.phone} onClose={() => setShowMessenger(false)} />}
+      {showAddrPicker && <AddressPicker addrFrom={p.addrFrom} addrTo={p.addrTo} onClose={() => setShowAddrPicker(false)} />}
 
       {showCancel && (
         <div className="border-t border-red-100 bg-red-50/60 p-3.5">

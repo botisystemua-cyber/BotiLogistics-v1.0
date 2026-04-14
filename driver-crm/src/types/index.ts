@@ -37,6 +37,8 @@ interface RouteItemBase {
   tag: string;
   note: string;
   smsNote: string;
+  tips: string;
+  tipsCurrency: string;
   sheet: string;
   _statusKey: string;
   _sourceRoute?: string;
@@ -91,6 +93,8 @@ export interface ShippingItem {
   status: string;
   pkgId: string;
   note: string;
+  tips: string;
+  tipsCurrency: string;
   sheet: string;
   _statusKey: string;
   _sourceRoute?: string;
