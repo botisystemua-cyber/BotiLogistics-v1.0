@@ -843,6 +843,192 @@ async function sbPkgGetPayments(params) {
     }
 }
 
+// ================================================================
+// NOVA POSHTA API (ключ у system_settings, виклик API з браузера)
+// ================================================================
+
+async function sbPkgGetNpApiKey() {
+    const { data, error } = await sb.from('system_settings')
+        .select('setting_value')
+        .eq('tenant_id', TENANT_ID)
+        .eq('setting_name', 'NP_API_KEY')
+        .limit(1);
+    if (error) return null;
+    return (data && data[0] && data[0].setting_value) || null;
+}
+
+async function sbPkgCheckNpApiKey(_params) {
+    try {
+        const key = await sbPkgGetNpApiKey();
+        return { ok: true, hasKey: !!key, data: { hasKey: !!key } };
+    } catch (e) {
+        return { ok: false, error: e.message };
+    }
+}
+
+// NP StatusCode → Ukrainian package_status (як у GAS Script-cargo.gs)
+const NP_STATUS_MAP = {
+    '3':'В дорозі','4':'В дорозі','5':'В дорозі','6':'В дорозі','7':'В дорозі','8':'В дорозі',
+    '9':'Доставлено','10':'Доставлено','11':'Доставлено',
+    '12':'Затримано','14':'Затримано','103':'Затримано','104':'Затримано','106':'Затримано',
+    '111':'Затримано','112':'Затримано',
+    '101':'Втрачено','102':'Втрачено',
+};
+
+async function sbPkgTrackParcel(params) {
+    try {
+        let ttn = (params && params.ttn) || '';
+        const pkgId = params && params.pkg_id;
+
+        // Якщо TTN не вказано — взяти з БД по pkg_id
+        if (!ttn && pkgId) {
+            const { data } = await sb.from('packages')
+                .select('ttn_number').eq('tenant_id', TENANT_ID).eq('pkg_id', pkgId).limit(1);
+            if (data && data[0]) ttn = data[0].ttn_number || '';
+        }
+        if (!ttn) return { ok: false, error: 'ТТН не вказано' };
+
+        const npKey = await sbPkgGetNpApiKey();
+        if (!npKey) return { ok: false, error: 'API ключ Нової Пошти не налаштований (system_settings.NP_API_KEY)' };
+
+        const resp = await fetch('https://api.novaposhta.ua/v2.0/json/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                apiKey: npKey,
+                modelName: 'TrackingDocument',
+                calledMethod: 'getStatusDocuments',
+                methodProperties: { Documents: [{ DocumentNumber: ttn, Phone: '' }] },
+            }),
+        });
+        const result = await resp.json();
+
+        if (!result.success || !result.data || result.data.length === 0) {
+            const errs = (result.errors || []).join(', ') || 'Не знайдено';
+            return { ok: false, error: 'НП: ' + errs };
+        }
+
+        const t = result.data[0];
+        const tracking = {
+            ttn,
+            status:        t.Status || '',
+            statusCode:    t.StatusCode || '',
+            cityFrom:      t.CitySender || '',
+            cityTo:        t.CityRecipient || '',
+            weight:        t.DocumentWeight || '',
+            cost:          t.DocumentCost || '',
+            deliveryDate:  t.ActualDeliveryDate || t.ScheduledDeliveryDate || '',
+            payerType:     t.PayerType || '',
+            paymentMethod: t.PaymentMethod || '',
+        };
+
+        // Якщо є pkg_id — синхронізувати статус у БД
+        if (pkgId) {
+            const newStatus = NP_STATUS_MAP[String(t.StatusCode)] || '';
+            if (newStatus) {
+                const sbStatus = STATUS_UA_TO_SB[newStatus] || newStatus;
+                await sb.from('packages')
+                    .update({ package_status: sbStatus, updated_at: new Date().toISOString() })
+                    .eq('tenant_id', TENANT_ID).eq('pkg_id', pkgId);
+            }
+        }
+
+        return { ok: true, tracking, data: tracking };
+    } catch (e) {
+        console.error('sbPkgTrackParcel error:', e);
+        return { ok: false, error: e.message };
+    }
+}
+
+// ================================================================
+// PACKAGE PHOTOS API
+// ================================================================
+// Фото зберігаємо як URL (Google Drive / S3 / інше). Файловий upload
+// у Supabase Storage — окремий крок, якщо знадобиться.
+
+// Resolve text pkg_id → uuid packages.id (повертає {id, ttn_number} або null)
+async function _resolvePkg(pkgId) {
+    if (!pkgId) return null;
+    const { data, error } = await sb.from('packages')
+        .select('id, ttn_number')
+        .eq('tenant_id', TENANT_ID).eq('pkg_id', pkgId).limit(1);
+    if (error || !data || !data[0]) return null;
+    return data[0];
+}
+
+async function sbPkgGetPhotos(params) {
+    try {
+        const pkgId = params && params.pkg_id;
+        if (!pkgId) return { ok: true, data: [], count: 0 };
+
+        const pkg = await _resolvePkg(pkgId);
+        if (!pkg) return { ok: true, data: [], count: 0 };
+
+        const { data, error } = await sb.from('package_photos')
+            .select('*')
+            .eq('tenant_id', TENANT_ID)
+            .eq('package_id', pkg.id)
+            .order('created_at', { ascending: false });
+        if (error) throw error;
+
+        const photos = (data || []).map(r => ({
+            PHOTO_ID:            r.photo_id || '',
+            PKG_ID:              pkgId,
+            'Номер ТТН':         r.ttn_number || '',
+            'Штрих-код ТТН':     r.ttn_barcode || '',
+            'Тип фото':          r.photo_type || '',
+            'Фото посилки':      r.photo_url || '',
+            'Хто завантажив':    r.uploaded_by || '',
+            'Роль':              r.uploaded_by_role || '',
+            'Коментар':          r.comment || '',
+            'Статус перевірки':  r.verification_status || '',
+            'Час':               r.created_at ? String(r.created_at).slice(0, 19).replace('T', ' ') : '',
+        }));
+        return { ok: true, data: photos, count: photos.length };
+    } catch (e) {
+        console.error('sbPkgGetPhotos error:', e);
+        return { ok: false, error: e.message };
+    }
+}
+
+async function sbPkgAddPhoto(params) {
+    try {
+        const pkgId = params && params.pkg_id;
+        const url   = (params && params.url) || '';
+        if (!pkgId) return { ok: false, error: 'pkg_id не вказано' };
+        if (!url)   return { ok: false, error: 'URL фото не вказано' };
+
+        const pkg = await _resolvePkg(pkgId);
+        if (!pkg) return { ok: false, error: 'Посилку не знайдено: ' + pkgId };
+
+        const photoId = 'PHOTO_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+        const insertRow = {
+            tenant_id:           TENANT_ID,
+            photo_id:            photoId,
+            package_id:          pkg.id,
+            ttn_number:          pkg.ttn_number || '',
+            photo_type:          params.type || 'Посилка',
+            photo_url:           url,
+            uploaded_by_role:    params.role || 'Перевіряючий',
+            comment:             params.comment || '',
+            verification_status: 'Новий',
+        };
+
+        const { data, error } = await sb.from('package_photos').insert(insertRow).select();
+        if (error) throw error;
+
+        // Денормалізація: останнє фото лишаємо на packages.photo_url (як у GAS)
+        await sb.from('packages')
+            .update({ photo_url: url, updated_at: new Date().toISOString() })
+            .eq('tenant_id', TENANT_ID).eq('id', pkg.id);
+
+        return { ok: true, photo_id: photoId, data: data && data[0] };
+    } catch (e) {
+        console.error('sbPkgAddPhoto error:', e);
+        return { ok: false, error: e.message };
+    }
+}
+
 async function sbPkgGetExpenses(params) {
     try {
         const { data, error } = await sb.from('expenses')
@@ -1051,10 +1237,13 @@ async function apiPostSupabase(action, params) {
         getExpensesList:    sbPkgGetExpensesList,    // sidebar grouped by rte_id
         getExpensesSheet:   sbPkgGetExpensesSheet,   // detail rows for one rte_id
 
-        // Verification (update fields)
+        // Verification — Nova Poshta
         scanTTN:            async (p) => {
             const { data } = await sb.from('packages')
-                .select('*').eq('ttn_number', p.ttn).eq('is_archived', false).limit(1);
+                .select('*')
+                .eq('tenant_id', TENANT_ID)
+                .eq('ttn_number', p.ttn)
+                .eq('is_archived', false).limit(1);
             if (data && data.length > 0) {
                 const obj = sbToGasObjPkg(data[0]);
                 obj['Борг'] = calcDebtPkg(obj);
@@ -1062,16 +1251,18 @@ async function apiPostSupabase(action, params) {
             }
             return { ok: true, found: false };
         },
+        trackParcel:        sbPkgTrackParcel,
+        checkNpApiKey:      sbPkgCheckNpApiKey,
 
-        // Not implemented (stubs)
-        trackParcel:        async () => ({ ok: true, data: null }),
-        checkNpApiKey:      async () => ({ ok: true, data: { hasKey: false } }),
+        // Photos
+        getPhotos:          sbPkgGetPhotos,
+        addPhoto:           sbPkgAddPhoto,
+
+        // SMS/Messenger — still stubs (Sprint skipped per user)
         getClientMessages:  async () => ({ ok: true, data: [] }),
         sendManagerMessage: async () => ({ ok: true }),
         getUnreadCounts:    async () => ({ ok: true, data: {} }),
         markClientRead:     async () => ({ ok: true }),
-        getPhotos:          async () => ({ ok: true, data: [] }),
-        addPhoto:           async () => ({ ok: true }),
         getOrderInfo:       async (p) => sbPkgGetOne(p),
         getVerificationStats: async () => {
             const { data } = await sb.from('packages')
