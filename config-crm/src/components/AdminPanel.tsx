@@ -182,9 +182,9 @@ function ClientsScreen() {
                   <Td className="font-semibold">{c.name}</Td>
                   <Td>
                     <div className="flex flex-wrap gap-1">
-                      {(c.modules ?? []).map((m) => (
+                      {(c.modules ?? []).filter((m) => MODULE_LABEL[m]).map((m) => (
                         <span key={m} className="px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-[10px] font-bold text-emerald-700 uppercase">
-                          {MODULE_LABEL[m] ?? m}
+                          {MODULE_LABEL[m]}
                         </span>
                       ))}
                     </div>
