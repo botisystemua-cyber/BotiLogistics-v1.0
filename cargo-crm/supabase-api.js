@@ -156,7 +156,20 @@ function calcDebtPkg(obj) {
 }
 
 // ── TENANT ──
-const TENANT_ID = 'gresco';
+function _readTenantId() {
+    try {
+        const raw = localStorage.getItem('boti_session');
+        if (!raw) return null;
+        const s = JSON.parse(raw);
+        return s && s.tenant_id ? s.tenant_id : null;
+    } catch (_) { return null; }
+}
+const BOTI_SESSION = (() => { try { return JSON.parse(localStorage.getItem('boti_session') || 'null'); } catch (_) { return null; } })();
+const TENANT_ID = _readTenantId();
+if (!TENANT_ID && !location.search.includes('nologinguard=1')) {
+    console.warn('[boti] no boti_session — redirecting to config-crm login');
+    location.href = '../config-crm/';
+}
 
 // ================================================================
 // PACKAGES API
