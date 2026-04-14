@@ -368,6 +368,9 @@ export async function addRouteItem(data: Record<string, string>) {
     is_placeholder: false,
   };
 
+  if (data.deposit) row.deposit = data.deposit;
+  if (data.depositCurrency) row.deposit_currency = data.depositCurrency;
+
   if (!isPackage) {
     row.passenger_name = data.name || '';
     row.passenger_phone = data.phone || '';
