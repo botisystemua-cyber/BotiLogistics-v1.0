@@ -339,12 +339,13 @@ export async function updateItemStatus(
 
 export async function addRouteItem(data: Record<string, string>) {
   const tenantId = getTenantId();
-  const isPackage = (data.type || '').toLowerCase().includes('посилк');
+  const typeRaw = data.itemType || data.type || '';
+  const isPackage = typeRaw.toLowerCase().includes('посилк');
 
   const row: Record<string, unknown> = {
     tenant_id: tenantId,
     rte_id: data.routeName,
-    record_type: data.type || (isPackage ? 'Посилка' : 'Пасажир'),
+    record_type: isPackage ? 'Посилка' : 'Пасажир',
     direction: data.direction || '',
     pax_id_or_pkg_id: data.itemId || `${isPackage ? 'PKG' : 'PAX'}-${Date.now()}`,
     route_date: data.dateTrip || '',
@@ -352,6 +353,10 @@ export async function addRouteItem(data: Record<string, string>) {
     vehicle_name: data.autoNum || '',
     driver_name: data.driverName || '',
     city: data.city || '',
+    amount: data.amount || '',
+    amount_currency: data.currency || '',
+    payment_form: data.payForm || '',
+    notes: data.note || '',
     status: 'pending',
     is_placeholder: false,
   };
@@ -362,6 +367,7 @@ export async function addRouteItem(data: Record<string, string>) {
     row.departure_address = data.addrFrom || '';
     row.arrival_address = data.addrTo || '';
     row.seats_count = data.seatsCount || '';
+    row.baggage_weight = data.baggageWeight || '';
   } else {
     row.sender_name = data.senderName || '';
     row.passenger_phone = data.senderPhone || '';
