@@ -1,10 +1,12 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import {
   ArrowLeft, RefreshCw, Package, Users, Truck, BarChart3,
   ListFilter, LayoutGrid, Search, X,
 } from 'lucide-react';
 import { useApp } from '../store/useAppStore';
-import { fetchPassengers, fetchPackages, fetchShippingItems } from '../api';
+import type { Theme } from '../store/useAppStore';
+import { isUaEu, isEuUa } from '../utils/smsParser';
+import { fetchPassengers, fetchPackages, fetchShippingItems, updateItemStatus } from '../api';
 import { PassengerCard } from './PassengerCard';
 import { PackageCard } from './PackageCard';
 import { ShippingCard } from './ShippingCard';
@@ -12,15 +14,32 @@ import { ColumnEditor } from './ColumnEditor';
 import { BottomNav } from './BottomNav';
 import { AddItemModal } from './AddItemModal';
 import { EditItemModal } from './EditItemModal';
+import { ThemeSplash } from './ThemeSplash';
 import type { Passenger, Package as Pkg, ShippingItem, ItemStatus, StatusFilter, ViewTab, RouteItem } from '../types';
 
 export function ListScreen() {
   const {
-    currentSheet, isUnifiedView, goBack, showToast, setCurrentScreen,
+    currentSheet, isUnifiedView, goBack, showToast, setCurrentScreen, driverName,
     statusFilter, setStatusFilter, getStatus, setStatus,
     routeFilter, setRouteFilter, routes, shippingRoutes,
     viewTab, setViewTab,
+    theme, setTheme,
   } = useApp();
+
+  const [splashTheme, setSplashTheme] = useState<Theme | null>(null);
+  const [themeMenuOpen, setThemeMenuOpen] = useState(false);
+  const THEME_LIST: { key: Theme; label: string; emoji: string }[] = [
+    { key: 'top-driver', label: 'ТОП Водій', emoji: '👑' },
+    { key: 'lone-wolf', label: 'Вовк-одинак', emoji: '🐺' },
+    { key: 'detonator', label: 'Підривник', emoji: '💣' },
+    { key: 'lightning', label: 'Блискавка', emoji: '⚡' },
+  ];
+  const pickTheme = (t: Theme) => {
+    setThemeMenuOpen(false);
+    if (t === theme) return;
+    setSplashTheme(t);
+    setTheme(t);
+  };
 
   const [passengers, setPassengers] = useState<Passenger[]>([]);
   const [packages, setPackages] = useState<Pkg[]>([]);
@@ -30,18 +49,25 @@ export function ListScreen() {
   const [showColumnEditor, setShowColumnEditor] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editItem, setEditItem] = useState<RouteItem | null>(null);
+  const [convertingPickup, setConvertingPickup] = useState<Pkg | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [hidingCompleted, setHidingCompleted] = useState(false);
 
   const routeNum = currentSheet.replace('Маршрут_', '');
-  const shippingSheetName = shippingRoutes.find((s) => s.name === 'Відправка_' + routeNum)?.name || '';
-  const hasShipping = !!shippingSheetName || isUnifiedView;
+  const shippingSheetName = shippingRoutes.find((s) => s.name === 'Відправка_' + routeNum)?.name || 'Відправка_' + routeNum;
+  const hasShipping = true;
 
-  const isPackagesMode = viewTab === 'packages' || viewTab === 'shipping' || viewTab === 'allPackages';
+  const isPackagesMode = viewTab === 'packages' || viewTab === 'shipping' || viewTab === 'allPackages' || viewTab === 'pkgUaEu' || viewTab === 'pkgEuUa';
+  const isPassengersMode = viewTab === 'passengers' || viewTab === 'paxUaEu' || viewTab === 'paxEuUa';
   const activeMainTab: 'all' | 'passengers' | 'packages' = viewTab === 'all' ? 'all' : isPackagesMode ? 'packages' : 'passengers';
 
   // Load data for current tab only
   const loadCurrentTab = useCallback(async (tab: ViewTab, force = false) => {
-    const tabsToLoad: ViewTab[] = tab === 'all' ? ['passengers', 'packages', 'shipping'] : tab === 'allPackages' ? ['packages', 'shipping'] : [tab];
+    const tabsToLoad: ViewTab[] = tab === 'all' ? ['passengers', 'packages', 'shipping']
+      : tab === 'allPackages' ? ['packages', 'shipping']
+      : (tab === 'paxUaEu' || tab === 'paxEuUa') ? ['passengers']
+      : (tab === 'pkgUaEu' || tab === 'pkgEuUa') ? ['packages']
+      : [tab];
     const needsLoad = tabsToLoad.some((t) => force || !loadedTabs.has(t));
     if (!needsLoad) return;
 
@@ -94,9 +120,11 @@ export function ListScreen() {
               all.forEach((s, i) => { s._statusKey = `ship_${s.dispatchId || s.rowNum}_${s._sourceRoute}_${i}`; if (s.status && s.status !== 'pending') setStatus(s._statusKey, s.status as ItemStatus); });
               setShippingItems(all);
             } else if (shippingSheetName) {
-              const items = await fetchShippingItems(shippingSheetName);
-              items.forEach((s, i) => { s._statusKey = `ship_${s.dispatchId || s.rowNum}_${i}`; if (s.status && s.status !== 'pending') setStatus(s._statusKey, s.status as ItemStatus); });
-              setShippingItems(items);
+              try {
+                const items = await fetchShippingItems(shippingSheetName);
+                items.forEach((s, i) => { s._statusKey = `ship_${s.dispatchId || s.rowNum}_${i}`; if (s.status && s.status !== 'pending') setStatus(s._statusKey, s.status as ItemStatus); });
+                setShippingItems(items);
+              } catch { setShippingItems([]); }
             }
             setLoadedTabs((prev) => new Set(prev).add('shipping'));
           })());
@@ -136,16 +164,43 @@ export function ListScreen() {
     return items.filter((item) => fields.some((f) => String((item as any)[f] || '').toLowerCase().includes(q)));
   };
 
-  const filteredPassengers = searchIn(filterItems(passengers), ['name', 'phone', 'addrFrom', 'addrTo', 'itemId']);
-  const filteredPackages = searchIn(filterItems(packages), ['recipientName', 'recipientPhone', 'senderName', 'recipientAddr', 'ttn', 'itemId']);
+  const filteredPassengersAll = searchIn(filterItems(passengers), ['name', 'phone', 'addrFrom', 'addrTo', 'itemId']);
+  const filteredPassengers = viewTab === 'paxUaEu' ? filteredPassengersAll.filter((p) => isUaEu(p.direction))
+    : viewTab === 'paxEuUa' ? filteredPassengersAll.filter((p) => isEuUa(p.direction))
+    : filteredPassengersAll;
+  const filteredPackagesAll = searchIn(filterItems(packages), ['recipientName', 'recipientPhone', 'senderName', 'recipientAddr', 'ttn', 'itemId']);
+  const filteredPackages = viewTab === 'pkgUaEu' ? filteredPackagesAll.filter((p) => isUaEu(p.direction))
+    : viewTab === 'pkgEuUa' ? filteredPackagesAll.filter((p) => isEuUa(p.direction))
+    : filteredPackagesAll;
   const filteredShipping = searchIn(filterItems(shippingItems), ['senderName', 'recipientName', 'recipientPhone', 'recipientAddr', 'dispatchId']);
-  const currentItems = viewTab === 'passengers' || viewTab === 'all' ? filteredPassengers : viewTab === 'packages' ? filteredPackages : [];
+
+  // "All" tab: hide completed items (unless status filter = completed)
+  const allTabPassengers = statusFilter === 'completed' ? filteredPassengers : filteredPassengers.filter((p) => getStatus(p._statusKey) !== 'completed');
+  const allTabPackages = statusFilter === 'completed' ? filteredPackages : filteredPackages.filter((p) => getStatus(p._statusKey) !== 'completed');
+  const allTabTotal = allTabPassengers.length + allTabPackages.length;
+
+  const prevAllTotalRef = useRef(allTabTotal);
+  useEffect(() => {
+    if (viewTab === 'all' && allTabTotal < prevAllTotalRef.current) {
+      setHidingCompleted(true);
+      const t = setTimeout(() => setHidingCompleted(false), 500);
+      prevAllTotalRef.current = allTabTotal;
+      return () => clearTimeout(t);
+    }
+    prevAllTotalRef.current = allTabTotal;
+  }, [allTabTotal, viewTab]);
+
+  const currentItems = isPassengersMode || viewTab === 'all' ? filteredPassengers : viewTab === 'packages' ? filteredPackages : [];
 
   // Stats
   const allStatsItems: { _statusKey: string; _sourceRoute?: string }[] = viewTab === 'all'
-    ? [...passengers, ...packages, ...shippingItems]
+    ? [...passengers, ...packages]
     : viewTab === 'allPackages' ? [...packages, ...shippingItems]
     : viewTab === 'shipping' ? shippingItems
+    : viewTab === 'paxUaEu' ? passengers.filter((p) => isUaEu(p.direction))
+    : viewTab === 'paxEuUa' ? passengers.filter((p) => isEuUa(p.direction))
+    : viewTab === 'pkgUaEu' ? packages.filter((p) => isUaEu(p.direction))
+    : viewTab === 'pkgEuUa' ? packages.filter((p) => isEuUa(p.direction))
     : viewTab === 'passengers' ? passengers : packages;
   const statsBase = isUnifiedView && routeFilter !== 'all'
     ? allStatsItems.filter((i) => i._sourceRoute === routeFilter) : allStatsItems;
@@ -157,7 +212,7 @@ export function ListScreen() {
     cancelled: statsBase.filter((i) => getStatus(i._statusKey) === 'cancelled').length,
   };
 
-  const countSource: { _sourceRoute?: string }[] = viewTab === 'all' ? [...passengers, ...packages, ...shippingItems] : viewTab === 'allPackages' ? [...packages, ...shippingItems] : viewTab === 'shipping' ? shippingItems : viewTab === 'passengers' ? passengers : packages;
+  const countSource: { _sourceRoute?: string }[] = viewTab === 'all' ? [...passengers, ...packages] : viewTab === 'allPackages' ? [...packages, ...shippingItems] : viewTab === 'shipping' ? shippingItems : viewTab === 'passengers' ? passengers : packages;
   const routeTabs = isUnifiedView
     ? [{ name: 'all', label: 'Усі', count: countSource.length },
        ...routes.map((r) => ({ name: r.name, label: r.name.replace('Маршрут_', 'М'), count: countSource.filter((i) => i._sourceRoute === r.name).length }))]
@@ -190,7 +245,13 @@ export function ListScreen() {
               <ArrowLeft className="w-5 h-5 text-text" />
             </button>
             <div className="flex items-center gap-2">
-              {isUnifiedView ? <BarChart3 className="w-5 h-5 text-brand" /> : <Package className="w-5 h-5 text-brand" />}
+              <button
+                onClick={() => setThemeMenuOpen(true)}
+                className="relative w-8 h-8 flex items-center justify-center rounded-lg cursor-pointer active:scale-90 transition-transform"
+                title="Змінити тему"
+              >
+                <ThemeBadge theme={theme} unified={isUnifiedView} />
+              </button>
               <span className="text-sm font-bold text-text">{isUnifiedView ? 'Усі маршрути' : currentSheet}</span>
             </div>
           </div>
@@ -213,7 +274,7 @@ export function ListScreen() {
         {/* Main tabs */}
         <div className="flex gap-2 mb-2.5">
           {mainTabs.map((t) => (
-            <button key={t.key} onClick={() => setViewTab(t.key === 'packages' && hasShipping ? 'allPackages' : t.key)}
+            <button key={t.key} onClick={() => setViewTab(t.key)}
               className={`flex-1 py-2.5 rounded-xl text-[13px] font-bold text-center cursor-pointer transition-all ${
                 activeMainTab === t.key ? 'bg-brand text-white shadow-sm' : 'bg-gray-100 text-gray-400'
               }`}>
@@ -222,20 +283,40 @@ export function ListScreen() {
           ))}
         </div>
 
-        {/* Sub-tabs: Усі | Отримання | Відправка */}
-        {isPackagesMode && hasShipping && (
+        {/* Sub-tabs for Packages: UA→EU | EU→UA | Відправка */}
+        {isPackagesMode && (
           <div className="flex items-center gap-1 mb-2 bg-gray-100 rounded-lg p-0.5">
-            <button onClick={() => setViewTab('allPackages')}
-              className={`flex-1 py-1.5 rounded-md text-[11px] font-semibold text-center cursor-pointer transition-all ${viewTab === 'allPackages' ? 'bg-white text-text shadow-sm' : 'text-gray-400'}`}>
+            <button onClick={() => setViewTab('pkgUaEu')}
+              className={`flex-1 py-1.5 rounded-md text-[11px] font-semibold text-center cursor-pointer transition-all ${viewTab === 'pkgUaEu' ? 'bg-white text-text shadow-sm' : 'text-gray-400'}`}>
+              UA→EU
+            </button>
+            <button onClick={() => setViewTab('pkgEuUa')}
+              className={`flex-1 py-1.5 rounded-md text-[11px] font-semibold text-center cursor-pointer transition-all ${viewTab === 'pkgEuUa' ? 'bg-white text-text shadow-sm' : 'text-gray-400'}`}>
+              EU→UA
+            </button>
+            {hasShipping && (
+              <button onClick={() => setViewTab('shipping')}
+                className={`flex-1 py-1.5 rounded-md text-[11px] font-semibold text-center cursor-pointer transition-all ${viewTab === 'shipping' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400'}`}>
+                <Truck className="w-3 h-3 inline mr-1 -mt-0.5" />Відправка
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Sub-tabs for Passengers: Усі | UA→EU | EU→UA */}
+        {isPassengersMode && (
+          <div className="flex items-center gap-1 mb-2 bg-gray-100 rounded-lg p-0.5">
+            <button onClick={() => setViewTab('passengers')}
+              className={`flex-1 py-1.5 rounded-md text-[11px] font-semibold text-center cursor-pointer transition-all ${viewTab === 'passengers' ? 'bg-white text-text shadow-sm' : 'text-gray-400'}`}>
               <LayoutGrid className="w-3 h-3 inline mr-1 -mt-0.5" />Усі
             </button>
-            <button onClick={() => setViewTab('packages')}
-              className={`flex-1 py-1.5 rounded-md text-[11px] font-semibold text-center cursor-pointer transition-all ${viewTab === 'packages' ? 'bg-white text-text shadow-sm' : 'text-gray-400'}`}>
-              <Package className="w-3 h-3 inline mr-1 -mt-0.5" />Отримання
+            <button onClick={() => setViewTab('paxUaEu')}
+              className={`flex-1 py-1.5 rounded-md text-[11px] font-semibold text-center cursor-pointer transition-all ${viewTab === 'paxUaEu' ? 'bg-white text-text shadow-sm' : 'text-gray-400'}`}>
+              UA→EU
             </button>
-            <button onClick={() => setViewTab('shipping')}
-              className={`flex-1 py-1.5 rounded-md text-[11px] font-semibold text-center cursor-pointer transition-all ${viewTab === 'shipping' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400'}`}>
-              <Truck className="w-3 h-3 inline mr-1 -mt-0.5" />Відправка
+            <button onClick={() => setViewTab('paxEuUa')}
+              className={`flex-1 py-1.5 rounded-md text-[11px] font-semibold text-center cursor-pointer transition-all ${viewTab === 'paxEuUa' ? 'bg-white text-text shadow-sm' : 'text-gray-400'}`}>
+              EU→UA
             </button>
           </div>
         )}
@@ -292,7 +373,7 @@ export function ListScreen() {
                     <span className="text-[10px] font-bold text-muted bg-gray-100 px-2 py-0.5 rounded-full">{filteredPackages.length}</span>
                   </div>
                   {filteredPackages.map((p, i) => (
-                    <PackageCard key={p._statusKey} pkg={p} index={i} searchQuery={searchQuery} onEdit={setEditItem} />
+                    <PackageCard key={p._statusKey} pkg={p} index={i} searchQuery={searchQuery} onEdit={setEditItem} onConvertPickup={setConvertingPickup} />
                   ))}
                 </>
               )}
@@ -315,53 +396,46 @@ export function ListScreen() {
             <ShippingCard key={item._statusKey || `ship_${item.rowNum}_${i}`} item={item} index={i} onEdit={setEditItem} />
           ))
         ) : showAllTab ? (
-          (filteredPassengers.length === 0 && filteredPackages.length === 0 && filteredShipping.length === 0) ? <Empty /> : (
+          hidingCompleted ? (
+            <div className="flex flex-col items-center justify-center py-16">
+              <RefreshCw className="w-7 h-7 text-brand animate-spin mb-3" />
+              <p className="text-muted text-sm">Оновлення...</p>
+            </div>
+          ) : (allTabPassengers.length === 0 && allTabPackages.length === 0) ? <Empty /> : (
             <>
-              {filteredPassengers.length > 0 && (
+              {allTabPassengers.length > 0 && (
                 <>
                   <div className="flex items-center gap-2 px-1">
                     <Users className="w-4 h-4 text-brand" />
                     <span className="text-xs font-bold text-text">Пасажири</span>
-                    <span className="text-[10px] font-bold text-muted bg-gray-100 px-2 py-0.5 rounded-full">{filteredPassengers.length}</span>
+                    <span className="text-[10px] font-bold text-muted bg-gray-100 px-2 py-0.5 rounded-full">{allTabPassengers.length}</span>
                   </div>
-                  {filteredPassengers.map((p, i) => (
+                  {allTabPassengers.map((p, i) => (
                     <PassengerCard key={p._statusKey} passenger={p} index={i} searchQuery={searchQuery} onEdit={setEditItem} />
                   ))}
                 </>
               )}
-              {filteredPackages.length > 0 && (
+              {allTabPackages.length > 0 && (
                 <>
                   <div className="flex items-center gap-2 px-1 mt-2">
                     <Package className="w-4 h-4 text-brand" />
                     <span className="text-xs font-bold text-text">Посилки</span>
-                    <span className="text-[10px] font-bold text-muted bg-gray-100 px-2 py-0.5 rounded-full">{filteredPackages.length}</span>
+                    <span className="text-[10px] font-bold text-muted bg-gray-100 px-2 py-0.5 rounded-full">{allTabPackages.length}</span>
                   </div>
-                  {filteredPackages.map((p, i) => (
-                    <PackageCard key={p._statusKey} pkg={p} index={i} searchQuery={searchQuery} onEdit={setEditItem} />
-                  ))}
-                </>
-              )}
-              {filteredShipping.length > 0 && (
-                <>
-                  <div className="flex items-center gap-2 px-1 mt-2">
-                    <Truck className="w-4 h-4 text-blue-500" />
-                    <span className="text-xs font-bold text-text">Відправка</span>
-                    <span className="text-[10px] font-bold text-muted bg-gray-100 px-2 py-0.5 rounded-full">{filteredShipping.length}</span>
-                  </div>
-                  {filteredShipping.map((item, i) => (
-                    <ShippingCard key={item._statusKey || `ship_${item.rowNum}_${i}`} item={item} index={i} onEdit={setEditItem} />
+                  {allTabPackages.map((p, i) => (
+                    <PackageCard key={p._statusKey} pkg={p} index={i} searchQuery={searchQuery} onEdit={setEditItem} onConvertPickup={setConvertingPickup} />
                   ))}
                 </>
               )}
             </>
           )
-        ) : viewTab === 'passengers' ? (
+        ) : isPassengersMode ? (
           currentItems.length === 0 ? <Empty /> : (currentItems as Passenger[]).map((p, i) => (
             <PassengerCard key={p._statusKey} passenger={p} index={i} searchQuery={searchQuery} onEdit={setEditItem} />
           ))
         ) : (
           currentItems.length === 0 ? <Empty /> : (currentItems as Pkg[]).map((p, i) => (
-            <PackageCard key={p._statusKey} pkg={p} index={i} searchQuery={searchQuery} onEdit={setEditItem} />
+            <PackageCard key={p._statusKey} pkg={p} index={i} searchQuery={searchQuery} onEdit={setEditItem} onConvertPickup={setConvertingPickup} />
           ))
         )}
       </div>
@@ -379,7 +453,143 @@ export function ListScreen() {
       {showColumnEditor && <ColumnEditor onClose={() => setShowColumnEditor(false)} />}
       {showAddModal && <AddItemModal onClose={() => setShowAddModal(false)} onAdded={refresh} />}
       {editItem && <EditItemModal item={editItem} onClose={() => setEditItem(null)} onSaved={refresh} />}
+      {convertingPickup && (
+        <AddItemModal
+          onClose={() => setConvertingPickup(null)}
+          onAdded={async () => {
+            const pkg = convertingPickup;
+            const rn = isUnifiedView && pkg._sourceRoute ? pkg._sourceRoute : currentSheet;
+            setStatus(pkg._statusKey, 'completed');
+            try { await updateItemStatus(driverName, rn, pkg, 'completed'); } catch { /* ignore */ }
+            setConvertingPickup(null);
+            refresh();
+          }}
+          forceShipping
+          prefill={{
+            senderName: convertingPickup.senderName,
+            senderPhone: convertingPickup.senderPhone,
+            addrFrom: convertingPickup.addrFrom,
+            pkgDesc: convertingPickup.pkgDesc,
+            city: convertingPickup.city,
+            recipientName: convertingPickup.recipientName,
+            recipientPhone: convertingPickup.recipientPhone,
+            recipientAddr: convertingPickup.recipientAddr,
+            pkgWeight: convertingPickup.pkgWeight,
+            amount: convertingPickup.amount,
+            currency: convertingPickup.currency,
+          }}
+        />
+      )}
+      {splashTheme && <ThemeSplash theme={splashTheme} onDone={() => setSplashTheme(null)} />}
+      {themeMenuOpen && (
+        <div
+          className="fixed inset-0 z-[90] bg-black/50 flex items-end sm:items-center justify-center"
+          onClick={() => setThemeMenuOpen(false)}
+        >
+          <div
+            className="bg-card w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl p-4 shadow-2xl"
+            style={{ animation: 'slideUp 0.25s ease-out' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-sm font-bold text-text">Оформлення</span>
+              <button onClick={() => setThemeMenuOpen(false)} className="p-1 rounded-lg hover:bg-gray-100 cursor-pointer">
+                <X className="w-4 h-4 text-muted" />
+              </button>
+            </div>
+            <div className="space-y-2">
+              {THEME_LIST.map((t) => {
+                const active = t.key === theme;
+                return (
+                  <button
+                    key={t.key}
+                    onClick={() => pickTheme(t.key)}
+                    className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl border-2 cursor-pointer active:scale-[0.98] transition-all ${
+                      active ? 'border-brand bg-brand/10' : 'border-border bg-bg hover:border-brand/40'
+                    }`}
+                  >
+                    <div className="w-9 h-9 flex items-center justify-center rounded-lg bg-card shrink-0">
+                      <ThemeBadge theme={t.key} unified={false} />
+                    </div>
+                    <div className="flex-1 text-left">
+                      <div className="text-sm font-bold text-text">{t.emoji} {t.label}</div>
+                    </div>
+                    {active && <div className="w-2 h-2 rounded-full bg-brand" />}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
+  );
+}
+
+function ThemeBadge({ theme, unified }: { theme: Theme; unified: boolean }) {
+  if (unified) return <BarChart3 className="w-5 h-5 text-brand" />;
+  if (theme === 'detonator') {
+    return (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+        <circle cx="12" cy="12" r="10" fill="#ffd500" stroke="#d40511" strokeWidth="1.5" />
+        <text x="12" y="16" fontSize="9" fontWeight="900" fill="#d40511" textAnchor="middle">DHL</text>
+      </svg>
+    );
+  }
+  if (theme === 'lightning') {
+    return (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+        <circle cx="12" cy="12" r="10" fill="#de2329" stroke="#7a0e12" strokeWidth="1.2" />
+        <path d="M13,4 L7,13 L11,13 L9,20 L17,10 L13,10 L15,4 Z" fill="#fff" />
+      </svg>
+    );
+  }
+  if (theme === 'lone-wolf') {
+    return (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+        <defs>
+          <linearGradient id="wolfGrad" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stopColor="#e0e0e8" />
+            <stop offset="100%" stopColor="#7a7a82" />
+          </linearGradient>
+        </defs>
+        <path
+          d="M4,11 L2,7 L5,8 L6,4 L9,7 L12,3 L15,7 L18,4 L19,8 L22,7 L20,11 L21,15 L18,19 L15,21 L12,20 L9,21 L6,19 L3,15 Z"
+          fill="url(#wolfGrad)"
+          stroke="#4a4a52"
+          strokeWidth="0.6"
+          strokeLinejoin="round"
+        />
+        <circle cx="9.5" cy="13" r="1" fill="#0a0a0c" />
+        <circle cx="14.5" cy="13" r="1" fill="#0a0a0c" />
+        <path d="M11,16 L12,17 L13,16" stroke="#0a0a0c" strokeWidth="0.8" strokeLinecap="round" fill="none" />
+      </svg>
+    );
+  }
+  // top-driver
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+      <defs>
+        <linearGradient id="hexGrad" x1="0" x2="1" y1="0" y2="1">
+          <stop offset="0%" stopColor="#34d399" />
+          <stop offset="100%" stopColor="#16a34a" />
+        </linearGradient>
+      </defs>
+      <path
+        d="M12,2 L21,7 L21,17 L12,22 L3,17 L3,7 Z"
+        fill="url(#hexGrad)"
+        stroke="#0f6b30"
+        strokeWidth="0.6"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M7,14 L8.5,10 L15.5,10 L17,14 Z"
+        fill="#fff"
+        opacity="0.95"
+      />
+      <circle cx="9" cy="15" r="1.2" fill="#0f1f12" />
+      <circle cx="15" cy="15" r="1.2" fill="#0f1f12" />
+    </svg>
   );
 }
 

@@ -1,323 +1,731 @@
-import { CONFIG } from '../config';
+import { supabase } from '../lib/supabase';
+import { readSession } from '../lib/session';
 import type { Route, ShippingRoute, Passenger, Package, ShippingItem, RouteItem, ExpenseItem, ExpenseAdvance } from '../types';
 
 // ============================================
-// Читання через Google Sheets gviz API (публічна таблиця)
-// Це НАБАГАТО швидше ніж Apps Script
+// Helpers
 // ============================================
 
-async function fetchSheet(sheetName: string): Promise<string[][]> {
-  const url = `https://docs.google.com/spreadsheets/d/${CONFIG.SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`;
-  const response = await fetch(url);
-  if (!response.ok) throw new Error('Не вдалося завантажити: ' + sheetName);
-  const csv = await response.text();
-  return parseCsv(csv);
+function getTenantId(): string {
+  return readSession()?.tenant_id ?? 'gresco';
 }
 
-function parseCsv(csv: string): string[][] {
-  const rows: string[][] = [];
-  let current = '';
-  let inQuotes = false;
-  let row: string[] = [];
+function s(v: unknown): string {
+  return v == null ? '' : String(v);
+}
 
-  for (let i = 0; i < csv.length; i++) {
-    const ch = csv[i];
-    if (inQuotes) {
-      if (ch === '"' && csv[i + 1] === '"') {
-        current += '"';
-        i++;
-      } else if (ch === '"') {
-        inQuotes = false;
-      } else {
-        current += ch;
-      }
-    } else {
-      if (ch === '"') {
-        inQuotes = true;
-      } else if (ch === ',') {
-        row.push(current);
-        current = '';
-      } else if (ch === '\n' || (ch === '\r' && csv[i + 1] === '\n')) {
-        row.push(current);
-        current = '';
-        if (row.some((c) => c.trim())) rows.push(row);
-        row = [];
-        if (ch === '\r') i++;
-      } else {
-        current += ch;
-      }
-    }
+// ============================================
+// Routes list
+// ============================================
+
+export async function fetchRoutes(): Promise<{ routes: Route[]; shipping: ShippingRoute[] }> {
+  const tenantId = getTenantId();
+
+  const { data, error } = await supabase
+    .from('routes')
+    .select('rte_id, record_type, is_placeholder')
+    .eq('tenant_id', tenantId);
+
+  if (error) throw error;
+
+  const routeMap: Record<string, Route> = {};
+  for (const row of data ?? []) {
+    const name = row.rte_id || 'Маршрут';
+    if (!routeMap[name]) routeMap[name] = { name, count: 0, paxCount: 0, pkgCount: 0 };
+    if (row.is_placeholder) continue;
+    routeMap[name].count++;
+    const t = (row.record_type || '').toLowerCase();
+    if (t === 'пасажир' || t === 'passenger') routeMap[name].paxCount!++;
+    else routeMap[name].pkgCount!++;
   }
-  if (current || row.length) {
-    row.push(current);
-    if (row.some((c) => c.trim())) rows.push(row);
+
+  const routes = Object.values(routeMap).sort((a, b) => a.name.localeCompare(b.name));
+
+  // Dispatches — count per rte_id
+  const { data: dispData } = await supabase
+    .from('dispatches')
+    .select('rte_id')
+    .eq('tenant_id', tenantId);
+
+  const dispMap: Record<string, number> = {};
+  for (const d of dispData ?? []) {
+    const name = d.rte_id || '';
+    dispMap[name] = (dispMap[name] || 0) + 1;
   }
-  return rows;
+
+  // Build shipping routes from dispatches that have distinct rte_id values
+  const shipping: ShippingRoute[] = Object.entries(dispMap).map(([name, count]) => ({
+    name: name.replace('Маршрут_', 'Відправка_'),
+    label: name.replace('Маршрут_', 'Відправка ').replace('_', ' '),
+    count,
+  }));
+
+  return { routes, shipping };
 }
 
-// Column indices for Маршрут sheets (matching .gs COL)
-const C = {
-  RTE_ID: 0, TYPE: 1, DIRECTION: 2, SOURCE_SHEET: 3, ITEM_ID: 4,
-  DATE_CREATED: 5, DATE_TRIP: 6, TIMING: 7, AUTO_ID: 8, AUTO_NUM: 9,
-  DRIVER: 10, DRIVER_PHONE: 11, CITY: 12, SEAT: 13, PAX_NAME: 14,
-  PAX_PHONE: 15, ADDR_FROM: 16, ADDR_TO: 17, SEATS_COUNT: 18,
-  BAGGAGE_WEIGHT: 19, SENDER_NAME: 20, RECIPIENT_NAME: 21,
-  RECIPIENT_PHONE: 22, RECIPIENT_ADDR: 23, INTERNAL_NUM: 24,
-  TTN: 25, PKG_DESC: 26, PKG_WEIGHT: 27, AMOUNT: 28, CURRENCY: 29,
-  DEPOSIT: 30, DEPOSIT_CURRENCY: 31, PAY_FORM: 32, PAY_STATUS: 33,
-  DEBT: 34, PAY_NOTE: 35, STATUS: 36, STATUS_CRM: 37, TAG: 38,
-  NOTE: 43, SMS_NOTE: 44,
-};
+// ============================================
+// Common route row → driver-crm object
+// ============================================
 
-// Column indices for Відправка sheets
-const CS = {
-  DISPATCH_ID: 0, DATE_CREATED: 1, RTE_ID: 2, DATE_TRIP: 3,
-  AUTO_NUM: 5, DRIVER: 6, SENDER_PHONE: 9, SENDER_NAME: 10,
-  RECIPIENT_NAME: 11, RECIPIENT_PHONE: 12, RECIPIENT_ADDR: 13,
-  INTERNAL_NUM: 14, WEIGHT: 15, DESCRIPTION: 16, PHOTO: 17,
-  AMOUNT: 18, CURRENCY: 19, DEPOSIT: 20, DEPOSIT_CURRENCY: 21, PAY_FORM: 22,
-  PAY_STATUS: 23, DEBT: 24, STATUS: 25, PKG_ID: 26, NOTE: 27,
-};
-
-function val(row: string[], idx: number): string {
-  return (row[idx] || '').trim();
-}
-
-function buildCommon(row: string[], sheetName: string, rowNum: number) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function buildCommon(r: any, sheetName: string) {
   return {
-    rowNum,
-    rteId: val(row, C.RTE_ID),
-    type: val(row, C.TYPE),
-    direction: val(row, C.DIRECTION),
-    itemId: val(row, C.ITEM_ID),
-    dateCreated: val(row, C.DATE_CREATED),
-    dateTrip: val(row, C.DATE_TRIP),
-    timing: val(row, C.TIMING),
-    autoNum: val(row, C.AUTO_NUM),
-    driver: val(row, C.DRIVER),
-    city: val(row, C.CITY),
-    amount: val(row, C.AMOUNT),
-    currency: val(row, C.CURRENCY),
-    deposit: val(row, C.DEPOSIT),
-    depositCurrency: val(row, C.DEPOSIT_CURRENCY),
-    payForm: val(row, C.PAY_FORM),
-    payStatus: val(row, C.PAY_STATUS),
-    debt: val(row, C.DEBT),
-    payNote: val(row, C.PAY_NOTE),
-    status: val(row, C.STATUS) || 'pending',
-    statusCrm: val(row, C.STATUS_CRM),
-    tag: val(row, C.TAG),
-    note: val(row, C.NOTE),
-    smsNote: val(row, C.SMS_NOTE),
+    rowNum: 0,                                 // no row numbers in Supabase — use id
+    _uuid: r.id,
+    rteId: s(r.rte_id),
+    type: s(r.record_type),
+    direction: s(r.direction),
+    itemId: s(r.pax_id_or_pkg_id),
+    dateCreated: s(r.created_at),
+    dateTrip: s(r.route_date),
+    timing: s(r.timing),
+    autoNum: s(r.vehicle_name),
+    driver: s(r.driver_name),
+    city: s(r.city),
+    amount: s(r.amount),
+    currency: s(r.amount_currency),
+    deposit: s(r.deposit),
+    depositCurrency: s(r.deposit_currency),
+    payForm: s(r.payment_form),
+    payStatus: s(r.payment_status),
+    debt: s(r.debt),
+    payNote: s(r.payment_notes),
+    status: s(r.status) || 'pending',
+    statusCrm: s(r.crm_status),
+    tag: s(r.tag),
+    note: s(r.notes),
+    smsNote: s(r.sms_notes),
+    tips: s(r.tips),
+    tipsCurrency: s(r.tips_currency),
     sheet: sheetName,
     _statusKey: '',
     _sourceRoute: undefined as string | undefined,
   };
 }
 
-// ---- Routes (fetch real counts from Apps Script) ----
-export async function fetchRoutes(): Promise<{ routes: Route[]; shipping: ShippingRoute[] }> {
-  try {
-    const response = await fetch(CONFIG.API_URL + '?action=getAvailableRoutes');
-    const text = await response.text();
-    const data = JSON.parse(text);
-    if (data.success) return { routes: data.routes, shipping: data.shipping };
-  } catch { /* fallback to config */ }
-  return {
-    routes: CONFIG.ROUTES.map((name) => ({ name, count: 0 })),
-    shipping: CONFIG.SHIPPING.map((s) => ({ ...s, count: 0 })),
-  };
-}
+// ============================================
+// Passengers
+// ============================================
 
-// ---- Passengers ----
 export async function fetchPassengers(sheetName: string): Promise<Passenger[]> {
-  const rows = await fetchSheet(sheetName);
-  const items: Passenger[] = [];
-  // Skip header (row 0)
-  for (let i = 1; i < rows.length; i++) {
-    const row = rows[i];
-    const type = val(row, C.TYPE).toLowerCase();
-    if (type !== 'пасажир') continue;
-    if (!val(row, C.ITEM_ID)) continue;
+  const tenantId = getTenantId();
 
-    items.push({
-      ...buildCommon(row, sheetName, i + 1),
-      name: val(row, C.PAX_NAME),
-      phone: val(row, C.PAX_PHONE),
-      addrFrom: val(row, C.ADDR_FROM),
-      addrTo: val(row, C.ADDR_TO),
-      seatsCount: val(row, C.SEATS_COUNT),
-      baggageWeight: val(row, C.BAGGAGE_WEIGHT),
-      seat: val(row, C.SEAT),
-    } as Passenger);
+  let query = supabase
+    .from('routes')
+    .select('*')
+    .eq('tenant_id', tenantId)
+    .ilike('record_type', '%пасажир%');
+
+  if (sheetName && sheetName !== '__unified__') {
+    query = query.eq('rte_id', sheetName);
   }
-  return items;
+
+  const { data, error } = await query;
+  if (error) throw error;
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? [] as any[])
+    .filter((r: any) => r.pax_id_or_pkg_id)
+    .map((r: any) => ({
+      ...buildCommon(r, r.rte_id || sheetName),
+      name: s(r.passenger_name),
+      phone: s(r.passenger_phone),
+      addrFrom: s(r.departure_address),
+      addrTo: s(r.arrival_address),
+      seatsCount: s(r.seats_count),
+      baggageWeight: s(r.baggage_weight),
+      seat: s(r.seat_number),
+    } as Passenger));
 }
 
-// ---- Packages ----
+// ============================================
+// Packages
+// ============================================
+
 export async function fetchPackages(sheetName: string): Promise<Package[]> {
-  const rows = await fetchSheet(sheetName);
-  const items: Package[] = [];
-  for (let i = 1; i < rows.length; i++) {
-    const row = rows[i];
-    const type = val(row, C.TYPE).toLowerCase();
-    if (type !== 'посилка') continue;
-    if (!val(row, C.ITEM_ID)) continue;
+  const tenantId = getTenantId();
 
-    items.push({
-      ...buildCommon(row, sheetName, i + 1),
-      senderName: val(row, C.SENDER_NAME),
-      senderPhone: val(row, C.PAX_PHONE),
-      addrFrom: val(row, C.ADDR_FROM),
-      recipientName: val(row, C.RECIPIENT_NAME),
-      recipientPhone: val(row, C.RECIPIENT_PHONE),
-      recipientAddr: val(row, C.RECIPIENT_ADDR),
-      internalNum: val(row, C.INTERNAL_NUM),
-      ttn: val(row, C.TTN),
-      pkgDesc: val(row, C.PKG_DESC),
-      pkgWeight: val(row, C.PKG_WEIGHT),
-    } as Package);
+  let query = supabase
+    .from('routes')
+    .select('*')
+    .eq('tenant_id', tenantId)
+    .ilike('record_type', '%посилк%');
+
+  if (sheetName && sheetName !== '__unified__') {
+    query = query.eq('rte_id', sheetName);
   }
-  return items;
+
+  const { data, error } = await query;
+  if (error) throw error;
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? [] as any[])
+    .filter((r: any) => r.pax_id_or_pkg_id)
+    .map((r: any) => ({
+      ...buildCommon(r, r.rte_id || sheetName),
+      senderName: s(r.sender_name),
+      senderPhone: s(r.passenger_phone),
+      addrFrom: s(r.departure_address),
+      recipientName: s(r.recipient_name),
+      recipientPhone: s(r.recipient_phone),
+      recipientAddr: s(r.recipient_address),
+      internalNum: s(r.internal_number),
+      ttn: s(r.ttn_number),
+      pkgDesc: s(r.package_description),
+      pkgWeight: s(r.package_weight),
+    } as Package));
 }
 
-// ---- Shipping (read-only) ----
+// ============================================
+// Shipping (dispatches — read-only for driver)
+// ============================================
+
 export async function fetchShippingItems(sheetName: string): Promise<ShippingItem[]> {
-  const rows = await fetchSheet(sheetName);
-  const items: ShippingItem[] = [];
-  for (let i = 1; i < rows.length; i++) {
-    const row = rows[i];
-    const dispatchId = val(row, CS.DISPATCH_ID);
-    const senderName = val(row, CS.SENDER_NAME);
-    if (!dispatchId && !senderName) continue;
+  const tenantId = getTenantId();
+  // sheetName comes as "Відправка_1" — map back to rte_id "Маршрут_1"
+  const rteId = sheetName.replace('Відправка_', 'Маршрут_');
 
-    items.push({
-      rowNum: i + 1,
-      dispatchId,
-      dateCreated: val(row, CS.DATE_CREATED),
-      dateTrip: val(row, CS.DATE_TRIP),
-      autoNum: val(row, CS.AUTO_NUM),
-      driver: val(row, CS.DRIVER),
-      senderPhone: val(row, CS.SENDER_PHONE),
-      senderName,
-      recipientName: val(row, CS.RECIPIENT_NAME),
-      recipientPhone: val(row, CS.RECIPIENT_PHONE),
-      recipientAddr: val(row, CS.RECIPIENT_ADDR),
-      internalNum: val(row, CS.INTERNAL_NUM),
-      weight: val(row, CS.WEIGHT),
-      description: val(row, CS.DESCRIPTION),
-      photo: val(row, CS.PHOTO),
-      amount: val(row, CS.AMOUNT),
-      currency: val(row, CS.CURRENCY),
-      deposit: val(row, CS.DEPOSIT),
-      depositCurrency: val(row, CS.DEPOSIT_CURRENCY),
-      payForm: val(row, CS.PAY_FORM),
-      payStatus: val(row, CS.PAY_STATUS),
-      debt: val(row, CS.DEBT),
-      status: val(row, CS.STATUS),
-      pkgId: val(row, CS.PKG_ID),
-      note: val(row, CS.NOTE),
-      sheet: sheetName,
-      _statusKey: '',
-      _sourceRoute: undefined as string | undefined,
-    });
+  let query = supabase
+    .from('dispatches')
+    .select('*')
+    .eq('tenant_id', tenantId);
+
+  if (sheetName && sheetName !== '__unified__') {
+    query = query.eq('rte_id', rteId);
   }
-  return items;
+
+  const { data, error } = await query;
+  if (error) throw error;
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? [] as any[]).map((r: any) => ({
+    rowNum: 0,
+    _uuid: r.id,
+    dispatchId: s(r.dispatch_id),
+    dateCreated: s(r.created_at),
+    dateTrip: s(r.route_date),
+    autoNum: s(r.vehicle_name),
+    driver: s(r.driver_name),
+    senderPhone: s(r.sender_phone),
+    senderName: s(r.sender_name),
+    recipientName: s(r.recipient_name),
+    recipientPhone: s(r.recipient_phone),
+    recipientAddr: s(r.recipient_address),
+    internalNum: s(r.internal_number),
+    weight: s(r.weight_kg),
+    description: s(r.description),
+    photo: s(r.photo_url),
+    amount: s(r.total_amount),
+    currency: s(r.payment_currency),
+    deposit: s(r.deposit),
+    depositCurrency: s(r.deposit_currency),
+    payForm: s(r.payment_form),
+    payStatus: s(r.payment_status),
+    debt: s(r.debt),
+    status: s(r.status),
+    pkgId: s(r.pkg_id),
+    note: s(r.notes),
+    tips: s(r.tips),
+    tipsCurrency: s(r.tips_currency),
+    sheet: sheetName,
+    _statusKey: '',
+    _sourceRoute: undefined as string | undefined,
+  }));
 }
 
-// ---- Status Update (still via Apps Script POST) ----
+// ============================================
+// Expenses
+// ============================================
+
+const CATEGORY_COL: Record<string, string> = {
+  fuel: 'fuel', food: 'food', parking: 'parking', toll: 'toll',
+  fine: 'fine', customs: 'customs', topUp: 'top_up', other: 'other', tips: 'tips',
+};
+
+function detectCategory(row: Record<string, unknown>): { category: string; amount: number } {
+  for (const [cat, col] of Object.entries(CATEGORY_COL)) {
+    const v = parseFloat(String(row[col] ?? '0')) || 0;
+    if (v > 0) return { category: cat, amount: v };
+  }
+  return { category: 'other', amount: 0 };
+}
+
+export async function fetchExpenses(routeName: string): Promise<{ items: ExpenseItem[]; advance: ExpenseAdvance | null }> {
+  const tenantId = getTenantId();
+
+  let query = supabase
+    .from('expenses')
+    .select('*')
+    .eq('tenant_id', tenantId)
+    .order('created_at', { ascending: true });
+
+  if (routeName && routeName !== '__unified__') {
+    query = query.eq('rte_id', routeName);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+
+  const rows = data ?? [];
+  let advance: ExpenseAdvance | null = null;
+  const items: ExpenseItem[] = [];
+
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+
+    // First row per route may contain advance info
+    if (i === 0 || (!advance && (parseFloat(r.advance_cash) > 0 || parseFloat(r.advance_card) > 0))) {
+      const advCash = parseFloat(r.advance_cash) || 0;
+      const advCard = parseFloat(r.advance_card) || 0;
+      if (advCash > 0 || advCard > 0) {
+        advance = {
+          cash: advCash,
+          cashCurrency: r.advance_cash_currency || 'UAH',
+          card: advCard,
+          cardCurrency: r.advance_card_currency || 'UAH',
+        };
+      }
+    }
+
+    const detected = detectCategory(r);
+    if (detected.amount === 0 && !r.other_description && !r.notes) continue;
+
+    items.push({
+      rowNum: 0,
+      _uuid: r.id,
+      expId: s(r.exp_id),
+      dateTrip: s(r.trip_date ?? r.route_date),
+      driver: s(r.driver_name),
+      category: detected.category as ExpenseItem['category'],
+      amount: detected.amount,
+      currency: s(r.expense_currency) || 'CHF',
+      description: s(r.other_description || r.notes || ''),
+      _routeName: s(r.rte_id),
+    } as ExpenseItem & { _uuid: string; _routeName: string });
+  }
+
+  return { items, advance };
+}
+
+// ============================================
+// WRITE: Status Update
+// ============================================
+
 export async function updateItemStatus(
-  driverName: string,
-  routeName: string,
+  _driverName: string,
+  _routeName: string,
   item: RouteItem | { itemId: string; type: string },
   status: string,
   cancelReason = ''
 ) {
-  const itemId = 'dispatchId' in item ? (item as ShippingItem).dispatchId : (item as Passenger | Package).itemId;
-  const itemType = 'dispatchId' in item ? 'відправка' : (item as Passenger | Package).type;
-  const phone = 'phone' in item ? (item as Passenger).phone : ('recipientPhone' in item ? (item as Package | ShippingItem).recipientPhone : '');
+  const isDispatch = 'dispatchId' in item;
+  const table = isDispatch ? 'dispatches' : 'routes';
+  const idCol = isDispatch ? 'dispatch_id' : 'pax_id_or_pkg_id';
+  const idVal = isDispatch ? (item as ShippingItem).dispatchId : (item as Passenger | Package).itemId;
+  const tenantId = getTenantId();
 
-  const response = await fetch(CONFIG.API_URL, {
-    method: 'POST',
-    redirect: 'follow',
-    headers: { 'Content-Type': 'text/plain' },
-    body: JSON.stringify({
-      action: 'updateDriverStatus',
-      driverId: driverName,
-      routeName,
-      itemId,
-      itemType,
-      phone,
-      status,
-      cancelReason,
-    }),
-  });
-  const text = await response.text();
-  try { return JSON.parse(text); }
-  catch { throw new Error('Помилка оновлення'); }
+  const update: Record<string, unknown> = {
+    status,
+    updated_at: new Date().toISOString(),
+  };
+  if (cancelReason) update.cancel_reason = cancelReason;
+
+  const { error } = await supabase
+    .from(table)
+    .update(update)
+    .eq('tenant_id', tenantId)
+    .eq(idCol, idVal);
+
+  if (error) throw error;
+  return { success: true };
 }
 
-// ---- Expenses ----
-export async function fetchExpenses(routeName: string): Promise<{ items: ExpenseItem[]; advance: ExpenseAdvance | null }> {
-  const sheetName = routeName.replace('Маршрут_', 'Витрати_');
-  const response = await fetch(CONFIG.API_URL, {
-    method: 'POST',
-    redirect: 'follow',
-    headers: { 'Content-Type': 'text/plain' },
-    body: JSON.stringify({ action: 'getExpenses', payload: { sheetName } }),
-  });
-  const text = await response.text();
-  const data = JSON.parse(text);
-  if (data.success) return { items: data.items || [], advance: data.advance || null };
-  throw new Error(data.error || 'Помилка завантаження витрат');
+// ============================================
+// WRITE: Add new item (passenger or package)
+// ============================================
+
+export async function addRouteItem(data: Record<string, string>) {
+  const tenantId = getTenantId();
+  const typeRaw = data.itemType || data.type || '';
+  const isPackage = typeRaw.toLowerCase().includes('посилк');
+
+  const row: Record<string, unknown> = {
+    tenant_id: tenantId,
+    rte_id: data.routeName,
+    record_type: isPackage ? 'Посилка' : 'Пасажир',
+    direction: data.direction || '',
+    pax_id_or_pkg_id: data.itemId || `${isPackage ? 'PKG' : 'PAX'}-${Date.now()}`,
+    route_date: data.dateTrip || '',
+    timing: data.timing || '',
+    vehicle_name: data.autoNum || '',
+    driver_name: data.driverName || '',
+    city: data.city || '',
+    amount: data.amount || '',
+    amount_currency: data.currency || '',
+    payment_form: data.payForm || '',
+    notes: data.note || '',
+    status: 'pending',
+    is_placeholder: false,
+  };
+
+  if (data.deposit) row.deposit = data.deposit;
+  if (data.depositCurrency) row.deposit_currency = data.depositCurrency;
+
+  if (!isPackage) {
+    row.passenger_name = data.name || '';
+    row.passenger_phone = data.phone || '';
+    row.departure_address = data.addrFrom || '';
+    row.arrival_address = data.addrTo || '';
+    row.seats_count = data.seatsCount || '';
+    row.baggage_weight = data.baggageWeight || '';
+  } else {
+    row.sender_name = data.senderName || '';
+    row.passenger_phone = data.senderPhone || '';
+    row.recipient_name = data.recipientName || '';
+    row.recipient_phone = data.recipientPhone || '';
+    row.recipient_address = data.recipientAddr || '';
+    row.departure_address = data.addrFrom || '';
+    row.internal_number = data.internalNum || '';
+    row.ttn_number = data.ttn || '';
+    row.package_description = data.pkgDesc || '';
+    row.package_weight = data.pkgWeight || '';
+  }
+
+  const { error } = await supabase.from('routes').insert(row);
+  if (error) throw error;
+  return { success: true };
 }
+
+// ============================================
+// WRITE: Update driver fields
+// ============================================
+
+const FIELD_MAP: Record<string, string> = {
+  status: 'status',
+  dateTrip: 'route_date',
+  timing: 'timing',
+  name: 'passenger_name',
+  phone: 'passenger_phone',
+  addrFrom: 'departure_address',
+  addrTo: 'arrival_address',
+  seatsCount: 'seats_count',
+  baggageWeight: 'baggage_weight',
+  seat: 'seat_number',
+  city: 'city',
+  amount: 'amount',
+  currency: 'amount_currency',
+  deposit: 'deposit',
+  depositCurrency: 'deposit_currency',
+  payForm: 'payment_form',
+  payStatus: 'payment_status',
+  debt: 'debt',
+  payNote: 'payment_notes',
+  note: 'notes',
+  smsNote: 'sms_notes',
+  tag: 'tag',
+  senderName: 'sender_name',
+  senderPhone: 'passenger_phone',
+  recipientName: 'recipient_name',
+  recipientPhone: 'recipient_phone',
+  recipientAddr: 'recipient_address',
+  internalNum: 'internal_number',
+  ttn: 'ttn_number',
+  pkgDesc: 'package_description',
+  pkgWeight: 'package_weight',
+  weight: 'weight_kg',
+  description: 'description',
+  tips: 'tips',
+  tipsCurrency: 'tips_currency',
+};
+
+export async function updateDriverFields(itemId: string, _routeName: string, fields: Record<string, string>) {
+  const tenantId = getTenantId();
+  const update: Record<string, unknown> = { updated_at: new Date().toISOString() };
+
+  for (const [key, value] of Object.entries(fields)) {
+    const sbCol = FIELD_MAP[key] || key;
+    update[sbCol] = value;
+  }
+
+  const { error } = await supabase
+    .from('routes')
+    .update(update)
+    .eq('tenant_id', tenantId)
+    .eq('pax_id_or_pkg_id', itemId);
+
+  if (error) throw error;
+  return { success: true };
+}
+
+// ============================================
+// WRITE: Add expense
+// ============================================
 
 export async function addExpense(data: Record<string, string>) {
-  const response = await fetch(CONFIG.API_URL, {
-    method: 'POST',
-    redirect: 'follow',
-    headers: { 'Content-Type': 'text/plain' },
-    body: JSON.stringify({ action: 'addExpense', ...data }),
-  });
-  const text = await response.text();
-  try { return JSON.parse(text); }
-  catch { throw new Error('Помилка додавання витрати'); }
+  const tenantId = getTenantId();
+  const category = data.category;
+  const categoryCol = CATEGORY_COL[category];
+  if (!categoryCol) throw new Error('Невалідна категорія: ' + category);
+
+  const amount = parseFloat(data.amount);
+  if (!amount || amount <= 0) throw new Error('Невалідна сума');
+
+  const now = new Date();
+  const dateStr = now.toISOString().slice(0, 10);
+  const expId = 'EXP-' + dateStr.replace(/-/g, '') + '-' + now.toTimeString().slice(0, 8).replace(/:/g, '');
+
+  const row: Record<string, unknown> = {
+    tenant_id: tenantId,
+    exp_id: expId,
+    rte_id: data.routeName,
+    trip_date: dateStr,
+    driver_name: data.driverName || '',
+    expense_currency: data.currency || 'CHF',
+    other_description: data.description || '',
+    total_expenses: amount,
+    [categoryCol]: amount,
+  };
+
+  const { error } = await supabase.from('expenses').insert(row);
+  if (error) throw error;
+  return { success: true, expId };
 }
+
+// ============================================
+// WRITE: Delete expense
+// ============================================
 
 export async function deleteExpense(data: Record<string, string>) {
-  const response = await fetch(CONFIG.API_URL, {
-    method: 'POST',
-    redirect: 'follow',
-    headers: { 'Content-Type': 'text/plain' },
-    body: JSON.stringify({ action: 'deleteExpense', ...data }),
-  });
-  const text = await response.text();
-  try { return JSON.parse(text); }
-  catch { throw new Error('Помилка видалення витрати'); }
+  const tenantId = getTenantId();
+  const expId = data.expId;
+
+  if (!expId) throw new Error('Не вказано ID витрати');
+
+  const { error } = await supabase
+    .from('expenses')
+    .delete()
+    .eq('tenant_id', tenantId)
+    .eq('exp_id', expId);
+
+  if (error) throw error;
+  return { success: true };
 }
 
-// ---- Update advance ----
+// ============================================
+// WRITE: Update advance
+// ============================================
+
 export async function updateAdvance(data: Record<string, string>) {
-  const response = await fetch(CONFIG.API_URL, {
-    method: 'POST',
-    redirect: 'follow',
-    headers: { 'Content-Type': 'text/plain' },
-    body: JSON.stringify({ action: 'updateAdvance', ...data }),
-  });
-  const text = await response.text();
-  try { return JSON.parse(text); }
-  catch { throw new Error('Помилка оновлення коштів'); }
+  const tenantId = getTenantId();
+  const routeName = data.routeName;
+
+  // Advance is stored on the first expense row for a given route.
+  // Find or create it.
+  const { data: existing } = await supabase
+    .from('expenses')
+    .select('id')
+    .eq('tenant_id', tenantId)
+    .eq('rte_id', routeName)
+    .order('created_at', { ascending: true })
+    .limit(1);
+
+  const advanceFields = {
+    advance_cash: parseFloat(data.cash) || 0,
+    advance_cash_currency: data.cashCurrency || 'UAH',
+    advance_card: parseFloat(data.card) || 0,
+    advance_card_currency: data.cardCurrency || 'UAH',
+    updated_at: new Date().toISOString(),
+  };
+
+  if (existing && existing.length > 0) {
+    const { error } = await supabase
+      .from('expenses')
+      .update(advanceFields)
+      .eq('id', existing[0].id);
+    if (error) throw error;
+  } else {
+    // Create new row with advance info
+    const { error } = await supabase.from('expenses').insert({
+      tenant_id: tenantId,
+      rte_id: routeName,
+      exp_id: `ADV-${routeName}-${Date.now()}`,
+      driver_name: data.driverName || '',
+      ...advanceFields,
+    });
+    if (error) throw error;
+  }
+
+  return { success: true };
 }
 
-// ---- Add new item (passenger or package) ----
-export async function addRouteItem(data: Record<string, string>) {
-  const response = await fetch(CONFIG.API_URL, {
-    method: 'POST',
-    redirect: 'follow',
-    headers: { 'Content-Type': 'text/plain' },
-    body: JSON.stringify({ action: 'addRouteItem', ...data }),
+// ============================================
+// Archive search (for autofill in AddItemModal)
+// ============================================
+
+export interface ArchiveMatch {
+  dateArchive: string;
+  pkgId: string;
+  cliId: string;
+  senderName: string;
+  senderPhone: string;
+  recipientName: string;
+  recipientPhone: string;
+  recipientAddr: string;
+}
+
+export async function searchArchive(query: string): Promise<{ results: ArchiveMatch[]; totalMatches: number }> {
+  const tenantId = getTenantId();
+  const q = query.trim();
+  if (!q || q.length < 4) return { results: [], totalMatches: 0 };
+
+  const { data, error } = await supabase
+    .from('routes')
+    .select('*')
+    .eq('tenant_id', tenantId)
+    .or(`recipient_phone.ilike.%${q}%,passenger_phone.ilike.%${q}%,recipient_name.ilike.%${q}%,sender_name.ilike.%${q}%`)
+    .order('created_at', { ascending: false })
+    .limit(20);
+
+  if (error) throw error;
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const matches: ArchiveMatch[] = (data ?? []).map((r: any) => ({
+    dateArchive: s(r.route_date) || s(r.created_at),
+    pkgId: s(r.pax_id_or_pkg_id),
+    cliId: '',
+    senderName: s(r.sender_name),
+    senderPhone: s(r.passenger_phone),
+    recipientName: s(r.recipient_name),
+    recipientPhone: s(r.recipient_phone),
+    recipientAddr: s(r.recipient_address),
+  }));
+
+  const seen = new Set<string>();
+  const unique = matches.filter((m) => {
+    const key = m.recipientPhone || m.senderPhone || m.pkgId;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
   });
-  const text = await response.text();
-  try { return JSON.parse(text); }
-  catch { throw new Error('Помилка додавання'); }
+
+  return { results: unique.slice(0, 5), totalMatches: matches.length };
+}
+
+// ============================================
+// Route Summary (client-side computation)
+// ============================================
+
+export async function buildRouteSummary(
+  routeName: string,
+  _driverName: string,
+): Promise<import('../types').RouteSummary> {
+  const [pax, pkgs, expenses] = await Promise.all([
+    fetchPassengers(routeName),
+    fetchPackages(routeName),
+    fetchExpenses(routeName),
+  ]);
+
+  const shipName = routeName.replace('Маршрут_', 'Відправка_');
+  let shipItems: import('../types').ShippingItem[] = [];
+  try { shipItems = await fetchShippingItems(shipName); } catch { /* no shipping */ }
+
+  const addCur = (obj: Record<string, number>, cur: string, val: number) => {
+    if (!cur || !val) return;
+    obj[cur] = (obj[cur] || 0) + val;
+  };
+
+  const paxTotals: Record<string, number> = {};
+  const pkgTotals: Record<string, number> = {};
+  const shipTotals: Record<string, number> = {};
+  const tipsTotals: Record<string, number> = {};
+  const cashCollected: Record<string, number> = {};
+  const cardCollected: Record<string, number> = {};
+  const debtsTotals: Record<string, number> = {};
+
+  for (const p of pax) {
+    const amt = parseFloat(p.amount) || 0;
+    const cur = p.currency || 'UAH';
+    addCur(paxTotals, cur, amt);
+    const pf = (p.payForm || '').toLowerCase();
+    if (pf === 'готівка') addCur(cashCollected, cur, amt);
+    else if (pf === 'картка') addCur(cardCollected, cur, amt);
+    const debt = parseFloat(p.debt) || 0;
+    if (debt > 0) addCur(debtsTotals, cur, debt);
+    const tip = parseFloat(p.tips) || 0;
+    if (tip > 0) addCur(tipsTotals, p.tipsCurrency || 'CHF', tip);
+  }
+
+  for (const p of pkgs) {
+    const amt = parseFloat(p.amount) || 0;
+    const cur = p.currency || 'UAH';
+    addCur(pkgTotals, cur, amt);
+    const pf = (p.payForm || '').toLowerCase();
+    if (pf === 'готівка') addCur(cashCollected, cur, amt);
+    else if (pf === 'картка') addCur(cardCollected, cur, amt);
+    const debt = parseFloat(p.debt) || 0;
+    if (debt > 0) addCur(debtsTotals, cur, debt);
+    const tip = parseFloat(p.tips) || 0;
+    if (tip > 0) addCur(tipsTotals, p.tipsCurrency || 'CHF', tip);
+  }
+
+  for (const si of shipItems) {
+    const amt = parseFloat(si.amount) || 0;
+    const cur = si.currency || 'CHF';
+    addCur(shipTotals, cur, amt);
+    const debt = parseFloat(si.debt) || 0;
+    if (debt > 0) addCur(debtsTotals, cur, debt);
+    const tip = parseFloat(si.tips) || 0;
+    if (tip > 0) addCur(tipsTotals, si.tipsCurrency || 'CHF', tip);
+  }
+
+  const income: Record<string, number> = {};
+  for (const [c, v] of Object.entries(paxTotals)) addCur(income, c, v);
+  for (const [c, v] of Object.entries(pkgTotals)) addCur(income, c, v);
+  for (const [c, v] of Object.entries(shipTotals)) addCur(income, c, v);
+
+  const expTotals: Record<string, number> = {};
+  const expByCategory: Record<string, { amount: number; currency: string }> = {};
+  let advCash = 0, advCashCur = 'CHF', advCard = 0, advCardCur = 'CHF';
+
+  for (const e of expenses.items) {
+    addCur(expTotals, e.currency, e.amount);
+    expByCategory[e.category] = { amount: e.amount, currency: e.currency };
+  }
+  if (expenses.advance) {
+    advCash = expenses.advance.cash;
+    advCashCur = expenses.advance.cashCurrency || 'CHF';
+    advCard = expenses.advance.card;
+    advCardCur = expenses.advance.cardCurrency || 'CHF';
+  }
+
+  const toReturn: Record<string, number> = {};
+  for (const [c, v] of Object.entries(cashCollected)) addCur(toReturn, c, v);
+  for (const [c, v] of Object.entries(expTotals)) addCur(toReturn, c, -v);
+
+  return {
+    routeName,
+    passengers: paxTotals,
+    packages: pkgTotals,
+    shipping: shipTotals,
+    tips: tipsTotals,
+    income,
+    cashCollected,
+    cardCollected,
+    debts: debtsTotals,
+    advanceCash: advCash,
+    advanceCashCur: advCashCur,
+    advanceCard: advCard,
+    advanceCardCur: advCardCur,
+    expenses: expTotals,
+    expensesByCategory: expByCategory,
+    toReturn,
+  };
+}
+
+export async function saveRouteSummaryApi(
+  _routeName: string,
+  _driverName: string,
+  _summary: import('../types').RouteSummary,
+): Promise<void> {
+  // Summary is computed client-side — no separate save needed
 }

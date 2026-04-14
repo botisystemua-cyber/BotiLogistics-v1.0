@@ -17,7 +17,12 @@ type Section = 'clients' | 'users' | 'stats' | 'billing' | 'settings';
 const ROLES: Role[] = ['owner', 'manager', 'driver'];
 const ROLE_LABEL: Record<Role, string> = { owner: 'Власник', manager: 'Менеджер', driver: 'Водій' };
 
-const ALL_MODULES = ['passenger', 'cargo', 'driver', 'owner'] as const;
+const ALL_MODULES = ['passenger', 'cargo', 'driver'] as const;
+const MODULE_LABEL: Record<string, string> = {
+  passenger: 'Пасажири',
+  cargo: 'Посилки',
+  driver: 'Водійська',
+};
 
 export function AdminPanel({ onLogout }: { onLogout: () => void }) {
   const [section, setSection] = useState<Section>('clients');
@@ -177,9 +182,9 @@ function ClientsScreen() {
                   <Td className="font-semibold">{c.name}</Td>
                   <Td>
                     <div className="flex flex-wrap gap-1">
-                      {(c.modules ?? []).map((m) => (
+                      {(c.modules ?? []).filter((m) => MODULE_LABEL[m]).map((m) => (
                         <span key={m} className="px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-[10px] font-bold text-emerald-700 uppercase">
-                          {m}
+                          {MODULE_LABEL[m]}
                         </span>
                       ))}
                     </div>
@@ -319,13 +324,13 @@ function ClientFormModal({
                     key={m}
                     type="button"
                     onClick={() => toggleModule(m)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase border-2 cursor-pointer transition-all ${
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold border-2 cursor-pointer transition-all ${
                       on
                         ? 'bg-emerald-50 border-emerald-300 text-emerald-700'
                         : 'bg-bg border-border text-muted hover:border-emerald-200'
                     }`}
                   >
-                    {m}
+                    {MODULE_LABEL[m] ?? m}
                   </button>
                 );
               })}

@@ -5,8 +5,9 @@ import {
   HelpCircle, Receipt, X, Wallet, Pencil,
 } from 'lucide-react';
 import { useApp } from '../store/useAppStore';
-import { fetchExpenses, addExpense, deleteExpense, updateAdvance } from '../api';
-import type { ExpenseItem, ExpenseAdvance, ExpenseCategory } from '../types';
+import { fetchExpenses, addExpense, deleteExpense, updateAdvance, buildRouteSummary } from '../api';
+import type { ExpenseItem, ExpenseAdvance, ExpenseCategory, RouteSummary } from '../types';
+import { RouteSummaryModal } from './RouteSummaryModal';
 
 const CATEGORIES: { key: ExpenseCategory; label: string; icon: typeof Fuel; color: string; bg: string }[] = [
   { key: 'fuel', label: 'Бензин', icon: Fuel, color: 'text-amber-600', bg: 'bg-amber-50' },
@@ -38,6 +39,8 @@ export function ExpensesScreen() {
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [showAdvanceModal, setShowAdvanceModal] = useState<string | null>(null); // routeName or null
+  const [summaryData, setSummaryData] = useState<RouteSummary | null>(null);
+  const [loadingSummary, setLoadingSummary] = useState(false);
 
   const routeNames = isUnifiedView ? routes.map((r) => r.name) : [currentSheet];
 
@@ -103,26 +106,35 @@ export function ExpensesScreen() {
 
   const handleDelete = async (item: TaggedExpense) => {
     try {
-      const res = await deleteExpense({ routeName: item._routeName, rowNum: String(item.rowNum), driverName });
-      if (res.success) { showToast('Видалено'); loadData(); }
-      else showToast('Помилка: ' + (res.error || ''));
+      await deleteExpense({ routeName: item._routeName, expId: item.expId, driverName });
+      showToast('Видалено'); loadData();
     } catch (err) { showToast('Помилка: ' + (err as Error).message); }
   };
 
   const handleAdd = async (category: ExpenseCategory, amount: string, currency: string, description: string, routeName: string) => {
     try {
-      const res = await addExpense({ routeName, driverName, category, amount, currency, description });
-      if (res.success) { showToast('Додано!'); setShowAdd(false); loadData(); }
-      else showToast('Помилка: ' + (res.error || ''));
+      await addExpense({ routeName, driverName, category, amount, currency, description });
+      showToast('Додано!'); setShowAdd(false); loadData();
     } catch (err) { showToast('Помилка: ' + (err as Error).message); }
   };
 
   const handleSaveAdvance = async (routeName: string, cash: string, cashCurrency: string, card: string, cardCurrency: string) => {
     try {
-      const res = await updateAdvance({ routeName, driverName, cash, cashCurrency, card, cardCurrency });
-      if (res.success) { showToast('Збережено!'); setShowAdvanceModal(null); loadData(); }
-      else showToast('Помилка: ' + (res.error || ''));
+      await updateAdvance({ routeName, driverName, cash, cashCurrency, card, cardCurrency });
+      showToast('Збережено!'); setShowAdvanceModal(null); loadData();
     } catch (err) { showToast('Помилка: ' + (err as Error).message); }
+  };
+
+  const handleBuildSummary = async () => {
+    setLoadingSummary(true);
+    try {
+      const summary = await buildRouteSummary(currentSheet, driverName);
+      setSummaryData(summary);
+    } catch (err) {
+      showToast('Помилка: ' + (err as Error).message);
+    } finally {
+      setLoadingSummary(false);
+    }
   };
 
   const headerLabel = isUnifiedView ? 'Усі маршрути' : currentSheet.replace('Маршрут_', 'М');
@@ -296,13 +308,18 @@ export function ExpensesScreen() {
         )}
       </div>
 
-      {/* Add button (hidden in unified view) */}
+      {/* Bottom buttons (hidden in unified view) */}
       {!loading && !isUnifiedView && (
-        <div className="shrink-0 bg-white border-t border-border px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        <div className="shrink-0 bg-white border-t border-border px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] space-y-2">
           <button onClick={() => setShowAdd(true)}
             className="w-full py-3.5 rounded-2xl bg-brand text-white font-bold text-sm flex items-center justify-center gap-2 cursor-pointer active:scale-[0.98] transition-all">
             <Plus className="w-5 h-5" />
             Додати витрату
+          </button>
+          <button onClick={handleBuildSummary} disabled={loadingSummary}
+            className="w-full py-3.5 rounded-2xl bg-blue-600 text-white font-bold text-sm flex items-center justify-center gap-2 cursor-pointer active:scale-[0.98] transition-all disabled:opacity-40">
+            {loadingSummary ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Receipt className="w-5 h-5" />}
+            {loadingSummary ? 'Завантаження...' : 'Зведення рейсу'}
           </button>
         </div>
       )}
@@ -323,6 +340,15 @@ export function ExpensesScreen() {
           advance={advances[showAdvanceModal] ?? null}
           onClose={() => setShowAdvanceModal(null)}
           onSave={handleSaveAdvance}
+        />
+      )}
+      {summaryData && (
+        <RouteSummaryModal
+          summary={summaryData}
+          routeName={currentSheet}
+          driverName={driverName}
+          showToast={showToast}
+          onClose={() => setSummaryData(null)}
         />
       )}
     </div>

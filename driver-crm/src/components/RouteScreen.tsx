@@ -2,10 +2,10 @@ import { useEffect, useState } from 'react';
 import { Package, LogOut, ChevronRight, Layers, RefreshCw, User } from 'lucide-react';
 import { useApp } from '../store/useAppStore';
 import { fetchRoutes } from '../api';
-import { BotiLogo } from './BotiLogo';
+import { logout, readSession } from '../lib/session';
 
 export function RouteScreen() {
-  const { driverName, setDriverName, setCurrentScreen, openRoute, routes, setRoutes, shippingRoutes, setShippingRoutes } = useApp();
+  const { driverName, openRoute, routes, setRoutes, shippingRoutes, setShippingRoutes } = useApp();
   const [loading, setLoading] = useState(false);
 
   const loadRoutes = async () => {
@@ -20,18 +20,18 @@ export function RouteScreen() {
 
   useEffect(() => { loadRoutes(); }, []);
 
-  const logout = () => { setDriverName(''); localStorage.removeItem('driverName'); setCurrentScreen('login'); };
+  const handleLogout = () => logout();
 
   return (
     <div className="flex-1 flex flex-col bg-bg min-h-dvh">
       <div className="bg-white border-b border-border px-4 pt-6 pb-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <BotiLogo size="md" />
+            <h1 className="text-xl font-black tracking-tight select-none text-text">{readSession()?.tenant_name || 'Logistics'}</h1>
             <div className="text-[11px] text-muted">{driverName}</div>
           </div>
           <div className="flex gap-2">
-            <button onClick={logout} className="p-2 rounded-xl hover:bg-red-50 cursor-pointer active:scale-95 transition-all">
+            <button onClick={handleLogout} className="p-2 rounded-xl hover:bg-red-50 cursor-pointer active:scale-95 transition-all">
               <LogOut className="w-5 h-5 text-red-400" />
             </button>
           </div>

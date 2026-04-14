@@ -112,10 +112,18 @@ export async function authenticate(
   if (cErr) throw cErr;
   if (!client) throw new Error('Компанію не знайдено');
 
+  const modules = (client.modules as string[]) ?? [];
+
+  // Module-gated roles: driver requires 'driver' module on the tenant.
+  // Owner and manager are always allowed (passenger is a baseline module).
+  if (role === 'driver' && !modules.includes('driver')) {
+    throw new Error('Водійська панель не підключена для вашої компанії. Зверніться до адміністратора.');
+  }
+
   return {
     user: user as User,
     tenantName: client.name,
-    modules: (client.modules as string[]) ?? [],
+    modules,
     logoUrl: (client.logo_url as string) ?? '',
   };
 }
