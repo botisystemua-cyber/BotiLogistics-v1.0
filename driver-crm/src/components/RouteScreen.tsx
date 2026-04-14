@@ -2,8 +2,7 @@ import { useEffect, useState } from 'react';
 import { Package, LogOut, ChevronRight, Layers, RefreshCw, User } from 'lucide-react';
 import { useApp } from '../store/useAppStore';
 import { fetchRoutes } from '../api';
-import { BotiLogo } from './BotiLogo';
-import { logout } from '../lib/session';
+import { logout, readSession } from '../lib/session';
 
 export function RouteScreen() {
   const { driverName, openRoute, routes, setRoutes, shippingRoutes, setShippingRoutes } = useApp();
@@ -28,7 +27,7 @@ export function RouteScreen() {
       <div className="bg-white border-b border-border px-4 pt-6 pb-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <BotiLogo size="md" />
+            <h1 className="text-xl font-black tracking-tight select-none text-text">{readSession()?.tenant_name || 'Logistics'}</h1>
             <div className="text-[11px] text-muted">{driverName}</div>
           </div>
           <div className="flex gap-2">
