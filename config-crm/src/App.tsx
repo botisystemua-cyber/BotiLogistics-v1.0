@@ -161,12 +161,15 @@ function App() {
   };
 
   // Which apps to show on success screen — based on selected role + tenant's enabled modules
+  // Owner & passenger are always available; cargo & driver are module-gated.
   const availableApps = (u: SessionUser): string[] => {
     if (!u) return [];
-    if (u.role === ROLES.find((r) => r.key === 'driver')?.label) return ['driver'];
-    if (u.role === ROLES.find((r) => r.key === 'owner')?.label)  return ['owner'];
-    // manager → all data modules tenant has enabled (passenger / cargo)
-    return u.modules.filter((m) => m === 'passenger' || m === 'cargo');
+    if (selectedRole?.key === 'driver') return ['driver'];
+    if (selectedRole?.key === 'owner')  return ['owner'];
+    // manager → always 'passenger' + 'cargo' only if tenant has it
+    const apps = ['passenger'];
+    if (u.modules.includes('cargo')) apps.push('cargo');
+    return apps;
   };
 
   if (step === 'admin') {
