@@ -1,0 +1,181 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand: var(--theme-brand);
+  --color-brand-dark: var(--theme-brand-dark);
+  --color-brand-light: var(--theme-brand-light);
+  --color-bg: var(--theme-bg);
+  --color-card: var(--theme-card);
+  --color-text: var(--theme-text);
+  --color-text-secondary: var(--theme-text-secondary);
+  --color-border: var(--theme-border);
+  --color-muted: var(--theme-muted);
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+:root,
+[data-theme="top-driver"] {
+  --theme-brand: #22c55e;
+  --theme-brand-dark: #16a34a;
+  --theme-brand-light: #f0fdf4;
+  --theme-bg: #f2f4f7;
+  --theme-card: #ffffff;
+  --theme-text: #111827;
+  --theme-text-secondary: #6b7280;
+  --theme-border: #e5e7eb;
+  --theme-muted: #9ca3af;
+}
+
+[data-theme="lone-wolf"] {
+  --theme-brand: #c0c0c8;
+  --theme-brand-dark: #8a8a92;
+  --theme-brand-light: #2a2a2e;
+  --theme-bg: #161618;
+  --theme-card: #232327;
+  --theme-text: #ececee;
+  --theme-text-secondary: #a8a8b0;
+  --theme-border: #34343a;
+  --theme-muted: #6e6e76;
+}
+
+/* In dark themes, remap hard-coded white/gray utilities to themed surfaces */
+[data-theme="lone-wolf"] .bg-white { background-color: var(--theme-card) !important; }
+[data-theme="lone-wolf"] .bg-gray-50 { background-color: #1d1d20 !important; }
+[data-theme="lone-wolf"] .bg-gray-100 { background-color: #2a2a2e !important; }
+[data-theme="lone-wolf"] .bg-gray-200 { background-color: #34343a !important; }
+[data-theme="lone-wolf"] .text-gray-300 { color: #5a5a62 !important; }
+[data-theme="lone-wolf"] .text-gray-400 { color: #7a7a82 !important; }
+[data-theme="lone-wolf"] .text-gray-500 { color: #9a9aa2 !important; }
+[data-theme="lone-wolf"] .text-gray-600 { color: #b0b0b8 !important; }
+[data-theme="lone-wolf"] .text-gray-700 { color: #c8c8d0 !important; }
+[data-theme="lone-wolf"] .text-gray-800 { color: #e0e0e6 !important; }
+[data-theme="lone-wolf"] .text-gray-900 { color: #ececee !important; }
+[data-theme="lone-wolf"] .border-gray-100,
+[data-theme="lone-wolf"] .border-gray-200,
+[data-theme="lone-wolf"] .border-gray-300 { border-color: #34343a !important; }
+[data-theme="lone-wolf"] .bg-emerald-50 { background-color: #1a2a22 !important; }
+[data-theme="lone-wolf"] .bg-green-50 { background-color: #16271c !important; }
+[data-theme="lone-wolf"] .bg-blue-50 { background-color: #1a2230 !important; }
+[data-theme="lone-wolf"] .bg-red-50 { background-color: #2a1a1c !important; }
+[data-theme="lone-wolf"] .bg-yellow-50 { background-color: #2a2618 !important; }
+[data-theme="lone-wolf"] .bg-orange-50 { background-color: #2a1f14 !important; }
+[data-theme="lone-wolf"] .bg-purple-50 { background-color: #221a2a !important; }
+[data-theme="lone-wolf"] .text-emerald-400 { color: #4ade80 !important; }
+[data-theme="lone-wolf"] .text-blue-400 { color: #60a5fa !important; }
+[data-theme="lone-wolf"] .text-red-400 { color: #f87171 !important; }
+[data-theme="lone-wolf"] .text-green-700 { color: #86efac !important; }
+[data-theme="lone-wolf"] .text-blue-700 { color: #93c5fd !important; }
+[data-theme="lone-wolf"] .text-red-700 { color: #fca5a5 !important; }
+[data-theme="lone-wolf"] .text-yellow-700 { color: #fde047 !important; }
+[data-theme="lone-wolf"] .text-orange-700 { color: #fdba74 !important; }
+[data-theme="lone-wolf"] .text-purple-700 { color: #d8b4fe !important; }
+[data-theme="lone-wolf"] .border-red-200,
+[data-theme="lone-wolf"] .border-green-200,
+[data-theme="lone-wolf"] .border-blue-200 { border-color: #34343a !important; }
+[data-theme="lone-wolf"] input,
+[data-theme="lone-wolf"] textarea,
+[data-theme="lone-wolf"] select { color: var(--theme-text); }
+[data-theme="lone-wolf"] input::placeholder,
+[data-theme="lone-wolf"] textarea::placeholder { color: #5a5a62 !important; }
+
+[data-theme="detonator"] {
+  --theme-brand: #d40511;
+  --theme-brand-dark: #a00309;
+  --theme-brand-light: #fff8d0;
+  --theme-bg: #fff4b8;
+  --theme-card: #ffffff;
+  --theme-text: #1a1a1a;
+  --theme-text-secondary: #5a4a00;
+  --theme-border: #f0d040;
+  --theme-muted: #8a7820;
+}
+
+[data-theme="lightning"] {
+  --theme-brand: #de2329;
+  --theme-brand-dark: #a8161b;
+  --theme-brand-light: #fff0f0;
+  --theme-bg: #f5dcdd;
+  --theme-card: #fff5f5;
+  --theme-text: #2a0a0c;
+  --theme-text-secondary: #7a2225;
+  --theme-border: #e8b8ba;
+  --theme-muted: #a06868;
+}
+
+@layer base {
+  body {
+    @apply bg-bg text-text font-sans antialiased;
+    margin: 0;
+    min-height: 100dvh;
+  }
+
+  #root {
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+  }
+}
+
+@keyframes slideUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+/* === Theme splash animations === */
+@keyframes splashFade {
+  0% { opacity: 0; }
+  10%, 80% { opacity: 1; }
+  100% { opacity: 0; }
+}
+@keyframes moonRise {
+  0% { transform: translate(-50%, 60px) scale(0.4); opacity: 0; filter: blur(8px); }
+  100% { transform: translate(-50%, 0) scale(1); opacity: 1; filter: blur(0); }
+}
+@keyframes wolfRise {
+  0% { transform: translateY(80px); opacity: 0; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+@keyframes howlShake {
+  0%, 100% { transform: rotate(0deg); }
+  40% { transform: rotate(-4deg); }
+  60% { transform: rotate(2deg); }
+}
+@keyframes titleIn {
+  0% { opacity: 0; letter-spacing: 0.6em; transform: translateY(20px); }
+  100% { opacity: 1; letter-spacing: 0.25em; transform: translateY(0); }
+}
+@keyframes starTwinkle {
+  0%, 100% { opacity: 0.2; }
+  50% { opacity: 1; }
+}
+@keyframes mistDrift {
+  0% { transform: translateX(-20px); opacity: 0.4; }
+  100% { transform: translateX(20px); opacity: 0.2; }
+}
+@keyframes speedoNeedle {
+  0% { transform: rotate(-110deg); }
+  60% { transform: rotate(70deg); }
+  100% { transform: rotate(40deg); }
+}
+@keyframes themeBtnPulse {
+  0%, 100% { box-shadow: 0 0 0 0 var(--color-brand); }
+  50% { box-shadow: 0 0 0 6px transparent; }
+}
+@keyframes truckDrive {
+  0% { transform: translateX(-120%); }
+  100% { transform: translateX(120%); }
+}
+@keyframes explosionPop {
+  0% { transform: scale(0); opacity: 0; }
+  40% { transform: scale(1.3); opacity: 1; }
+  100% { transform: scale(1); opacity: 0.9; }
+}
+@keyframes boltStrike {
+  0% { transform: scaleY(0) translateY(-100%); opacity: 0; }
+  30% { transform: scaleY(1) translateY(0); opacity: 1; }
+  100% { transform: scaleY(1) translateY(0); opacity: 0.9; }
+}
+@keyframes flash {
+  0%, 100% { opacity: 0; }
+  50% { opacity: 0.8; }
+}
