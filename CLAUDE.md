@@ -131,6 +131,29 @@ Google Sheets (legacy, being migrated)
 - **Multi-currency**: UAH, EUR, CHF, PLN, CZK, USD
 - **Bi-directional routes**: UA -> EU and EU -> UA
 
+### Database migrations (for Claude / automation)
+
+**Запускай DDL сам — не проси користувача.** У БД є RPC `public.exec_sql(query text)`,
+доступна лише `service_role`. Використовуй її для `ALTER TABLE`, `CREATE INDEX`,
+`CREATE FUNCTION` тощо.
+
+```bash
+curl -sS -X POST \
+  "https://pgdhuezxkehpjlxoesoe.supabase.co/rest/v1/rpc/exec_sql" \
+  -H "apikey: $SERVICE_ROLE_KEY" \
+  -H "Authorization: Bearer $SERVICE_ROLE_KEY" \
+  -H "Content-Type: application/json" \
+  --data '{"query":"ALTER TABLE passengers ADD COLUMN example text;"}'
+```
+
+Відповідь: `{"ok": true, "rows_affected": N}` або `{"ok": false, "error": "...", "sqlstate": "..."}`.
+
+- Ключ `service_role` — у таблиці API Keys вище.
+- Якщо RPC повертає `404 PGRST202` — функцію ще не створено, запусти
+  `sql/2026-04-setup-exec-sql-rpc.sql` у Dashboard → SQL Editor **раз**.
+- Для SELECT-звітів усередині SQL використовуй звичайний PostgREST
+  (`/rest/v1/<table>?select=...`), а не `exec_sql` — вона повертає лише статус.
+
 ## Legacy API Endpoints (Google Apps Script)
 
 | Endpoint | Backend |
