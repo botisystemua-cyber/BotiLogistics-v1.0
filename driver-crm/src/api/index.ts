@@ -554,3 +554,175 @@ export async function updateAdvance(data: Record<string, string>) {
 
   return { success: true };
 }
+
+// ============================================
+// Archive search (for autofill in AddItemModal)
+// ============================================
+
+export interface ArchiveMatch {
+  dateArchive: string;
+  pkgId: string;
+  cliId: string;
+  senderName: string;
+  senderPhone: string;
+  recipientName: string;
+  recipientPhone: string;
+  recipientAddr: string;
+}
+
+export async function searchArchive(query: string): Promise<{ results: ArchiveMatch[]; totalMatches: number }> {
+  const tenantId = getTenantId();
+  const q = query.trim();
+  if (!q || q.length < 4) return { results: [], totalMatches: 0 };
+
+  const { data, error } = await supabase
+    .from('routes')
+    .select('*')
+    .eq('tenant_id', tenantId)
+    .or(`recipient_phone.ilike.%${q}%,passenger_phone.ilike.%${q}%,recipient_name.ilike.%${q}%,sender_name.ilike.%${q}%`)
+    .order('created_at', { ascending: false })
+    .limit(20);
+
+  if (error) throw error;
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const matches: ArchiveMatch[] = (data ?? []).map((r: any) => ({
+    dateArchive: s(r.route_date) || s(r.created_at),
+    pkgId: s(r.pax_id_or_pkg_id),
+    cliId: '',
+    senderName: s(r.sender_name),
+    senderPhone: s(r.passenger_phone),
+    recipientName: s(r.recipient_name),
+    recipientPhone: s(r.recipient_phone),
+    recipientAddr: s(r.recipient_address),
+  }));
+
+  const seen = new Set<string>();
+  const unique = matches.filter((m) => {
+    const key = m.recipientPhone || m.senderPhone || m.pkgId;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  return { results: unique.slice(0, 5), totalMatches: matches.length };
+}
+
+// ============================================
+// Route Summary (client-side computation)
+// ============================================
+
+export async function buildRouteSummary(
+  routeName: string,
+  _driverName: string,
+): Promise<import('../types').RouteSummary> {
+  const [pax, pkgs, expenses] = await Promise.all([
+    fetchPassengers(routeName),
+    fetchPackages(routeName),
+    fetchExpenses(routeName),
+  ]);
+
+  const shipName = routeName.replace('Маршрут_', 'Відправка_');
+  let shipItems: import('../types').ShippingItem[] = [];
+  try { shipItems = await fetchShippingItems(shipName); } catch { /* no shipping */ }
+
+  const addCur = (obj: Record<string, number>, cur: string, val: number) => {
+    if (!cur || !val) return;
+    obj[cur] = (obj[cur] || 0) + val;
+  };
+
+  const paxTotals: Record<string, number> = {};
+  const pkgTotals: Record<string, number> = {};
+  const shipTotals: Record<string, number> = {};
+  const tipsTotals: Record<string, number> = {};
+  const cashCollected: Record<string, number> = {};
+  const cardCollected: Record<string, number> = {};
+  const debtsTotals: Record<string, number> = {};
+
+  for (const p of pax) {
+    const amt = parseFloat(p.amount) || 0;
+    const cur = p.currency || 'UAH';
+    addCur(paxTotals, cur, amt);
+    const pf = (p.payForm || '').toLowerCase();
+    if (pf === 'готівка') addCur(cashCollected, cur, amt);
+    else if (pf === 'картка') addCur(cardCollected, cur, amt);
+    const debt = parseFloat(p.debt) || 0;
+    if (debt > 0) addCur(debtsTotals, cur, debt);
+    const tip = parseFloat(p.tips) || 0;
+    if (tip > 0) addCur(tipsTotals, p.tipsCurrency || 'CHF', tip);
+  }
+
+  for (const p of pkgs) {
+    const amt = parseFloat(p.amount) || 0;
+    const cur = p.currency || 'UAH';
+    addCur(pkgTotals, cur, amt);
+    const pf = (p.payForm || '').toLowerCase();
+    if (pf === 'готівка') addCur(cashCollected, cur, amt);
+    else if (pf === 'картка') addCur(cardCollected, cur, amt);
+    const debt = parseFloat(p.debt) || 0;
+    if (debt > 0) addCur(debtsTotals, cur, debt);
+    const tip = parseFloat(p.tips) || 0;
+    if (tip > 0) addCur(tipsTotals, p.tipsCurrency || 'CHF', tip);
+  }
+
+  for (const si of shipItems) {
+    const amt = parseFloat(si.amount) || 0;
+    const cur = si.currency || 'CHF';
+    addCur(shipTotals, cur, amt);
+    const debt = parseFloat(si.debt) || 0;
+    if (debt > 0) addCur(debtsTotals, cur, debt);
+    const tip = parseFloat(si.tips) || 0;
+    if (tip > 0) addCur(tipsTotals, si.tipsCurrency || 'CHF', tip);
+  }
+
+  const income: Record<string, number> = {};
+  for (const [c, v] of Object.entries(paxTotals)) addCur(income, c, v);
+  for (const [c, v] of Object.entries(pkgTotals)) addCur(income, c, v);
+  for (const [c, v] of Object.entries(shipTotals)) addCur(income, c, v);
+
+  const expTotals: Record<string, number> = {};
+  const expByCategory: Record<string, { amount: number; currency: string }> = {};
+  let advCash = 0, advCashCur = 'CHF', advCard = 0, advCardCur = 'CHF';
+
+  for (const e of expenses.items) {
+    addCur(expTotals, e.currency, e.amount);
+    expByCategory[e.category] = { amount: e.amount, currency: e.currency };
+  }
+  if (expenses.advance) {
+    advCash = expenses.advance.cash;
+    advCashCur = expenses.advance.cashCurrency || 'CHF';
+    advCard = expenses.advance.card;
+    advCardCur = expenses.advance.cardCurrency || 'CHF';
+  }
+
+  const toReturn: Record<string, number> = {};
+  for (const [c, v] of Object.entries(cashCollected)) addCur(toReturn, c, v);
+  for (const [c, v] of Object.entries(expTotals)) addCur(toReturn, c, -v);
+
+  return {
+    routeName,
+    passengers: paxTotals,
+    packages: pkgTotals,
+    shipping: shipTotals,
+    tips: tipsTotals,
+    income,
+    cashCollected,
+    cardCollected,
+    debts: debtsTotals,
+    advanceCash: advCash,
+    advanceCashCur: advCashCur,
+    advanceCard: advCard,
+    advanceCardCur: advCardCur,
+    expenses: expTotals,
+    expensesByCategory: expByCategory,
+    toReturn,
+  };
+}
+
+export async function saveRouteSummaryApi(
+  _routeName: string,
+  _driverName: string,
+  _summary: import('../types').RouteSummary,
+): Promise<void> {
+  // Summary is computed client-side — no separate save needed
+}

@@ -129,3 +129,22 @@ export interface ExpenseAdvance {
   card: number;
   cardCurrency: string;
 }
+
+export interface RouteSummary {
+  routeName: string;
+  passengers: Record<string, number>;
+  packages: Record<string, number>;
+  shipping: Record<string, number>;
+  tips: Record<string, number>;
+  income: Record<string, number>;
+  cashCollected: Record<string, number>;
+  cardCollected: Record<string, number>;
+  debts: Record<string, number>;
+  advanceCash: number;
+  advanceCashCur: string;
+  advanceCard: number;
+  advanceCardCur: string;
+  expenses: Record<string, number>;
+  expensesByCategory: Record<string, { amount: number; currency: string }>;
+  toReturn: Record<string, number>;
+}
