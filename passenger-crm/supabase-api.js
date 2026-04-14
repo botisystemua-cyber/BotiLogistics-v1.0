@@ -43,6 +43,7 @@ const SB_TO_GAS = {
     archive_reason:    'ARCHIVE_REASON',
     archive_id:        'ARCHIVE_ID',
     cal_id:            'CAL_ID',
+    messenger:         'Месенджер',
     // Extra fields from Supabase not in GAS
     id:                '_uuid',
     tenant_id:         '_tenant',
@@ -142,7 +143,7 @@ const FORM_TO_SB = {
     vehicle: 'vehicle_name',
     seatInCar: 'seat_number',
     seatNumber: 'seat_number',
-    city: 'city',
+    messenger: 'messenger',
     payForm: 'payment_form',
     price: 'ticket_price',
     currency: 'ticket_currency',

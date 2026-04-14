@@ -594,7 +594,17 @@ $manifest = 'manifest.php' . ($t ? '?name=' . rawurlencode($t) . ($l ? '&logo=' 
                 </div>
             </div>
             <div class="form-row">
-                <div class="form-group"><label>Місто</label><input type="text" id="fCity"></div>
+                <div class="form-group">
+                    <label>Месенджер</label>
+                    <input type="text" id="fMessenger" list="messengerOptions" placeholder="Оберіть або введіть свій варіант" autocomplete="off">
+                    <datalist id="messengerOptions">
+                        <option value="📱 Telegram"></option>
+                        <option value="💬 WhatsApp"></option>
+                        <option value="🟣 Viber"></option>
+                        <option value="🤖 SmartSender"></option>
+                        <option value="📞 Дзвінок"></option>
+                    </datalist>
+                </div>
                 <div class="form-group"><label>Місце в авто</label><input type="text" id="fSeatNumber"></div>
             </div>
             <div class="form-row">

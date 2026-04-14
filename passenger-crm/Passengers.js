@@ -120,7 +120,7 @@ const COL_MAP = {
     crmStatus:'Статус CRM', tag:'Тег', note:'Примітка', noteSms:'Примітка СМС',
     cliId:'CLI_ID', bookingId:'BOOKING_ID', dateArchive:'DATE_ARCHIVE',
     archivedBy:'ARCHIVED_BY', archiveReason:'ARCHIVE_REASON', archiveId:'ARCHIVE_ID',
-    calId:'CAL_ID'
+    calId:'CAL_ID', messenger:'Месенджер'
 };
 const DEFAULT_OSNOVNE_FIELDS = ['name','phone','phoneReg','direction','date','seats'];
 // Поля які можна показати/сховати на картці
@@ -139,14 +139,15 @@ const CARD_FIELD_OPTIONS = [
     { key:'dateCreated', label:'Дата реєстрації' },
     { key:'leadStatus', label:'Статус ліда (бейдж)' },
     { key:'payStatus', label:'Статус оплати (бейдж)' },
-    { key:'debt', label:'Борг (бейдж)' }
+    { key:'debt', label:'Борг (бейдж)' },
+    { key:'messenger', label:'Месенджер' }
 ];
 const DEFAULT_CARD_FIELDS = ['direction','phone','seats','date','price','deposit','name','pax_id','smartId','route','leadStatus','payStatus','debt'];
 const OTHER_SECTIONS = [
     { key:'route', title:'🗺️ Маршрут', fields:['from','to','timing','vehicle','seatInCar','calId'] },
     { key:'finance', title:'💰 Фінанси', fields:['price','currency','deposit','currencyDeposit','weight','weightPrice','currencyWeight','debt'] },
     { key:'payments', title:'💳 Платежі', fields:[], readonly:true, async:true },
-    { key:'statuses', title:'📊 Статуси', fields:['payStatus','leadStatus','crmStatus','tag'] },
+    { key:'statuses', title:'📊 Статуси', fields:['payStatus','leadStatus','crmStatus','tag','messenger'] },
     { key:'notes', title:'📝 Примітки', fields:['note','noteSms'] },
     { key:'system', title:'🔧 Системні', fields:['pax_id','smartId','dateCreated','sourceSheet','cliId','bookingId'], readonly:true }
 ];
@@ -2276,7 +2277,7 @@ function openRouteEditModal(rteId, sheetName) {
     document.getElementById('fWeightPrice').value = r['Ціна багажу'] || '';
     document.getElementById('fNote').value = r['Примітка'] || '';
     const _set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v || ''; };
-    _set('fCity', r['Місто']);
+    _set('fMessenger', r['Месенджер']);
     _set('fSeatNumber', r['Місце в авто']);
     _set('fPayStatus', r['Статус оплати']);
     _set('fPayForm', r['Форма оплати']);
@@ -3422,7 +3423,7 @@ function openEditPax(id) {
     document.getElementById('fWeightPrice').value = p['Ціна багажу'] || '';
     document.getElementById('fNote').value = p['Примітка'] || '';
     const _setP = (id, v) => { const el = document.getElementById(id); if (el) el.value = v || ''; };
-    _setP('fCity', p['Місто']);
+    _setP('fMessenger', p['Месенджер']);
     _setP('fSeatNumber', p['Місце в авто']);
     _setP('fPayStatus', p['Статус оплати']);
     _setP('fPayForm', p['Форма оплати']);
@@ -3925,7 +3926,7 @@ async function savePassenger() {
         weightPrice: document.getElementById('fWeightPrice').value.trim(),
         currencyWeight: document.getElementById('fCurrencyWeight').value,
         note: document.getElementById('fNote').value.trim(),
-        city: (document.getElementById('fCity')||{}).value?.trim() || '',
+        messenger: (document.getElementById('fMessenger')||{}).value?.trim() || '',
         seatNumber: (document.getElementById('fSeatNumber')||{}).value?.trim() || '',
         payStatus: (document.getElementById('fPayStatus')||{}).value || '',
         payForm: (document.getElementById('fPayForm')||{}).value || '',
@@ -3951,7 +3952,7 @@ async function savePassenger() {
             'Валюта завдатку': formData.currencyDeposit,
             'Вага багажу': formData.weight,
             'Примітка': formData.note,
-            'Місто': formData.city,
+            'Месенджер': formData.messenger,
             'Місце в авто': formData.seatNumber,
             'Статус оплати': formData.payStatus,
             'Форма оплати': formData.payForm,
