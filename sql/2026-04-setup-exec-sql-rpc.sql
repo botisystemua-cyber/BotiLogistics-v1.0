@@ -13,9 +13,21 @@
 --     повний доступ через direct Postgres. Ця функція нічого не погіршує.
 -- ============================================================================
 
--- Якщо функція вже існує з іншою сигнатурою/return type — дропаємо, щоб
--- уникнути "42P13: cannot change return type of existing function".
-drop function if exists public.exec_sql(text);
+-- Дропаємо ВСІ overload'и public.exec_sql незалежно від сигнатури/типу
+-- повернення (щоб уникнути "42P13: cannot change return type").
+do $drop$
+declare
+    _sig text;
+begin
+    for _sig in
+        select pg_catalog.pg_get_function_identity_arguments(p.oid)
+        from pg_catalog.pg_proc p
+        join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'public' and p.proname = 'exec_sql'
+    loop
+        execute format('drop function public.exec_sql(%s) cascade', _sig);
+    end loop;
+end $drop$;
 
 create or replace function public.exec_sql(query text)
 returns jsonb
