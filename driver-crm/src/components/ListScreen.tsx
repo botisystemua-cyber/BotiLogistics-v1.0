@@ -6,7 +6,7 @@ import {
 import { useApp } from '../store/useAppStore';
 import type { Theme } from '../store/useAppStore';
 import { isUaEu, isEuUa } from '../utils/smsParser';
-import { fetchPassengers, fetchPackages, fetchShippingItems } from '../api';
+import { fetchPassengers, fetchPackages, fetchShippingItems, updateItemStatus } from '../api';
 import { PassengerCard } from './PassengerCard';
 import { PackageCard } from './PackageCard';
 import { ShippingCard } from './ShippingCard';
@@ -19,7 +19,7 @@ import type { Passenger, Package as Pkg, ShippingItem, ItemStatus, StatusFilter,
 
 export function ListScreen() {
   const {
-    currentSheet, isUnifiedView, goBack, showToast, setCurrentScreen,
+    currentSheet, isUnifiedView, goBack, showToast, setCurrentScreen, driverName,
     statusFilter, setStatusFilter, getStatus, setStatus,
     routeFilter, setRouteFilter, routes, shippingRoutes,
     viewTab, setViewTab,
@@ -49,6 +49,7 @@ export function ListScreen() {
   const [showColumnEditor, setShowColumnEditor] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editItem, setEditItem] = useState<RouteItem | null>(null);
+  const [convertingPickup, setConvertingPickup] = useState<Pkg | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [hidingCompleted, setHidingCompleted] = useState(false);
 
@@ -370,7 +371,7 @@ export function ListScreen() {
                     <span className="text-[10px] font-bold text-muted bg-gray-100 px-2 py-0.5 rounded-full">{filteredPackages.length}</span>
                   </div>
                   {filteredPackages.map((p, i) => (
-                    <PackageCard key={p._statusKey} pkg={p} index={i} searchQuery={searchQuery} onEdit={setEditItem} />
+                    <PackageCard key={p._statusKey} pkg={p} index={i} searchQuery={searchQuery} onEdit={setEditItem} onConvertPickup={setConvertingPickup} />
                   ))}
                 </>
               )}
@@ -420,7 +421,7 @@ export function ListScreen() {
                     <span className="text-[10px] font-bold text-muted bg-gray-100 px-2 py-0.5 rounded-full">{allTabPackages.length}</span>
                   </div>
                   {allTabPackages.map((p, i) => (
-                    <PackageCard key={p._statusKey} pkg={p} index={i} searchQuery={searchQuery} onEdit={setEditItem} />
+                    <PackageCard key={p._statusKey} pkg={p} index={i} searchQuery={searchQuery} onEdit={setEditItem} onConvertPickup={setConvertingPickup} />
                   ))}
                 </>
               )}
@@ -432,7 +433,7 @@ export function ListScreen() {
           ))
         ) : (
           currentItems.length === 0 ? <Empty /> : (currentItems as Pkg[]).map((p, i) => (
-            <PackageCard key={p._statusKey} pkg={p} index={i} searchQuery={searchQuery} onEdit={setEditItem} />
+            <PackageCard key={p._statusKey} pkg={p} index={i} searchQuery={searchQuery} onEdit={setEditItem} onConvertPickup={setConvertingPickup} />
           ))
         )}
       </div>
@@ -450,6 +451,33 @@ export function ListScreen() {
       {showColumnEditor && <ColumnEditor onClose={() => setShowColumnEditor(false)} />}
       {showAddModal && <AddItemModal onClose={() => setShowAddModal(false)} onAdded={refresh} />}
       {editItem && <EditItemModal item={editItem} onClose={() => setEditItem(null)} onSaved={refresh} />}
+      {convertingPickup && (
+        <AddItemModal
+          onClose={() => setConvertingPickup(null)}
+          onAdded={async () => {
+            const pkg = convertingPickup;
+            const rn = isUnifiedView && pkg._sourceRoute ? pkg._sourceRoute : currentSheet;
+            setStatus(pkg._statusKey, 'completed');
+            try { await updateItemStatus(driverName, rn, pkg, 'completed'); } catch { /* ignore */ }
+            setConvertingPickup(null);
+            refresh();
+          }}
+          forceShipping
+          prefill={{
+            senderName: convertingPickup.senderName,
+            senderPhone: convertingPickup.senderPhone,
+            addrFrom: convertingPickup.addrFrom,
+            pkgDesc: convertingPickup.pkgDesc,
+            city: convertingPickup.city,
+            recipientName: convertingPickup.recipientName,
+            recipientPhone: convertingPickup.recipientPhone,
+            recipientAddr: convertingPickup.recipientAddr,
+            pkgWeight: convertingPickup.pkgWeight,
+            amount: convertingPickup.amount,
+            currency: convertingPickup.currency,
+          }}
+        />
+      )}
       {splashTheme && <ThemeSplash theme={splashTheme} onDone={() => setSplashTheme(null)} />}
       {themeMenuOpen && (
         <div

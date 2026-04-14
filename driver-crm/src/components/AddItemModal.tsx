@@ -24,14 +24,29 @@ function saveContact(phone: string, name: string, addr: string) {
   localStorage.setItem(CONTACTS_KEY, JSON.stringify(contacts));
 }
 
+interface PrefillData {
+  senderName?: string;
+  senderPhone?: string;
+  addrFrom?: string;
+  pkgDesc?: string;
+  city?: string;
+  recipientName?: string;
+  recipientPhone?: string;
+  recipientAddr?: string;
+  pkgWeight?: string;
+  amount?: string;
+  currency?: string;
+}
+
 interface Props {
   onClose: () => void;
   onAdded: () => void;
   defaultType?: 'пасажир' | 'посилка';
   forceShipping?: boolean;
+  prefill?: PrefillData;
 }
 
-export function AddItemModal({ onClose, onAdded, defaultType: dt, forceShipping = false }: Props) {
+export function AddItemModal({ onClose, onAdded, defaultType: dt, forceShipping = false, prefill }: Props) {
   const { currentSheet, isUnifiedView, routes, driverName, viewTab, shippingRoutes, showToast } = useApp();
 
   const defaultType = dt || (viewTab === 'packages' || viewTab === 'shipping' ? 'посилка' : 'пасажир');
@@ -74,6 +89,24 @@ export function AddItemModal({ onClose, onAdded, defaultType: dt, forceShipping 
   const [pkgDesc, setPkgDesc] = useState('');
   const [pkgWeight, setPkgWeight] = useState('');
   const [ttn, setTtn] = useState('');
+
+  // Apply prefill once on mount
+  useEffect(() => {
+    if (!prefill) return;
+    if (prefill.senderName) setSenderName(prefill.senderName);
+    if (prefill.senderPhone) setSenderPhone(prefill.senderPhone);
+    if (prefill.addrFrom) setAddrFrom(prefill.addrFrom);
+    if (prefill.pkgDesc) setPkgDesc(prefill.pkgDesc);
+    if (prefill.city) setCity(prefill.city);
+    if (prefill.recipientName) setRecipientName(prefill.recipientName);
+    if (prefill.recipientPhone) setRecipientPhone(prefill.recipientPhone);
+    if (prefill.recipientAddr) setRecipientAddr(prefill.recipientAddr);
+    if (prefill.pkgWeight) setPkgWeight(prefill.pkgWeight);
+    if (prefill.amount) setAmount(prefill.amount);
+    if (prefill.currency) setCurrency(prefill.currency);
+    if (prefill.senderPhone && prefill.recipientPhone) setArchiveFilled(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Відправка-specific fields
   const [internalNum, setInternalNum] = useState('');

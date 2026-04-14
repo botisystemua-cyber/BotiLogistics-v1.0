@@ -12,7 +12,7 @@ import { MessengerPopup } from './MessengerPopup';
 import { AddressPicker } from './AddressPicker';
 import { TipsButton } from './TipsButton';
 
-interface Props { pkg: Package; index: number; searchQuery?: string; onEdit?: (p: Package) => void; }
+interface Props { pkg: Package; index: number; searchQuery?: string; onEdit?: (p: Package) => void; onConvertPickup?: (p: Package) => void; }
 
 const borderColor: Record<ItemStatus, string> = {
   pending: 'border-l-amber-400', 'in-progress': 'border-l-blue-500',
@@ -33,7 +33,7 @@ function derivePayStatus(payForm?: string): { label: string; cls: string } {
   return { label: 'Борг', cls: 'text-red-600 bg-red-50' };
 }
 
-export function PackageCard({ pkg: p, index, searchQuery = '', onEdit }: Props) {
+export function PackageCard({ pkg: p, index, searchQuery = '', onEdit, onConvertPickup }: Props) {
   const hl = (text: string) => <Highlight text={text} query={searchQuery} />;
   const { getStatus, setStatus, hiddenCols, driverName, currentSheet, isUnifiedView, showToast } = useApp();
   const [showCancel, setShowCancel] = useState(false);
@@ -119,6 +119,12 @@ export function PackageCard({ pkg: p, index, searchQuery = '', onEdit }: Props) 
           <Btn icon={MapPin} label="Адреси" color="bg-blue-50 text-blue-700" onClick={() => { if (p.addrFrom || p.recipientAddr) setShowAddrPicker(true); else showToast('Немає адрес'); }} />
           <Btn icon={expanded ? ChevronUp : Info} label={expanded ? 'Згорнути' : 'Деталі'} color={expanded ? 'bg-brand/10 text-brand' : 'bg-gray-50 text-gray-600'} onClick={() => setExpanded(!expanded)} />
         </div>
+
+        {dirKind === 'eu-ua' && status !== 'completed' && onConvertPickup && (
+          <button onClick={() => onConvertPickup(p)} className="w-full mb-2 py-2.5 rounded-xl bg-emerald-500 text-white text-[12px] font-bold cursor-pointer active:scale-95 transition-transform">
+            Оформити відправку
+          </button>
+        )}
 
         <div className="flex gap-1.5">
           <SB icon={RotateCw} c="border-blue-200 text-blue-600 hover:bg-blue-50" onClick={() => doStatus('in-progress')} />
