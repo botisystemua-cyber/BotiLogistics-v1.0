@@ -526,12 +526,16 @@ async function sbPkgGetRoutesList(params) {
             }
         });
 
-        // Also include dispatches grouped by rte_id (for Cargo.js sidebar).
-        const dispRes = await sbPkgGetDispatches();
+        // Also include dispatches + expenses grouped by rte_id (for Cargo.js sidebar).
+        const [dispRes, expRes] = await Promise.all([
+            sbPkgGetDispatches(),
+            sbPkgGetExpensesList(),
+        ]);
         const dispatches = dispRes.ok ? (dispRes.data || []) : [];
+        const expenses   = expRes.ok  ? (expRes.data  || []) : [];
 
         const routes = Object.values(routeMap);
-        return { ok: true, data: routes, routes, dispatches };
+        return { ok: true, data: routes, routes, dispatches, expenses };
     } catch (e) {
         console.error('sbPkgGetRoutesList error:', e);
         return { ok: false, error: e.message };
@@ -843,11 +847,118 @@ async function sbPkgGetExpenses(params) {
     try {
         const { data, error } = await sb.from('expenses')
             .select('*')
+            .eq('tenant_id', TENANT_ID)
             .order('created_at', { ascending: false });
         if (error) throw error;
         return { ok: true, data: data || [] };
     } catch (e) {
         return { ok: true, data: [] };
+    }
+}
+
+// ================================================================
+// EXPENSES (DRIVER) API — READ-ONLY for cargo-crm / manager
+// ================================================================
+// Витрати вводять ВОДІЇ через driver-crm. Менеджер тільки ЧИТАЄ.
+
+function expenseRowToGas(r, routeInfo) {
+    return {
+        'EXP_ID':             r.exp_id || '',
+        'Дата рейсу':         r.route_date || '',
+        'RTE_ID':             routeInfo && routeInfo.rte_id ? routeInfo.rte_id : '',
+        'Водій':              routeInfo && routeInfo.driver_name ? routeInfo.driver_name : '',
+        'Номер авто':         routeInfo && routeInfo.vehicle_name ? routeInfo.vehicle_name : '',
+        'AUTO_ID':            r.vehicle_id || '',
+        'Аванс готівка':      r.advance_cash || '',
+        'Валюта авансу готівка': r.advance_cash_currency || '',
+        'Аванс картка':       r.advance_card || '',
+        'Валюта авансу картка':  r.advance_card_currency || '',
+        'Залишок авансу':     r.advance_remaining || '',
+        'Бензин':             r.fuel || '',
+        'Їжа':                r.meals || '',
+        'Паркування':         r.parking || '',
+        'Толл на дорозі':     r.toll || '',
+        'Штраф':              r.fine || '',
+        'Митниця':            r.customs || '',
+        'Топап рахунку':      r.account_topup || '',
+        'Інше':               r.other || '',
+        'Опис іншого':        r.other_description || '',
+        'Чеки':               r.receipt_photos || '',
+        'Валюта витрат':      r.expense_currency || '',
+        'Всього витрат':      r.total_expenses || '',
+        'Чайові':             r.tips || '',
+        'Валюта чайових':     r.tips_currency || '',
+        'Примітка':           r.notes || '',
+        'Дата створення':     r.created_at ? String(r.created_at).slice(0, 10) : '',
+    };
+}
+
+// Sidebar list: grouped by rte_id → [{sheetName, city, route_date, rowCount}, ...]
+async function sbPkgGetExpensesList(_params) {
+    try {
+        const { data, error } = await sb.from('expenses')
+            .select('id, route_id, route_date')
+            .eq('tenant_id', TENANT_ID);
+        if (error) throw error;
+
+        const rows = data || [];
+        const uuids = [...new Set(rows.map(r => r.route_id).filter(Boolean))];
+        const routesById = await _fetchRoutesIndex(uuids);
+
+        const groups = {};
+        rows.forEach(r => {
+            const route = routesById[r.route_id];
+            const key = (route && route.rte_id) || r.route_id || '—';
+            if (!groups[key]) {
+                groups[key] = {
+                    sheetName: key,
+                    rte_id:    key,
+                    city:      (route && route.city) || '',
+                    route_date:(route && route.route_date) || r.route_date || '',
+                    rowCount:  0,
+                };
+            }
+            groups[key].rowCount++;
+        });
+
+        return { ok: true, data: Object.values(groups) };
+    } catch (e) {
+        console.error('sbPkgGetExpensesList error:', e);
+        return { ok: false, error: e.message };
+    }
+}
+
+// Detail rows for ONE route (all expense records under given rte_id)
+async function sbPkgGetExpensesSheet(params) {
+    try {
+        const sheetName = params.sheetName || params.sheet || params.rte_id;
+        if (!sheetName) return { ok: false, error: 'Не вказано rte_id/sheetName' };
+
+        const { data: routeRows, error: rErr } = await sb.from('routes')
+            .select('id, rte_id, route_date, city, driver_name, vehicle_name, status')
+            .eq('tenant_id', TENANT_ID)
+            .eq('rte_id', sheetName)
+            .limit(1);
+        if (rErr) throw rErr;
+
+        const routeInfo = (routeRows && routeRows[0]) || null;
+        if (!routeInfo) {
+            return { ok: true, data: { rows: [], headers: [], sheetName }, rows: [], headers: [], sheetName };
+        }
+
+        const { data: expRows, error: eErr } = await sb.from('expenses')
+            .select('*')
+            .eq('tenant_id', TENANT_ID)
+            .eq('route_id', routeInfo.id)
+            .order('created_at', { ascending: true });
+        if (eErr) throw eErr;
+
+        const rows = (expRows || []).map(r => expenseRowToGas(r, routeInfo));
+        const headers = rows.length > 0 ? Object.keys(rows[0]) : [];
+        return { ok: true, data: { rows, headers, sheetName }, rows, headers, sheetName };
+    } catch (e) {
+        console.error('sbPkgGetExpensesSheet error:', e);
+        return { ok: false, error: e.message };
     }
 }
 
@@ -934,7 +1045,11 @@ async function apiPostSupabase(action, params) {
         // Misc
         checkDuplicates:    sbPkgCheckDuplicates,
         getPayments:        sbPkgGetPayments,
-        getExpenses:        sbPkgGetExpenses,
+
+        // Expenses (READ-ONLY — drivers enter via driver-crm)
+        getExpenses:        sbPkgGetExpenses,        // legacy stub (flat list by pkg_id)
+        getExpensesList:    sbPkgGetExpensesList,    // sidebar grouped by rte_id
+        getExpensesSheet:   sbPkgGetExpensesSheet,   // detail rows for one rte_id
 
         // Verification (update fields)
         scanTTN:            async (p) => {

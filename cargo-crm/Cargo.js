@@ -2603,11 +2603,15 @@ function openExpensesView(idx) {
   showToast('Завантаження витрат...', 'info');
 
   var e = expenses[idx];
-  apiPost('getRouteSheet', { sheetName: e.sheetName }).then(function(res) {
+  apiPost('getExpensesSheet', { sheetName: e.sheetName }).then(function(res) {
     if (!res.ok) { showToast('Помилка: ' + res.error, 'error'); return; }
     routeData = res.data.rows || [];
     renderExpensesView(e);
   }).catch(function() { showToast('Помилка завантаження', 'error'); });
+}
+
+function refreshExpensesView() {
+  if (activeRouteIdx !== null && expenses[activeRouteIdx]) openExpensesView(activeRouteIdx);
 }
 
 function renderExpensesView(exp) {
@@ -2619,7 +2623,7 @@ function renderExpensesView(exp) {
       '<div class="route-header-stats">' + routeData.length + ' записів <span class="readonly-badge">READ-ONLY</span></div>' +
     '</div>' +
     '<div class="route-header-actions">' +
-      '<button onclick="refreshRouteView()">🔄 Оновити</button>' +
+      '<button onclick="refreshExpensesView()">🔄 Оновити</button>' +
       '<button onclick="backToParcels()">← Назад</button>' +
     '</div>';
 
