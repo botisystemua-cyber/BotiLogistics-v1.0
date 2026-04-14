@@ -84,14 +84,10 @@ export function AddItemModal({ onClose, onAdded }: Props) {
         data.direction = direction;
       }
 
-      const result = await addRouteItem(data);
-      if (result.success) {
-        showToast(result.message || 'Додано!');
-        onAdded();
-        onClose();
-      } else {
-        showToast('Помилка: ' + result.error);
-      }
+      await addRouteItem(data);
+      showToast('Додано!');
+      onAdded();
+      onClose();
     } catch (err) {
       showToast('Помилка: ' + (err as Error).message);
     } finally {

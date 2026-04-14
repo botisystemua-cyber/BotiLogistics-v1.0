@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { X, Save } from 'lucide-react';
 import { useApp } from '../store/useAppStore';
-import { CONFIG } from '../config';
+import { updateDriverFields } from '../api';
 import type { Passenger, Package as Pkg, ShippingItem, RouteItem } from '../types';
 
 const CURRENCIES = ['UAH', 'EUR', 'CHF', 'PLN', 'USD'];
@@ -14,7 +14,7 @@ interface Props {
 }
 
 export function EditItemModal({ item, onClose, onSaved }: Props) {
-  const { driverName, currentSheet, isUnifiedView, showToast } = useApp();
+  const { currentSheet, isUnifiedView, showToast } = useApp();
   const [submitting, setSubmitting] = useState(false);
 
   const isShipping = 'dispatchId' in item;
@@ -77,72 +77,50 @@ export function EditItemModal({ item, onClose, onSaved }: Props) {
     try {
       const fields: Record<string, string> = {};
 
+      // Common fields
+      fields.dateTrip = dateTrip;
+      fields.amount = amount;
+      fields.currency = currency;
+      fields.payForm = payForm;
+      fields.note = note;
+
       if (isShipping) {
-        fields['Дата рейсу'] = dateTrip;
-        fields['Піб відправника'] = senderName;
-        fields['Телефон відправника'] = senderPhone;
-        fields['Піб отримувача'] = recipientName;
-        fields['Телефон отримувача'] = recipientPhone;
-        fields['Адреса отримувача'] = recipientAddr;
-        fields['Вага'] = weight;
-        fields['Опис посилки'] = description;
-        fields['Сума'] = amount;
-        fields['Валюта'] = currency;
-        fields['Форма оплати'] = payForm;
-        fields['Примітка'] = note;
+        fields.senderName = senderName;
+        fields.senderPhone = senderPhone;
+        fields.recipientName = recipientName;
+        fields.recipientPhone = recipientPhone;
+        fields.recipientAddr = recipientAddr;
+        fields.weight = weight;
+        fields.pkgDesc = description;
       } else {
-        fields['Дата рейсу'] = dateTrip;
-        fields['Місто'] = city;
-        fields['Сума'] = amount;
-        fields['Валюта'] = currency;
-        fields['Форма оплати'] = payForm;
-        fields['Примітка'] = note;
+        fields.city = city;
 
         if (isPax) {
-          fields['Піб пасажира'] = name;
-          fields['Телефон пасажира'] = phone;
-          fields['Адреса відправки'] = addrFrom;
-          fields['Адреса прибуття'] = addrTo;
-          fields['Кількість місць'] = seatsCount;
-          fields['Вага багажу'] = baggageWeight;
-          fields['Таймінг'] = timing;
+          fields.name = name;
+          fields.phone = phone;
+          fields.addrFrom = addrFrom;
+          fields.addrTo = addrTo;
+          fields.seatsCount = seatsCount;
+          fields.baggageWeight = baggageWeight;
+          fields.timing = timing;
         } else {
-          fields['Піб відправника'] = senderName;
-          fields['Телефон пасажира'] = senderPhone;
-          fields['Телефон отримувача'] = recipientPhone;
-          fields['Піб отримувача'] = recipientName;
-          fields['Адреса отримувача'] = recipientAddr;
-          fields['Опис посилки'] = pkgDesc;
-          fields['Кг посилки'] = pkgWeight;
-          fields['Номер ТТН'] = ttn;
+          fields.senderName = senderName;
+          fields.senderPhone = senderPhone;
+          fields.recipientName = recipientName;
+          fields.recipientPhone = recipientPhone;
+          fields.recipientAddr = recipientAddr;
+          fields.pkgDesc = pkgDesc;
+          fields.pkgWeight = pkgWeight;
+          fields.ttn = ttn;
         }
       }
 
       const itemId = isShipping ? (item as ShippingItem).dispatchId : (item as Passenger | Pkg).itemId;
 
-      const response = await fetch(CONFIG.API_URL, {
-        method: 'POST',
-        redirect: 'follow',
-        headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify({
-          action: 'updateDriverFields',
-          driverId: driverName,
-          routeName,
-          itemId,
-          itemType: isShipping ? 'відправка' : (item as Passenger | Pkg).type,
-          fields,
-        }),
-      });
-      const text = await response.text();
-      const result = JSON.parse(text);
-
-      if (result.success) {
-        showToast('Збережено!');
-        onSaved();
-        onClose();
-      } else {
-        showToast('Помилка: ' + (result.error || 'невідома'));
-      }
+      await updateDriverFields(itemId, routeName, fields);
+      showToast('Збережено!');
+      onSaved();
+      onClose();
     } catch (err) {
       showToast('Помилка: ' + (err as Error).message);
     } finally {

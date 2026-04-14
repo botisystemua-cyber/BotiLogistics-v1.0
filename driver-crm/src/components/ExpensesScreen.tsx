@@ -103,25 +103,22 @@ export function ExpensesScreen() {
 
   const handleDelete = async (item: TaggedExpense) => {
     try {
-      const res = await deleteExpense({ routeName: item._routeName, rowNum: String(item.rowNum), driverName });
-      if (res.success) { showToast('Видалено'); loadData(); }
-      else showToast('Помилка: ' + (res.error || ''));
+      await deleteExpense({ routeName: item._routeName, expId: item.expId, driverName });
+      showToast('Видалено'); loadData();
     } catch (err) { showToast('Помилка: ' + (err as Error).message); }
   };
 
   const handleAdd = async (category: ExpenseCategory, amount: string, currency: string, description: string, routeName: string) => {
     try {
-      const res = await addExpense({ routeName, driverName, category, amount, currency, description });
-      if (res.success) { showToast('Додано!'); setShowAdd(false); loadData(); }
-      else showToast('Помилка: ' + (res.error || ''));
+      await addExpense({ routeName, driverName, category, amount, currency, description });
+      showToast('Додано!'); setShowAdd(false); loadData();
     } catch (err) { showToast('Помилка: ' + (err as Error).message); }
   };
 
   const handleSaveAdvance = async (routeName: string, cash: string, cashCurrency: string, card: string, cardCurrency: string) => {
     try {
-      const res = await updateAdvance({ routeName, driverName, cash, cashCurrency, card, cardCurrency });
-      if (res.success) { showToast('Збережено!'); setShowAdvanceModal(null); loadData(); }
-      else showToast('Помилка: ' + (res.error || ''));
+      await updateAdvance({ routeName, driverName, cash, cashCurrency, card, cardCurrency });
+      showToast('Збережено!'); setShowAdvanceModal(null); loadData();
     } catch (err) { showToast('Помилка: ' + (err as Error).message); }
   };
 
