@@ -1,10 +1,11 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import {
   ArrowLeft, RefreshCw, Package, Users, Truck, BarChart3,
   ListFilter, LayoutGrid, Search, X,
 } from 'lucide-react';
 import { useApp } from '../store/useAppStore';
 import type { Theme } from '../store/useAppStore';
+import { isUaEu, isEuUa } from '../utils/smsParser';
 import { fetchPassengers, fetchPackages, fetchShippingItems } from '../api';
 import { PassengerCard } from './PassengerCard';
 import { PackageCard } from './PackageCard';
@@ -49,17 +50,23 @@ export function ListScreen() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [editItem, setEditItem] = useState<RouteItem | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [hidingCompleted, setHidingCompleted] = useState(false);
 
   const routeNum = currentSheet.replace('Маршрут_', '');
   const shippingSheetName = shippingRoutes.find((s) => s.name === 'Відправка_' + routeNum)?.name || '';
   const hasShipping = !!shippingSheetName || isUnifiedView;
 
-  const isPackagesMode = viewTab === 'packages' || viewTab === 'shipping' || viewTab === 'allPackages';
+  const isPackagesMode = viewTab === 'packages' || viewTab === 'shipping' || viewTab === 'allPackages' || viewTab === 'pkgUaEu' || viewTab === 'pkgEuUa';
+  const isPassengersMode = viewTab === 'passengers' || viewTab === 'paxUaEu' || viewTab === 'paxEuUa';
   const activeMainTab: 'all' | 'passengers' | 'packages' = viewTab === 'all' ? 'all' : isPackagesMode ? 'packages' : 'passengers';
 
   // Load data for current tab only
   const loadCurrentTab = useCallback(async (tab: ViewTab, force = false) => {
-    const tabsToLoad: ViewTab[] = tab === 'all' ? ['passengers', 'packages', 'shipping'] : tab === 'allPackages' ? ['packages', 'shipping'] : [tab];
+    const tabsToLoad: ViewTab[] = tab === 'all' ? ['passengers', 'packages', 'shipping']
+      : tab === 'allPackages' ? ['packages', 'shipping']
+      : (tab === 'paxUaEu' || tab === 'paxEuUa') ? ['passengers']
+      : (tab === 'pkgUaEu' || tab === 'pkgEuUa') ? ['packages']
+      : [tab];
     const needsLoad = tabsToLoad.some((t) => force || !loadedTabs.has(t));
     if (!needsLoad) return;
 
@@ -154,16 +161,43 @@ export function ListScreen() {
     return items.filter((item) => fields.some((f) => String((item as any)[f] || '').toLowerCase().includes(q)));
   };
 
-  const filteredPassengers = searchIn(filterItems(passengers), ['name', 'phone', 'addrFrom', 'addrTo', 'itemId']);
-  const filteredPackages = searchIn(filterItems(packages), ['recipientName', 'recipientPhone', 'senderName', 'recipientAddr', 'ttn', 'itemId']);
+  const filteredPassengersAll = searchIn(filterItems(passengers), ['name', 'phone', 'addrFrom', 'addrTo', 'itemId']);
+  const filteredPassengers = viewTab === 'paxUaEu' ? filteredPassengersAll.filter((p) => isUaEu(p.direction))
+    : viewTab === 'paxEuUa' ? filteredPassengersAll.filter((p) => isEuUa(p.direction))
+    : filteredPassengersAll;
+  const filteredPackagesAll = searchIn(filterItems(packages), ['recipientName', 'recipientPhone', 'senderName', 'recipientAddr', 'ttn', 'itemId']);
+  const filteredPackages = viewTab === 'pkgUaEu' ? filteredPackagesAll.filter((p) => isUaEu(p.direction))
+    : viewTab === 'pkgEuUa' ? filteredPackagesAll.filter((p) => isEuUa(p.direction))
+    : filteredPackagesAll;
   const filteredShipping = searchIn(filterItems(shippingItems), ['senderName', 'recipientName', 'recipientPhone', 'recipientAddr', 'dispatchId']);
-  const currentItems = viewTab === 'passengers' || viewTab === 'all' ? filteredPassengers : viewTab === 'packages' ? filteredPackages : [];
+
+  // "All" tab: hide completed items (unless status filter = completed)
+  const allTabPassengers = statusFilter === 'completed' ? filteredPassengers : filteredPassengers.filter((p) => getStatus(p._statusKey) !== 'completed');
+  const allTabPackages = statusFilter === 'completed' ? filteredPackages : filteredPackages.filter((p) => getStatus(p._statusKey) !== 'completed');
+  const allTabTotal = allTabPassengers.length + allTabPackages.length;
+
+  const prevAllTotalRef = useRef(allTabTotal);
+  useEffect(() => {
+    if (viewTab === 'all' && allTabTotal < prevAllTotalRef.current) {
+      setHidingCompleted(true);
+      const t = setTimeout(() => setHidingCompleted(false), 500);
+      prevAllTotalRef.current = allTabTotal;
+      return () => clearTimeout(t);
+    }
+    prevAllTotalRef.current = allTabTotal;
+  }, [allTabTotal, viewTab]);
+
+  const currentItems = isPassengersMode || viewTab === 'all' ? filteredPassengers : viewTab === 'packages' ? filteredPackages : [];
 
   // Stats
   const allStatsItems: { _statusKey: string; _sourceRoute?: string }[] = viewTab === 'all'
-    ? [...passengers, ...packages, ...shippingItems]
+    ? [...passengers, ...packages]
     : viewTab === 'allPackages' ? [...packages, ...shippingItems]
     : viewTab === 'shipping' ? shippingItems
+    : viewTab === 'paxUaEu' ? passengers.filter((p) => isUaEu(p.direction))
+    : viewTab === 'paxEuUa' ? passengers.filter((p) => isEuUa(p.direction))
+    : viewTab === 'pkgUaEu' ? packages.filter((p) => isUaEu(p.direction))
+    : viewTab === 'pkgEuUa' ? packages.filter((p) => isEuUa(p.direction))
     : viewTab === 'passengers' ? passengers : packages;
   const statsBase = isUnifiedView && routeFilter !== 'all'
     ? allStatsItems.filter((i) => i._sourceRoute === routeFilter) : allStatsItems;
@@ -175,7 +209,7 @@ export function ListScreen() {
     cancelled: statsBase.filter((i) => getStatus(i._statusKey) === 'cancelled').length,
   };
 
-  const countSource: { _sourceRoute?: string }[] = viewTab === 'all' ? [...passengers, ...packages, ...shippingItems] : viewTab === 'allPackages' ? [...packages, ...shippingItems] : viewTab === 'shipping' ? shippingItems : viewTab === 'passengers' ? passengers : packages;
+  const countSource: { _sourceRoute?: string }[] = viewTab === 'all' ? [...passengers, ...packages] : viewTab === 'allPackages' ? [...packages, ...shippingItems] : viewTab === 'shipping' ? shippingItems : viewTab === 'passengers' ? passengers : packages;
   const routeTabs = isUnifiedView
     ? [{ name: 'all', label: 'Усі', count: countSource.length },
        ...routes.map((r) => ({ name: r.name, label: r.name.replace('Маршрут_', 'М'), count: countSource.filter((i) => i._sourceRoute === r.name).length }))]
@@ -237,7 +271,7 @@ export function ListScreen() {
         {/* Main tabs */}
         <div className="flex gap-2 mb-2.5">
           {mainTabs.map((t) => (
-            <button key={t.key} onClick={() => setViewTab(t.key === 'packages' && hasShipping ? 'allPackages' : t.key)}
+            <button key={t.key} onClick={() => setViewTab(t.key)}
               className={`flex-1 py-2.5 rounded-xl text-[13px] font-bold text-center cursor-pointer transition-all ${
                 activeMainTab === t.key ? 'bg-brand text-white shadow-sm' : 'bg-gray-100 text-gray-400'
               }`}>
@@ -246,20 +280,40 @@ export function ListScreen() {
           ))}
         </div>
 
-        {/* Sub-tabs: Усі | Отримання | Відправка */}
-        {isPackagesMode && hasShipping && (
+        {/* Sub-tabs for Packages: UA→EU | EU→UA | Відправка */}
+        {isPackagesMode && (
           <div className="flex items-center gap-1 mb-2 bg-gray-100 rounded-lg p-0.5">
-            <button onClick={() => setViewTab('allPackages')}
-              className={`flex-1 py-1.5 rounded-md text-[11px] font-semibold text-center cursor-pointer transition-all ${viewTab === 'allPackages' ? 'bg-white text-text shadow-sm' : 'text-gray-400'}`}>
+            <button onClick={() => setViewTab('pkgUaEu')}
+              className={`flex-1 py-1.5 rounded-md text-[11px] font-semibold text-center cursor-pointer transition-all ${viewTab === 'pkgUaEu' ? 'bg-white text-text shadow-sm' : 'text-gray-400'}`}>
+              UA→EU
+            </button>
+            <button onClick={() => setViewTab('pkgEuUa')}
+              className={`flex-1 py-1.5 rounded-md text-[11px] font-semibold text-center cursor-pointer transition-all ${viewTab === 'pkgEuUa' ? 'bg-white text-text shadow-sm' : 'text-gray-400'}`}>
+              EU→UA
+            </button>
+            {hasShipping && (
+              <button onClick={() => setViewTab('shipping')}
+                className={`flex-1 py-1.5 rounded-md text-[11px] font-semibold text-center cursor-pointer transition-all ${viewTab === 'shipping' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400'}`}>
+                <Truck className="w-3 h-3 inline mr-1 -mt-0.5" />Відправка
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Sub-tabs for Passengers: Усі | UA→EU | EU→UA */}
+        {isPassengersMode && (
+          <div className="flex items-center gap-1 mb-2 bg-gray-100 rounded-lg p-0.5">
+            <button onClick={() => setViewTab('passengers')}
+              className={`flex-1 py-1.5 rounded-md text-[11px] font-semibold text-center cursor-pointer transition-all ${viewTab === 'passengers' ? 'bg-white text-text shadow-sm' : 'text-gray-400'}`}>
               <LayoutGrid className="w-3 h-3 inline mr-1 -mt-0.5" />Усі
             </button>
-            <button onClick={() => setViewTab('packages')}
-              className={`flex-1 py-1.5 rounded-md text-[11px] font-semibold text-center cursor-pointer transition-all ${viewTab === 'packages' ? 'bg-white text-text shadow-sm' : 'text-gray-400'}`}>
-              <Package className="w-3 h-3 inline mr-1 -mt-0.5" />Отримання
+            <button onClick={() => setViewTab('paxUaEu')}
+              className={`flex-1 py-1.5 rounded-md text-[11px] font-semibold text-center cursor-pointer transition-all ${viewTab === 'paxUaEu' ? 'bg-white text-text shadow-sm' : 'text-gray-400'}`}>
+              UA→EU
             </button>
-            <button onClick={() => setViewTab('shipping')}
-              className={`flex-1 py-1.5 rounded-md text-[11px] font-semibold text-center cursor-pointer transition-all ${viewTab === 'shipping' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400'}`}>
-              <Truck className="w-3 h-3 inline mr-1 -mt-0.5" />Відправка
+            <button onClick={() => setViewTab('paxEuUa')}
+              className={`flex-1 py-1.5 rounded-md text-[11px] font-semibold text-center cursor-pointer transition-all ${viewTab === 'paxEuUa' ? 'bg-white text-text shadow-sm' : 'text-gray-400'}`}>
+              EU→UA
             </button>
           </div>
         )}
@@ -339,47 +393,40 @@ export function ListScreen() {
             <ShippingCard key={item._statusKey || `ship_${item.rowNum}_${i}`} item={item} index={i} onEdit={setEditItem} />
           ))
         ) : showAllTab ? (
-          (filteredPassengers.length === 0 && filteredPackages.length === 0 && filteredShipping.length === 0) ? <Empty /> : (
+          hidingCompleted ? (
+            <div className="flex flex-col items-center justify-center py-16">
+              <RefreshCw className="w-7 h-7 text-brand animate-spin mb-3" />
+              <p className="text-muted text-sm">Оновлення...</p>
+            </div>
+          ) : (allTabPassengers.length === 0 && allTabPackages.length === 0) ? <Empty /> : (
             <>
-              {filteredPassengers.length > 0 && (
+              {allTabPassengers.length > 0 && (
                 <>
                   <div className="flex items-center gap-2 px-1">
                     <Users className="w-4 h-4 text-brand" />
                     <span className="text-xs font-bold text-text">Пасажири</span>
-                    <span className="text-[10px] font-bold text-muted bg-gray-100 px-2 py-0.5 rounded-full">{filteredPassengers.length}</span>
+                    <span className="text-[10px] font-bold text-muted bg-gray-100 px-2 py-0.5 rounded-full">{allTabPassengers.length}</span>
                   </div>
-                  {filteredPassengers.map((p, i) => (
+                  {allTabPassengers.map((p, i) => (
                     <PassengerCard key={p._statusKey} passenger={p} index={i} searchQuery={searchQuery} onEdit={setEditItem} />
                   ))}
                 </>
               )}
-              {filteredPackages.length > 0 && (
+              {allTabPackages.length > 0 && (
                 <>
                   <div className="flex items-center gap-2 px-1 mt-2">
                     <Package className="w-4 h-4 text-brand" />
                     <span className="text-xs font-bold text-text">Посилки</span>
-                    <span className="text-[10px] font-bold text-muted bg-gray-100 px-2 py-0.5 rounded-full">{filteredPackages.length}</span>
+                    <span className="text-[10px] font-bold text-muted bg-gray-100 px-2 py-0.5 rounded-full">{allTabPackages.length}</span>
                   </div>
-                  {filteredPackages.map((p, i) => (
+                  {allTabPackages.map((p, i) => (
                     <PackageCard key={p._statusKey} pkg={p} index={i} searchQuery={searchQuery} onEdit={setEditItem} />
-                  ))}
-                </>
-              )}
-              {filteredShipping.length > 0 && (
-                <>
-                  <div className="flex items-center gap-2 px-1 mt-2">
-                    <Truck className="w-4 h-4 text-blue-500" />
-                    <span className="text-xs font-bold text-text">Відправка</span>
-                    <span className="text-[10px] font-bold text-muted bg-gray-100 px-2 py-0.5 rounded-full">{filteredShipping.length}</span>
-                  </div>
-                  {filteredShipping.map((item, i) => (
-                    <ShippingCard key={item._statusKey || `ship_${item.rowNum}_${i}`} item={item} index={i} onEdit={setEditItem} />
                   ))}
                 </>
               )}
             </>
           )
-        ) : viewTab === 'passengers' ? (
+        ) : isPassengersMode ? (
           currentItems.length === 0 ? <Empty /> : (currentItems as Passenger[]).map((p, i) => (
             <PassengerCard key={p._statusKey} passenger={p} index={i} searchQuery={searchQuery} onEdit={setEditItem} />
           ))
