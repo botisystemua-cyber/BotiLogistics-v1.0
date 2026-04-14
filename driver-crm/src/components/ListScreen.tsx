@@ -54,8 +54,8 @@ export function ListScreen() {
   const [hidingCompleted, setHidingCompleted] = useState(false);
 
   const routeNum = currentSheet.replace('Маршрут_', '');
-  const shippingSheetName = shippingRoutes.find((s) => s.name === 'Відправка_' + routeNum)?.name || '';
-  const hasShipping = !!shippingSheetName || isUnifiedView;
+  const shippingSheetName = shippingRoutes.find((s) => s.name === 'Відправка_' + routeNum)?.name || 'Відправка_' + routeNum;
+  const hasShipping = true;
 
   const isPackagesMode = viewTab === 'packages' || viewTab === 'shipping' || viewTab === 'allPackages' || viewTab === 'pkgUaEu' || viewTab === 'pkgEuUa';
   const isPassengersMode = viewTab === 'passengers' || viewTab === 'paxUaEu' || viewTab === 'paxEuUa';
@@ -120,9 +120,11 @@ export function ListScreen() {
               all.forEach((s, i) => { s._statusKey = `ship_${s.dispatchId || s.rowNum}_${s._sourceRoute}_${i}`; if (s.status && s.status !== 'pending') setStatus(s._statusKey, s.status as ItemStatus); });
               setShippingItems(all);
             } else if (shippingSheetName) {
-              const items = await fetchShippingItems(shippingSheetName);
-              items.forEach((s, i) => { s._statusKey = `ship_${s.dispatchId || s.rowNum}_${i}`; if (s.status && s.status !== 'pending') setStatus(s._statusKey, s.status as ItemStatus); });
-              setShippingItems(items);
+              try {
+                const items = await fetchShippingItems(shippingSheetName);
+                items.forEach((s, i) => { s._statusKey = `ship_${s.dispatchId || s.rowNum}_${i}`; if (s.status && s.status !== 'pending') setStatus(s._statusKey, s.status as ItemStatus); });
+                setShippingItems(items);
+              } catch { setShippingItems([]); }
             }
             setLoadedTabs((prev) => new Set(prev).add('shipping'));
           })());
