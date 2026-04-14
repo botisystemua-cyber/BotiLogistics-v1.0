@@ -121,9 +121,10 @@ export async function fetchPassengers(sheetName: string): Promise<Passenger[]> {
   const { data, error } = await query;
   if (error) throw error;
 
-  return (data ?? [])
-    .filter((r) => r.pax_id_or_pkg_id)
-    .map((r) => ({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? [] as any[])
+    .filter((r: any) => r.pax_id_or_pkg_id)
+    .map((r: any) => ({
       ...buildCommon(r, r.rte_id || sheetName),
       name: s(r.passenger_name),
       phone: s(r.passenger_phone),
@@ -155,9 +156,10 @@ export async function fetchPackages(sheetName: string): Promise<Package[]> {
   const { data, error } = await query;
   if (error) throw error;
 
-  return (data ?? [])
-    .filter((r) => r.pax_id_or_pkg_id)
-    .map((r) => ({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? [] as any[])
+    .filter((r: any) => r.pax_id_or_pkg_id)
+    .map((r: any) => ({
       ...buildCommon(r, r.rte_id || sheetName),
       senderName: s(r.sender_name),
       senderPhone: s(r.passenger_phone),
@@ -193,7 +195,8 @@ export async function fetchShippingItems(sheetName: string): Promise<ShippingIte
   const { data, error } = await query;
   if (error) throw error;
 
-  return (data ?? []).map((r) => ({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? [] as any[]).map((r: any) => ({
     rowNum: 0,
     _uuid: r.id,
     dispatchId: s(r.dispatch_id),
