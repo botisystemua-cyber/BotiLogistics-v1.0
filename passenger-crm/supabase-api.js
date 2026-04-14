@@ -230,6 +230,18 @@ window.botiLogout = function () {
     location.href = '../config-crm/';
 };
 
+// Switch to owner-crm panel (sets active role to 'owner' so owner-crm accepts the session)
+window.goToOwnerPanel = function () {
+    try {
+        var s = JSON.parse(localStorage.getItem('boti_session') || 'null');
+        if (s) {
+            s.role = 'owner';
+            localStorage.setItem('boti_session', JSON.stringify(s));
+        }
+    } catch (_) {}
+    location.href = '../owner-crm/';
+};
+
 // ── HEARTBEAT ──
 // Writes users.last_login = now() every 60s while this tab is visible, so that
 // owner-crm's Online tab (5-min threshold on last_login) can see managers that

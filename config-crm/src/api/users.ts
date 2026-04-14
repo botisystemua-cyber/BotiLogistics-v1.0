@@ -66,6 +66,7 @@ export interface AuthSuccess {
   user: User;
   tenantName: string;
   modules: string[];
+  logoUrl: string;
 }
 
 /**
@@ -101,10 +102,10 @@ export async function authenticate(
     .update({ last_login: new Date().toISOString() })
     .eq('id', user.id);
 
-  // Fetch tenant info (name + modules) so success screen can show app links
+  // Fetch tenant info (name + modules + logo) so success screen can show app links
   const { data: client, error: cErr } = await supabase
     .from('clients')
-    .select('name, modules')
+    .select('name, modules, logo_url')
     .eq('tenant_id', user.tenant_id)
     .maybeSingle();
 
@@ -115,5 +116,6 @@ export async function authenticate(
     user: user as User,
     tenantName: client.name,
     modules: (client.modules as string[]) ?? [],
+    logoUrl: (client.logo_url as string) ?? '',
   };
 }

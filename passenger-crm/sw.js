@@ -11,7 +11,7 @@ var NO_HTTP_CACHE = [
   'supabase-config.js',
   'supabase-api.js',
   'sw.js',
-  'manifest.json'
+  'manifest.php'
 ];
 
 // Install — просто активуємось

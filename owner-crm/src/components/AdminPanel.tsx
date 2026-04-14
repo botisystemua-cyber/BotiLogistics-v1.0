@@ -1,16 +1,18 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Users, Wifi, RefreshCw, ExternalLink, DollarSign, LogOut } from 'lucide-react';
+import { Users, Wifi, RefreshCw, ExternalLink, DollarSign, LogOut, Settings } from 'lucide-react';
 import { Logo } from './shared';
 import { StaffTab } from './StaffTab';
 import { OnlineTab } from './OnlineTab';
+import { SettingsTab } from './SettingsTab';
 import { listUsersByTenant, type User } from '../api/users';
 import { logout, beatHeartbeat, type BotiSession } from '../lib/session';
 
-type Tab = 'staff' | 'online' | 'finances' | 'crm';
+type Tab = 'staff' | 'online' | 'settings' | 'finances' | 'crm';
 
 const MENU_ITEMS: { key: Tab; label: string; shortLabel: string; icon: typeof Users; external?: string }[] = [
   { key: 'staff', label: 'Співробітники', shortLabel: 'Команда', icon: Users },
   { key: 'online', label: 'Онлайн', shortLabel: 'Онлайн', icon: Wifi },
+  { key: 'settings', label: 'Налаштування', shortLabel: 'Налашт.', icon: Settings },
   { key: 'finances', label: 'Фінанси', shortLabel: 'Фінанси', icon: DollarSign },
   { key: 'crm', label: 'CRM', shortLabel: 'CRM', icon: ExternalLink, external: '../passenger-crm/' },
 ];
@@ -82,9 +84,8 @@ export function AdminPanel({ session }: { session: BotiSession }) {
       {/* ═══ Sidebar — desktop ═══ */}
       <aside className="hidden lg:flex w-[280px] shrink-0 flex-col bg-white border-r border-border sticky top-0 h-[100dvh]">
         <div className="px-6 py-6 border-b border-border">
-          <Logo size="md" />
-          <div className="mt-3 text-xs font-bold text-text truncate">{session.tenant_name}</div>
-          <div className="text-[11px] text-muted truncate">{session.user_name}</div>
+          <Logo size="md" tenantName={session.tenant_name} />
+          <div className="mt-3 text-sm font-bold text-text truncate">{session.user_name}</div>
         </div>
         <nav className="flex-1 px-4 py-5 space-y-1.5">
           {MENU_ITEMS.map(item => {
@@ -118,7 +119,7 @@ export function AdminPanel({ session }: { session: BotiSession }) {
           </button>
         </div>
         <div className="px-6 pb-5 text-xs text-muted/50 font-medium">
-          <span className="text-text/40 font-bold">Boti</span><span className="text-success/40 font-bold">Logistics</span> Owner v1.0
+          <span className="text-text/40 font-bold">{session.tenant_name}</span> <span className="text-muted/40">v1.0</span>
         </div>
       </aside>
 
@@ -126,9 +127,8 @@ export function AdminPanel({ session }: { session: BotiSession }) {
       <div className="flex-1 flex flex-col min-w-0">
         {/* Mobile header */}
         <header className="lg:hidden flex items-center justify-between px-4 py-3 bg-white border-b border-border sticky top-0 z-30">
-          <Logo size="sm" />
+          <Logo size="sm" tenantName={session.tenant_name} />
           <div className="flex items-center gap-2">
-            <span className="text-xs font-bold text-text truncate max-w-[120px]">{session.tenant_name}</span>
             <button onClick={logout} className="p-2 rounded-lg hover:bg-red-50 cursor-pointer">
               <LogOut className="w-4 h-4 text-muted" />
             </button>
@@ -158,6 +158,7 @@ export function AdminPanel({ session }: { session: BotiSession }) {
                 />
               )}
               {tab === 'online' && <OnlineTab users={users} onReload={loadAll} />}
+              {tab === 'settings' && <SettingsTab tenantId={session.tenant_id} />}
               {tab === 'finances' && (
                 <div className="flex items-center justify-center min-h-[60vh]">
                   <div className="text-center">
@@ -182,14 +183,16 @@ export function AdminPanel({ session }: { session: BotiSession }) {
               <button key={item.key} onClick={() => handleTabClick(item)}
                 className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl min-w-[60px] cursor-pointer transition-all ${active ? 'text-brand' : 'text-muted'}`}>
                 <div className="relative">
-                  <Icon className="w-5 h-5" />
+                  <Icon className={item.key === 'settings' ? 'w-6 h-6' : 'w-5 h-5'} />
                   {item.key === 'online' && onlineCount > 0 && (
                     <span className="absolute -top-1 -right-2 w-4 h-4 rounded-full text-[8px] font-bold flex items-center justify-center bg-green-500 text-white">
                       {onlineCount}
                     </span>
                   )}
                 </div>
-                <span className="text-[10px] font-bold">{item.shortLabel}</span>
+                {item.key !== 'settings' && (
+                  <span className="text-[10px] font-bold">{item.shortLabel}</span>
+                )}
               </button>
             );
           })}

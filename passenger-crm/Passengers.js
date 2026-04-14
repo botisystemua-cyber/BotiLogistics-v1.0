@@ -1,81 +1,47 @@
 // ================================================================
-// PWA: Icon + Manifest + Install
+// PWA: Manifest + Install
 // ================================================================
 (function() {
-    // Генеруємо іконку 192x192 з canvas
-    function generateAppIcon(size) {
-        var c = document.createElement('canvas');
-        c.width = size; c.height = size;
-        var ctx = c.getContext('2d');
-        // Фон
-        ctx.fillStyle = '#1a3a5e';
-        ctx.beginPath();
-        ctx.roundRect(0, 0, size, size, size * 0.18);
-        ctx.fill();
-        // Автобус emoji
-        ctx.font = (size * 0.35) + 'px serif';
-        ctx.textAlign = 'center';
-        ctx.fillText('🚐', size / 2, size * 0.42);
-        // Текст BotiLogistics
-        ctx.fillStyle = '#000000';
-        ctx.font = '800 ' + (size * 0.18) + 'px Montserrat, Arial, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('BOTI', size / 2, size * 0.62);
-        ctx.fillStyle = '#10b981';
-        ctx.font = '800 ' + (size * 0.15) + 'px Montserrat, Arial, sans-serif';
-        ctx.fillText('LOGISTICS', size / 2, size * 0.82);
-        return c.toDataURL('image/png');
+    // Read session
+    var _sess = null;
+    try { _sess = JSON.parse(localStorage.getItem('boti_session') || 'null'); } catch(_) {}
+    var _tenantName = (_sess && _sess.tenant_name) ? _sess.tenant_name : '';
+    var _logoUrl = (_sess && _sess.logo_url) ? _sess.logo_url : '';
+    window.__botiTenantName = _tenantName;
+
+    // Set cookie so PHP can read tenant name for Safari meta tags
+    if (_tenantName) {
+        document.cookie = 'boti_tenant=' + encodeURIComponent(_tenantName) + ';path=/;max-age=31536000;SameSite=Lax';
+    }
+    if (_logoUrl) {
+        document.cookie = 'boti_logo=' + encodeURIComponent(_logoUrl) + ';path=/;max-age=31536000;SameSite=Lax';
     }
 
-    // Створюємо іконки
-    var icon192 = generateAppIcon(192);
-    var icon512 = generateAppIcon(512);
+    // Update manifest link (defined in HTML as <link rel="manifest" href="manifest.php" id="pwaManifest">)
+    var manifestLink = document.getElementById('pwaManifest') || document.querySelector('link[rel="manifest"]');
+    if (manifestLink && _tenantName) {
+        var params = 'name=' + encodeURIComponent(_tenantName);
+        if (_logoUrl) params += '&logo=' + encodeURIComponent(_logoUrl);
+        manifestLink.href = 'manifest.php?' + params;
+    }
 
-    // Apple touch icon
-    var appleIcon = document.createElement('link');
-    appleIcon.rel = 'apple-touch-icon';
-    appleIcon.href = icon192;
-    document.head.appendChild(appleIcon);
+    // Update meta tags with tenant name
+    if (_tenantName) {
+        var metaAppTitle = document.querySelector('meta[name="apple-mobile-web-app-title"]');
+        if (metaAppTitle) metaAppTitle.setAttribute('content', _tenantName);
+        var metaAppName = document.querySelector('meta[name="application-name"]');
+        if (metaAppName) metaAppName.setAttribute('content', _tenantName + ' CRM');
+    }
 
-    // Favicon
-    var favicon = document.createElement('link');
-    favicon.rel = 'icon';
-    favicon.type = 'image/png';
-    favicon.href = icon192;
-    document.head.appendChild(favicon);
+    // Update apple-touch-icon if custom logo exists
+    if (_logoUrl) {
+        var appleIcon = document.querySelector('link[rel="apple-touch-icon"]');
+        if (appleIcon) appleIcon.href = _logoUrl;
+    }
 
-    // Web App Manifest — спочатку пробуємо файл, fallback на inline
-    var manifestLink = document.createElement('link');
-    manifestLink.rel = 'manifest';
-    // Перевіряємо чи manifest.json доступний
-    fetch('manifest.json', { method: 'HEAD' }).then(function(r) {
-        if (r.ok) {
-            manifestLink.href = 'manifest.json';
-        } else {
-            throw new Error('no file');
-        }
-    }).catch(function() {
-        // Fallback — inline manifest (для Google Apps Script)
-        var m = {
-            name: 'BotiLogistics CRM', short_name: 'BotiLogistics',
-            description: 'CRM Пасажири — BotiLogistics',
-            start_url: location.href, display: 'standalone',
-            orientation: 'portrait', theme_color: '#1a3a5e', background_color: '#f5f7fa',
-            icons: [
-                { src: icon192, sizes: '192x192', type: 'image/png' },
-                { src: icon512, sizes: '512x512', type: 'image/png' }
-            ]
-        };
-        manifestLink.href = 'data:application/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(m));
-    });
-    document.head.appendChild(manifestLink);
-
-    // Service Worker — реєструємо якщо доступний
+    // Service Worker
     if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('sw.js').catch(function() {
-            // SW недоступний (напр. Google Apps Script) — ігноруємо
-        });
+        navigator.serviceWorker.register('sw.js').catch(function() {});
     }
 })();
 
@@ -98,7 +64,7 @@ function installApp() {
         deferredInstallPrompt.prompt();
         deferredInstallPrompt.userChoice.then(function(result) {
             if (result.outcome === 'accepted') {
-                showToast('BotiLogistics встановлено!');
+                showToast((window.__botiTenantName || 'BotiLogistics') + ' встановлено!');
                 var banner = document.getElementById('installBanner');
                 if (banner) banner.style.display = 'none';
             }
@@ -439,7 +405,7 @@ function renderRoutePointDropdown(which) {
     }
 
     const flagByCountry = {
-        UA: '🇺🇦', RO: '🇷🇴', SK: '🇸🇰', CZ: '🇨🇿', DE: '🇩🇪', ES: '🇪🇸',
+        UA: '🇺🇦', MD: '🇲🇩', RO: '🇷🇴', SK: '🇸🇰', CZ: '🇨🇿', DE: '🇩🇪', ES: '🇪🇸',
         PL: '🇵🇱', AT: '🇦🇹', HU: '🇭🇺', CH: '🇨🇭', IT: '🇮🇹', FR: '🇫🇷'
     };
     dd.innerHTML = filtered.map(p => {
@@ -638,6 +604,14 @@ function renderManagerSlots() {
     html += '</div>';
     html += '</div>';
 
+    // "Owner Panel" button — only if user has owner role
+    var roles = session.roles || [session.role];
+    if (roles.indexOf('owner') !== -1) {
+        html += '<button onclick="goToOwnerPanel()" style="width:100%;padding:12px;border:2px solid var(--border);border-radius:10px;background:white;color:#6d28d9;font-weight:700;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:8px;transition:all .2s" onmouseover="this.style.background=\'#f5f3ff\';this.style.borderColor=\'#c4b5fd\'" onmouseout="this.style.background=\'white\';this.style.borderColor=\'var(--border)\'">';
+        html += '<span>👑</span><span>Власницька панель</span>';
+        html += '</button>';
+    }
+
     html += '<button onclick="botiLogout()" style="width:100%;padding:12px;border:2px solid var(--border);border-radius:10px;background:white;color:#dc2626;font-weight:700;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:all .2s" onmouseover="this.style.background=\'#fef2f2\';this.style.borderColor=\'#fecaca\'" onmouseout="this.style.background=\'white\';this.style.borderColor=\'var(--border)\'">';
     html += '<span>🚪</span><span>Вийти</span>';
     html += '</button>';
@@ -807,6 +781,13 @@ async function apiPost(action, data) {
 // INIT
 // ================================================================
 document.addEventListener('DOMContentLoaded', () => {
+    // Replace BotiLogistics logo with company name from session
+    var _bs = getBotiSession();
+    if (_bs && _bs.tenant_name) {
+        var logoEl = document.querySelector('.logo');
+        if (logoEl) logoEl.textContent = _bs.tenant_name;
+    }
+
     // Запит менеджера при першому відкритті
     updateAvatarUI();
     if (!getManagerName()) {
@@ -2762,7 +2743,8 @@ function updateAppBadge(count) {
         }
     }
     // 2. Оновлюємо title сторінки — видно в табах і на деяких платформах
-    const baseTitle = 'BotiLogistics CRM';
+    const _s = getBotiSession();
+    const baseTitle = (_s && _s.tenant_name) ? _s.tenant_name + ' CRM' : 'BotiLogistics CRM';
     document.title = count > 0 ? '(' + count + ') ' + baseTitle : baseTitle;
 
     // 3. Динамічний favicon з лічильником (працює скрізь)

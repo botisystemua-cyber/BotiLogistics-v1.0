@@ -1,0 +1,20 @@
+# Parse Passengers.html as PHP (cookie bridge for Safari PWA branding)
+<Files "Passengers.html">
+    AddHandler application/x-httpd-php .html
+</Files>
+
+# Service Worker — дозвіл на root scope + без кешу
+<FilesMatch "sw\.js$">
+    Header set Service-Worker-Allowed "/"
+    Header set Cache-Control "no-cache"
+</FilesMatch>
+
+# Manifest — правильний Content-Type
+<FilesMatch "manifest\.php$">
+    Header set Cache-Control "public, max-age=86400"
+</FilesMatch>
+
+# Кеш для іконок
+<FilesMatch "\.(png|ico)$">
+    Header set Cache-Control "public, max-age=86400"
+</FilesMatch>
