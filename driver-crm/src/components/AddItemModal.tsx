@@ -88,7 +88,7 @@ export function AddItemModal({ onClose, onAdded, defaultType: dt, forceShipping 
   const [recipientAddr, setRecipientAddr] = useState('');
   const [pkgDesc, setPkgDesc] = useState('');
   const [pkgWeight, setPkgWeight] = useState('');
-  const [ttn, setTtn] = useState('');
+  const [ttn] = useState('');
 
   // Apply prefill once on mount
   useEffect(() => {
