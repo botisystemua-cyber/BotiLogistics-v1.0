@@ -416,7 +416,18 @@ const MOCK_ROUTES = [
 ];
 
 // ===== [SECT-INIT] INIT =====
+function _getBotiSession() {
+  try { return JSON.parse(localStorage.getItem('boti_session') || 'null'); } catch (_) { return null; }
+}
+
 document.addEventListener('DOMContentLoaded', async function() {
+  // Swap BotiLogistics brand with tenant name from session
+  const _bs = _getBotiSession();
+  if (_bs && _bs.tenant_name) {
+    const logoEl = document.querySelector('.logo');
+    if (logoEl) logoEl.textContent = _bs.tenant_name;
+  }
+
   await loadData();
 });
 
