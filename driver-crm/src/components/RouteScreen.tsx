@@ -3,9 +3,10 @@ import { Package, LogOut, ChevronRight, Layers, RefreshCw, User } from 'lucide-r
 import { useApp } from '../store/useAppStore';
 import { fetchRoutes } from '../api';
 import { BotiLogo } from './BotiLogo';
+import { logout } from '../lib/session';
 
 export function RouteScreen() {
-  const { driverName, setDriverName, setCurrentScreen, openRoute, routes, setRoutes, shippingRoutes, setShippingRoutes } = useApp();
+  const { driverName, openRoute, routes, setRoutes, shippingRoutes, setShippingRoutes } = useApp();
   const [loading, setLoading] = useState(false);
 
   const loadRoutes = async () => {
@@ -20,7 +21,7 @@ export function RouteScreen() {
 
   useEffect(() => { loadRoutes(); }, []);
 
-  const logout = () => { setDriverName(''); localStorage.removeItem('driverName'); setCurrentScreen('login'); };
+  const handleLogout = () => logout();
 
   return (
     <div className="flex-1 flex flex-col bg-bg min-h-dvh">
@@ -31,7 +32,7 @@ export function RouteScreen() {
             <div className="text-[11px] text-muted">{driverName}</div>
           </div>
           <div className="flex gap-2">
-            <button onClick={logout} className="p-2 rounded-xl hover:bg-red-50 cursor-pointer active:scale-95 transition-all">
+            <button onClick={handleLogout} className="p-2 rounded-xl hover:bg-red-50 cursor-pointer active:scale-95 transition-all">
               <LogOut className="w-5 h-5 text-red-400" />
             </button>
           </div>

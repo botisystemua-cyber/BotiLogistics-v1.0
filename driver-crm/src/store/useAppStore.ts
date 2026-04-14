@@ -3,10 +3,9 @@ import type { ItemStatus, StatusFilter, Route, ShippingRoute, ViewTab } from '..
 
 export interface AppStore {
   driverName: string;
-  setDriverName: (name: string) => void;
 
-  currentScreen: 'login' | 'routes' | 'list' | 'expenses';
-  setCurrentScreen: (screen: 'login' | 'routes' | 'list' | 'expenses') => void;
+  currentScreen: 'routes' | 'list' | 'expenses';
+  setCurrentScreen: (screen: 'routes' | 'list' | 'expenses') => void;
 
   currentSheet: string;
   isUnifiedView: boolean;

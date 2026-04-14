@@ -1,6 +1,7 @@
 import { useState, useCallback, useMemo, type ReactNode } from 'react';
 import { AppContext, type AppStore } from './useAppStore';
 import type { ItemStatus, StatusFilter, Route, ShippingRoute, ViewTab } from '../types';
+import { readSession } from '../lib/session';
 
 function loadStatuses(sheet: string): Record<string, ItemStatus> {
   try {
@@ -17,8 +18,10 @@ function loadHiddenCols(): Set<string> {
 }
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [driverName, setDriverNameState] = useState(() => localStorage.getItem('driverName') || '');
-  const [currentScreen, setCurrentScreen] = useState<'login' | 'routes' | 'list' | 'expenses'>('login');
+  const session = readSession();
+  const driverName = session?.user_name ?? '';
+
+  const [currentScreen, setCurrentScreen] = useState<'routes' | 'list' | 'expenses'>('routes');
   const [currentSheet, setCurrentSheet] = useState('');
   const [isUnifiedView, setIsUnifiedView] = useState(false);
   const [statuses, setStatuses] = useState<Record<string, ItemStatus>>({});
@@ -29,11 +32,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [shippingRoutes, setShippingRoutes] = useState<ShippingRoute[]>([]);
   const [toastMessage, setToastMessage] = useState('');
   const [hiddenCols, setHiddenCols] = useState<Set<string>>(loadHiddenCols);
-
-  const setDriverName = useCallback((name: string) => {
-    setDriverNameState(name);
-    localStorage.setItem('driverName', name);
-  }, []);
 
   const setStatus = useCallback((key: string, status: ItemStatus) => {
     setStatuses((prev) => {
@@ -78,13 +76,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const store: AppStore = useMemo(() => ({
-    driverName, setDriverName, currentScreen, setCurrentScreen,
+    driverName, currentScreen, setCurrentScreen,
     currentSheet, isUnifiedView, statuses, setStatus, getStatus,
     statusFilter, setStatusFilter, routeFilter, setRouteFilter,
     viewTab, setViewTab, routes, setRoutes, shippingRoutes, setShippingRoutes,
     openRoute, goBack, toastMessage, showToast, hiddenCols, toggleCol,
   }), [
-    driverName, setDriverName, currentScreen, currentSheet,
+    driverName, currentScreen, currentSheet,
     isUnifiedView, statuses, setStatus, getStatus,
     statusFilter, routeFilter, viewTab, routes, shippingRoutes,
     openRoute, goBack, toastMessage, showToast, hiddenCols, toggleCol,
