@@ -427,6 +427,8 @@ const FIELD_MAP: Record<string, string> = {
   pkgWeight: 'package_weight',
   weight: 'weight_kg',
   description: 'description',
+  tips: 'tips',
+  tipsCurrency: 'tips_currency',
 };
 
 export async function updateDriverFields(itemId: string, _routeName: string, fields: Record<string, string>) {
