@@ -13,6 +13,10 @@
 --     повний доступ через direct Postgres. Ця функція нічого не погіршує.
 -- ============================================================================
 
+-- Якщо функція вже існує з іншою сигнатурою/return type — дропаємо, щоб
+-- уникнути "42P13: cannot change return type of existing function".
+drop function if exists public.exec_sql(text);
+
 create or replace function public.exec_sql(query text)
 returns jsonb
 language plpgsql
