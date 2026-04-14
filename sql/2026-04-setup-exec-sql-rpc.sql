@@ -50,6 +50,3 @@ revoke all on function public.exec_sql(text) from public;
 revoke all on function public.exec_sql(text) from anon;
 revoke all on function public.exec_sql(text) from authenticated;
 grant execute on function public.exec_sql(text) to service_role;
-
-comment on function public.exec_sql(text) is
-    'Admin-only DDL/DML executor. Доступна лише service_role. Повертає {ok, rows_affected} або {ok:false, error, sqlstate}.';
