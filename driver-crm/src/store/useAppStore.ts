@@ -1,6 +1,8 @@
 import { createContext, useContext } from 'react';
 import type { ItemStatus, StatusFilter, Route, ShippingRoute, ViewTab } from '../types';
 
+export type Theme = 'top-driver' | 'lone-wolf' | 'detonator' | 'lightning';
+
 export interface AppStore {
   driverName: string;
 
@@ -36,6 +38,9 @@ export interface AppStore {
 
   hiddenCols: Set<string>;
   toggleCol: (col: string) => void;
+
+  theme: Theme;
+  setTheme: (theme: Theme) => void;
 }
 
 export const AppContext = createContext<AppStore | null>(null);
