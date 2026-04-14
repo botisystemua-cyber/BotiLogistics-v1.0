@@ -526,7 +526,12 @@ async function sbPkgGetRoutesList(params) {
             }
         });
 
-        return { ok: true, data: Object.values(routeMap) };
+        // Also include dispatches grouped by rte_id (for Cargo.js sidebar).
+        const dispRes = await sbPkgGetDispatches();
+        const dispatches = dispRes.ok ? (dispRes.data || []) : [];
+
+        const routes = Object.values(routeMap);
+        return { ok: true, data: routes, routes, dispatches };
     } catch (e) {
         console.error('sbPkgGetRoutesList error:', e);
         return { ok: false, error: e.message };
@@ -657,24 +662,125 @@ async function sbPkgUpdateRouteField(params) {
 }
 
 // ================================================================
-// DISPATCHES API
+// DISPATCHES API (READ-ONLY for cargo-crm / manager)
 // ================================================================
+// Відправки створюють і редагують ВОДІЇ через driver-crm.
+// Менеджер (cargo-crm) тільки ЧИТАЄ — ніяких create/update/delete.
 
-async function sbPkgUpdateDispatch(params) {
+// Mapping: dispatches SB column → GAS Ukrainian header (used by Cargo.js UI)
+function dispatchRowToGas(r, routeInfo) {
+    return {
+        'DISPATCH_ID':        r.dispatch_id || '',
+        'Дата створення':     r.created_at ? String(r.created_at).slice(0, 10) : '',
+        'Дата рейсу':         r.route_date || '',
+        'RTE_ID':             routeInfo && routeInfo.rte_id ? routeInfo.rte_id : '',
+        'Водій':              routeInfo && routeInfo.driver_name ? routeInfo.driver_name : '',
+        'Номер авто':         routeInfo && routeInfo.vehicle_name ? routeInfo.vehicle_name : '',
+        'AUTO_ID':            r.vehicle_id || '',
+        'Піб відправника':    r.sender_name || '',
+        'Телефон відправника':r.sender_phone || '',
+        'Телефон реєстратора':r.registrar_phone || '',
+        'Піб отримувача':     r.recipient_name || '',
+        'Телефон отримувача': r.recipient_phone || '',
+        'Адреса отримувача':  r.recipient_address || '',
+        'Внутрішній №':       r.internal_number || '',
+        'Вага':               r.weight_kg || '',
+        'Опис посилки':       r.package_description || '',
+        'Фото посилки':       r.photo_url || '',
+        'Сума':               r.amount || '',
+        'Валюта':             r.amount_currency || '',
+        'Завдаток':           r.deposit || '',
+        'Валюта завдатку':    r.deposit_currency || '',
+        'Форма оплати':       r.payment_form || '',
+        'Статус оплати':      r.payment_status || '',
+        'Борг':               r.debt || '',
+        'Статус':             r.status || '',
+        'Примітка':           r.notes || '',
+        'PKG_ID':             '', // dispatches has no pkg_id FK yet
+        'CLI_ID':             '',
+    };
+}
+
+// Helper: build uuid → {rte_id, driver_name, vehicle_name, city, route_date, status} map
+async function _fetchRoutesIndex(routeUuids) {
+    if (!routeUuids || routeUuids.length === 0) return {};
+    const { data, error } = await sb.from('routes')
+        .select('id, rte_id, route_date, city, driver_name, vehicle_name, status')
+        .eq('tenant_id', TENANT_ID)
+        .in('id', routeUuids);
+    if (error) throw error;
+    const idx = {};
+    (data || []).forEach(r => { idx[r.id] = r; });
+    return idx;
+}
+
+// Returns grouped list for sidebar: [{sheetName, city, rowCount, rte_id}, ...]
+async function sbPkgGetDispatches(_params) {
     try {
-        const dispatchId = params.dispatch_id;
-        const sbCol = GAS_TO_SB_PKG[params.col] || params.col;
-        const updateObj = {};
-        updateObj[sbCol] = params.value === '' ? null : params.value;
-        updateObj.updated_at = new Date().toISOString();
-
         const { data, error } = await sb.from('dispatches')
-            .update(updateObj).eq('dispatch_id', dispatchId).select();
+            .select('id, route_id, route_date')
+            .eq('tenant_id', TENANT_ID);
         if (error) throw error;
 
-        return { ok: true, data: data[0] };
+        const rows = data || [];
+        const uuids = [...new Set(rows.map(r => r.route_id).filter(Boolean))];
+        const routesById = await _fetchRoutesIndex(uuids);
+
+        const groups = {};
+        rows.forEach(r => {
+            const route = routesById[r.route_id];
+            const key = (route && route.rte_id) || r.route_id || '—';
+            if (!groups[key]) {
+                groups[key] = {
+                    sheetName: key,
+                    rte_id:    key,
+                    city:      (route && route.city) || '',
+                    route_date:(route && route.route_date) || r.route_date || '',
+                    rowCount:  0,
+                };
+            }
+            groups[key].rowCount++;
+        });
+
+        return { ok: true, data: Object.values(groups) };
     } catch (e) {
-        console.error('sbPkgUpdateDispatch error:', e);
+        console.error('sbPkgGetDispatches error:', e);
+        return { ok: false, error: e.message };
+    }
+}
+
+// Returns detail rows for ONE dispatch (all dispatches under given rte_id)
+async function sbPkgGetDispatchSheet(params) {
+    try {
+        const sheetName = params.sheetName || params.sheet || params.rte_id;
+        if (!sheetName) return { ok: false, error: 'Не вказано rte_id/sheetName' };
+
+        // 1) Resolve rte_id → routes.id (uuid)
+        const { data: routeRows, error: rErr } = await sb.from('routes')
+            .select('id, rte_id, route_date, city, driver_name, vehicle_name, status')
+            .eq('tenant_id', TENANT_ID)
+            .eq('rte_id', sheetName)
+            .limit(1);
+        if (rErr) throw rErr;
+
+        const routeInfo = (routeRows && routeRows[0]) || null;
+        if (!routeInfo) {
+            return { ok: true, data: { rows: [], headers: [], sheetName }, rows: [], headers: [], sheetName };
+        }
+
+        // 2) Fetch dispatches for this route uuid
+        const { data: dispRows, error: dErr } = await sb.from('dispatches')
+            .select('*')
+            .eq('tenant_id', TENANT_ID)
+            .eq('route_id', routeInfo.id)
+            .order('created_at', { ascending: true });
+        if (dErr) throw dErr;
+
+        const rows = (dispRows || []).map(r => dispatchRowToGas(r, routeInfo));
+        const headers = rows.length > 0 ? Object.keys(rows[0]) : [];
+        return { ok: true, data: { rows, headers, sheetName }, rows, headers, sheetName };
+    } catch (e) {
+        console.error('sbPkgGetDispatchSheet error:', e);
         return { ok: false, error: e.message };
     }
 }
@@ -821,13 +927,9 @@ async function apiPostSupabase(action, params) {
             return { ok: true }; // No separate sheets in Supabase
         },
 
-        // Dispatches
-        updateDispatch:     sbPkgUpdateDispatch,
-        getDispatches:      async (p) => {
-            const { data, error } = await sb.from('dispatches').select('*');
-            if (error) return { ok: false, error: error.message };
-            return { ok: true, data: data || [] };
-        },
+        // Dispatches (READ-ONLY — drivers create via driver-crm, manager only views)
+        getDispatches:      sbPkgGetDispatches,
+        getDispatchSheet:   sbPkgGetDispatchSheet,
 
         // Misc
         checkDuplicates:    sbPkgCheckDuplicates,

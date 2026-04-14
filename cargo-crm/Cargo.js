@@ -2255,11 +2255,15 @@ function openDispatchView(idx) {
   showToast('Завантаження відправки...', 'info');
 
   var d = dispatches[idx];
-  apiPost('getRouteSheet', { sheetName: d.sheetName }).then(function(res) {
+  apiPost('getDispatchSheet', { sheetName: d.sheetName }).then(function(res) {
     if (!res.ok) { showToast('Помилка: ' + res.error, 'error'); return; }
     routeData = res.data.rows || [];
     renderDispatchView(d);
   }).catch(function() { showToast('Помилка завантаження', 'error'); });
+}
+
+function refreshDispatchView() {
+  if (activeRouteIdx !== null && dispatches[activeRouteIdx]) openDispatchView(activeRouteIdx);
 }
 
 function renderDispatchView(disp) {
@@ -2279,7 +2283,7 @@ function renderDispatchView(disp) {
     '</div>' +
     '<div class="route-header-actions">' +
       '<button onclick="openDispatchPrintDialog()">🖨️ Друк списку</button>' +
-      '<button onclick="refreshRouteView()">🔄 Оновити</button>' +
+      '<button onclick="refreshDispatchView()">🔄 Оновити</button>' +
       '<button onclick="backToParcels()">← Назад</button>' +
     '</div>';
 
@@ -2341,7 +2345,6 @@ function openDispatchDetail(idx) {
       '<h3 style="margin:0;">📥 Відправка <span style="font-size:12px;font-weight:400;color:var(--text-secondary);">' + (r['DISPATCH_ID'] || '') + '</span></h3>' +
       '<div style="display:flex;gap:6px;">' +
         '<button class="dispatch-action-btn" onclick="printSingleDispatch(' + idx + ')" title="Друк">🖨️ Друк</button>' +
-        '<button class="dispatch-action-btn edit-btn" onclick="toggleDispatchEdit(' + idx + ')" id="dispEditToggle" title="Редагувати">✏️ Редагувати</button>' +
       '</div>' +
     '</div>';
 
@@ -2360,18 +2363,12 @@ function openDispatchDetail(idx) {
     ['Фото', r['Фото посилки'] ? '<a href="' + r['Фото посилки'] + '" target="_blank" style="color:var(--info);">📷 Переглянути</a>' : '']
   ]);
 
-  // Editable finance section
-  html += '<div class="route-detail-section" id="dispFinanceSection">' +
-    '<div class="route-detail-section-title">Фінанси</div>' +
-    '<div class="route-detail-grid">' +
-      dispEditableField('Сума', r['Сума'], 'number') +
-      dispReadField('Валюта', r['Валюта']) +
-      dispEditableField('Завдаток', r['Завдаток'], 'number') +
-      dispReadField('Валюта завдатку', r['Валюта завдатку']) +
-      dispEditableSelect('Форма оплати', r['Форма оплати'], ['Готівка', 'Безготівка', 'Картка', 'Інше']) +
-      dispEditableSelect('Статус оплати', r['Статус оплати'], ['Оплачено', 'Частково', 'Не оплачено']) +
-      dispEditableField('Борг', r['Борг'], 'number') +
-    '</div></div>';
+  html += renderRouteDetailSection('Фінанси', [
+    ['Сума', r['Сума']], ['Валюта', r['Валюта']],
+    ['Завдаток', r['Завдаток']], ['Валюта завдатку', r['Валюта завдатку']],
+    ['Форма оплати', r['Форма оплати']], ['Статус оплати', r['Статус оплати']],
+    ['Борг', r['Борг']]
+  ]);
 
   html += renderRouteDetailSection('Рейс', [
     ['Дата створення', r['Дата створення']], ['Дата рейсу', r['Дата рейсу']],
@@ -2379,124 +2376,18 @@ function openDispatchDetail(idx) {
     ['AUTO_ID', r['AUTO_ID']], ['RTE_ID', r['RTE_ID']]
   ]);
 
-  // Editable status + note
-  html += '<div class="route-detail-section" id="dispStatusSection">' +
-    '<div class="route-detail-section-title">Статус / Системні</div>' +
-    '<div class="route-detail-grid">' +
-      dispReadField('DISPATCH_ID', r['DISPATCH_ID']) +
-      dispReadField('PKG_ID', r['PKG_ID']) +
-      dispEditableSelect('Статус', r['Статус'], ['Нова', 'В дорозі', 'Доставлено', 'Повернення', 'Скасовано']) +
-      dispEditableField('Примітка', r['Примітка'], 'text') +
-    '</div></div>';
-
-  // Save button (hidden by default, shown in edit mode)
-  html += '<div id="dispSaveBar" style="display:none;padding:12px;text-align:center;">' +
-    '<button class="dispatch-action-btn save-btn" onclick="saveDispatchEdits(' + idx + ')" style="background:var(--success);color:#fff;padding:8px 24px;font-size:14px;">💾 Зберегти зміни</button>' +
-    '<button class="dispatch-action-btn" onclick="toggleDispatchEdit(' + idx + ')" style="margin-left:8px;">Скасувати</button>' +
-  '</div>';
+  html += renderRouteDetailSection('Статус / Системні', [
+    ['DISPATCH_ID', r['DISPATCH_ID']], ['PKG_ID', r['PKG_ID']],
+    ['Статус', r['Статус']], ['Примітка', r['Примітка']]
+  ]);
 
   html += '</div>';
   overlay.innerHTML = html;
   overlay.classList.add('open');
 }
 
-function dispReadField(label, val) {
-  return '<div class="route-detail-field"><label>' + label + '</label><div class="val ' + (val ? '' : 'empty') + '">' + (val || '—') + '</div></div>';
-}
-
-function dispEditableField(label, val, type) {
-  var v = val || '';
-  return '<div class="route-detail-field disp-editable-wrap">' +
-    '<label>' + label + '</label>' +
-    '<div class="val disp-view-mode ' + (v ? '' : 'empty') + '">' + (v || '—') + '</div>' +
-    '<input class="disp-edit-input disp-edit-mode" type="' + type + '" value="' + v + '" data-col="' + label + '" style="display:none;" />' +
-  '</div>';
-}
-
-function dispEditableSelect(label, val, options) {
-  var v = val || '';
-  var opts = options.map(function(o) {
-    return '<option value="' + o + '"' + (o === v ? ' selected' : '') + '>' + o + '</option>';
-  }).join('');
-  return '<div class="route-detail-field disp-editable-wrap">' +
-    '<label>' + label + '</label>' +
-    '<div class="val disp-view-mode ' + (v ? '' : 'empty') + '">' + (v || '—') + '</div>' +
-    '<select class="disp-edit-input disp-edit-mode" data-col="' + label + '" style="display:none;">' +
-      '<option value="">— Не вказано —</option>' + opts +
-    '</select>' +
-  '</div>';
-}
-
-var dispatchEditMode = false;
-function toggleDispatchEdit(idx) {
-  dispatchEditMode = !dispatchEditMode;
-  var panel = document.getElementById('dispatchDetailPanel');
-  if (!panel) return;
-  var viewEls = panel.querySelectorAll('.disp-view-mode');
-  var editEls = panel.querySelectorAll('.disp-edit-mode');
-  var saveBar = document.getElementById('dispSaveBar');
-  var toggleBtn = document.getElementById('dispEditToggle');
-
-  viewEls.forEach(function(el) { el.style.display = dispatchEditMode ? 'none' : ''; });
-  editEls.forEach(function(el) { el.style.display = dispatchEditMode ? '' : 'none'; });
-  if (saveBar) saveBar.style.display = dispatchEditMode ? '' : 'none';
-  if (toggleBtn) {
-    toggleBtn.textContent = dispatchEditMode ? '❌ Скасувати' : '✏️ Редагувати';
-    toggleBtn.classList.toggle('active-edit', dispatchEditMode);
-  }
-}
-
-function saveDispatchEdits(idx) {
-  var r = routeData[idx];
-  if (!r) return;
-  var d = dispatches[activeRouteIdx];
-  if (!d) { showToast('Помилка: відправка не знайдена', 'error'); return; }
-
-  var inputs = document.querySelectorAll('#dispatchDetailPanel .disp-edit-input');
-  var changes = [];
-  inputs.forEach(function(inp) {
-    var col = inp.getAttribute('data-col');
-    var newVal = inp.value;
-    var oldVal = r[col] || '';
-    if (String(newVal) !== String(oldVal)) {
-      changes.push({ col: col, value: newVal });
-    }
-  });
-
-  if (changes.length === 0) {
-    showToast('Нічого не змінено', 'info');
-    dispatchEditMode = false;
-    toggleDispatchEdit(idx);
-    return;
-  }
-
-  showToast('Збереження ' + changes.length + ' змін...', 'info');
-
-  var promises = changes.map(function(c) {
-    return apiPost('updateDispatch', {
-      sheetName: d.sheetName,
-      dispatch_id: r['DISPATCH_ID'],
-      col: c.col,
-      value: c.value
-    });
-  });
-
-  Promise.all(promises).then(function(results) {
-    var failed = results.filter(function(res) { return !res.ok; });
-    if (failed.length > 0) {
-      showToast('Помилка збереження: ' + (failed[0].error || 'Невідомо'), 'error');
-      return;
-    }
-    // Update local data
-    changes.forEach(function(c) { r[c.col] = c.value; });
-    showToast('Збережено!', 'success');
-    dispatchEditMode = false;
-    openDispatchDetail(idx); // Refresh the panel
-    renderDispatchView(d);   // Refresh the table
-  }).catch(function() {
-    showToast('Помилка мережі', 'error');
-  });
-}
+// NOTE: dispatch details are READ-ONLY for manager.
+// Creation / edits / status updates happen in driver-crm (водії).
 
 // ===== DISPATCH PRINT LIST =====
 var dispPrintCols = [
