@@ -431,6 +431,8 @@ const ROUTE_GAS_TO_SB = {
     'Водій':              'driver_name',
     'Телефон водія':      'driver_phone',
     'Місто':              'city',
+    'Піб пасажира':       'passenger_name',
+    'Телефон пасажира':   'passenger_phone',
     'Піб відправника':    'sender_name',
     'Телефон відправника':'passenger_phone',
     'Адреса відправки':   'departure_address',
@@ -439,6 +441,9 @@ const ROUTE_GAS_TO_SB = {
     'Адреса отримувача':  'recipient_address',
     'Адреса в Європі':    'recipient_address',
     'Адреса прибуття':    'arrival_address',
+    'Вага багажу':        'baggage_weight',
+    'Кількість місць':    'seats_count',
+    'Місце в авто':       'seat_number',
     'Внутрішній №':       'internal_number',
     'Номер ТТН':          'ttn_number',
     'Опис':               'package_description',
@@ -714,13 +719,23 @@ async function sbPkgUpdateRouteField(params) {
         const rowId = params.rte_id || params.id;
         const updateObj = {};
 
+        // Захист: якщо GAS-ключ не має DB-колонки (напр. 'Тел. реєстратора',
+        // 'Валюта багажу', 'Ціна багажу' — їх просто нема в routes), не шлемо
+        // запит з кириличним іменем колонки — PostgREST поверне schema cache
+        // помилку, користувач побачить червоний тост.
+        const isValidSbCol = (c) => /^[a-z_][a-z0-9_]*$/.test(c);
+
         if (params.fields) {
             for (const [col, val] of Object.entries(params.fields)) {
                 const sbCol = ROUTE_GAS_TO_SB[col] || col;
+                if (!isValidSbCol(sbCol)) continue; // мовчки пропускаємо
                 updateObj[sbCol] = (val === '' || val === undefined) ? null : String(val);
             }
         } else {
             const sbCol = ROUTE_GAS_TO_SB[params.col] || params.col;
+            if (!isValidSbCol(sbCol)) {
+                return { ok: false, error: 'Поле «' + params.col + '» не редагується тут' };
+            }
             updateObj[sbCol] = (params.value === '' || params.value === undefined) ? null : String(params.value);
         }
         updateObj.updated_at = new Date().toISOString();

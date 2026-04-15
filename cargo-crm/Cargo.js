@@ -2088,34 +2088,63 @@ function renderRouteCard(r, idx, sheetName) {
     const headerPhone = isPax ? phone : (recipPhone || phone);
     const cleanPhone = (headerPhone || '').replace(/[^+\d]/g, '');
 
-    // All detail fields for expanded view
-    const allFields = [
-        {label: isPax ? 'ПІБ' : 'ПІБ відправника', key: 'Піб пасажира', value: name},
-        {label: isPax ? 'Телефон' : 'Тел. відправника', key: 'Телефон пасажира', value: phone},
-        ...(isPax ? [] : [
-            {label: 'ПІБ отримувача', key: 'Піб отримувача', value: recipName || '—'},
-            {label: 'Тел. отримувача', key: 'Телефон отримувача', value: recipPhone || '—'},
-        ]),
+    // Розбивка деталей на 4 вкладки (як у звичайному списку посилок),
+    // щоб не було "сміттєвої" грид-стіни. Поля без DB-колонки в routes
+    // (Тел. реєстратора, Ціна/Валюта багажу) залишаємо для відображення —
+    // backend сам мовчки пропустить їх при спробі редагування.
+    const contactsFields = isPax ? [
+        {label: 'ПІБ', key: 'Піб пасажира', value: name},
+        {label: 'Телефон', key: 'Телефон пасажира', value: phone},
         {label: 'Тел. реєстратора', key: 'Телефон реєстратора', value: phoneReg},
+        {label: 'Адреса відправки', key: 'Адреса відправки', value: from},
+        {label: 'Адреса прибуття', key: 'Адреса прибуття', value: to},
+    ] : [
+        {label: 'ПІБ відправника', key: 'Піб відправника', value: name},
+        {label: 'Тел. відправника', key: 'Телефон відправника', value: phone},
+        {label: 'ПІБ отримувача', key: 'Піб отримувача', value: recipName || '—'},
+        {label: 'Тел. отримувача', key: 'Телефон отримувача', value: recipPhone || '—'},
+        {label: 'Адреса відправки', key: 'Адреса відправки', value: from},
+        {label: 'Адреса прибуття', key: 'Адреса прибуття', value: to},
+    ];
+    const financeFields = [
+        {label: 'Сума', key: 'Сума', value: price},
+        {label: 'Валюта', key: 'Валюта', value: curr},
+        {label: 'Завдаток', key: 'Завдаток', value: deposit},
+        {label: 'Валюта завдатку', key: 'Валюта завдатку', value: depositCurr},
+        {label: 'Статус оплати', key: 'Статус оплати', value: payStatus},
+        {label: 'Вага багажу', key: 'Вага багажу', value: weight},
+        {label: 'Ціна багажу', key: 'Ціна багажу', value: weightPrice},
+        {label: 'Валюта багажу', key: 'Валюта багажу', value: weightCurr},
+    ];
+    const tripFields = [
         {label: 'Напрям', key: 'Напрям', value: direction},
         {label: 'Дата рейсу', key: 'Дата рейсу', value: displayDate},
         {label: 'Кількість місць', key: 'Кількість місць', value: seats},
         {label: 'Номер авто', key: 'Номер авто', value: auto},
         {label: 'Місце в авто', key: 'Місце в авто', value: seat},
         {label: 'Водій', key: 'Водій', value: driver},
-        {label: 'Адреса відправки', key: 'Адреса відправки', value: from},
-        {label: 'Адреса прибуття', key: 'Адреса прибуття', value: to},
-        {label: 'Сума', key: 'Сума', value: price},
-        {label: 'Валюта', key: 'Валюта', value: curr},
-        {label: 'Завдаток', key: 'Завдаток', value: deposit},
-        {label: 'Валюта завдатку', key: 'Валюта завдатку', value: depositCurr},
-        {label: 'Вага багажу', key: 'Вага багажу', value: weight},
-        {label: 'Ціна багажу', key: 'Ціна багажу', value: weightPrice},
-        {label: 'Валюта багажу', key: 'Валюта багажу', value: weightCurr},
-        {label: 'Статус оплати', key: 'Статус оплати', value: payStatus},
         {label: 'Статус', key: 'Статус', value: status},
-        {label: 'Примітка', key: 'Примітка', value: note}
     ];
+    const noteFields = [
+        {label: 'Примітка', key: 'Примітка', value: note},
+    ];
+
+    function renderRouteFieldsGrid(fields) {
+        return '<div class="details-grid">' + fields.map(f => {
+            const val = f.value || '—';
+            const safeKey = f.key.replace(/'/g, "\\'");
+            return `<div class="detail-block">
+                <div class="detail-block-label">${f.label}</div>
+                <div class="detail-block-value" id="rdv-${rteId}-${f.key}">${val}</div>
+                <div class="detail-block-actions">
+                    <button class="detail-micro-btn" onclick="event.stopPropagation(); startRouteInlineEdit('${rteId}','${safeKey}','${safeSheet}')">✏️</button>
+                </div>
+            </div>`;
+        }).join('') + '</div>';
+    }
+
+    const contactsIcon = isPax ? '👤' : '📦';
+    const contactsLabel = isPax ? 'Контакти' : 'Посилка';
 
     return `<div class="route-card ${statusClass} ${isSelected ? 'selected' : ''}" id="rte-card-${rteId}">
         <div class="route-card-header" onclick="toggleRouteDetails('${rteId}')">
@@ -2144,21 +2173,17 @@ function renderRouteCard(r, idx, sheetName) {
                 ${note ? `<span>📝 ${note.substring(0, 30)}${note.length > 30 ? '...' : ''}</span>` : ''}
             </div>
         </div>
-        <div class="route-card-details ${isDetailsOpen ? 'show' : ''}" id="rte-details-${rteId}">
-            <div class="details-grid">
-                ${allFields.map(f => {
-                    const val = f.value || '—';
-                    const safeVal = String(f.value || '').replace(/'/g, "\\'");
-                    const safeKey = f.key.replace(/'/g, "\\'");
-                    return `<div class="detail-block">
-                        <div class="detail-block-label">${f.label}</div>
-                        <div class="detail-block-value" id="rdv-${rteId}-${f.key}">${val}</div>
-                        <div class="detail-block-actions">
-                            <button class="detail-micro-btn" onclick="event.stopPropagation(); startRouteInlineEdit('${rteId}','${safeKey}','${safeSheet}')">✏️</button>
-                        </div>
-                    </div>`;
-                }).join('')}
+        <div class="route-card-details ${isDetailsOpen ? 'show' : ''}" id="rte-details-${rteId}" data-rte-id="${rteId}">
+            <div class="detail-tabs">
+                <div class="detail-tab active" data-tab="contacts" onclick="event.stopPropagation(); switchRouteTab('${rteId}','contacts')">${contactsIcon} ${contactsLabel}</div>
+                <div class="detail-tab" data-tab="finance" onclick="event.stopPropagation(); switchRouteTab('${rteId}','finance')">💰 Фінанси</div>
+                <div class="detail-tab" data-tab="trip" onclick="event.stopPropagation(); switchRouteTab('${rteId}','trip')">🚖 Рейс</div>
+                <div class="detail-tab" data-tab="note" onclick="event.stopPropagation(); switchRouteTab('${rteId}','note')">📝 Примітка</div>
             </div>
+            <div class="detail-tab-panel active" data-tab-panel="contacts">${renderRouteFieldsGrid(contactsFields)}</div>
+            <div class="detail-tab-panel" data-tab-panel="finance">${renderRouteFieldsGrid(financeFields)}</div>
+            <div class="detail-tab-panel" data-tab-panel="trip">${renderRouteFieldsGrid(tripFields)}</div>
+            <div class="detail-tab-panel" data-tab-panel="note">${renderRouteFieldsGrid(noteFields)}</div>
             <!-- Кнопки дій для ліда: 2 рядки -->
             <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;">
                 <button class="btn-card-action btn-call" style="flex:1 1 calc(33% - 6px)" onclick="event.stopPropagation(); window.open('tel:${cleanPhone}')">📞 Дзвінок</button>
@@ -2170,6 +2195,14 @@ function renderRouteCard(r, idx, sheetName) {
             </div>
         </div>
     </div>`;
+}
+
+// ── Перемикач вкладок розгорнутої картки маршруту ──
+function switchRouteTab(rteId, tabName) {
+    const card = document.getElementById('rte-details-' + rteId);
+    if (!card) return;
+    card.querySelectorAll('.detail-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tabName));
+    card.querySelectorAll('.detail-tab-panel').forEach(p => p.classList.toggle('active', p.dataset.tabPanel === tabName));
 }
 
 // ── Деталі картки маршруту ──
