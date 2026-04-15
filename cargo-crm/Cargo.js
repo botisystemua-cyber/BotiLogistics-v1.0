@@ -487,6 +487,44 @@ function renderProfileSlots() {
   if (closeBtn) closeBtn.style.display = '';
 }
 
+// ── PWA Install prompt ─────────────────────────────────────────────
+var deferredInstallPrompt = null;
+window.addEventListener('beforeinstallprompt', function(e) {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  showInstallBanner();
+});
+
+function showInstallBanner() {
+  const banner = document.getElementById('installBanner');
+  if (banner) banner.style.display = '';
+}
+
+function installApp() {
+  if (deferredInstallPrompt) {
+    // Chrome/Android — нативний промпт
+    deferredInstallPrompt.prompt();
+    deferredInstallPrompt.userChoice.then(function(result) {
+      if (result.outcome === 'accepted') {
+        const s = getBotiSession();
+        const tname = (s && s.tenant_name) || 'BotiLogistics';
+        showToast(tname + ' встановлено!');
+        const banner = document.getElementById('installBanner');
+        if (banner) banner.style.display = 'none';
+      }
+      deferredInstallPrompt = null;
+    });
+  } else {
+    // iOS / інші — показуємо інструкцію
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    if (isIOS) {
+      showToast('Натисніть "Поділитися" (📤) внизу Safari, потім "На початковий екран"', 'info');
+    } else {
+      showToast('Відкрийте меню браузера (⋮) → "Додати на головний екран" або "Встановити додаток"', 'info');
+    }
+  }
+}
+
 function openProfileModal() {
   renderProfileSlots();
   document.getElementById('profileModal').classList.add('open');
@@ -521,6 +559,11 @@ document.addEventListener('DOMContentLoaded', async function() {
   }
 
   updateAvatarUI();
+
+  // Show install banner unless already running as installed PWA
+  if (!window.matchMedia('(display-mode: standalone)').matches && !navigator.standalone) {
+    showInstallBanner();
+  }
 
   await loadData();
 });
