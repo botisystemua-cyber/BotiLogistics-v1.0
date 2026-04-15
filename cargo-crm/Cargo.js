@@ -71,17 +71,11 @@ let deliveryType = 'np';
 let showArchive = false;
 let archiveData = [];
 
-const SWISS_POINTS = [
-  { city: 'Цюрих', addr: 'Parking Theater 11, Dorflistrasse 90, 8050 Zürich' },
-  { city: 'Цуг', addr: 'Bahnhofplatz, 6300 Zug' },
-  { city: 'Люцерн', addr: 'Tourist Bus Parking Landenberg, Alpenquai, 6005 Luzern' },
-  { city: 'Берн', addr: 'Parkplatz 7c, Beundenfeld, 3014 Bern' },
-  { city: 'Базель', addr: 'Basel Meret Oppenheim Strasse SBB Station, 4053 Basel' },
-  { city: 'Сен-Гален', addr: 'Bahnhofpl. 8b, 9000 St. Gallen' },
-  { city: 'Лозана', addr: 'Avenue du Grey 43, Lausanne' },
-  { city: 'Монтре', addr: 'Rte des Châtaigniers 7, 1816 Montreux' },
-  { city: 'Женева', addr: 'P+R Bout-du-Monde, Rte de Vessy 12, 1206 Genève' }
-];
+// Owner-configurable route points loaded from passenger_route_points
+// table (same catalogue that owner-crm's RoutePointsPanel manages).
+// Populated by loadRoutePointsCatalog(); empty until fetch resolves.
+// Shape: [{ city, addr }] where city=name_ua, addr=location_name.
+let SWISS_POINTS = [];
 
 // ===== [SECT-COLUMNS] COLUMN CONFIGURATOR =====
 const ALL_CARD_COLUMNS = [
@@ -3237,10 +3231,14 @@ function initSwissPoints() {
   ['Sender', 'Receiver'].forEach(suffix => {
     const list = document.getElementById('swissList' + suffix);
     if (!list) return;
+    if (!SWISS_POINTS.length) {
+      list.innerHTML = '<div class="add-swiss-item" style="opacity:.6;cursor:default">Адрес ще не додано — налаштуйте у Власницькій панелі</div>';
+      return;
+    }
     list.innerHTML = SWISS_POINTS.map((pt, i) => `
       <div class="add-swiss-item" onclick="selectSwissPoint('${suffix}', ${i})">
         <span class="add-swiss-city">${pt.city}</span>
-        <span class="add-swiss-addr">${pt.addr.substring(0, 40)}...</span>
+        <span class="add-swiss-addr">${pt.addr.length > 40 ? pt.addr.substring(0, 40) + '...' : pt.addr}</span>
       </div>
     `).join('');
   });
@@ -3254,7 +3252,7 @@ function toggleSwissList(type) {
 function selectSwissPoint(suffix, idx) {
   const pt = SWISS_POINTS[idx];
   const fieldId = suffix === 'Sender' ? 'fAddressFrom' : 'fAddressTo';
-  document.getElementById(fieldId).value = pt.city + ' — ' + pt.addr;
+  document.getElementById(fieldId).value = pt.addr ? (pt.city + ' — ' + pt.addr) : pt.city;
   document.getElementById('swissList' + suffix).classList.remove('open');
 }
 
@@ -3523,6 +3521,20 @@ function hideLoader() {
   if (el) { el.classList.add('hidden'); }
 }
 
+async function loadRoutePointsCatalog() {
+  try {
+    const res = await apiPost('getRoutePoints', { route_group: 'ua-es-wed' });
+    if (!res.ok || !Array.isArray(res.data)) return;
+    SWISS_POINTS = res.data
+      .filter(p => p.name_ua)
+      .map(p => ({ city: p.name_ua, addr: p.location_name || '' }));
+    // If the form is already rendered, refresh the dropdown contents.
+    try { initSwissPoints(); } catch (_) {}
+  } catch (e) {
+    console.warn('loadRoutePointsCatalog failed:', e);
+  }
+}
+
 async function loadData() {
   if (isLoading) return;
   isLoading = true;
@@ -3532,7 +3544,8 @@ async function loadData() {
     const [dataRes, statsRes, routesRes] = await Promise.all([
       apiPost('getAll', { sheet: 'all', filter: {} }),
       apiPost('getStats', {}),
-      apiPost('getRoutesList', {})
+      apiPost('getRoutesList', {}),
+      loadRoutePointsCatalog()
     ]);
 
     if (dataRes.ok) {

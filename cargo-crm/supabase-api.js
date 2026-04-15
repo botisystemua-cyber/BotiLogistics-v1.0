@@ -1162,6 +1162,32 @@ async function sbPkgGetExpensesSheet(params) {
 }
 
 // ================================================================
+// ROUTE POINTS (owner-configurable EU/UA addresses)
+// ================================================================
+
+// Returns active tenant-owned route points from passenger_route_points
+// (same table owner-crm writes to via RoutePointsPanel). Used for the
+// address-autocomplete dropdowns in the add-package form.
+async function sbGetRoutePoints(params) {
+    try {
+        const routeGroup = (params && params.route_group) || 'ua-es-wed';
+        const { data, error } = await sb
+            .from('passenger_route_points')
+            .select('id, route_group, name_ua, country_code, sort_order, location_name, lat, lon, maps_url, delivery_mode, active')
+            .eq('tenant_id', TENANT_ID)
+            .eq('route_group', routeGroup)
+            .eq('active', true)
+            .order('sort_order', { ascending: true });
+        if (error) throw error;
+        return { ok: true, data: data || [] };
+    } catch (e) {
+        console.error('sbGetRoutePoints error:', e);
+        // Не фатально: CRM має працювати й без каталога (fallback — вільний текст)
+        return { ok: true, data: [] };
+    }
+}
+
+// ================================================================
 // MAIN ROUTER — replaces apiPost()
 // ================================================================
 
@@ -1175,6 +1201,9 @@ async function apiPostSupabase(action, params) {
         addParcel:          sbPkgAdd,
         updateField:        sbPkgUpdateField,
         getOne:             sbPkgGetOne,
+
+        // Owner-configurable route points (address autocomplete)
+        getRoutePoints:     sbGetRoutePoints,
 
         // Archive
         deleteParcel:       sbPkgDelete,
