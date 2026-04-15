@@ -489,12 +489,11 @@ function routeRowToGasPkg(r) {
         'Телефон водія':      r.driver_phone || '',
         'Місто':              r.city || '',
         // Імена / телефони — таблиця routes ділить дві колонки між пасажирами
-        // та посилками (passenger_name vs sender_name). Рендер картки маршруту
-        // читає 'Піб пасажира' / 'Телефон пасажира'. Для посилки fallback-каскад:
-        // passenger_name → sender_name → recipient_name (бо часто менеджер
-        // заповнює тільки отримувача — відправник лишається порожнім).
-        'Піб пасажира':       r.passenger_name || r.sender_name || r.recipient_name || '',
-        'Телефон пасажира':   r.passenger_phone || r.recipient_phone || '',
+        // та посилками. Для посилки 'Піб пасажира' = sender_name (відправник),
+        // а отримувач читається окремо через 'Піб отримувача' / 'Телефон отримувача'.
+        // Рендер картки маршруту виводить пару "відправник → отримувач".
+        'Піб пасажира':       r.passenger_name || r.sender_name || '',
+        'Телефон пасажира':   r.passenger_phone || '',
         'Піб відправника':    r.sender_name || '',
         'Телефон відправника':r.passenger_phone || '',
         'Адреса відправки':   r.departure_address || '',
@@ -664,21 +663,16 @@ async function sbPkgAddToRoute(params) {
             if (!row.pax_id_or_pkg_id && pkgKey) row.pax_id_or_pkg_id = pkgKey;
             if (!row.route_date) row.route_date = today;
 
-            // ── Coalesce phones/names ──
+            // ── Coalesce phone ──
             // Форма "нова посилка" зберігає номер у packages.registrar_phone,
             // а sender_phone лишається порожнім. У таблиці routes колонки
             // registrar_phone взагалі нема — є тільки passenger_phone (спільна).
             // Тому якщо passenger_phone з gasItemToRouteRow порожній — підтягуємо
             // з registrar_phone напряму з БД. Інакше у маршруті телефон зникає.
-            // Final fallback: recipient_phone / recipient_name — бо часто
-            // менеджер заповнює лише блок отримувача, і відправник лишається ''.
+            // Recipient окремо у row.recipient_phone — для нього fallback не потрібен.
             if ((!row.passenger_phone || row.passenger_phone === '') && dbRow) {
-                var phoneFb = dbRow.sender_phone || dbRow.registrar_phone || dbRow.recipient_phone || '';
+                var phoneFb = dbRow.sender_phone || dbRow.registrar_phone || '';
                 if (phoneFb) row.passenger_phone = String(phoneFb);
-            }
-            if ((!row.sender_name || row.sender_name === '') && dbRow) {
-                var nameFb = dbRow.sender_name || dbRow.recipient_name || '';
-                if (nameFb) row.sender_name = String(nameFb);
             }
             return row;
         });

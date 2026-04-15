@@ -2032,6 +2032,8 @@ function renderRouteCard(r, idx, sheetName) {
     const type = r['Тип запису'] || '';
     const name = r['Піб пасажира'] || '—';
     const phone = String(r['Телефон пасажира'] || '—');
+    const recipName = r['Піб отримувача'] || '';
+    const recipPhone = String(r['Телефон отримувача'] || '');
     const date = r['Дата рейсу'] || '';
     const direction = r['Напрям'] || '';
     const auto = r['Номер авто'] || '';
@@ -2079,12 +2081,21 @@ function renderRouteCard(r, idx, sheetName) {
     const isDetailsOpen = routeOpenDetailsId === rteId;
     const isActionsOpen = routeOpenActionsId === rteId;
     const safeSheet = (sheetName || '').replace(/'/g, "\\'");
-    const cleanPhone = (phone || '').replace(/[^+\d]/g, '');
+    // Для посилок у заголовку показуємо "відправник → отримувач" (як у списку
+    // посилок) та телефон отримувача (бо водій дзвонить саме йому при доставці).
+    // Для пасажирів — одне ПІБ і телефон пасажира.
+    const headerName = isPax ? name : (`${name || '—'} → ${recipName || '—'}`);
+    const headerPhone = isPax ? phone : (recipPhone || phone);
+    const cleanPhone = (headerPhone || '').replace(/[^+\d]/g, '');
 
     // All detail fields for expanded view
     const allFields = [
-        {label: 'ПІБ', key: 'Піб пасажира', value: name},
-        {label: 'Телефон', key: 'Телефон пасажира', value: phone},
+        {label: isPax ? 'ПІБ' : 'ПІБ відправника', key: 'Піб пасажира', value: name},
+        {label: isPax ? 'Телефон' : 'Тел. відправника', key: 'Телефон пасажира', value: phone},
+        ...(isPax ? [] : [
+            {label: 'ПІБ отримувача', key: 'Піб отримувача', value: recipName || '—'},
+            {label: 'Тел. отримувача', key: 'Телефон отримувача', value: recipPhone || '—'},
+        ]),
         {label: 'Тел. реєстратора', key: 'Телефон реєстратора', value: phoneReg},
         {label: 'Напрям', key: 'Напрям', value: direction},
         {label: 'Дата рейсу', key: 'Дата рейсу', value: displayDate},
@@ -2113,7 +2124,7 @@ function renderRouteCard(r, idx, sheetName) {
                     <input class="card-checkbox" type="checkbox" ${isSelected ? 'checked' : ''} onchange="toggleRouteSelect('${rteId}',this.checked)">
                 </div>
                 ${dirLabel ? `<span class="card-direction ${dirCls}">${dirLabel}</span>` : ''}
-                <span class="route-card-phone">${phone}</span>
+                <span class="route-card-phone">${headerPhone || '—'}</span>
                 <span class="route-card-seats">${seats}м</span>
                 <span class="route-card-date">${displayDate}</span>
                 ${seat ? `<span style="background:#e0e7ff;color:#3730a3;font-size:10px;padding:2px 8px;border-radius:4px;font-weight:700;">💺 ${seat}</span>` : ''}
@@ -2121,7 +2132,7 @@ function renderRouteCard(r, idx, sheetName) {
             </div>
             <div class="route-card-info">
                 <span style="font-size:12px;">${typeIcon}</span>
-                <span class="route-card-name">${name}</span>
+                <span class="route-card-name">${headerName}</span>
                 <span style="color:var(--text-secondary);font-size:10px;">${rteId}</span>
                 ${lsBadge} ${payBadge}
             </div>
