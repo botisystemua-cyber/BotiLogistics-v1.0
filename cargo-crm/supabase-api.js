@@ -744,7 +744,10 @@ async function sbPkgUpdateRouteField(params) {
             .update(updateObj).eq('id', rowId).select();
         if (error) throw error;
 
-        return { ok: true, data: data && data[0] };
+        // Повертаємо GAS-keyed рядок, щоб фронт зміг змерджити його в
+        // локальний sheet.rows і картка одразу оновилась без reload.
+        const fresh = data && data[0] ? routeRowToGasPkg(data[0]) : null;
+        return { ok: true, data: fresh };
     } catch (e) {
         console.error('sbPkgUpdateRouteField error:', e);
         return { ok: false, error: e.message };

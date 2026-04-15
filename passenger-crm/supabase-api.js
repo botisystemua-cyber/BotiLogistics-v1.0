@@ -1099,7 +1099,10 @@ async function sbUpdateRouteField(params) {
             .select();
         if (error) throw error;
 
-        return { ok: true, data: data[0] };
+        // GAS-keyed для мержу в локальний sheet.rows (без цього картка
+        // маршруту показує стару інфу до reload).
+        const fresh = data && data[0] ? routeRowToGas(data[0]) : null;
+        return { ok: true, data: fresh };
     } catch (e) {
         console.error('sbUpdateRouteField error:', e);
         return { ok: false, error: e.message };

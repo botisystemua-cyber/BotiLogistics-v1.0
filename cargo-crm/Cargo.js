@@ -2305,6 +2305,12 @@ async function saveRouteInlineEdit(rteId, colName, sheetName, newVal) {
 
     const res = await apiPost('updateRouteField', { sheet: sheetName, rte_id: rteId, col: colName, value: newVal });
     if (res.ok) {
+        // Мерджимо свіжий GAS-keyed рядок назад у локальний sheet.rows —
+        // без цього картка показує стару інфу (бо ми писали під одним GAS
+        // ключем, а рендер читає інший аліас тієї ж колонки).
+        if (res.data && typeof res.data === 'object') {
+            Object.assign(row, res.data);
+        }
         showToast('✅ Збережено');
         renderRoutes();
     } else {
