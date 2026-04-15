@@ -662,19 +662,28 @@ async function sbPkgAddToRoute(params) {
             if (!row.record_type) row.record_type = 'Посилка';
             if (!row.pax_id_or_pkg_id && pkgKey) row.pax_id_or_pkg_id = pkgKey;
             if (!row.route_date) row.route_date = today;
+
+            // ── Coalesce phones/names ──
+            // Форма "нова посилка" зберігає номер у packages.registrar_phone,
+            // а sender_phone лишається порожнім. У таблиці routes колонки
+            // registrar_phone взагалі нема — є тільки passenger_phone (спільна).
+            // Тому якщо passenger_phone з gasItemToRouteRow порожній — підтягуємо
+            // з registrar_phone напряму з БД. Інакше у маршруті телефон зникає.
+            if ((!row.passenger_phone || row.passenger_phone === '') && dbRow && dbRow.registrar_phone) {
+                row.passenger_phone = String(dbRow.registrar_phone);
+            }
+            if ((!row.sender_name || row.sender_name === '') && dbRow && dbRow.sender_name) {
+                row.sender_name = String(dbRow.sender_name);
+            }
             return row;
         });
 
         const { data, error } = await sb.from('routes').insert(insertData).select();
         if (error) throw error;
 
-        // Дзеркалимо RTE_ID назад у packages, щоб картка одразу показувала маршрут
-        if (pkgIds.length) {
-            await sb.from('packages')
-                .update({ route_id: rteId })
-                .eq('tenant_id', TENANT_ID)
-                .in('pkg_id', pkgIds);
-        }
+        // NB: не апдейтимо тут packages.route_id — там uuid-колонка, а rteId
+        // це назва аркуша (text). Фронт після успіху сам ставить item['RTE_ID']
+        // у пам'ять (Cargo.js doAssignToRoute → item['RTE_ID']=route.sheetName).
 
         return { ok: true, data };
     } catch (e) {
