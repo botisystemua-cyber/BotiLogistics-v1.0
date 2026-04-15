@@ -1,6 +1,6 @@
 // BotiLogistics Service Worker — потрібен для PWA встановлення
 // ВАЖЛИВО: бампай версію при кожному релізі щоб старий кеш видалявся автоматично.
-var CACHE_NAME = 'botilogistics-crm-v3';
+var CACHE_NAME = 'botilogistics-crm-v4';
 
 // Файли, які ЗАВЖДИ мусять братися з мережі свіжими (щоб не було
 // розсинхрону між HTML/CSS/JS через HTTP-кеш браузера).
