@@ -923,7 +923,11 @@ function routeRowToGas(r) {
         'Адреса відправки':   r.departure_address || '',
         'Адреса прибуття':    r.arrival_address || '',
         'Кількість місць':    r.seats_count || '',
-        'Вага багажу':        r.baggage_weight || '',
+        // baggage_weight (для пасажирського багажу) і package_weight (вага
+        // посилки) — дві окремі колонки. Рендер картки читає 'Вага багажу';
+        // для посилок цей ключ має fallback на package_weight, інакше
+        // після редагування "Вага (кг)" значення не відображається до reload.
+        'Вага багажу':        r.baggage_weight || r.package_weight || '',
         'Внутрішній №':       r.internal_number || '',
         'Номер ТТН':          r.ttn_number || '',
         'Опис':               r.package_description || '',
