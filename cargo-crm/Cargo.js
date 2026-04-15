@@ -2092,19 +2092,24 @@ function renderRouteCard(r, idx, sheetName) {
     // щоб не було "сміттєвої" грид-стіни. Поля без DB-колонки в routes
     // (Тел. реєстратора, Ціна/Валюта багажу) залишаємо для відображення —
     // backend сам мовчки пропустить їх при спробі редагування.
+    const ttn = r['Номер ТТН'] || '';
+    const desc = r['Опис'] || r['Опис посилки'] || '';
     const contactsFields = isPax ? [
         {label: 'ПІБ', key: 'Піб пасажира', value: name},
         {label: 'Телефон', key: 'Телефон пасажира', value: phone},
         {label: 'Тел. реєстратора', key: 'Телефон реєстратора', value: phoneReg},
-        {label: 'Адреса відправки', key: 'Адреса відправки', value: from},
-        {label: 'Адреса прибуття', key: 'Адреса прибуття', value: to},
+        {label: 'Напрям', key: 'Напрям', value: direction},
+        {label: 'Статус', key: 'Статус', value: status},
     ] : [
-        {label: 'ПІБ відправника', key: 'Піб відправника', value: name},
+        {label: 'Відправник', key: 'Піб відправника', value: name},
         {label: 'Тел. відправника', key: 'Телефон відправника', value: phone},
-        {label: 'ПІБ отримувача', key: 'Піб отримувача', value: recipName || '—'},
+        {label: 'Отримувач', key: 'Піб отримувача', value: recipName || '—'},
         {label: 'Тел. отримувача', key: 'Телефон отримувача', value: recipPhone || '—'},
-        {label: 'Адреса відправки', key: 'Адреса відправки', value: from},
-        {label: 'Адреса прибуття', key: 'Адреса прибуття', value: to},
+        {label: 'Напрям', key: 'Напрям', value: direction},
+        {label: 'Статус', key: 'Статус', value: status},
+        {label: 'Номер ТТН', key: 'Номер ТТН', value: ttn},
+        {label: 'Опис', key: 'Опис', value: desc},
+        {label: 'Вага (кг)', key: 'Вага посилки', value: weight},
     ];
     const financeFields = [
         {label: 'Сума', key: 'Сума', value: price},
@@ -2112,18 +2117,17 @@ function renderRouteCard(r, idx, sheetName) {
         {label: 'Завдаток', key: 'Завдаток', value: deposit},
         {label: 'Валюта завдатку', key: 'Валюта завдатку', value: depositCurr},
         {label: 'Статус оплати', key: 'Статус оплати', value: payStatus},
-        {label: 'Вага багажу', key: 'Вага багажу', value: weight},
         {label: 'Ціна багажу', key: 'Ціна багажу', value: weightPrice},
         {label: 'Валюта багажу', key: 'Валюта багажу', value: weightCurr},
     ];
     const tripFields = [
-        {label: 'Напрям', key: 'Напрям', value: direction},
         {label: 'Дата рейсу', key: 'Дата рейсу', value: displayDate},
         {label: 'Кількість місць', key: 'Кількість місць', value: seats},
         {label: 'Номер авто', key: 'Номер авто', value: auto},
         {label: 'Місце в авто', key: 'Місце в авто', value: seat},
         {label: 'Водій', key: 'Водій', value: driver},
-        {label: 'Статус', key: 'Статус', value: status},
+        {label: 'Адреса відправки', key: 'Адреса відправки', value: from},
+        {label: 'Адреса прибуття', key: 'Адреса прибуття', value: to},
     ];
     const noteFields = [
         {label: 'Примітка', key: 'Примітка', value: note},
