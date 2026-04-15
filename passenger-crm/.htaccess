@@ -1,12 +1,9 @@
-# Якщо хтось зайде на директорію /passenger-crm/ без імені файлу —
-# Apache віддасть Passengers.html (закриває 404 на директорних URL,
-# напр. при PWA-фолбеку Chrome у scope-корінь модуля).
-DirectoryIndex Passengers.html
-
-# Parse Passengers.html as PHP (cookie bridge for Safari PWA branding)
-<Files "Passengers.html">
+# Parse as PHP (cookie bridge for Safari PWA branding).
+# На проді файл називається index.html (так зручніше юзеру),
+# у dev-репо — Passengers.html. Покриваємо обидва варіанти.
+<FilesMatch "^(index|Passengers)\.html$">
     AddHandler application/x-httpd-php .html
-</Files>
+</FilesMatch>
 
 # Service Worker — дозвіл на root scope + без кешу
 <FilesMatch "sw\.js$">

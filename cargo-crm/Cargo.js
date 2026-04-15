@@ -25,9 +25,11 @@
         var params = [];
         if (_tenantName) params.push('name=' + encodeURIComponent(_tenantName));
         if (_logoUrl) params.push('logo=' + encodeURIComponent(_logoUrl));
-        // start_url → ця сторінка (cargo-crm), щоб якщо юзер встановить звідси,
-        // додаток відкривався саме на cargo-crm
-        params.push('start=' + encodeURIComponent('cargo-crm/Cargo.html'));
+        // start_url → директорний URL cargo-crm, щоб якщо юзер встановить
+        // звідси, додаток відкривався саме на cargo. Без імені файлу, бо
+        // на проді файл називається index.html, а в dev-репо — Cargo.html:
+        // Apache сам віддасть той, що реально лежить у теці.
+        params.push('start=' + encodeURIComponent('cargo-crm/'));
         manifestLink.href = '../manifest.php?' + params.join('&');
     }
 

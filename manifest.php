@@ -24,12 +24,13 @@ $host = isset($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : 'localhost';
 $dir = rtrim(dirname($_SERVER['SCRIPT_NAME']), '/') . '/';
 $base = $proto . '://' . $host . $dir;
 
-// start_url: за замовчуванням відкриваємо passenger-crm (звідти користувач
-// може перемкнутися на cargo-crm через бічне меню → "Посилки").
-// Можна перевизначити через ?start=cargo-crm/Cargo.html.
+// start_url: за замовчуванням відкриваємо passenger-crm через директорний
+// URL (без імені файлу) — Apache віддасть той файл, що там реально лежить
+// (index.html на проді, Passengers.html у dev-репо). Можна перевизначити
+// через ?start=cargo-crm/, щоб PWA з cargo-crm відкривався саме на cargo.
 $startUrl = $start
     ? $base . ltrim($start, '/')
-    : $base . 'passenger-crm/Passengers.html';
+    : $base . 'passenger-crm/';
 
 $manifest = [
     'name' => $appName,
