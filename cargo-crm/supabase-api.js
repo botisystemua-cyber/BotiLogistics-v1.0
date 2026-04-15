@@ -525,7 +525,7 @@ function routeRowToGasPkg(r) {
         'Статус оплати':      r.payment_status || '',
         'Борг':               r.debt || '',
         'Примітка оплати':    r.payment_notes || '',
-        'Статус':             r.status || '',
+        'Статус':             (r.status === 'scheduled' ? 'Новий' : (r.status || '')),
         'Статус CRM':         r.crm_status || '',
         'Тег':                r.tag || '',
         'Примітка':           r.notes || '',
@@ -667,6 +667,7 @@ async function sbPkgAddToRoute(params) {
             if (!row.record_type) row.record_type = 'Посилка';
             if (!row.pax_id_or_pkg_id && pkgKey) row.pax_id_or_pkg_id = pkgKey;
             if (!row.route_date) row.route_date = today;
+            if (!row.status || row.status === 'scheduled') row.status = 'Новий';
 
             // ── Coalesce phone ──
             // Форма "нова посилка" зберігає номер у packages.registrar_phone,
@@ -1303,7 +1304,7 @@ async function apiPostSupabase(action, params) {
                 record_type: 'Посилка',
                 direction: p.direction || '',
                 route_date: new Date().toISOString().split('T')[0],
-                status: 'scheduled',
+                status: 'Новий',
                 crm_status: 'active',
             }).select();
             if (error) return { ok: false, error: error.message };

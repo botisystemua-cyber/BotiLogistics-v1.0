@@ -943,7 +943,7 @@ function routeRowToGas(r) {
         'Статус оплати':      r.payment_status || '',
         'Борг':               r.debt || '',
         'Примітка оплати':    r.payment_notes || '',
-        'Статус':             r.status || '',
+        'Статус':             (r.status === 'scheduled' ? 'Новий' : (r.status || '')),
         'Статус CRM':         r.crm_status || '',
         'Тег':                r.tag || '',
         'Примітка':           r.notes || '',
@@ -1053,7 +1053,7 @@ async function sbSetRouteOrder(params) {
                 rte_id: sheetName,
                 is_placeholder: true,
                 record_type: 'Пасажир',
-                status: 'scheduled',
+                status: 'Новий',
                 crm_status: 'active',
                 route_date: new Date().toISOString().split('T')[0],
                 ...updateObj
@@ -1122,6 +1122,7 @@ async function sbAddToRoute(params) {
             const row = gasItemToRouteRow(item);
             row.rte_id = rteId;
             if (!row.record_type) row.record_type = 'Пасажир';
+            if (!row.status || row.status === 'scheduled') row.status = 'Новий';
             return row;
         });
 
@@ -1518,7 +1519,7 @@ async function apiPostSupabase(action, data) {
                 record_type: 'Пасажир',
                 direction: p.direction || '',
                 route_date: new Date().toISOString().split('T')[0],
-                status: 'scheduled',
+                status: 'Новий',
                 crm_status: 'active',
             });
             if (error) return { ok: false, error: error.message };

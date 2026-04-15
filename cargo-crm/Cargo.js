@@ -2097,7 +2097,6 @@ function renderRouteCard(r, idx, sheetName) {
     const contactsFields = isPax ? [
         {label: 'ПІБ', key: 'Піб пасажира', value: name},
         {label: 'Телефон', key: 'Телефон пасажира', value: phone},
-        {label: 'Тел. реєстратора', key: 'Телефон реєстратора', value: phoneReg},
         {label: 'Напрям', key: 'Напрям', value: direction},
         {label: 'Статус', key: 'Статус', value: status},
     ] : [
