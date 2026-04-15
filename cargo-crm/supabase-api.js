@@ -490,10 +490,11 @@ function routeRowToGasPkg(r) {
         'Місто':              r.city || '',
         // Імена / телефони — таблиця routes ділить дві колонки між пасажирами
         // та посилками (passenger_name vs sender_name). Рендер картки маршруту
-        // читає 'Піб пасажира' / 'Телефон пасажира', тож для пакета
-        // дублюємо туди sender_name + passenger_phone (одна колонка телефону).
-        'Піб пасажира':       r.passenger_name || r.sender_name || '',
-        'Телефон пасажира':   r.passenger_phone || '',
+        // читає 'Піб пасажира' / 'Телефон пасажира'. Для посилки fallback-каскад:
+        // passenger_name → sender_name → recipient_name (бо часто менеджер
+        // заповнює тільки отримувача — відправник лишається порожнім).
+        'Піб пасажира':       r.passenger_name || r.sender_name || r.recipient_name || '',
+        'Телефон пасажира':   r.passenger_phone || r.recipient_phone || '',
         'Піб відправника':    r.sender_name || '',
         'Телефон відправника':r.passenger_phone || '',
         'Адреса відправки':   r.departure_address || '',
@@ -669,11 +670,15 @@ async function sbPkgAddToRoute(params) {
             // registrar_phone взагалі нема — є тільки passenger_phone (спільна).
             // Тому якщо passenger_phone з gasItemToRouteRow порожній — підтягуємо
             // з registrar_phone напряму з БД. Інакше у маршруті телефон зникає.
-            if ((!row.passenger_phone || row.passenger_phone === '') && dbRow && dbRow.registrar_phone) {
-                row.passenger_phone = String(dbRow.registrar_phone);
+            // Final fallback: recipient_phone / recipient_name — бо часто
+            // менеджер заповнює лише блок отримувача, і відправник лишається ''.
+            if ((!row.passenger_phone || row.passenger_phone === '') && dbRow) {
+                var phoneFb = dbRow.sender_phone || dbRow.registrar_phone || dbRow.recipient_phone || '';
+                if (phoneFb) row.passenger_phone = String(phoneFb);
             }
-            if ((!row.sender_name || row.sender_name === '') && dbRow && dbRow.sender_name) {
-                row.sender_name = String(dbRow.sender_name);
+            if ((!row.sender_name || row.sender_name === '') && dbRow) {
+                var nameFb = dbRow.sender_name || dbRow.recipient_name || '';
+                if (nameFb) row.sender_name = String(nameFb);
             }
             return row;
         });
