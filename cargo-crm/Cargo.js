@@ -1,3 +1,67 @@
+// ================================================================
+// PWA: Shared Manifest + Service Worker
+// manifest.php та sw.js лежать на рівні /BotiLogistics-v1.0/ —
+// scope покриває обидва модулі (passenger-crm + cargo-crm), тому
+// одне встановлення PWA працює для обох.
+// ================================================================
+(function() {
+    // Read session
+    var _sess = null;
+    try { _sess = JSON.parse(localStorage.getItem('boti_session') || 'null'); } catch(_) {}
+    var _tenantName = (_sess && _sess.tenant_name) ? _sess.tenant_name : '';
+    var _logoUrl = (_sess && _sess.logo_url) ? _sess.logo_url : '';
+
+    // Cookies (для PHP-сторінок сусіднього модуля — passenger-crm читає їх для Safari meta)
+    if (_tenantName) {
+        document.cookie = 'boti_tenant=' + encodeURIComponent(_tenantName) + ';path=/;max-age=31536000;SameSite=Lax';
+    }
+    if (_logoUrl) {
+        document.cookie = 'boti_logo=' + encodeURIComponent(_logoUrl) + ';path=/;max-age=31536000;SameSite=Lax';
+    }
+
+    // Update manifest link (tag injected in HTML with id="pwaManifest")
+    var manifestLink = document.getElementById('pwaManifest') || document.querySelector('link[rel="manifest"]');
+    if (manifestLink) {
+        var params = [];
+        if (_tenantName) params.push('name=' + encodeURIComponent(_tenantName));
+        if (_logoUrl) params.push('logo=' + encodeURIComponent(_logoUrl));
+        // start_url → ця сторінка (cargo-crm), щоб якщо юзер встановить звідси,
+        // додаток відкривався саме на cargo-crm
+        params.push('start=' + encodeURIComponent('cargo-crm/Cargo.html'));
+        manifestLink.href = '../manifest.php?' + params.join('&');
+    }
+
+    // Update meta tags with tenant name
+    if (_tenantName) {
+        var metaAppTitle = document.querySelector('meta[name="apple-mobile-web-app-title"]');
+        if (metaAppTitle) metaAppTitle.setAttribute('content', _tenantName);
+        var metaAppName = document.querySelector('meta[name="application-name"]');
+        if (metaAppName) metaAppName.setAttribute('content', _tenantName + ' CRM');
+    }
+
+    // Update apple-touch-icon if custom logo exists
+    if (_logoUrl) {
+        var appleIcon = document.querySelector('link[rel="apple-touch-icon"]');
+        if (appleIcon) appleIcon.href = _logoUrl;
+        var iconLink = document.querySelector('link[rel="icon"]');
+        if (iconLink) iconLink.href = _logoUrl;
+    }
+
+    // Shared Service Worker — scope '../' покриває і passenger-crm/, і cargo-crm/
+    if ('serviceWorker' in navigator) {
+        // Спочатку прибираємо старі per-module SW (passenger-crm/sw.js, cargo-crm/sw.js) —
+        // інакше їхній вужчий scope переважає над спільним SW і ламає кеш.
+        navigator.serviceWorker.getRegistrations().then(function(regs) {
+            regs.forEach(function(reg) {
+                if (reg.scope && /\/(passenger-crm|cargo-crm)\/?$/.test(reg.scope)) {
+                    reg.unregister();
+                }
+            });
+        }).catch(function() {});
+        navigator.serviceWorker.register('../sw.js', { scope: '../' }).catch(function() {});
+    }
+})();
+
 // Раннє оголошення функцій для onclick в HTML
 window.openRouteView = function(idx) { if (typeof openRoute === 'function') openRoute(idx); else alert('Маршрути ще завантажуються'); };
 // ╔══════════════════════════════════════════════════════════════╗

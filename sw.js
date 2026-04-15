@@ -1,13 +1,20 @@
-// BotiLogistics Service Worker — потрібен для PWA встановлення
+// BotiLogistics Shared Service Worker — PWA для passenger-crm + cargo-crm
+// Розміщений на рівні /BotiLogistics-v1.0/ щоб scope покривав обидва модулі.
 // ВАЖЛИВО: бампай версію при кожному релізі щоб старий кеш видалявся автоматично.
-var CACHE_NAME = 'botilogistics-crm-v4';
+var CACHE_NAME = 'botilogistics-suite-v1';
 
 // Файли, які ЗАВЖДИ мусять братися з мережі свіжими (щоб не було
 // розсинхрону між HTML/CSS/JS через HTTP-кеш браузера).
 var NO_HTTP_CACHE = [
+  // passenger-crm
   'Passengers.html',
   'Passengers.js',
   'Passengers.css',
+  // cargo-crm
+  'Cargo.html',
+  'Cargo.js',
+  'Cargo.css',
+  // спільні
   'supabase-config.js',
   'supabase-api.js',
   'sw.js',
@@ -45,14 +52,15 @@ self.addEventListener('fetch', function(e) {
   if (!e.request.url.startsWith('http') ||
       e.request.url.includes('script.google.com') ||
       e.request.url.includes('googleapis.com') ||
+      e.request.url.includes('supabase.co') ||
       e.request.method !== 'GET') {
     return;
   }
 
-  // Для «критичних» файлів (HTML/JS/CSS аплікухи) ОБХОДИМО HTTP-кеш браузера
+  // Для «критичних» файлів (HTML/JS/CSS аплікух) ОБХОДИМО HTTP-кеш браузера
   // через cache: 'no-store' — це єдиний спосіб гарантувати, що Passengers.js
-  // та Passengers.html не розсинхронізуються. Для решти контенту (іконки,
-  // картинки, шрифти) лишаємо звичайний fetch, щоб браузер міг кешувати.
+  // та Passengers.html (і Cargo.*) не розсинхронізуються. Для решти контенту
+  // (іконки, картинки, шрифти) лишаємо звичайний fetch.
   var url = e.request.url;
   var isCritical = NO_HTTP_CACHE.some(function(name) {
     return url.indexOf('/' + name) !== -1 || url.indexOf(name + '?') !== -1;

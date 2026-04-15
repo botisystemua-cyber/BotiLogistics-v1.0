@@ -22,7 +22,7 @@
     if (manifestLink && _tenantName) {
         var params = 'name=' + encodeURIComponent(_tenantName);
         if (_logoUrl) params += '&logo=' + encodeURIComponent(_logoUrl);
-        manifestLink.href = 'manifest.php?' + params;
+        manifestLink.href = '../manifest.php?' + params;
     }
 
     // Update meta tags with tenant name
@@ -39,9 +39,19 @@
         if (appleIcon) appleIcon.href = _logoUrl;
     }
 
-    // Service Worker
+    // Service Worker — спільний для passenger-crm + cargo-crm
+    // (лежить на рівні /BotiLogistics-v1.0/ з scope, що покриває обидва модулі)
     if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('sw.js').catch(function() {});
+        // Спочатку прибираємо старі per-module SW (passenger-crm/sw.js, cargo-crm/sw.js) —
+        // інакше їхній вужчий scope переважає над спільним SW і ламає кеш.
+        navigator.serviceWorker.getRegistrations().then(function(regs) {
+            regs.forEach(function(reg) {
+                if (reg.scope && /\/(passenger-crm|cargo-crm)\/?$/.test(reg.scope)) {
+                    reg.unregister();
+                }
+            });
+        }).catch(function() {});
+        navigator.serviceWorker.register('../sw.js', { scope: '../' }).catch(function() {});
     }
 })();
 
