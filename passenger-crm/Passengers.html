@@ -471,7 +471,7 @@ $manifest = 'manifest.php' . ($t ? '?name=' . rawurlencode($t) . ($l ? '&logo=' 
 <!-- BOTTOM NAV (Mobile) -->
 <nav class="bottom-nav">
     <button class="nav-item active" id="navPax" onclick="showPaxView('all')"><span>👥</span>Пасажири</button>
-    <button class="nav-item" id="navParcels" onclick="showToast('📦 Модуль Посилки не підключено. Зверніться до BotiSystem для підключення.', 4000)"><span>📦</span>Посилки</button>
+    <button class="nav-item" id="navParcels" onclick="goToCargoModule()"><span>📦</span>Посилки</button>
     <button class="nav-item" onclick="silentSync(true)"><span>🔄</span>Синхр.</button>
     <button class="nav-item" onclick="openColumnConfigurator()"><span>⚙️</span>Колонки</button>
     <button class="nav-item" onclick="openAddModal()"><span>➕</span>Додати</button>

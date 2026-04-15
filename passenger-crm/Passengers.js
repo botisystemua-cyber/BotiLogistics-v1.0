@@ -1084,6 +1084,16 @@ function setSyncStatus(status) {
 // ================================================================
 // VIEW SWITCHING
 // ================================================================
+function goToCargoModule() {
+    var sess = getBotiSession();
+    var modules = (sess && Array.isArray(sess.modules)) ? sess.modules : [];
+    if (modules.indexOf('cargo') !== -1) {
+        location.href = '../cargo-crm/';
+    } else {
+        showToast('📦 Модуль Посилки ще не підключений. Зверніться до BotiSystem для підключення.', 4000);
+    }
+}
+
 function showPaxView(dir) {
     currentView = 'pax';
     currentDir = dir || 'all';
