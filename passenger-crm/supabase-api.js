@@ -821,20 +821,25 @@ const ROUTE_GAS_TO_SB = {
     'Піб':                'passenger_name',
     'Телефон пасажира':   'passenger_phone',
     'Піб відправника':    'sender_name',
+    'Телефон відправника':'passenger_phone',
     'Піб отримувача':     'recipient_name',
     'Телефон отримувача': 'recipient_phone',
     'Адреса отримувача':  'recipient_address',
+    'Адреса в Європі':    'recipient_address',
     'Адреса відправки':   'departure_address',
     'Адреса прибуття':    'arrival_address',
     'Кількість місць':    'seats_count',
     'Вага багажу':        'baggage_weight',
     'Внутрішній №':       'internal_number',
     'Номер ТТН':          'ttn_number',
+    'Опис':               'package_description',
     'Опис посилки':       'package_description',
+    'Кг':                 'package_weight',
     'Вага посилки':       'package_weight',
     'Сума':               'amount',
     'Ціна квитка':        'amount',
     'Валюта':             'amount_currency',
+    'Валюта оплати':      'amount_currency',
     'Валюта квитка':      'amount_currency',
     'Завдаток':           'deposit',
     'Валюта завдатку':    'deposit_currency',
@@ -910,19 +915,24 @@ function routeRowToGas(r) {
         'Піб пасажира':       r.passenger_name || '',
         'Телефон пасажира':   r.passenger_phone || '',
         'Піб відправника':    r.sender_name || '',
+        'Телефон відправника':r.passenger_phone || '',
         'Піб отримувача':     r.recipient_name || '',
         'Телефон отримувача': r.recipient_phone || '',
         'Адреса отримувача':  r.recipient_address || '',
+        'Адреса в Європі':    r.recipient_address || '',
         'Адреса відправки':   r.departure_address || '',
         'Адреса прибуття':    r.arrival_address || '',
         'Кількість місць':    r.seats_count || '',
         'Вага багажу':        r.baggage_weight || '',
         'Внутрішній №':       r.internal_number || '',
         'Номер ТТН':          r.ttn_number || '',
+        'Опис':               r.package_description || '',
         'Опис посилки':       r.package_description || '',
+        'Кг':                 r.package_weight || '',
         'Вага посилки':       r.package_weight || '',
         'Сума':               r.amount || '',
         'Валюта':             r.amount_currency || '',
+        'Валюта оплати':      r.amount_currency || '',
         'Завдаток':           r.deposit || '',
         'Валюта завдатку':    r.deposit_currency || '',
         'Форма оплати':       r.payment_form || '',
@@ -1060,14 +1070,22 @@ async function sbUpdateRouteField(params) {
         const rteId = params.rte_id;
         const updateObj = {};
 
+        // Захист: якщо GAS-ключ не має DB-колонки в routes, не шлемо PostgREST
+        // запит з кириличним іменем колонки (інакше: "schema cache" помилка).
+        const isValidSbCol = (c) => /^[a-z_][a-z0-9_]*$/.test(c);
+
         if (params.fields) {
             for (const [col, val] of Object.entries(params.fields)) {
                 const sbCol = ROUTE_GAS_TO_SB[col] || col;
+                if (!isValidSbCol(sbCol)) continue;
                 updateObj[sbCol] = (val === '' || val === undefined) ? null : String(val);
             }
         } else {
             const col = params.col;
             const sbCol = ROUTE_GAS_TO_SB[col] || col;
+            if (!isValidSbCol(sbCol)) {
+                return { ok: false, error: 'Поле «' + col + '» не редагується тут' };
+            }
             updateObj[sbCol] = (params.value === '' || params.value === undefined) ? null : String(params.value);
         }
 
