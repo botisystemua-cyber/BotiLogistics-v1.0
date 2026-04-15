@@ -1,0 +1,4 @@
+# Якщо хтось зайде на директорію /cargo-crm/ без імені файлу —
+# Apache віддасть Cargo.html (закриває 404 на директорних URL,
+# напр. при PWA-фолбеку Chrome у scope-корінь модуля).
+DirectoryIndex Cargo.html
