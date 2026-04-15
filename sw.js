@@ -1,7 +1,7 @@
 // BotiLogistics Shared Service Worker — PWA для passenger-crm + cargo-crm
 // Розміщений на рівні /BotiLogistics-v1.0/ щоб scope покривав обидва модулі.
 // ВАЖЛИВО: бампай версію при кожному релізі щоб старий кеш видалявся автоматично.
-var CACHE_NAME = 'botilogistics-suite-v1';
+var CACHE_NAME = 'botilogistics-suite-v2';
 
 // Файли, які ЗАВЖДИ мусять братися з мережі свіжими (щоб не було
 // розсинхрону між HTML/CSS/JS через HTTP-кеш браузера).

@@ -1609,6 +1609,11 @@ body {
   .burger { display: block; }
   .header-fields-btn { display: none !important; }
   .fab { display: none !important; }
+  /* На мобільному довга tenant-назва розпирала хедер і виштовхувала пошук+аватарку.
+     Обмежуємо ширину логотипу і ріжемо ellipsis'ом. */
+  .header { gap: 8px; padding: 0 10px; }
+  .logo { font-size: 15px; max-width: 110px; overflow: hidden; text-overflow: ellipsis; flex-shrink: 1; }
+  .header-right { gap: 6px; }
 }
 @media (max-width: 768px) {
   .header-search { max-width: 180px; }
@@ -1617,6 +1622,9 @@ body {
   .details-grid { grid-template-columns: 1fr; }
   .card-top { gap: 4px; }
   .card-price { font-size: 14px; }
+  .logo { font-size: 13px; max-width: 90px; }
+  .header-search { max-width: none; }
+  .sync-indicator { display: none; }
 }
 
 /* ===== ROUTE CARD STYLES ===== */
