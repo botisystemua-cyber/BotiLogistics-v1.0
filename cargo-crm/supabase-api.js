@@ -488,6 +488,12 @@ function routeRowToGasPkg(r) {
         'Водій':              r.driver_name || '',
         'Телефон водія':      r.driver_phone || '',
         'Місто':              r.city || '',
+        // Імена / телефони — таблиця routes ділить дві колонки між пасажирами
+        // та посилками (passenger_name vs sender_name). Рендер картки маршруту
+        // читає 'Піб пасажира' / 'Телефон пасажира', тож для пакета
+        // дублюємо туди sender_name + passenger_phone (одна колонка телефону).
+        'Піб пасажира':       r.passenger_name || r.sender_name || '',
+        'Телефон пасажира':   r.passenger_phone || '',
         'Піб відправника':    r.sender_name || '',
         'Телефон відправника':r.passenger_phone || '',
         'Адреса відправки':   r.departure_address || '',
@@ -495,13 +501,18 @@ function routeRowToGasPkg(r) {
         'Телефон отримувача': r.recipient_phone || '',
         'Адреса отримувача':  r.recipient_address || '',
         'Адреса в Європі':    r.recipient_address || '',
+        'Адреса прибуття':    r.arrival_address || r.recipient_address || '',
         'Внутрішній №':       r.internal_number || '',
         'Номер ТТН':          r.ttn_number || '',
         'Опис':               r.package_description || '',
         'Опис посилки':       r.package_description || '',
         'Кг':                 r.package_weight || '',
         'Вага посилки':       r.package_weight || '',
+        'Вага багажу':        r.baggage_weight || r.package_weight || '',
+        'Кількість місць':    r.seats_count || '',
+        'Місце в авто':       r.seat_number || '',
         'Сума':               r.amount || '',
+        'Валюта':             r.amount_currency || '',
         'Валюта оплати':      r.amount_currency || '',
         'Завдаток':           r.deposit || '',
         'Валюта завдатку':    r.deposit_currency || '',

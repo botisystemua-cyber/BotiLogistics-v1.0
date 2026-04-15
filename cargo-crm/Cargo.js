@@ -3030,9 +3030,30 @@ async function doAssignToRoute(routeIdx) {
     } catch(e) {}
   }
 
+  // Інвалідуємо кеш доданого маршруту: інакше при відкритті в sidebar
+  // відобразяться старі rows без щойно доданих посилок.
+  if (route) {
+    route.rows = null;
+    route.rowCount = (route.rowCount || 0) + success;
+    route.parcelCount = (route.parcelCount || 0) + success;
+    var allIdx = (typeof allRouteSheets !== 'undefined') ? allRouteSheets.findIndex(function(s) { return s.sheetName === route.sheetName; }) : -1;
+    if (allIdx !== -1) {
+      allRouteSheets[allIdx].rows = null;
+      allRouteSheets[allIdx].rowCount = route.rowCount;
+      allRouteSheets[allIdx].parcelCount = route.parcelCount;
+    }
+  }
+
   showToast('Додано в ' + routeName + ': ' + success + ' з ' + ids.length, success > 0 ? 'success' : 'error');
   if (_routeModalMode === 'bulk') afterBulkAction();
   else renderCards();
+
+  // Якщо юзер прямо зараз відкритий саме на цьому маршруті — перерендеримо одразу
+  if (typeof activeRouteIdx !== 'undefined' && activeRouteIdx === routeIdx) {
+    try { await loadRouteSheetData(routeIdx, true); renderRoutes(); } catch(_) {}
+  }
+  // Оновлюємо лічильники в sidebar
+  if (typeof renderRouteSidebar === 'function') renderRouteSidebar();
 }
 
 // ===== [SECT-COUNTERS] COUNTERS =====
