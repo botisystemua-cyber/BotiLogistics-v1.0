@@ -663,11 +663,23 @@ document.addEventListener('DOMContentLoaded', async function() {
 });
 
 // ===== [SECT-FILTER] FILTERING =====
+// Нові (24 год): посилка вважається новою, якщо з моменту її створення
+// минуло менше 24 годин. Логіка симетрична passenger-crm.
+function isNew24h(p) {
+  const raw = p && p['Дата створення'];
+  if (!raw) return false;
+  const d = new Date(raw);
+  if (isNaN(d.getTime())) return false;
+  return (Date.now() - d.getTime()) < 24 * 60 * 60 * 1000;
+}
+
 function filterData() {
   let data = allData.filter(p => p['Статус CRM'] !== 'Архів');
 
   // Direction filter
-  if (currentDirection === 'ue') {
+  if (currentDirection === 'new24') {
+    data = data.filter(p => isNew24h(p));
+  } else if (currentDirection === 'ue') {
     data = data.filter(p => p['Напрям'] === 'УК→ЄВ');
   } else {
     data = data.filter(p => p['Напрям'] === 'ЄВ→УК');
@@ -938,6 +950,7 @@ function renderCard(p) {
         <div class="card-top-row">
           <input type="checkbox" class="card-checkbox" onclick="event.stopPropagation(); toggleSelect('${pkgId}')" ${selectedIds.has(pkgId) ? 'checked' : ''}>
           <span class="dir-badge ${dirBadgeClass}">${dirLabel}</span>
+          ${isNew24h(p) ? '<span class="badge badge-new24">🆕 NEW</span>' : ''}
           ${visCols.includes('ttn') ? ttnHtml : ''}
           ${visCols.includes('weight') && weight ? `<span class="badge-weight">⚖️ ${weight} кг</span>` : ''}
           <div class="card-finance">
@@ -1595,13 +1608,16 @@ function bulkOptimizeRoute() {
 
 function setDirection(dir) {
   currentDirection = dir;
+  // active-клас: для напрямків — кольоровий (active-ue / active-eu),
+  // для «Нові (24 год)» — нейтральний active.
+  const activeCls = dir === 'ue' ? 'active-ue' : (dir === 'eu' ? 'active-eu' : 'active');
   // Update desktop sidebar items
   document.querySelectorAll('.sidebar [data-dir]').forEach(el => {
-    el.className = 'sidebar-item' + (el.dataset.dir === dir ? (dir === 'ue' ? ' active-ue' : ' active-eu') : '');
+    el.className = 'sidebar-item' + (el.dataset.dir === dir ? ' ' + activeCls : '');
   });
   // Update mobile sidebar items
   document.querySelectorAll('#mobileSidebar [data-dir]').forEach(el => {
-    el.className = 'mob-item' + (el.dataset.dir === dir ? (dir === 'ue' ? ' active-ue' : ' active-eu') : '');
+    el.className = 'mob-item' + (el.dataset.dir === dir ? ' ' + activeCls : '');
   });
   // Switch back to parcels view if in route/other view
   if (currentView !== 'parcels') backToParcels();
@@ -3194,12 +3210,15 @@ function updateCounters() {
     const active = allData.filter(p => p['Статус CRM'] !== 'Архів');
     const ue = active.filter(p => p['Напрям'] === 'УК→ЄВ');
     const eu = active.filter(p => p['Напрям'] === 'ЄВ→УК');
+    const new24 = active.filter(p => isNew24h(p));
     const setCount = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
     setCount('countUe', ue.length);
     setCount('countEu', eu.length);
+    setCount('countNew24', new24.length);
     setCount('mobCountUe', ue.length);
     setCount('mobCountEu', eu.length);
-    const dirData = currentDirection === 'ue' ? ue : eu;
+    setCount('mobCountNew24', new24.length);
+    const dirData = currentDirection === 'new24' ? new24 : (currentDirection === 'ue' ? ue : eu);
     var cAll = dirData.length;
     var cChecking = dirData.filter(p => p['Контроль перевірки'] === 'В перевірці').length;
     var cReady = dirData.filter(p => p['Контроль перевірки'] === 'Готова до маршруту').length;
@@ -3305,7 +3324,7 @@ async function toggleArchiveView() {
 
   if (showArchive) {
     showToast('Завантаження архіву...', 'info');
-    var dir = currentDirection === 'ue' ? 'ue' : 'eu';
+    var dir = currentDirection === 'eu' ? 'eu' : 'ue';
     var res = await apiPost('getArchive', { direction: dir });
     if (res.ok) {
       archiveData = res.data || [];
@@ -3529,7 +3548,7 @@ async function archiveMassRestore() {
   }
   archiveSelectedIds.clear();
   // Перезавантажити архів
-  var dir = currentDirection === 'ue' ? 'ue' : 'eu';
+  var dir = currentDirection === 'eu' ? 'eu' : 'ue';
   var archRes = await apiPost('getArchive', { direction: dir });
   if (archRes.ok) {
     archiveData = archRes.data || [];
@@ -3563,7 +3582,9 @@ function createRoute() { alert('Створення нового маршруту
 
 // ===== [SECT-ADDFORM] ADD PARCEL FORM =====
 function openAddForm() {
-  addFormDirection = currentDirection;
+  // 'new24' — це віртуальна вкладка (фільтр за свіжістю), не реальний напрям.
+  // У формі додавання дефолтимось на 'ue', щоб не зламати валідацію.
+  addFormDirection = (currentDirection === 'new24') ? 'ue' : currentDirection;
   document.getElementById('fDirection').value = addFormDirection;
   clearAddForm();
   setAddDirection(addFormDirection);

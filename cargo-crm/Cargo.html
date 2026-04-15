@@ -46,6 +46,7 @@
   <div class="mob-section">
     <div class="mob-section-title" onclick="toggleMobSection(this)">🧭 Напрямок <span class="mob-toggle">▶</span></div>
     <div class="mob-section-body mob-collapsed">
+      <div class="mob-item" data-dir="new24" onclick="setDirection('new24')">🆕 Нові (24 год) <span class="badge-count" id="mobCountNew24" style="background:#fef3c7;color:#d97706;">0</span></div>
       <div class="mob-item active" data-dir="ue" onclick="setDirection('ue')">🇺🇦 УК → Європа <span class="badge-count" id="mobCountUe">0</span></div>
       <div class="mob-item" data-dir="eu" onclick="setDirection('eu')">🇪🇺 Європа → УК <span class="badge-count" id="mobCountEu">0</span></div>
     </div>
@@ -158,6 +159,9 @@
         🧭 Напрямок <span class="toggle open">▶</span>
       </div>
       <div class="sidebar-section-body">
+        <div class="sidebar-item" data-dir="new24" onclick="setDirection('new24')">
+          🆕 Нові (24 год) <span class="badge-count" id="countNew24" style="background:#fef3c7;color:#d97706;">0</span>
+        </div>
         <div class="sidebar-item active-ue" data-dir="ue" onclick="setDirection('ue')">
           🇺🇦 УК → Європа <span class="badge-count" id="countUe">0</span>
         </div>
