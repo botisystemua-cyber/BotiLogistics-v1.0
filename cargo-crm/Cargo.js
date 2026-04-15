@@ -1762,8 +1762,81 @@ function promptDeleteLinkedSheets(baseName) { if (activeRouteIdx !== null) activ
 function setCount(id, val) { var el = document.getElementById(id); if (el) el.textContent = val; }
 function refreshRouteView() { if (activeRouteIdx !== null) openRoute(activeRouteIdx, true); }
 function openRouteView(idx) { openRoute(idx); }
-function archiveFromRoute(rteId, sheetName, name) { deleteFromRoute(rteId, sheetName, name); }
-function routeBulkArchive() { routeBulkDeleteFromRoute(); }
+// ── Архівувати лід маршруту (справжній архів, не delete-from-sheet) ──
+// Пасажирів у cargo-crm архівувати не можна (чужий домен, див. passenger-crm),
+// показуємо юзеру інструкцію замість тихого видалення.
+async function archiveFromRoute(rteId, sheetName, name) {
+    const sheet = routes[activeRouteIdx];
+    if (!sheet) return;
+    const row = (sheet.rows || []).find(r => r['RTE_ID'] === rteId);
+    if (!row) return;
+    const isPax = (row['Тип запису'] || '').includes('Пасажир');
+    if (isPax) {
+        showToast('👤 Пасажирів архівує passenger-crm. Перейдіть у вкладку пасажирів.', 'warning');
+        return;
+    }
+    const pkgId = row['PKG_ID'] || row['PAX_ID'] || '';
+    if (!pkgId) { showToast('❌ Немає PKG_ID для архіву', 'error'); return; }
+    showConfirm('Архівувати «' + name + '» і прибрати з маршруту?', async (yes) => {
+        if (!yes) return;
+        showLoader('Архівування...');
+        const res = await apiPost('deleteParcel', { pkg_id: pkgId, reason: 'Архів з маршруту', archived_by: 'CRM' });
+        hideLoader();
+        if (res.ok) {
+            sheet.rows = (sheet.rows || []).filter(r => r['RTE_ID'] !== rteId);
+            const mainItem = allData.find(p => p['PKG_ID'] === pkgId);
+            if (mainItem) mainItem['Статус CRM'] = 'Архів';
+            routeSelectedIds.delete(rteId);
+            showToast('✅ Архівовано і прибрано з маршруту');
+            renderRoutes();
+            updateCounters();
+        } else {
+            showToast('❌ ' + (res.error || 'Помилка'));
+        }
+    });
+}
+
+// Bulk-архівація з маршруту: пасажирів пропускаємо (з тостом), посилки
+// реально архівуємо через deleteParcel (який тепер і з routes чистить).
+async function routeBulkArchive() {
+    if (routeSelectedIds.size === 0) return;
+    const sheet = routes[activeRouteIdx];
+    if (!sheet) return;
+    const ids = Array.from(routeSelectedIds);
+    const rows = ids.map(rId => (sheet.rows || []).find(r => r['RTE_ID'] === rId)).filter(Boolean);
+    const paxRows = rows.filter(r => (r['Тип запису'] || '').includes('Пасажир'));
+    const pkgRows = rows.filter(r => !(r['Тип запису'] || '').includes('Пасажир'));
+    if (pkgRows.length === 0) {
+        showToast('👤 Пасажирів архівує passenger-crm. Перейдіть у вкладку пасажирів.', 'warning');
+        return;
+    }
+    const msg = 'Архівувати ' + pkgRows.length + ' посилок?' +
+        (paxRows.length ? ' (пасажирів у виділенні: ' + paxRows.length + ' — їх пропустимо)' : '');
+    showConfirm(msg, async (yes) => {
+        if (!yes) return;
+        showLoader('Архівування...');
+        const pkgIds = pkgRows.map(r => r['PKG_ID'] || r['PAX_ID']).filter(Boolean);
+        const res = await apiPost('deleteParcel', { pkg_ids: pkgIds, reason: 'Архів з маршруту', archived_by: 'CRM' });
+        hideLoader();
+        if (res.ok) {
+            const archivedRteIds = new Set(pkgRows.map(r => r['RTE_ID']));
+            sheet.rows = (sheet.rows || []).filter(r => !archivedRteIds.has(r['RTE_ID']));
+            pkgIds.forEach(pid => {
+                const mainItem = allData.find(p => p['PKG_ID'] === pid);
+                if (mainItem) mainItem['Статус CRM'] = 'Архів';
+            });
+            archivedRteIds.forEach(id => routeSelectedIds.delete(id));
+            _routeToolbarForceOpen = false;
+            updateRouteBulkToolbar();
+            showToast('✅ Архівовано: ' + pkgIds.length + (paxRows.length ? ' (пасажирів пропущено: ' + paxRows.length + ')' : ''));
+            renderRoutes();
+            updateCounters();
+        } else {
+            showToast('❌ ' + (res.error || 'Помилка'));
+        }
+    });
+}
+
 function routeBulkDeleteFull() { routeBulkDeleteFromRoute(); }
 function optimizeRouteOrder() { showToast('Оптимізація порядку — в розробці'); }
 
@@ -3334,6 +3407,7 @@ function renderArchiveCard(p) {
     ['DATE_ARCHIVE', dateArchive, {readonly:true}],
     ['ARCHIVED_BY', archivedBy, {readonly:true}],
     ['ARCHIVE_REASON', reason, {readonly:true}],
+    ['Був у маршрутах', p['Був у маршрутах'] || '—', {readonly:true}],
     ['SOURCE_SHEET', p['SOURCE_SHEET'] || '', {readonly:true}],
   ], pkgId);
 

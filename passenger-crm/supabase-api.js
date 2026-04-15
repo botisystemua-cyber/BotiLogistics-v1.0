@@ -41,6 +41,7 @@ const SB_TO_GAS = {
     archived_at:       'DATE_ARCHIVE',
     archived_by:       'ARCHIVED_BY',
     archive_reason:    'ARCHIVE_REASON',
+    archived_from_routes: 'Був у маршрутах',
     archive_id:        'ARCHIVE_ID',
     cal_id:            'CAL_ID',
     messenger:         'Месенджер',
@@ -464,21 +465,50 @@ async function sbArchivePassenger(params) {
         const reason = params.reason || 'Архівовано';
         const manager = params.manager || '';
 
-        const { data, error } = await sb
-            .from('passengers')
-            .update({
-                is_archived: true,
-                archived_at: new Date().toISOString(),
-                archived_by: manager || null,
-                archive_reason: reason,
-                updated_at: new Date().toISOString()
-            })
-            .eq('tenant_id', TENANT_ID)
-            .in('pax_id', paxIds)
-            .select();
-        if (error) throw error;
+        // Збираємо імена маршрутів, з яких пасажир виходить в архів — пишемо
+        // їх у `archived_from_routes`, щоб у картці архіву було видно
+        // "Був у маршрутах: X, Y". Потім видаляємо route-рядки (рейс без
+        // архівованого пасажира).
+        const routesByPax = {};
+        if (paxIds.length) {
+            const { data: routeRows } = await sb.from('routes')
+                .select('rte_id, pax_id_or_pkg_id')
+                .eq('tenant_id', TENANT_ID)
+                .eq('record_type', 'Пасажир')
+                .in('pax_id_or_pkg_id', paxIds);
+            (routeRows || []).forEach(r => {
+                if (!r.pax_id_or_pkg_id) return;
+                (routesByPax[r.pax_id_or_pkg_id] = routesByPax[r.pax_id_or_pkg_id] || new Set()).add(r.rte_id);
+            });
 
-        return { ok: true, count: data.length };
+            await sb.from('routes').delete()
+                .eq('tenant_id', TENANT_ID)
+                .eq('record_type', 'Пасажир')
+                .in('pax_id_or_pkg_id', paxIds);
+        }
+
+        let updated = 0;
+        const nowIso = new Date().toISOString();
+        for (const paxId of paxIds) {
+            const routesCsv = routesByPax[paxId] ? Array.from(routesByPax[paxId]).join(', ') : null;
+            const { data, error } = await sb
+                .from('passengers')
+                .update({
+                    is_archived: true,
+                    archived_at: nowIso,
+                    archived_by: manager || null,
+                    archive_reason: reason,
+                    archived_from_routes: routesCsv,
+                    updated_at: nowIso
+                })
+                .eq('tenant_id', TENANT_ID)
+                .eq('pax_id', paxId)
+                .select();
+            if (error) throw error;
+            updated += (data || []).length;
+        }
+
+        return { ok: true, count: updated };
     } catch (e) {
         console.error('sbArchivePassenger error:', e);
         return { ok: false, error: e.message };
@@ -503,6 +533,7 @@ async function sbRestorePassenger(params) {
                 is_archived: false,
                 archived_at: null,
                 archive_reason: null,
+                archived_from_routes: null,
                 updated_at: new Date().toISOString()
             })
             .eq('tenant_id', TENANT_ID)

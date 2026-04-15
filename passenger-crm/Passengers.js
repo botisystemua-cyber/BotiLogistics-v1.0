@@ -6924,11 +6924,12 @@ function renderArchive() {
         const reason = p['ARCHIVE_REASON'] || '';
         const archDate = p['DATE_ARCHIVE'] || '';
         const archivedBy = p['ARCHIVED_BY'] || '';
+        const fromRoutes = p['Був у маршрутах'] || '';
         const dir = p['Напрям'] || '';
         const isSelected = archiveSelectedIds.has(id);
         const dirLabel = dir.includes('ua-eu') || dir.includes('UA→EU') ? 'UA→EU' : dir.includes('eu-ua') || dir.includes('EU→UA') ? 'EU→UA' : '';
         const dirCls = dirLabel === 'UA→EU' ? 'dir-badge-ua-eu' : dirLabel === 'EU→UA' ? 'dir-badge-eu-ua' : '';
-        const isFromRoute = reason.indexOf('маршрут') !== -1;
+        const isFromRoute = !!fromRoutes || reason.indexOf('маршрут') !== -1;
 
         return `<div class="pax-card ${isSelected ? 'selected' : ''}" style="border-left:3px solid ${isFromRoute ? '#f59e0b' : '#9ca3af'};opacity:0.85;" id="arc-${id}">
             <div class="card-top">
@@ -6950,6 +6951,7 @@ function renderArchive() {
                 ${archDate ? '<span style="font-size:10px;color:#6b7280;">📅 ' + archDate + '</span>' : ''}
                 ${archivedBy ? '<span style="font-size:10px;color:#6b7280;">👤 ' + archivedBy + '</span>' : ''}
                 ${reason ? '<span style="font-size:10px;color:#6b7280;">💬 ' + reason + '</span>' : ''}
+                ${fromRoutes ? '<span style="font-size:10px;color:#b45309;">🚐 Був у маршрутах: ' + fromRoutes + '</span>' : ''}
             </div>
             ${isFromRoute ? '' : `<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
                 <button class="btn-card-action" style="background:#d1fae5;color:#059669;" onclick="event.stopPropagation(); restorePax('${id}','${name}')">♻️ Відновити</button>
@@ -7267,6 +7269,13 @@ function archiveBulkDelete() {
 
 // Архівувати з маршруту (видалити з маршруту + архівувати в CRM)
 async function archiveFromRoute(rteId, sheetName, leadName) {
+    var sheetCheck = routes[activeRouteIdx];
+    var rowCheck = sheetCheck ? (sheetCheck.rows || []).find(function(r) { return r._resolvedId === rteId || r['RTE_ID'] === rteId; }) : null;
+    var isPkgRow = rowCheck && (rowCheck['Тип запису'] || '').toLowerCase().indexOf('посилк') !== -1;
+    if (isPkgRow) {
+        showToast('📦 Посилки архівує cargo-crm. Перейдіть у вкладку посилок.', 'warning');
+        return;
+    }
     showConfirm('Архівувати «' + leadName + '» і видалити з маршруту?', async function(yes) {
         if (!yes) return;
         showLoader('Архівування...');
@@ -7343,7 +7352,19 @@ async function deleteFromRouteFull(rteId, sheetName, leadName) {
 function routeBulkArchive() {
     const ids = Array.from(routeSelectedIds);
     if (!ids.length) return;
-    showConfirm('Архівувати ' + ids.length + ' записів і видалити з маршруту?', async function(yes) {
+    // У passenger-crm архівуємо тільки пасажирські рядки — посилки належать
+    // cargo-crm. Виокремлюємо pax/pkg до confirm, щоб юзер бачив розбивку.
+    const sheetPre = routes[activeRouteIdx];
+    const selectedRows = sheetPre ? (sheetPre.rows || []).filter(r => routeSelectedIds.has(r._resolvedId || r['RTE_ID'])) : [];
+    const pkgCount = selectedRows.filter(r => (r['Тип запису'] || '').toLowerCase().indexOf('посилк') !== -1).length;
+    const paxCount = selectedRows.length - pkgCount;
+    if (paxCount === 0) {
+        showToast('📦 Посилки архівує cargo-crm. Перейдіть у вкладку посилок.', 'warning');
+        return;
+    }
+    const confirmMsg = 'Архівувати ' + paxCount + ' пасажирів і видалити з маршруту?' +
+        (pkgCount ? ' (посилок у виділенні: ' + pkgCount + ' — їх пропустимо)' : '');
+    showConfirm(confirmMsg, async function(yes) {
         if (!yes) return;
         if (activeRouteIdx === null) return;
         const sheet = routes[activeRouteIdx];
@@ -7357,6 +7378,8 @@ function routeBulkArchive() {
             for (const row of (sheet.rows || [])) {
                 const resolvedId = row._resolvedId || row['RTE_ID'];
                 if (!routeSelectedIds.has(resolvedId)) continue;
+                // Пропускаємо посилкові рядки — ними займається cargo-crm.
+                if ((row['Тип запису'] || '').toLowerCase().indexOf('посилк') !== -1) continue;
                 let paxId = row['PAX_ID / PKG_ID'] || row['PAX_ID/PKG_ID'] || row['PAX_ID'] || row['PKG_ID'] || '';
                 // Fallback for legacy route rows with empty pax_id_or_pkg_id:
                 // look up the passenger by phone (+ name) in the local list.

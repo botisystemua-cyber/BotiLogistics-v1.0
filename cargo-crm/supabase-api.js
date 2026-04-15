@@ -55,6 +55,7 @@ const SB_TO_GAS_PKG = {
     archived_at:        'DATE_ARCHIVE',
     archived_by:        'ARCHIVED_BY',
     archive_reason:     'ARCHIVE_REASON',
+    archived_from_routes: 'Був у маршрутах',
 };
 
 // Reverse mapping: GAS Ukrainian → Supabase column
@@ -331,19 +332,50 @@ async function sbPkgDelete(params) {
         const reason = params.reason || 'Видалено';
         const manager = params.archived_by || params.manager || 'CRM';
 
-        const { data, error } = await sb.from('packages')
-            .update({
-                is_archived: true,
-                archived_at: new Date().toISOString(),
-                archived_by: manager,
-                archive_reason: reason,
-                updated_at: new Date().toISOString()
-            })
-            .in('pkg_id', pkgIds)
-            .select();
-        if (error) throw error;
+        // Для кожної посилки збираємо імена маршрутів, у яких вона зараз
+        // стоїть — потім кладемо у `archived_from_routes` щоб у картці архіву
+        // було видно "Був у маршрутах: X, Y". Після цього видаляємо route-рядки
+        // (архівована посилка не має лишатися у рейсі).
+        const routesByPkg = {};
+        if (pkgIds.length) {
+            const { data: routeRows } = await sb.from('routes')
+                .select('rte_id, pax_id_or_pkg_id')
+                .eq('tenant_id', TENANT_ID)
+                .eq('record_type', 'Посилка')
+                .in('pax_id_or_pkg_id', pkgIds);
+            (routeRows || []).forEach(r => {
+                if (!r.pax_id_or_pkg_id) return;
+                (routesByPkg[r.pax_id_or_pkg_id] = routesByPkg[r.pax_id_or_pkg_id] || new Set()).add(r.rte_id);
+            });
 
-        return { ok: true, count: data.length };
+            await sb.from('routes').delete()
+                .eq('tenant_id', TENANT_ID)
+                .eq('record_type', 'Посилка')
+                .in('pax_id_or_pkg_id', pkgIds);
+        }
+
+        // Update без масового archived_from_routes — оскільки у кожної
+        // посилки може бути свій список маршрутів, ідемо по одному .update().
+        let updated = 0;
+        const nowIso = new Date().toISOString();
+        for (const pkgId of pkgIds) {
+            const routesCsv = routesByPkg[pkgId] ? Array.from(routesByPkg[pkgId]).join(', ') : null;
+            const { data, error } = await sb.from('packages')
+                .update({
+                    is_archived: true,
+                    archived_at: nowIso,
+                    archived_by: manager,
+                    archive_reason: reason,
+                    archived_from_routes: routesCsv,
+                    updated_at: nowIso
+                })
+                .eq('pkg_id', pkgId)
+                .select();
+            if (error) throw error;
+            updated += (data || []).length;
+        }
+
+        return { ok: true, count: updated };
     } catch (e) {
         console.error('sbPkgDelete error:', e);
         return { ok: false, error: e.message };
@@ -359,6 +391,7 @@ async function sbPkgRestore(params) {
                 archived_at: null,
                 archived_by: null,
                 archive_reason: null,
+                archived_from_routes: null,
                 updated_at: new Date().toISOString()
             })
             .eq('pkg_id', pkgId)
