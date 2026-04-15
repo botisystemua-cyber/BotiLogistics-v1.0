@@ -160,16 +160,14 @@ function App() {
     setError('');
   };
 
-  // Which apps to show on success screen — based on selected role + tenant's enabled modules
-  // Owner & passenger are always available; cargo & driver are module-gated.
+  // Which apps to show on success screen — based on selected role.
+  // Manager enters via passenger-crm and can switch to cargo from inside
+  // (the Посилки button there is gated by the tenant's cargo module).
   const availableApps = (u: SessionUser): string[] => {
     if (!u) return [];
     if (selectedRole?.key === 'driver') return ['driver'];
     if (selectedRole?.key === 'owner')  return ['owner'];
-    // manager → always 'passenger' + 'cargo' only if tenant has it
-    const apps = ['passenger'];
-    if (u.modules.includes('cargo')) apps.push('cargo');
-    return apps;
+    return ['passenger']; // manager
   };
 
   if (step === 'admin') {
@@ -348,7 +346,7 @@ function App() {
                   href={APP_URLS[m]}
                   className="block w-full py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-green-600 text-white text-sm font-bold shadow-lg shadow-emerald-500/20 hover:brightness-110 active:scale-[0.97] transition-all"
                 >
-                  {APP_LABEL[m]} →
+                  {selectedRole?.key === 'manager' ? 'Перейти до додатку' : APP_LABEL[m]} →
                 </a>
               ))}
             </div>

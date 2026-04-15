@@ -55,6 +55,7 @@ const SB_TO_GAS_PKG = {
     archived_at:        'DATE_ARCHIVE',
     archived_by:        'ARCHIVED_BY',
     archive_reason:     'ARCHIVE_REASON',
+    archived_from_routes: 'Був у маршрутах',
 };
 
 // Reverse mapping: GAS Ukrainian → Supabase column
@@ -156,7 +157,20 @@ function calcDebtPkg(obj) {
 }
 
 // ── TENANT ──
-const TENANT_ID = 'gresco';
+function _readTenantId() {
+    try {
+        const raw = localStorage.getItem('boti_session');
+        if (!raw) return null;
+        const s = JSON.parse(raw);
+        return s && s.tenant_id ? s.tenant_id : null;
+    } catch (_) { return null; }
+}
+const BOTI_SESSION = (() => { try { return JSON.parse(localStorage.getItem('boti_session') || 'null'); } catch (_) { return null; } })();
+const TENANT_ID = _readTenantId();
+if (!TENANT_ID && !location.search.includes('nologinguard=1')) {
+    console.warn('[boti] no boti_session — redirecting to config-crm login');
+    location.href = '../config-crm/';
+}
 
 // ================================================================
 // PACKAGES API
@@ -318,19 +332,50 @@ async function sbPkgDelete(params) {
         const reason = params.reason || 'Видалено';
         const manager = params.archived_by || params.manager || 'CRM';
 
-        const { data, error } = await sb.from('packages')
-            .update({
-                is_archived: true,
-                archived_at: new Date().toISOString(),
-                archived_by: manager,
-                archive_reason: reason,
-                updated_at: new Date().toISOString()
-            })
-            .in('pkg_id', pkgIds)
-            .select();
-        if (error) throw error;
+        // Для кожної посилки збираємо імена маршрутів, у яких вона зараз
+        // стоїть — потім кладемо у `archived_from_routes` щоб у картці архіву
+        // було видно "Був у маршрутах: X, Y". Після цього видаляємо route-рядки
+        // (архівована посилка не має лишатися у рейсі).
+        const routesByPkg = {};
+        if (pkgIds.length) {
+            const { data: routeRows } = await sb.from('routes')
+                .select('rte_id, pax_id_or_pkg_id')
+                .eq('tenant_id', TENANT_ID)
+                .eq('record_type', 'Посилка')
+                .in('pax_id_or_pkg_id', pkgIds);
+            (routeRows || []).forEach(r => {
+                if (!r.pax_id_or_pkg_id) return;
+                (routesByPkg[r.pax_id_or_pkg_id] = routesByPkg[r.pax_id_or_pkg_id] || new Set()).add(r.rte_id);
+            });
 
-        return { ok: true, count: data.length };
+            await sb.from('routes').delete()
+                .eq('tenant_id', TENANT_ID)
+                .eq('record_type', 'Посилка')
+                .in('pax_id_or_pkg_id', pkgIds);
+        }
+
+        // Update без масового archived_from_routes — оскільки у кожної
+        // посилки може бути свій список маршрутів, ідемо по одному .update().
+        let updated = 0;
+        const nowIso = new Date().toISOString();
+        for (const pkgId of pkgIds) {
+            const routesCsv = routesByPkg[pkgId] ? Array.from(routesByPkg[pkgId]).join(', ') : null;
+            const { data, error } = await sb.from('packages')
+                .update({
+                    is_archived: true,
+                    archived_at: nowIso,
+                    archived_by: manager,
+                    archive_reason: reason,
+                    archived_from_routes: routesCsv,
+                    updated_at: nowIso
+                })
+                .eq('pkg_id', pkgId)
+                .select();
+            if (error) throw error;
+            updated += (data || []).length;
+        }
+
+        return { ok: true, count: updated };
     } catch (e) {
         console.error('sbPkgDelete error:', e);
         return { ok: false, error: e.message };
@@ -346,6 +391,7 @@ async function sbPkgRestore(params) {
                 archived_at: null,
                 archived_by: null,
                 archive_reason: null,
+                archived_from_routes: null,
                 updated_at: new Date().toISOString()
             })
             .eq('pkg_id', pkgId)
@@ -418,6 +464,8 @@ const ROUTE_GAS_TO_SB = {
     'Водій':              'driver_name',
     'Телефон водія':      'driver_phone',
     'Місто':              'city',
+    'Піб пасажира':       'passenger_name',
+    'Телефон пасажира':   'passenger_phone',
     'Піб відправника':    'sender_name',
     'Телефон відправника':'passenger_phone',
     'Адреса відправки':   'departure_address',
@@ -426,6 +474,9 @@ const ROUTE_GAS_TO_SB = {
     'Адреса отримувача':  'recipient_address',
     'Адреса в Європі':    'recipient_address',
     'Адреса прибуття':    'arrival_address',
+    'Вага багажу':        'baggage_weight',
+    'Кількість місць':    'seats_count',
+    'Місце в авто':       'seat_number',
     'Внутрішній №':       'internal_number',
     'Номер ТТН':          'ttn_number',
     'Опис':               'package_description',
@@ -475,6 +526,12 @@ function routeRowToGasPkg(r) {
         'Водій':              r.driver_name || '',
         'Телефон водія':      r.driver_phone || '',
         'Місто':              r.city || '',
+        // Імена / телефони — таблиця routes ділить дві колонки між пасажирами
+        // та посилками. Для посилки 'Піб пасажира' = sender_name (відправник),
+        // а отримувач читається окремо через 'Піб отримувача' / 'Телефон отримувача'.
+        // Рендер картки маршруту виводить пару "відправник → отримувач".
+        'Піб пасажира':       r.passenger_name || r.sender_name || '',
+        'Телефон пасажира':   r.passenger_phone || '',
         'Піб відправника':    r.sender_name || '',
         'Телефон відправника':r.passenger_phone || '',
         'Адреса відправки':   r.departure_address || '',
@@ -482,13 +539,18 @@ function routeRowToGasPkg(r) {
         'Телефон отримувача': r.recipient_phone || '',
         'Адреса отримувача':  r.recipient_address || '',
         'Адреса в Європі':    r.recipient_address || '',
+        'Адреса прибуття':    r.arrival_address || r.recipient_address || '',
         'Внутрішній №':       r.internal_number || '',
         'Номер ТТН':          r.ttn_number || '',
         'Опис':               r.package_description || '',
         'Опис посилки':       r.package_description || '',
         'Кг':                 r.package_weight || '',
         'Вага посилки':       r.package_weight || '',
+        'Вага багажу':        r.baggage_weight || r.package_weight || '',
+        'Кількість місць':    r.seats_count || '',
+        'Місце в авто':       r.seat_number || '',
         'Сума':               r.amount || '',
+        'Валюта':             r.amount_currency || '',
         'Валюта оплати':      r.amount_currency || '',
         'Завдаток':           r.deposit || '',
         'Валюта завдатку':    r.deposit_currency || '',
@@ -496,7 +558,7 @@ function routeRowToGasPkg(r) {
         'Статус оплати':      r.payment_status || '',
         'Борг':               r.debt || '',
         'Примітка оплати':    r.payment_notes || '',
-        'Статус':             r.status || '',
+        'Статус':             (r.status === 'scheduled' ? 'Новий' : (r.status || '')),
         'Статус CRM':         r.crm_status || '',
         'Тег':                r.tag || '',
         'Примітка':           r.notes || '',
@@ -526,7 +588,16 @@ async function sbPkgGetRoutesList(params) {
             }
         });
 
-        return { ok: true, data: Object.values(routeMap) };
+        // Also include dispatches + expenses grouped by rte_id (for Cargo.js sidebar).
+        const [dispRes, expRes] = await Promise.all([
+            sbPkgGetDispatches(),
+            sbPkgGetExpensesList(),
+        ]);
+        const dispatches = dispRes.ok ? (dispRes.data || []) : [];
+        const expenses   = expRes.ok  ? (expRes.data  || []) : [];
+
+        const routes = Object.values(routeMap);
+        return { ok: true, data: routes, routes, dispatches, expenses };
     } catch (e) {
         console.error('sbPkgGetRoutesList error:', e);
         return { ok: false, error: e.message };
@@ -593,16 +664,64 @@ async function sbPkgAddToRoute(params) {
         if (!rteId) return { ok: false, error: 'Не вказано назву маршруту' };
 
         const leads = params.leads || params.items || [params];
+
+        // ── Збираємо PKG_ID з усіх лідів та підтягуємо повні дані з packages.
+        // Раніше при single-add фронт надсилав лише { pkg_id }, тому
+        // gasItemToRouteRow не знаходив жодного GAS-ключа і у routes падав
+        // майже порожній рядок. Тепер завжди беремо authoritative-дані з БД.
+        const pkgIds = leads
+            .map(it => it && (it['PKG_ID'] || it.pkg_id || it.PKG_ID))
+            .filter(Boolean);
+
+        let pkgById = {};
+        if (pkgIds.length) {
+            const { data: pkgs, error: pkgErr } = await sb.from('packages')
+                .select('*')
+                .eq('tenant_id', TENANT_ID)
+                .in('pkg_id', pkgIds);
+            if (pkgErr) throw pkgErr;
+            (pkgs || []).forEach(r => { pkgById[r.pkg_id] = r; });
+        }
+
+        const today = new Date().toISOString().split('T')[0];
         const insertData = leads.map(item => {
-            const row = gasItemToRouteRow(item);
+            const pkgKey = item && (item['PKG_ID'] || item.pkg_id || item.PKG_ID);
+            const dbRow = pkgKey ? pkgById[pkgKey] : null;
+
+            // Якщо знайшли в БД — спочатку конвертимо повний пакет у GAS-форму,
+            // потім зливаємо з тим, що прислав фронт (на випадок, якщо bulk
+            // передав свіжі правки до синку).
+            const merged = dbRow
+                ? Object.assign({}, sbToGasObjPkg(dbRow), item)
+                : item;
+
+            const row = gasItemToRouteRow(merged);
             row.rte_id = rteId;
             if (!row.record_type) row.record_type = 'Посилка';
-            if (!row.route_date) row.route_date = new Date().toISOString().split('T')[0];
+            if (!row.pax_id_or_pkg_id && pkgKey) row.pax_id_or_pkg_id = pkgKey;
+            if (!row.route_date) row.route_date = today;
+            if (!row.status || row.status === 'scheduled') row.status = 'Новий';
+
+            // ── Coalesce phone ──
+            // Форма "нова посилка" зберігає номер у packages.registrar_phone,
+            // а sender_phone лишається порожнім. У таблиці routes колонки
+            // registrar_phone взагалі нема — є тільки passenger_phone (спільна).
+            // Тому якщо passenger_phone з gasItemToRouteRow порожній — підтягуємо
+            // з registrar_phone напряму з БД. Інакше у маршруті телефон зникає.
+            // Recipient окремо у row.recipient_phone — для нього fallback не потрібен.
+            if ((!row.passenger_phone || row.passenger_phone === '') && dbRow) {
+                var phoneFb = dbRow.sender_phone || dbRow.registrar_phone || '';
+                if (phoneFb) row.passenger_phone = String(phoneFb);
+            }
             return row;
         });
 
         const { data, error } = await sb.from('routes').insert(insertData).select();
         if (error) throw error;
+
+        // NB: не апдейтимо тут packages.route_id — там uuid-колонка, а rteId
+        // це назва аркуша (text). Фронт після успіху сам ставить item['RTE_ID']
+        // у пам'ять (Cargo.js doAssignToRoute → item['RTE_ID']=route.sheetName).
 
         return { ok: true, data };
     } catch (e) {
@@ -634,13 +753,23 @@ async function sbPkgUpdateRouteField(params) {
         const rowId = params.rte_id || params.id;
         const updateObj = {};
 
+        // Захист: якщо GAS-ключ не має DB-колонки (напр. 'Тел. реєстратора',
+        // 'Валюта багажу', 'Ціна багажу' — їх просто нема в routes), не шлемо
+        // запит з кириличним іменем колонки — PostgREST поверне schema cache
+        // помилку, користувач побачить червоний тост.
+        const isValidSbCol = (c) => /^[a-z_][a-z0-9_]*$/.test(c);
+
         if (params.fields) {
             for (const [col, val] of Object.entries(params.fields)) {
                 const sbCol = ROUTE_GAS_TO_SB[col] || col;
+                if (!isValidSbCol(sbCol)) continue; // мовчки пропускаємо
                 updateObj[sbCol] = (val === '' || val === undefined) ? null : String(val);
             }
         } else {
             const sbCol = ROUTE_GAS_TO_SB[params.col] || params.col;
+            if (!isValidSbCol(sbCol)) {
+                return { ok: false, error: 'Поле «' + params.col + '» не редагується тут' };
+            }
             updateObj[sbCol] = (params.value === '' || params.value === undefined) ? null : String(params.value);
         }
         updateObj.updated_at = new Date().toISOString();
@@ -649,7 +778,10 @@ async function sbPkgUpdateRouteField(params) {
             .update(updateObj).eq('id', rowId).select();
         if (error) throw error;
 
-        return { ok: true, data: data && data[0] };
+        // Повертаємо GAS-keyed рядок, щоб фронт зміг змерджити його в
+        // локальний sheet.rows і картка одразу оновилась без reload.
+        const fresh = data && data[0] ? routeRowToGasPkg(data[0]) : null;
+        return { ok: true, data: fresh };
     } catch (e) {
         console.error('sbPkgUpdateRouteField error:', e);
         return { ok: false, error: e.message };
@@ -657,24 +789,125 @@ async function sbPkgUpdateRouteField(params) {
 }
 
 // ================================================================
-// DISPATCHES API
+// DISPATCHES API (READ-ONLY for cargo-crm / manager)
 // ================================================================
+// Відправки створюють і редагують ВОДІЇ через driver-crm.
+// Менеджер (cargo-crm) тільки ЧИТАЄ — ніяких create/update/delete.
 
-async function sbPkgUpdateDispatch(params) {
+// Mapping: dispatches SB column → GAS Ukrainian header (used by Cargo.js UI)
+function dispatchRowToGas(r, routeInfo) {
+    return {
+        'DISPATCH_ID':        r.dispatch_id || '',
+        'Дата створення':     r.created_at ? String(r.created_at).slice(0, 10) : '',
+        'Дата рейсу':         r.route_date || '',
+        'RTE_ID':             routeInfo && routeInfo.rte_id ? routeInfo.rte_id : '',
+        'Водій':              routeInfo && routeInfo.driver_name ? routeInfo.driver_name : '',
+        'Номер авто':         routeInfo && routeInfo.vehicle_name ? routeInfo.vehicle_name : '',
+        'AUTO_ID':            r.vehicle_id || '',
+        'Піб відправника':    r.sender_name || '',
+        'Телефон відправника':r.sender_phone || '',
+        'Телефон реєстратора':r.registrar_phone || '',
+        'Піб отримувача':     r.recipient_name || '',
+        'Телефон отримувача': r.recipient_phone || '',
+        'Адреса отримувача':  r.recipient_address || '',
+        'Внутрішній №':       r.internal_number || '',
+        'Вага':               r.weight_kg || '',
+        'Опис посилки':       r.package_description || '',
+        'Фото посилки':       r.photo_url || '',
+        'Сума':               r.amount || '',
+        'Валюта':             r.amount_currency || '',
+        'Завдаток':           r.deposit || '',
+        'Валюта завдатку':    r.deposit_currency || '',
+        'Форма оплати':       r.payment_form || '',
+        'Статус оплати':      r.payment_status || '',
+        'Борг':               r.debt || '',
+        'Статус':             r.status || '',
+        'Примітка':           r.notes || '',
+        'PKG_ID':             '', // dispatches has no pkg_id FK yet
+        'CLI_ID':             '',
+    };
+}
+
+// Helper: build uuid → {rte_id, driver_name, vehicle_name, city, route_date, status} map
+async function _fetchRoutesIndex(routeUuids) {
+    if (!routeUuids || routeUuids.length === 0) return {};
+    const { data, error } = await sb.from('routes')
+        .select('id, rte_id, route_date, city, driver_name, vehicle_name, status')
+        .eq('tenant_id', TENANT_ID)
+        .in('id', routeUuids);
+    if (error) throw error;
+    const idx = {};
+    (data || []).forEach(r => { idx[r.id] = r; });
+    return idx;
+}
+
+// Returns grouped list for sidebar: [{sheetName, city, rowCount, rte_id}, ...]
+async function sbPkgGetDispatches(_params) {
     try {
-        const dispatchId = params.dispatch_id;
-        const sbCol = GAS_TO_SB_PKG[params.col] || params.col;
-        const updateObj = {};
-        updateObj[sbCol] = params.value === '' ? null : params.value;
-        updateObj.updated_at = new Date().toISOString();
-
         const { data, error } = await sb.from('dispatches')
-            .update(updateObj).eq('dispatch_id', dispatchId).select();
+            .select('id, route_id, route_date')
+            .eq('tenant_id', TENANT_ID);
         if (error) throw error;
 
-        return { ok: true, data: data[0] };
+        const rows = data || [];
+        const uuids = [...new Set(rows.map(r => r.route_id).filter(Boolean))];
+        const routesById = await _fetchRoutesIndex(uuids);
+
+        const groups = {};
+        rows.forEach(r => {
+            const route = routesById[r.route_id];
+            const key = (route && route.rte_id) || r.route_id || '—';
+            if (!groups[key]) {
+                groups[key] = {
+                    sheetName: key,
+                    rte_id:    key,
+                    city:      (route && route.city) || '',
+                    route_date:(route && route.route_date) || r.route_date || '',
+                    rowCount:  0,
+                };
+            }
+            groups[key].rowCount++;
+        });
+
+        return { ok: true, data: Object.values(groups) };
     } catch (e) {
-        console.error('sbPkgUpdateDispatch error:', e);
+        console.error('sbPkgGetDispatches error:', e);
+        return { ok: false, error: e.message };
+    }
+}
+
+// Returns detail rows for ONE dispatch (all dispatches under given rte_id)
+async function sbPkgGetDispatchSheet(params) {
+    try {
+        const sheetName = params.sheetName || params.sheet || params.rte_id;
+        if (!sheetName) return { ok: false, error: 'Не вказано rte_id/sheetName' };
+
+        // 1) Resolve rte_id → routes.id (uuid)
+        const { data: routeRows, error: rErr } = await sb.from('routes')
+            .select('id, rte_id, route_date, city, driver_name, vehicle_name, status')
+            .eq('tenant_id', TENANT_ID)
+            .eq('rte_id', sheetName)
+            .limit(1);
+        if (rErr) throw rErr;
+
+        const routeInfo = (routeRows && routeRows[0]) || null;
+        if (!routeInfo) {
+            return { ok: true, data: { rows: [], headers: [], sheetName }, rows: [], headers: [], sheetName };
+        }
+
+        // 2) Fetch dispatches for this route uuid
+        const { data: dispRows, error: dErr } = await sb.from('dispatches')
+            .select('*')
+            .eq('tenant_id', TENANT_ID)
+            .eq('route_id', routeInfo.id)
+            .order('created_at', { ascending: true });
+        if (dErr) throw dErr;
+
+        const rows = (dispRows || []).map(r => dispatchRowToGas(r, routeInfo));
+        const headers = rows.length > 0 ? Object.keys(rows[0]) : [];
+        return { ok: true, data: { rows, headers, sheetName }, rows, headers, sheetName };
+    } catch (e) {
+        console.error('sbPkgGetDispatchSheet error:', e);
         return { ok: false, error: e.message };
     }
 }
@@ -733,14 +966,333 @@ async function sbPkgGetPayments(params) {
     }
 }
 
+// ================================================================
+// NOVA POSHTA API (ключ у system_settings, виклик API з браузера)
+// ================================================================
+
+async function sbPkgGetNpApiKey() {
+    const { data, error } = await sb.from('system_settings')
+        .select('setting_value')
+        .eq('tenant_id', TENANT_ID)
+        .eq('setting_name', 'NP_API_KEY')
+        .limit(1);
+    if (error) return null;
+    return (data && data[0] && data[0].setting_value) || null;
+}
+
+async function sbPkgCheckNpApiKey(_params) {
+    try {
+        const key = await sbPkgGetNpApiKey();
+        return { ok: true, hasKey: !!key, data: { hasKey: !!key } };
+    } catch (e) {
+        return { ok: false, error: e.message };
+    }
+}
+
+// NP StatusCode → Ukrainian package_status (як у GAS Script-cargo.gs)
+const NP_STATUS_MAP = {
+    '3':'В дорозі','4':'В дорозі','5':'В дорозі','6':'В дорозі','7':'В дорозі','8':'В дорозі',
+    '9':'Доставлено','10':'Доставлено','11':'Доставлено',
+    '12':'Затримано','14':'Затримано','103':'Затримано','104':'Затримано','106':'Затримано',
+    '111':'Затримано','112':'Затримано',
+    '101':'Втрачено','102':'Втрачено',
+};
+
+async function sbPkgTrackParcel(params) {
+    try {
+        let ttn = (params && params.ttn) || '';
+        const pkgId = params && params.pkg_id;
+
+        // Якщо TTN не вказано — взяти з БД по pkg_id
+        if (!ttn && pkgId) {
+            const { data } = await sb.from('packages')
+                .select('ttn_number').eq('tenant_id', TENANT_ID).eq('pkg_id', pkgId).limit(1);
+            if (data && data[0]) ttn = data[0].ttn_number || '';
+        }
+        if (!ttn) return { ok: false, error: 'ТТН не вказано' };
+
+        const npKey = await sbPkgGetNpApiKey();
+        if (!npKey) return { ok: false, error: 'API ключ Нової Пошти не налаштований (system_settings.NP_API_KEY)' };
+
+        const resp = await fetch('https://api.novaposhta.ua/v2.0/json/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                apiKey: npKey,
+                modelName: 'TrackingDocument',
+                calledMethod: 'getStatusDocuments',
+                methodProperties: { Documents: [{ DocumentNumber: ttn, Phone: '' }] },
+            }),
+        });
+        const result = await resp.json();
+
+        if (!result.success || !result.data || result.data.length === 0) {
+            const errs = (result.errors || []).join(', ') || 'Не знайдено';
+            return { ok: false, error: 'НП: ' + errs };
+        }
+
+        const t = result.data[0];
+        const tracking = {
+            ttn,
+            status:        t.Status || '',
+            statusCode:    t.StatusCode || '',
+            cityFrom:      t.CitySender || '',
+            cityTo:        t.CityRecipient || '',
+            weight:        t.DocumentWeight || '',
+            cost:          t.DocumentCost || '',
+            deliveryDate:  t.ActualDeliveryDate || t.ScheduledDeliveryDate || '',
+            payerType:     t.PayerType || '',
+            paymentMethod: t.PaymentMethod || '',
+        };
+
+        // Якщо є pkg_id — синхронізувати статус у БД
+        if (pkgId) {
+            const newStatus = NP_STATUS_MAP[String(t.StatusCode)] || '';
+            if (newStatus) {
+                const sbStatus = STATUS_UA_TO_SB[newStatus] || newStatus;
+                await sb.from('packages')
+                    .update({ package_status: sbStatus, updated_at: new Date().toISOString() })
+                    .eq('tenant_id', TENANT_ID).eq('pkg_id', pkgId);
+            }
+        }
+
+        return { ok: true, tracking, data: tracking };
+    } catch (e) {
+        console.error('sbPkgTrackParcel error:', e);
+        return { ok: false, error: e.message };
+    }
+}
+
+// ================================================================
+// PACKAGE PHOTOS API
+// ================================================================
+// Фото зберігаємо як URL (Google Drive / S3 / інше). Файловий upload
+// у Supabase Storage — окремий крок, якщо знадобиться.
+
+// Resolve text pkg_id → uuid packages.id (повертає {id, ttn_number} або null)
+async function _resolvePkg(pkgId) {
+    if (!pkgId) return null;
+    const { data, error } = await sb.from('packages')
+        .select('id, ttn_number')
+        .eq('tenant_id', TENANT_ID).eq('pkg_id', pkgId).limit(1);
+    if (error || !data || !data[0]) return null;
+    return data[0];
+}
+
+async function sbPkgGetPhotos(params) {
+    try {
+        const pkgId = params && params.pkg_id;
+        if (!pkgId) return { ok: true, data: [], count: 0 };
+
+        const pkg = await _resolvePkg(pkgId);
+        if (!pkg) return { ok: true, data: [], count: 0 };
+
+        const { data, error } = await sb.from('package_photos')
+            .select('*')
+            .eq('tenant_id', TENANT_ID)
+            .eq('package_id', pkg.id)
+            .order('created_at', { ascending: false });
+        if (error) throw error;
+
+        const photos = (data || []).map(r => ({
+            PHOTO_ID:            r.photo_id || '',
+            PKG_ID:              pkgId,
+            'Номер ТТН':         r.ttn_number || '',
+            'Штрих-код ТТН':     r.ttn_barcode || '',
+            'Тип фото':          r.photo_type || '',
+            'Фото посилки':      r.photo_url || '',
+            'Хто завантажив':    r.uploaded_by || '',
+            'Роль':              r.uploaded_by_role || '',
+            'Коментар':          r.comment || '',
+            'Статус перевірки':  r.verification_status || '',
+            'Час':               r.created_at ? String(r.created_at).slice(0, 19).replace('T', ' ') : '',
+        }));
+        return { ok: true, data: photos, count: photos.length };
+    } catch (e) {
+        console.error('sbPkgGetPhotos error:', e);
+        return { ok: false, error: e.message };
+    }
+}
+
+async function sbPkgAddPhoto(params) {
+    try {
+        const pkgId = params && params.pkg_id;
+        const url   = (params && params.url) || '';
+        if (!pkgId) return { ok: false, error: 'pkg_id не вказано' };
+        if (!url)   return { ok: false, error: 'URL фото не вказано' };
+
+        const pkg = await _resolvePkg(pkgId);
+        if (!pkg) return { ok: false, error: 'Посилку не знайдено: ' + pkgId };
+
+        const photoId = 'PHOTO_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+        const insertRow = {
+            tenant_id:           TENANT_ID,
+            photo_id:            photoId,
+            package_id:          pkg.id,
+            ttn_number:          pkg.ttn_number || '',
+            photo_type:          params.type || 'Посилка',
+            photo_url:           url,
+            uploaded_by_role:    params.role || 'Перевіряючий',
+            comment:             params.comment || '',
+            verification_status: 'Новий',
+        };
+
+        const { data, error } = await sb.from('package_photos').insert(insertRow).select();
+        if (error) throw error;
+
+        // Денормалізація: останнє фото лишаємо на packages.photo_url (як у GAS)
+        await sb.from('packages')
+            .update({ photo_url: url, updated_at: new Date().toISOString() })
+            .eq('tenant_id', TENANT_ID).eq('id', pkg.id);
+
+        return { ok: true, photo_id: photoId, data: data && data[0] };
+    } catch (e) {
+        console.error('sbPkgAddPhoto error:', e);
+        return { ok: false, error: e.message };
+    }
+}
+
 async function sbPkgGetExpenses(params) {
     try {
         const { data, error } = await sb.from('expenses')
             .select('*')
+            .eq('tenant_id', TENANT_ID)
             .order('created_at', { ascending: false });
         if (error) throw error;
         return { ok: true, data: data || [] };
     } catch (e) {
+        return { ok: true, data: [] };
+    }
+}
+
+// ================================================================
+// EXPENSES (DRIVER) API — READ-ONLY for cargo-crm / manager
+// ================================================================
+// Витрати вводять ВОДІЇ через driver-crm. Менеджер тільки ЧИТАЄ.
+
+function expenseRowToGas(r, routeInfo) {
+    return {
+        'EXP_ID':             r.exp_id || '',
+        'Дата рейсу':         r.route_date || '',
+        'RTE_ID':             routeInfo && routeInfo.rte_id ? routeInfo.rte_id : '',
+        'Водій':              routeInfo && routeInfo.driver_name ? routeInfo.driver_name : '',
+        'Номер авто':         routeInfo && routeInfo.vehicle_name ? routeInfo.vehicle_name : '',
+        'AUTO_ID':            r.vehicle_id || '',
+        'Аванс готівка':      r.advance_cash || '',
+        'Валюта авансу готівка': r.advance_cash_currency || '',
+        'Аванс картка':       r.advance_card || '',
+        'Валюта авансу картка':  r.advance_card_currency || '',
+        'Залишок авансу':     r.advance_remaining || '',
+        'Бензин':             r.fuel || '',
+        'Їжа':                r.meals || '',
+        'Паркування':         r.parking || '',
+        'Толл на дорозі':     r.toll || '',
+        'Штраф':              r.fine || '',
+        'Митниця':            r.customs || '',
+        'Топап рахунку':      r.account_topup || '',
+        'Інше':               r.other || '',
+        'Опис іншого':        r.other_description || '',
+        'Чеки':               r.receipt_photos || '',
+        'Валюта витрат':      r.expense_currency || '',
+        'Всього витрат':      r.total_expenses || '',
+        'Чайові':             r.tips || '',
+        'Валюта чайових':     r.tips_currency || '',
+        'Примітка':           r.notes || '',
+        'Дата створення':     r.created_at ? String(r.created_at).slice(0, 10) : '',
+    };
+}
+
+// Sidebar list: grouped by rte_id → [{sheetName, city, route_date, rowCount}, ...]
+async function sbPkgGetExpensesList(_params) {
+    try {
+        const { data, error } = await sb.from('expenses')
+            .select('id, route_id, route_date')
+            .eq('tenant_id', TENANT_ID);
+        if (error) throw error;
+
+        const rows = data || [];
+        const uuids = [...new Set(rows.map(r => r.route_id).filter(Boolean))];
+        const routesById = await _fetchRoutesIndex(uuids);
+
+        const groups = {};
+        rows.forEach(r => {
+            const route = routesById[r.route_id];
+            const key = (route && route.rte_id) || r.route_id || '—';
+            if (!groups[key]) {
+                groups[key] = {
+                    sheetName: key,
+                    rte_id:    key,
+                    city:      (route && route.city) || '',
+                    route_date:(route && route.route_date) || r.route_date || '',
+                    rowCount:  0,
+                };
+            }
+            groups[key].rowCount++;
+        });
+
+        return { ok: true, data: Object.values(groups) };
+    } catch (e) {
+        console.error('sbPkgGetExpensesList error:', e);
+        return { ok: false, error: e.message };
+    }
+}
+
+// Detail rows for ONE route (all expense records under given rte_id)
+async function sbPkgGetExpensesSheet(params) {
+    try {
+        const sheetName = params.sheetName || params.sheet || params.rte_id;
+        if (!sheetName) return { ok: false, error: 'Не вказано rte_id/sheetName' };
+
+        const { data: routeRows, error: rErr } = await sb.from('routes')
+            .select('id, rte_id, route_date, city, driver_name, vehicle_name, status')
+            .eq('tenant_id', TENANT_ID)
+            .eq('rte_id', sheetName)
+            .limit(1);
+        if (rErr) throw rErr;
+
+        const routeInfo = (routeRows && routeRows[0]) || null;
+        if (!routeInfo) {
+            return { ok: true, data: { rows: [], headers: [], sheetName }, rows: [], headers: [], sheetName };
+        }
+
+        const { data: expRows, error: eErr } = await sb.from('expenses')
+            .select('*')
+            .eq('tenant_id', TENANT_ID)
+            .eq('route_id', routeInfo.id)
+            .order('created_at', { ascending: true });
+        if (eErr) throw eErr;
+
+        const rows = (expRows || []).map(r => expenseRowToGas(r, routeInfo));
+        const headers = rows.length > 0 ? Object.keys(rows[0]) : [];
+        return { ok: true, data: { rows, headers, sheetName }, rows, headers, sheetName };
+    } catch (e) {
+        console.error('sbPkgGetExpensesSheet error:', e);
+        return { ok: false, error: e.message };
+    }
+}
+
+// ================================================================
+// ROUTE POINTS (owner-configurable EU/UA addresses)
+// ================================================================
+
+// Returns active tenant-owned route points from passenger_route_points
+// (same table owner-crm writes to via RoutePointsPanel). Used for the
+// address-autocomplete dropdowns in the add-package form.
+async function sbGetRoutePoints(params) {
+    try {
+        const routeGroup = (params && params.route_group) || 'ua-es-wed';
+        const { data, error } = await sb
+            .from('passenger_route_points')
+            .select('id, route_group, name_ua, country_code, sort_order, location_name, lat, lon, maps_url, delivery_mode, active')
+            .eq('tenant_id', TENANT_ID)
+            .eq('route_group', routeGroup)
+            .eq('active', true)
+            .order('sort_order', { ascending: true });
+        if (error) throw error;
+        return { ok: true, data: data || [] };
+    } catch (e) {
+        console.error('sbGetRoutePoints error:', e);
+        // Не фатально: CRM має працювати й без каталога (fallback — вільний текст)
         return { ok: true, data: [] };
     }
 }
@@ -759,6 +1311,9 @@ async function apiPostSupabase(action, params) {
         addParcel:          sbPkgAdd,
         updateField:        sbPkgUpdateField,
         getOne:             sbPkgGetOne,
+
+        // Owner-configurable route points (address autocomplete)
+        getRoutePoints:     sbGetRoutePoints,
 
         // Archive
         deleteParcel:       sbPkgDelete,
@@ -782,7 +1337,7 @@ async function apiPostSupabase(action, params) {
                 record_type: 'Посилка',
                 direction: p.direction || '',
                 route_date: new Date().toISOString().split('T')[0],
-                status: 'scheduled',
+                status: 'Новий',
                 crm_status: 'active',
             }).select();
             if (error) return { ok: false, error: error.message };
@@ -821,23 +1376,26 @@ async function apiPostSupabase(action, params) {
             return { ok: true }; // No separate sheets in Supabase
         },
 
-        // Dispatches
-        updateDispatch:     sbPkgUpdateDispatch,
-        getDispatches:      async (p) => {
-            const { data, error } = await sb.from('dispatches').select('*');
-            if (error) return { ok: false, error: error.message };
-            return { ok: true, data: data || [] };
-        },
+        // Dispatches (READ-ONLY — drivers create via driver-crm, manager only views)
+        getDispatches:      sbPkgGetDispatches,
+        getDispatchSheet:   sbPkgGetDispatchSheet,
 
         // Misc
         checkDuplicates:    sbPkgCheckDuplicates,
         getPayments:        sbPkgGetPayments,
-        getExpenses:        sbPkgGetExpenses,
 
-        // Verification (update fields)
+        // Expenses (READ-ONLY — drivers enter via driver-crm)
+        getExpenses:        sbPkgGetExpenses,        // legacy stub (flat list by pkg_id)
+        getExpensesList:    sbPkgGetExpensesList,    // sidebar grouped by rte_id
+        getExpensesSheet:   sbPkgGetExpensesSheet,   // detail rows for one rte_id
+
+        // Verification — Nova Poshta
         scanTTN:            async (p) => {
             const { data } = await sb.from('packages')
-                .select('*').eq('ttn_number', p.ttn).eq('is_archived', false).limit(1);
+                .select('*')
+                .eq('tenant_id', TENANT_ID)
+                .eq('ttn_number', p.ttn)
+                .eq('is_archived', false).limit(1);
             if (data && data.length > 0) {
                 const obj = sbToGasObjPkg(data[0]);
                 obj['Борг'] = calcDebtPkg(obj);
@@ -845,16 +1403,18 @@ async function apiPostSupabase(action, params) {
             }
             return { ok: true, found: false };
         },
+        trackParcel:        sbPkgTrackParcel,
+        checkNpApiKey:      sbPkgCheckNpApiKey,
 
-        // Not implemented (stubs)
-        trackParcel:        async () => ({ ok: true, data: null }),
-        checkNpApiKey:      async () => ({ ok: true, data: { hasKey: false } }),
+        // Photos
+        getPhotos:          sbPkgGetPhotos,
+        addPhoto:           sbPkgAddPhoto,
+
+        // SMS/Messenger — still stubs (Sprint skipped per user)
         getClientMessages:  async () => ({ ok: true, data: [] }),
         sendManagerMessage: async () => ({ ok: true }),
         getUnreadCounts:    async () => ({ ok: true, data: {} }),
         markClientRead:     async () => ({ ok: true }),
-        getPhotos:          async () => ({ ok: true, data: [] }),
-        addPhoto:           async () => ({ ok: true }),
         getOrderInfo:       async (p) => sbPkgGetOne(p),
         getVerificationStats: async () => {
             const { data } = await sb.from('packages')

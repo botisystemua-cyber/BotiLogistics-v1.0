@@ -1,3 +1,69 @@
+// ================================================================
+// PWA: Shared Manifest + Service Worker
+// manifest.php та sw.js лежать на рівні /BotiLogistics-v1.0/ —
+// scope покриває обидва модулі (passenger-crm + cargo-crm), тому
+// одне встановлення PWA працює для обох.
+// ================================================================
+(function() {
+    // Read session
+    var _sess = null;
+    try { _sess = JSON.parse(localStorage.getItem('boti_session') || 'null'); } catch(_) {}
+    var _tenantName = (_sess && _sess.tenant_name) ? _sess.tenant_name : '';
+    var _logoUrl = (_sess && _sess.logo_url) ? _sess.logo_url : '';
+
+    // Cookies (для PHP-сторінок сусіднього модуля — passenger-crm читає їх для Safari meta)
+    if (_tenantName) {
+        document.cookie = 'boti_tenant=' + encodeURIComponent(_tenantName) + ';path=/;max-age=31536000;SameSite=Lax';
+    }
+    if (_logoUrl) {
+        document.cookie = 'boti_logo=' + encodeURIComponent(_logoUrl) + ';path=/;max-age=31536000;SameSite=Lax';
+    }
+
+    // Update manifest link (tag injected in HTML with id="pwaManifest")
+    var manifestLink = document.getElementById('pwaManifest') || document.querySelector('link[rel="manifest"]');
+    if (manifestLink) {
+        var params = [];
+        if (_tenantName) params.push('name=' + encodeURIComponent(_tenantName));
+        if (_logoUrl) params.push('logo=' + encodeURIComponent(_logoUrl));
+        // start_url → директорний URL cargo-crm, щоб якщо юзер встановить
+        // звідси, додаток відкривався саме на cargo. Без імені файлу, бо
+        // на проді файл називається index.html, а в dev-репо — Cargo.html:
+        // Apache сам віддасть той, що реально лежить у теці.
+        params.push('start=' + encodeURIComponent('cargo-crm/'));
+        manifestLink.href = '../manifest.php?' + params.join('&');
+    }
+
+    // Update meta tags with tenant name
+    if (_tenantName) {
+        var metaAppTitle = document.querySelector('meta[name="apple-mobile-web-app-title"]');
+        if (metaAppTitle) metaAppTitle.setAttribute('content', _tenantName);
+        var metaAppName = document.querySelector('meta[name="application-name"]');
+        if (metaAppName) metaAppName.setAttribute('content', _tenantName + ' CRM');
+    }
+
+    // Update apple-touch-icon if custom logo exists
+    if (_logoUrl) {
+        var appleIcon = document.querySelector('link[rel="apple-touch-icon"]');
+        if (appleIcon) appleIcon.href = _logoUrl;
+        var iconLink = document.querySelector('link[rel="icon"]');
+        if (iconLink) iconLink.href = _logoUrl;
+    }
+
+    // Shared Service Worker — scope '../' покриває і passenger-crm/, і cargo-crm/
+    if ('serviceWorker' in navigator) {
+        // Спочатку прибираємо старі per-module SW (passenger-crm/sw.js, cargo-crm/sw.js) —
+        // інакше їхній вужчий scope переважає над спільним SW і ламає кеш.
+        navigator.serviceWorker.getRegistrations().then(function(regs) {
+            regs.forEach(function(reg) {
+                if (reg.scope && /\/(passenger-crm|cargo-crm)\/?$/.test(reg.scope)) {
+                    reg.unregister();
+                }
+            });
+        }).catch(function() {});
+        navigator.serviceWorker.register('../sw.js', { scope: '../' }).catch(function() {});
+    }
+})();
+
 // Раннє оголошення функцій для onclick в HTML
 window.openRouteView = function(idx) { if (typeof openRoute === 'function') openRoute(idx); else alert('Маршрути ще завантажуються'); };
 // ╔══════════════════════════════════════════════════════════════╗
@@ -42,6 +108,36 @@ let currentFilter = 'all';
 let currentVerifyFilter = 'all';
 let currentPayFilter = 'all';
 let searchQuery = '';
+
+// Поля, по яких працює пошук (узгоджено з тим, що бачить юзер у картці)
+const SEARCHABLE_PKG_FIELDS = [
+  'PKG_ID', 'Ід_смарт',
+  'Піб відправника', 'Телефон відправника', 'Телефон реєстратора',
+  'Піб отримувача', 'Телефон отримувача',
+  'Адреса відправки', 'Адреса в Європі', 'Місто Нова Пошта',
+  'Номер ТТН', 'Внутрішній №',
+  'Опис', 'Деталі',
+  'Тег', 'Примітка', 'Примітка СМС',
+  'Номер авто', 'RTE_ID',
+];
+
+// Підсвічування знайденого фрагмента в тексті картки.
+// Повертає БЕЗПЕЧНИЙ HTML — спочатку екранує текст, потім обгортає
+// збіги у <mark class="search-hl">. Викликати лише з searchQuery !== ''.
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, function(c) {
+    return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
+  });
+}
+function escapeRegExp(s) {
+  return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+function highlightMatch(text) {
+  const safe = escapeHtml(text == null ? '' : text);
+  if (!searchQuery) return safe;
+  const re = new RegExp('(' + escapeRegExp(searchQuery) + ')', 'gi');
+  return safe.replace(re, '<mark class="search-hl">$1</mark>');
+}
 let openCardId = null;
 let stats = {};
 let routes = [];
@@ -71,17 +167,11 @@ let deliveryType = 'np';
 let showArchive = false;
 let archiveData = [];
 
-const SWISS_POINTS = [
-  { city: 'Цюрих', addr: 'Parking Theater 11, Dorflistrasse 90, 8050 Zürich' },
-  { city: 'Цуг', addr: 'Bahnhofplatz, 6300 Zug' },
-  { city: 'Люцерн', addr: 'Tourist Bus Parking Landenberg, Alpenquai, 6005 Luzern' },
-  { city: 'Берн', addr: 'Parkplatz 7c, Beundenfeld, 3014 Bern' },
-  { city: 'Базель', addr: 'Basel Meret Oppenheim Strasse SBB Station, 4053 Basel' },
-  { city: 'Сен-Гален', addr: 'Bahnhofpl. 8b, 9000 St. Gallen' },
-  { city: 'Лозана', addr: 'Avenue du Grey 43, Lausanne' },
-  { city: 'Монтре', addr: 'Rte des Châtaigniers 7, 1816 Montreux' },
-  { city: 'Женева', addr: 'P+R Bout-du-Monde, Rte de Vessy 12, 1206 Genève' }
-];
+// Owner-configurable route points loaded from passenger_route_points
+// table (same catalogue that owner-crm's RoutePointsPanel manages).
+// Populated by loadRoutePointsCatalog(); empty until fetch resolves.
+// Shape: [{ city, addr }] where city=name_ua, addr=location_name.
+let SWISS_POINTS = [];
 
 // ===== [SECT-COLUMNS] COLUMN CONFIGURATOR =====
 const ALL_CARD_COLUMNS = [
@@ -416,16 +506,182 @@ const MOCK_ROUTES = [
 ];
 
 // ===== [SECT-INIT] INIT =====
+function getBotiSession() {
+  try { return JSON.parse(localStorage.getItem('boti_session') || 'null'); } catch (_) { return null; }
+}
+
+function getUserDisplayName() {
+  const s = getBotiSession();
+  if (!s) return '';
+  return s.user_name || s.user_login || '';
+}
+
+function updateAvatarUI() {
+  const name = getUserDisplayName();
+  const avatar = document.getElementById('userAvatar');
+  if (!avatar) return;
+  if (name) {
+    const initials = name.trim().split(/\s+/)
+      .map(function(p) { return p[0] || ''; })
+      .join('')
+      .substring(0, 2)
+      .toUpperCase();
+    avatar.textContent = initials || '?';
+    avatar.title = name;
+  } else {
+    avatar.textContent = '?';
+    avatar.title = 'Увійти';
+  }
+}
+
+function renderProfileSlots() {
+  const session = getBotiSession();
+  const container = document.getElementById('profileSlots');
+  if (!container) return;
+
+  if (!session) {
+    container.innerHTML = '<div style="padding:16px;text-align:center;color:#6b7280;font-size:13px">Сесія відсутня. <a href="../config-crm/" style="color:var(--accent);font-weight:600">Увійти</a></div>';
+    const closeNoSess = document.getElementById('profileModalClose');
+    if (closeNoSess) closeNoSess.style.display = 'none';
+    return;
+  }
+
+  const name = session.user_name || session.user_login || '—';
+  const roleMap = { owner: 'Власник', manager: 'Менеджер', driver: 'Водій' };
+  const roleLabel = roleMap[session.role] || session.role || '';
+  const tenant = session.tenant_name || session.tenant_id || '';
+  const initials = name.trim().split(/\s+/)
+    .map(function(p) { return p[0] || ''; })
+    .join('')
+    .substring(0, 2)
+    .toUpperCase();
+
+  let html = '';
+  html += '<div style="display:flex;align-items:center;gap:14px;padding:16px;border-radius:12px;border:2px solid var(--border);background:#f9fafb;margin-bottom:12px">';
+  html += '<div style="width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,#3b82f6,#6366f1);display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:18px;flex-shrink:0">' + initials + '</div>';
+  html += '<div style="flex:1;min-width:0">';
+  html += '<div style="font-weight:700;font-size:15px;color:#111827;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + name + '</div>';
+  if (roleLabel) html += '<div style="font-size:12px;color:#6b7280;margin-top:2px">' + roleLabel + '</div>';
+  if (tenant)    html += '<div style="font-size:11px;color:#6b7280;margin-top:2px;opacity:.8">🏢 ' + tenant + '</div>';
+  html += '</div>';
+  html += '</div>';
+
+  const roles = session.roles || [session.role];
+  if (roles.indexOf('owner') !== -1) {
+    html += '<button onclick="goToOwnerPanel()" style="width:100%;padding:12px;border:2px solid var(--border);border-radius:10px;background:white;color:#6d28d9;font-weight:700;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:8px;transition:all .2s" onmouseover="this.style.background=\'#f5f3ff\';this.style.borderColor=\'#c4b5fd\'" onmouseout="this.style.background=\'white\';this.style.borderColor=\'var(--border)\'">';
+    html += '<span>👑</span><span>Власницька панель</span>';
+    html += '</button>';
+  }
+
+  html += '<button onclick="botiLogout()" style="width:100%;padding:12px;border:2px solid var(--border);border-radius:10px;background:white;color:#dc2626;font-weight:700;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:all .2s" onmouseover="this.style.background=\'#fef2f2\';this.style.borderColor=\'#fecaca\'" onmouseout="this.style.background=\'white\';this.style.borderColor=\'var(--border)\'">';
+  html += '<span>🚪</span><span>Вийти</span>';
+  html += '</button>';
+
+  container.innerHTML = html;
+
+  const closeBtn = document.getElementById('profileModalClose');
+  if (closeBtn) closeBtn.style.display = '';
+}
+
+// ── PWA Install prompt ─────────────────────────────────────────────
+var deferredInstallPrompt = null;
+window.addEventListener('beforeinstallprompt', function(e) {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  showInstallBanner();
+});
+
+function showInstallBanner() {
+  const banner = document.getElementById('installBanner');
+  if (banner) banner.style.display = '';
+}
+
+function installApp() {
+  if (deferredInstallPrompt) {
+    // Chrome/Android — нативний промпт
+    deferredInstallPrompt.prompt();
+    deferredInstallPrompt.userChoice.then(function(result) {
+      if (result.outcome === 'accepted') {
+        const s = getBotiSession();
+        const tname = (s && s.tenant_name) || 'BotiLogistics';
+        showToast(tname + ' встановлено!');
+        const banner = document.getElementById('installBanner');
+        if (banner) banner.style.display = 'none';
+      }
+      deferredInstallPrompt = null;
+    });
+  } else {
+    // iOS / інші — показуємо інструкцію
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    if (isIOS) {
+      showToast('Натисніть "Поділитися" (📤) внизу Safari, потім "На початковий екран"', 'info');
+    } else {
+      showToast('Відкрийте меню браузера (⋮) → "Додати на головний екран" або "Встановити додаток"', 'info');
+    }
+  }
+}
+
+function openProfileModal() {
+  renderProfileSlots();
+  document.getElementById('profileModal').classList.add('open');
+}
+
+function closeProfileModal() {
+  document.getElementById('profileModal').classList.remove('open');
+}
+
+function botiLogout() {
+  localStorage.removeItem('boti_session');
+  location.href = '../config-crm/';
+}
+
+function goToOwnerPanel() {
+  try {
+    const s = getBotiSession();
+    if (s) {
+      s.role = 'owner';
+      localStorage.setItem('boti_session', JSON.stringify(s));
+    }
+  } catch (_) {}
+  location.href = '../owner-crm/';
+}
+
 document.addEventListener('DOMContentLoaded', async function() {
+  // Swap BotiLogistics brand with tenant name from session
+  const _bs = getBotiSession();
+  if (_bs && _bs.tenant_name) {
+    const logoEl = document.querySelector('.logo');
+    if (logoEl) logoEl.textContent = _bs.tenant_name;
+  }
+
+  updateAvatarUI();
+
+  // Show install banner unless already running as installed PWA
+  if (!window.matchMedia('(display-mode: standalone)').matches && !navigator.standalone) {
+    showInstallBanner();
+  }
+
   await loadData();
 });
 
 // ===== [SECT-FILTER] FILTERING =====
+// Нові (24 год): посилка вважається новою, якщо з моменту її створення
+// минуло менше 24 годин. Логіка симетрична passenger-crm.
+function isNew24h(p) {
+  const raw = p && p['Дата створення'];
+  if (!raw) return false;
+  const d = new Date(raw);
+  if (isNaN(d.getTime())) return false;
+  return (Date.now() - d.getTime()) < 24 * 60 * 60 * 1000;
+}
+
 function filterData() {
   let data = allData.filter(p => p['Статус CRM'] !== 'Архів');
 
   // Direction filter
-  if (currentDirection === 'ue') {
+  if (currentDirection === 'new24') {
+    data = data.filter(p => isNew24h(p));
+  } else if (currentDirection === 'ue') {
     data = data.filter(p => p['Напрям'] === 'УК→ЄВ');
   } else {
     data = data.filter(p => p['Напрям'] === 'ЄВ→УК');
@@ -450,16 +706,14 @@ function filterData() {
     data = data.filter(p => p['Статус оплати'] === currentPayFilter);
   }
 
-  // Search
+  // Search — шукаємо по всіх корисних полях посилки
   if (searchQuery) {
     const q = searchQuery.toLowerCase();
-    data = data.filter(p =>
-      (p['Піб відправника'] || '').toLowerCase().includes(q) ||
-      (p['Телефон реєстратора'] || '').includes(q) ||
-      (p['PKG_ID'] || '').toLowerCase().includes(q) ||
-      (p['Адреса відправки'] || '').toLowerCase().includes(q) ||
-      (p['Адреса в Європі'] || '').toLowerCase().includes(q)
-    );
+    data = data.filter(p => SEARCHABLE_PKG_FIELDS.some(f => {
+      const v = p[f];
+      if (v === undefined || v === null || v === '') return false;
+      return String(v).toLowerCase().includes(q);
+    }));
   }
 
   filteredData = data;
@@ -574,25 +828,31 @@ function renderCard(p) {
     : '';
 
   // TTN display
-  const ttnHtml = (isUE && ttn) ? `<span class="card-ttn">TTH: ${ttn}</span>` : '';
+  const ttnHtml = (isUE && ttn) ? `<span class="card-ttn">TTH: ${highlightMatch(ttn)}</span>` : '';
 
   // Route strip
   const routeStrip = rteId
-    ? `<div class="card-route-strip">✅ В маршруті: ${rteId}${auto ? ' · 🚐 ' + auto : ''}</div>`
+    ? `<div class="card-route-strip">✅ В маршруті: ${highlightMatch(rteId)}${auto ? ' · 🚐 ' + highlightMatch(auto) : ''}</div>`
     : '';
 
   // Meta tags (configurable via column configurator)
   const visCols = getVisibleCardColumns();
   let metaHtml = '';
-  if (visCols.includes('date') && dateCreated) metaHtml += `<span class="meta-tag">📅 ${dateCreated}</span>`;
-  if (visCols.includes('statusPkg') && statusPkg) metaHtml += `<span class="meta-tag">${statusPkg}</span>`;
-  if (visCols.includes('phone') && phone) metaHtml += `<span class="meta-tag">📞 ${phone}</span>`;
-  if (visCols.includes('phoneRecv') && receiverPhone) metaHtml += `<span class="meta-tag">📱 ${receiverPhone}</span>`;
-  if (visCols.includes('tag') && tag) metaHtml += `<span class="meta-tag ${tag === 'VIP' || tag === 'срочна' ? 'tag-vip' : ''}">#${tag}</span>`;
-  if (visCols.includes('note') && note) metaHtml += `<span class="meta-tag">📝 ${note.substring(0, 30)}${note.length > 30 ? '…' : ''}</span>`;
-  if (visCols.includes('description') && p['Опис']) metaHtml += `<span class="meta-tag">📄 ${(p['Опис']).substring(0, 25)}${(p['Опис']).length > 25 ? '…' : ''}</span>`;
-  if (visCols.includes('qty') && p['Кількість позицій']) metaHtml += `<span class="meta-tag">📊 ${p['Кількість позицій']} шт</span>`;
-  if (visCols.includes('estValue') && p['Оціночна вартість']) metaHtml += `<span class="meta-tag">💎 ${p['Оціночна вартість']}</span>`;
+  if (visCols.includes('date') && dateCreated) metaHtml += `<span class="meta-tag">📅 ${escapeHtml(dateCreated)}</span>`;
+  if (visCols.includes('statusPkg') && statusPkg) metaHtml += `<span class="meta-tag">${escapeHtml(statusPkg)}</span>`;
+  if (visCols.includes('phone') && phone) metaHtml += `<span class="meta-tag">📞 ${highlightMatch(phone)}</span>`;
+  if (visCols.includes('phoneRecv') && receiverPhone) metaHtml += `<span class="meta-tag">📱 ${highlightMatch(receiverPhone)}</span>`;
+  if (visCols.includes('tag') && tag) metaHtml += `<span class="meta-tag ${tag === 'VIP' || tag === 'срочна' ? 'tag-vip' : ''}">#${highlightMatch(tag)}</span>`;
+  if (visCols.includes('note') && note) {
+    const noteShort = note.substring(0, 30) + (note.length > 30 ? '…' : '');
+    metaHtml += `<span class="meta-tag">📝 ${highlightMatch(noteShort)}</span>`;
+  }
+  if (visCols.includes('description') && p['Опис']) {
+    const descShort = (p['Опис']).substring(0, 25) + ((p['Опис']).length > 25 ? '…' : '');
+    metaHtml += `<span class="meta-tag">📄 ${highlightMatch(descShort)}</span>`;
+  }
+  if (visCols.includes('qty') && p['Кількість позицій']) metaHtml += `<span class="meta-tag">📊 ${escapeHtml(String(p['Кількість позицій']))} шт</span>`;
+  if (visCols.includes('estValue') && p['Оціночна вартість']) metaHtml += `<span class="meta-tag">💎 ${escapeHtml(String(p['Оціночна вартість']))}</span>`;
 
   // ===== TAB PANELS =====
   // 📦 Посилка (configurable)
@@ -649,14 +909,20 @@ function renderCard(p) {
     ['Примітка оплати', p['Примітка оплати'] || ''],
   ], pkgId);
 
-  // 🚖 Рейс
-  const tabRoute = renderDetailGrid([
-    ['Дата відправки', p['Дата відправки'] || ''],
-    ['Таймінг', p['Таймінг'] || ''],
-    ['Номер авто', auto],
-    ['RTE_ID', rteId, {readonly: true}],
-    ['Дата отримання', p['Дата отримання'] || ''],
-  ], pkgId);
+  // 🚖 Рейс — показуємо тільки коли посилка в маршруті
+  // Дані рейсу (дата відправки, авто, RTE_ID) — спільні для всього маршруту,
+  // редагуються в розділі «Маршрути» на рівні рейсу, тому тут readonly.
+  // Таймінг і Дата отримання — специфіка цієї посилки, редагуються.
+  const inRoute = !!rteId;
+  const tabRoute = inRoute
+    ? renderDetailGrid([
+        ['Дата відправки', p['Дата відправки'] || '', {readonly: true}],
+        ['Номер авто', auto, {readonly: true}],
+        ['RTE_ID', rteId, {readonly: true}],
+        ['Таймінг', p['Таймінг'] || ''],
+        ['Дата отримання', p['Дата отримання'] || ''],
+      ], pkgId)
+    : '<div style="padding:16px;color:var(--text-secondary);font-size:13px;text-align:center;">📭 Посилка не прикріплена до маршруту.<br><span style="font-size:12px;">Натисніть «🚖 Маршрут» у меню дій, щоб додати.</span></div>';
 
   // ⚙ Системні
   const tabSystem = renderDetailGrid([
@@ -686,6 +952,7 @@ function renderCard(p) {
         <div class="card-top-row">
           <input type="checkbox" class="card-checkbox" onclick="event.stopPropagation(); toggleSelect('${pkgId}')" ${selectedIds.has(pkgId) ? 'checked' : ''}>
           <span class="dir-badge ${dirBadgeClass}">${dirLabel}</span>
+          ${isNew24h(p) ? '<span class="badge badge-new24">🆕 NEW</span>' : ''}
           ${visCols.includes('ttn') ? ttnHtml : ''}
           ${visCols.includes('weight') && weight ? `<span class="badge-weight">⚖️ ${weight} кг</span>` : ''}
           <div class="card-finance">
@@ -697,11 +964,11 @@ function renderCard(p) {
         </div>
         <div class="card-row2-wrap">
           <div class="card-row2">
-            <span class="card-pkgid">${pkgId}</span>
-            <span class="card-sender-recv">👤 ${name || '—'} → ${receiver || '—'}</span>
+            <span class="card-pkgid">${highlightMatch(pkgId)}</span>
+            <span class="card-sender-recv">👤 ${name ? highlightMatch(name) : '—'} → ${receiver ? highlightMatch(receiver) : '—'}</span>
             ${visCols.includes('leadBadge') ? leadBadge : ''} ${visCols.includes('payBadge') ? payBadge : ''} ${visCols.includes('checkBadge') ? checkBadge : ''}
           </div>
-          ${visCols.includes('address') && (addressFrom || addressTo) ? `<div class="card-address">📍 ${addressFrom && addressTo ? addressFrom + ' → ' + addressTo : (addressFrom || addressTo)}</div>` : ''}
+          ${visCols.includes('address') && (addressFrom || addressTo) ? `<div class="card-address">📍 ${addressFrom && addressTo ? highlightMatch(addressFrom) + ' → ' + highlightMatch(addressTo) : highlightMatch(addressFrom || addressTo)}</div>` : ''}
           ${metaHtml ? `<div class="card-meta-tags">${metaHtml}</div>` : ''}
         </div>
       </div>
@@ -1343,13 +1610,16 @@ function bulkOptimizeRoute() {
 
 function setDirection(dir) {
   currentDirection = dir;
+  // active-клас: для напрямків — кольоровий (active-ue / active-eu),
+  // для «Нові (24 год)» — нейтральний active.
+  const activeCls = dir === 'ue' ? 'active-ue' : (dir === 'eu' ? 'active-eu' : 'active');
   // Update desktop sidebar items
   document.querySelectorAll('.sidebar [data-dir]').forEach(el => {
-    el.className = 'sidebar-item' + (el.dataset.dir === dir ? (dir === 'ue' ? ' active-ue' : ' active-eu') : '');
+    el.className = 'sidebar-item' + (el.dataset.dir === dir ? ' ' + activeCls : '');
   });
   // Update mobile sidebar items
   document.querySelectorAll('#mobileSidebar [data-dir]').forEach(el => {
-    el.className = 'mob-item' + (el.dataset.dir === dir ? (dir === 'ue' ? ' active-ue' : ' active-eu') : '');
+    el.className = 'mob-item' + (el.dataset.dir === dir ? ' ' + activeCls : '');
   });
   // Switch back to parcels view if in route/other view
   if (currentView !== 'parcels') backToParcels();
@@ -1516,8 +1786,81 @@ function promptDeleteLinkedSheets(baseName) { if (activeRouteIdx !== null) activ
 function setCount(id, val) { var el = document.getElementById(id); if (el) el.textContent = val; }
 function refreshRouteView() { if (activeRouteIdx !== null) openRoute(activeRouteIdx, true); }
 function openRouteView(idx) { openRoute(idx); }
-function archiveFromRoute(rteId, sheetName, name) { deleteFromRoute(rteId, sheetName, name); }
-function routeBulkArchive() { routeBulkDeleteFromRoute(); }
+// ── Архівувати лід маршруту (справжній архів, не delete-from-sheet) ──
+// Пасажирів у cargo-crm архівувати не можна (чужий домен, див. passenger-crm),
+// показуємо юзеру інструкцію замість тихого видалення.
+async function archiveFromRoute(rteId, sheetName, name) {
+    const sheet = routes[activeRouteIdx];
+    if (!sheet) return;
+    const row = (sheet.rows || []).find(r => r['RTE_ID'] === rteId);
+    if (!row) return;
+    const isPax = (row['Тип запису'] || '').includes('Пасажир');
+    if (isPax) {
+        showToast('👤 Пасажирів архівує passenger-crm. Перейдіть у вкладку пасажирів.', 'warning');
+        return;
+    }
+    const pkgId = row['PKG_ID'] || row['PAX_ID'] || '';
+    if (!pkgId) { showToast('❌ Немає PKG_ID для архіву', 'error'); return; }
+    showConfirm('Архівувати «' + name + '» і прибрати з маршруту?', async (yes) => {
+        if (!yes) return;
+        showLoader('Архівування...');
+        const res = await apiPost('deleteParcel', { pkg_id: pkgId, reason: 'Архів з маршруту', archived_by: 'CRM' });
+        hideLoader();
+        if (res.ok) {
+            sheet.rows = (sheet.rows || []).filter(r => r['RTE_ID'] !== rteId);
+            const mainItem = allData.find(p => p['PKG_ID'] === pkgId);
+            if (mainItem) mainItem['Статус CRM'] = 'Архів';
+            routeSelectedIds.delete(rteId);
+            showToast('✅ Архівовано і прибрано з маршруту');
+            renderRoutes();
+            updateCounters();
+        } else {
+            showToast('❌ ' + (res.error || 'Помилка'));
+        }
+    });
+}
+
+// Bulk-архівація з маршруту: пасажирів пропускаємо (з тостом), посилки
+// реально архівуємо через deleteParcel (який тепер і з routes чистить).
+async function routeBulkArchive() {
+    if (routeSelectedIds.size === 0) return;
+    const sheet = routes[activeRouteIdx];
+    if (!sheet) return;
+    const ids = Array.from(routeSelectedIds);
+    const rows = ids.map(rId => (sheet.rows || []).find(r => r['RTE_ID'] === rId)).filter(Boolean);
+    const paxRows = rows.filter(r => (r['Тип запису'] || '').includes('Пасажир'));
+    const pkgRows = rows.filter(r => !(r['Тип запису'] || '').includes('Пасажир'));
+    if (pkgRows.length === 0) {
+        showToast('👤 Пасажирів архівує passenger-crm. Перейдіть у вкладку пасажирів.', 'warning');
+        return;
+    }
+    const msg = 'Архівувати ' + pkgRows.length + ' посилок?' +
+        (paxRows.length ? ' (пасажирів у виділенні: ' + paxRows.length + ' — їх пропустимо)' : '');
+    showConfirm(msg, async (yes) => {
+        if (!yes) return;
+        showLoader('Архівування...');
+        const pkgIds = pkgRows.map(r => r['PKG_ID'] || r['PAX_ID']).filter(Boolean);
+        const res = await apiPost('deleteParcel', { pkg_ids: pkgIds, reason: 'Архів з маршруту', archived_by: 'CRM' });
+        hideLoader();
+        if (res.ok) {
+            const archivedRteIds = new Set(pkgRows.map(r => r['RTE_ID']));
+            sheet.rows = (sheet.rows || []).filter(r => !archivedRteIds.has(r['RTE_ID']));
+            pkgIds.forEach(pid => {
+                const mainItem = allData.find(p => p['PKG_ID'] === pid);
+                if (mainItem) mainItem['Статус CRM'] = 'Архів';
+            });
+            archivedRteIds.forEach(id => routeSelectedIds.delete(id));
+            _routeToolbarForceOpen = false;
+            updateRouteBulkToolbar();
+            showToast('✅ Архівовано: ' + pkgIds.length + (paxRows.length ? ' (пасажирів пропущено: ' + paxRows.length + ')' : ''));
+            renderRoutes();
+            updateCounters();
+        } else {
+            showToast('❌ ' + (res.error || 'Помилка'));
+        }
+    });
+}
+
 function routeBulkDeleteFull() { routeBulkDeleteFromRoute(); }
 function optimizeRouteOrder() { showToast('Оптимізація порядку — в розробці'); }
 
@@ -1786,6 +2129,8 @@ function renderRouteCard(r, idx, sheetName) {
     const type = r['Тип запису'] || '';
     const name = r['Піб пасажира'] || '—';
     const phone = String(r['Телефон пасажира'] || '—');
+    const recipName = r['Піб отримувача'] || '';
+    const recipPhone = String(r['Телефон отримувача'] || '');
     const date = r['Дата рейсу'] || '';
     const direction = r['Напрям'] || '';
     const auto = r['Номер авто'] || '';
@@ -1833,14 +2178,45 @@ function renderRouteCard(r, idx, sheetName) {
     const isDetailsOpen = routeOpenDetailsId === rteId;
     const isActionsOpen = routeOpenActionsId === rteId;
     const safeSheet = (sheetName || '').replace(/'/g, "\\'");
-    const cleanPhone = (phone || '').replace(/[^+\d]/g, '');
+    // Для посилок у заголовку показуємо "відправник → отримувач" (як у списку
+    // посилок) та телефон отримувача (бо водій дзвонить саме йому при доставці).
+    // Для пасажирів — одне ПІБ і телефон пасажира.
+    const headerName = isPax ? name : (`${name || '—'} → ${recipName || '—'}`);
+    const headerPhone = isPax ? phone : (recipPhone || phone);
+    const cleanPhone = (headerPhone || '').replace(/[^+\d]/g, '');
 
-    // All detail fields for expanded view
-    const allFields = [
+    // Розбивка деталей на 4 вкладки (як у звичайному списку посилок),
+    // щоб не було "сміттєвої" грид-стіни. Поля без DB-колонки в routes
+    // (Тел. реєстратора, Ціна/Валюта багажу) залишаємо для відображення —
+    // backend сам мовчки пропустить їх при спробі редагування.
+    const ttn = r['Номер ТТН'] || '';
+    const desc = r['Опис'] || r['Опис посилки'] || '';
+    const contactsFields = isPax ? [
         {label: 'ПІБ', key: 'Піб пасажира', value: name},
         {label: 'Телефон', key: 'Телефон пасажира', value: phone},
-        {label: 'Тел. реєстратора', key: 'Телефон реєстратора', value: phoneReg},
         {label: 'Напрям', key: 'Напрям', value: direction},
+        {label: 'Статус', key: 'Статус', value: status},
+    ] : [
+        {label: 'Відправник', key: 'Піб відправника', value: name},
+        {label: 'Тел. відправника', key: 'Телефон відправника', value: phone},
+        {label: 'Отримувач', key: 'Піб отримувача', value: recipName || '—'},
+        {label: 'Тел. отримувача', key: 'Телефон отримувача', value: recipPhone || '—'},
+        {label: 'Напрям', key: 'Напрям', value: direction},
+        {label: 'Статус', key: 'Статус', value: status},
+        {label: 'Номер ТТН', key: 'Номер ТТН', value: ttn},
+        {label: 'Опис', key: 'Опис', value: desc},
+        {label: 'Вага (кг)', key: 'Вага посилки', value: weight},
+    ];
+    const financeFields = [
+        {label: 'Сума', key: 'Сума', value: price},
+        {label: 'Валюта', key: 'Валюта', value: curr},
+        {label: 'Завдаток', key: 'Завдаток', value: deposit},
+        {label: 'Валюта завдатку', key: 'Валюта завдатку', value: depositCurr},
+        {label: 'Статус оплати', key: 'Статус оплати', value: payStatus},
+        {label: 'Ціна багажу', key: 'Ціна багажу', value: weightPrice},
+        {label: 'Валюта багажу', key: 'Валюта багажу', value: weightCurr},
+    ];
+    const tripFields = [
         {label: 'Дата рейсу', key: 'Дата рейсу', value: displayDate},
         {label: 'Кількість місць', key: 'Кількість місць', value: seats},
         {label: 'Номер авто', key: 'Номер авто', value: auto},
@@ -1848,17 +2224,27 @@ function renderRouteCard(r, idx, sheetName) {
         {label: 'Водій', key: 'Водій', value: driver},
         {label: 'Адреса відправки', key: 'Адреса відправки', value: from},
         {label: 'Адреса прибуття', key: 'Адреса прибуття', value: to},
-        {label: 'Сума', key: 'Сума', value: price},
-        {label: 'Валюта', key: 'Валюта', value: curr},
-        {label: 'Завдаток', key: 'Завдаток', value: deposit},
-        {label: 'Валюта завдатку', key: 'Валюта завдатку', value: depositCurr},
-        {label: 'Вага багажу', key: 'Вага багажу', value: weight},
-        {label: 'Ціна багажу', key: 'Ціна багажу', value: weightPrice},
-        {label: 'Валюта багажу', key: 'Валюта багажу', value: weightCurr},
-        {label: 'Статус оплати', key: 'Статус оплати', value: payStatus},
-        {label: 'Статус', key: 'Статус', value: status},
-        {label: 'Примітка', key: 'Примітка', value: note}
     ];
+    const noteFields = [
+        {label: 'Примітка', key: 'Примітка', value: note},
+    ];
+
+    function renderRouteFieldsGrid(fields) {
+        return '<div class="details-grid">' + fields.map(f => {
+            const val = f.value || '—';
+            const safeKey = f.key.replace(/'/g, "\\'");
+            return `<div class="detail-block">
+                <div class="detail-block-label">${f.label}</div>
+                <div class="detail-block-value" id="rdv-${rteId}-${f.key}">${val}</div>
+                <div class="detail-block-actions">
+                    <button class="detail-micro-btn" onclick="event.stopPropagation(); startRouteInlineEdit('${rteId}','${safeKey}','${safeSheet}')">✏️</button>
+                </div>
+            </div>`;
+        }).join('') + '</div>';
+    }
+
+    const contactsIcon = isPax ? '👤' : '📦';
+    const contactsLabel = isPax ? 'Контакти' : 'Посилка';
 
     return `<div class="route-card ${statusClass} ${isSelected ? 'selected' : ''}" id="rte-card-${rteId}">
         <div class="route-card-header" onclick="toggleRouteDetails('${rteId}')">
@@ -1867,7 +2253,7 @@ function renderRouteCard(r, idx, sheetName) {
                     <input class="card-checkbox" type="checkbox" ${isSelected ? 'checked' : ''} onchange="toggleRouteSelect('${rteId}',this.checked)">
                 </div>
                 ${dirLabel ? `<span class="card-direction ${dirCls}">${dirLabel}</span>` : ''}
-                <span class="route-card-phone">${phone}</span>
+                <span class="route-card-phone">${headerPhone || '—'}</span>
                 <span class="route-card-seats">${seats}м</span>
                 <span class="route-card-date">${displayDate}</span>
                 ${seat ? `<span style="background:#e0e7ff;color:#3730a3;font-size:10px;padding:2px 8px;border-radius:4px;font-weight:700;">💺 ${seat}</span>` : ''}
@@ -1875,7 +2261,7 @@ function renderRouteCard(r, idx, sheetName) {
             </div>
             <div class="route-card-info">
                 <span style="font-size:12px;">${typeIcon}</span>
-                <span class="route-card-name">${name}</span>
+                <span class="route-card-name">${headerName}</span>
                 <span style="color:var(--text-secondary);font-size:10px;">${rteId}</span>
                 ${lsBadge} ${payBadge}
             </div>
@@ -1887,21 +2273,17 @@ function renderRouteCard(r, idx, sheetName) {
                 ${note ? `<span>📝 ${note.substring(0, 30)}${note.length > 30 ? '...' : ''}</span>` : ''}
             </div>
         </div>
-        <div class="route-card-details ${isDetailsOpen ? 'show' : ''}" id="rte-details-${rteId}">
-            <div class="details-grid">
-                ${allFields.map(f => {
-                    const val = f.value || '—';
-                    const safeVal = String(f.value || '').replace(/'/g, "\\'");
-                    const safeKey = f.key.replace(/'/g, "\\'");
-                    return `<div class="detail-block">
-                        <div class="detail-block-label">${f.label}</div>
-                        <div class="detail-block-value" id="rdv-${rteId}-${f.key}">${val}</div>
-                        <div class="detail-block-actions">
-                            <button class="detail-micro-btn" onclick="event.stopPropagation(); startRouteInlineEdit('${rteId}','${safeKey}','${safeSheet}')">✏️</button>
-                        </div>
-                    </div>`;
-                }).join('')}
+        <div class="route-card-details ${isDetailsOpen ? 'show' : ''}" id="rte-details-${rteId}" data-rte-id="${rteId}">
+            <div class="detail-tabs">
+                <div class="detail-tab active" data-tab="contacts" onclick="event.stopPropagation(); switchRouteTab('${rteId}','contacts')">${contactsIcon} ${contactsLabel}</div>
+                <div class="detail-tab" data-tab="finance" onclick="event.stopPropagation(); switchRouteTab('${rteId}','finance')">💰 Фінанси</div>
+                <div class="detail-tab" data-tab="trip" onclick="event.stopPropagation(); switchRouteTab('${rteId}','trip')">🚖 Рейс</div>
+                <div class="detail-tab" data-tab="note" onclick="event.stopPropagation(); switchRouteTab('${rteId}','note')">📝 Примітка</div>
             </div>
+            <div class="detail-tab-panel active" data-tab-panel="contacts">${renderRouteFieldsGrid(contactsFields)}</div>
+            <div class="detail-tab-panel" data-tab-panel="finance">${renderRouteFieldsGrid(financeFields)}</div>
+            <div class="detail-tab-panel" data-tab-panel="trip">${renderRouteFieldsGrid(tripFields)}</div>
+            <div class="detail-tab-panel" data-tab-panel="note">${renderRouteFieldsGrid(noteFields)}</div>
             <!-- Кнопки дій для ліда: 2 рядки -->
             <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;">
                 <button class="btn-card-action btn-call" style="flex:1 1 calc(33% - 6px)" onclick="event.stopPropagation(); window.open('tel:${cleanPhone}')">📞 Дзвінок</button>
@@ -1913,6 +2295,14 @@ function renderRouteCard(r, idx, sheetName) {
             </div>
         </div>
     </div>`;
+}
+
+// ── Перемикач вкладок розгорнутої картки маршруту ──
+function switchRouteTab(rteId, tabName) {
+    const card = document.getElementById('rte-details-' + rteId);
+    if (!card) return;
+    card.querySelectorAll('.detail-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tabName));
+    card.querySelectorAll('.detail-tab-panel').forEach(p => p.classList.toggle('active', p.dataset.tabPanel === tabName));
 }
 
 // ── Деталі картки маршруту ──
@@ -2011,6 +2401,12 @@ async function saveRouteInlineEdit(rteId, colName, sheetName, newVal) {
 
     const res = await apiPost('updateRouteField', { sheet: sheetName, rte_id: rteId, col: colName, value: newVal });
     if (res.ok) {
+        // Мерджимо свіжий GAS-keyed рядок назад у локальний sheet.rows —
+        // без цього картка показує стару інфу (бо ми писали під одним GAS
+        // ключем, а рендер читає інший аліас тієї ж колонки).
+        if (res.data && typeof res.data === 'object') {
+            Object.assign(row, res.data);
+        }
         showToast('✅ Збережено');
         renderRoutes();
     } else {
@@ -2255,11 +2651,15 @@ function openDispatchView(idx) {
   showToast('Завантаження відправки...', 'info');
 
   var d = dispatches[idx];
-  apiPost('getRouteSheet', { sheetName: d.sheetName }).then(function(res) {
+  apiPost('getDispatchSheet', { sheetName: d.sheetName }).then(function(res) {
     if (!res.ok) { showToast('Помилка: ' + res.error, 'error'); return; }
     routeData = res.data.rows || [];
     renderDispatchView(d);
   }).catch(function() { showToast('Помилка завантаження', 'error'); });
+}
+
+function refreshDispatchView() {
+  if (activeRouteIdx !== null && dispatches[activeRouteIdx]) openDispatchView(activeRouteIdx);
 }
 
 function renderDispatchView(disp) {
@@ -2279,7 +2679,7 @@ function renderDispatchView(disp) {
     '</div>' +
     '<div class="route-header-actions">' +
       '<button onclick="openDispatchPrintDialog()">🖨️ Друк списку</button>' +
-      '<button onclick="refreshRouteView()">🔄 Оновити</button>' +
+      '<button onclick="refreshDispatchView()">🔄 Оновити</button>' +
       '<button onclick="backToParcels()">← Назад</button>' +
     '</div>';
 
@@ -2341,7 +2741,6 @@ function openDispatchDetail(idx) {
       '<h3 style="margin:0;">📥 Відправка <span style="font-size:12px;font-weight:400;color:var(--text-secondary);">' + (r['DISPATCH_ID'] || '') + '</span></h3>' +
       '<div style="display:flex;gap:6px;">' +
         '<button class="dispatch-action-btn" onclick="printSingleDispatch(' + idx + ')" title="Друк">🖨️ Друк</button>' +
-        '<button class="dispatch-action-btn edit-btn" onclick="toggleDispatchEdit(' + idx + ')" id="dispEditToggle" title="Редагувати">✏️ Редагувати</button>' +
       '</div>' +
     '</div>';
 
@@ -2360,18 +2759,12 @@ function openDispatchDetail(idx) {
     ['Фото', r['Фото посилки'] ? '<a href="' + r['Фото посилки'] + '" target="_blank" style="color:var(--info);">📷 Переглянути</a>' : '']
   ]);
 
-  // Editable finance section
-  html += '<div class="route-detail-section" id="dispFinanceSection">' +
-    '<div class="route-detail-section-title">Фінанси</div>' +
-    '<div class="route-detail-grid">' +
-      dispEditableField('Сума', r['Сума'], 'number') +
-      dispReadField('Валюта', r['Валюта']) +
-      dispEditableField('Завдаток', r['Завдаток'], 'number') +
-      dispReadField('Валюта завдатку', r['Валюта завдатку']) +
-      dispEditableSelect('Форма оплати', r['Форма оплати'], ['Готівка', 'Безготівка', 'Картка', 'Інше']) +
-      dispEditableSelect('Статус оплати', r['Статус оплати'], ['Оплачено', 'Частково', 'Не оплачено']) +
-      dispEditableField('Борг', r['Борг'], 'number') +
-    '</div></div>';
+  html += renderRouteDetailSection('Фінанси', [
+    ['Сума', r['Сума']], ['Валюта', r['Валюта']],
+    ['Завдаток', r['Завдаток']], ['Валюта завдатку', r['Валюта завдатку']],
+    ['Форма оплати', r['Форма оплати']], ['Статус оплати', r['Статус оплати']],
+    ['Борг', r['Борг']]
+  ]);
 
   html += renderRouteDetailSection('Рейс', [
     ['Дата створення', r['Дата створення']], ['Дата рейсу', r['Дата рейсу']],
@@ -2379,124 +2772,18 @@ function openDispatchDetail(idx) {
     ['AUTO_ID', r['AUTO_ID']], ['RTE_ID', r['RTE_ID']]
   ]);
 
-  // Editable status + note
-  html += '<div class="route-detail-section" id="dispStatusSection">' +
-    '<div class="route-detail-section-title">Статус / Системні</div>' +
-    '<div class="route-detail-grid">' +
-      dispReadField('DISPATCH_ID', r['DISPATCH_ID']) +
-      dispReadField('PKG_ID', r['PKG_ID']) +
-      dispEditableSelect('Статус', r['Статус'], ['Нова', 'В дорозі', 'Доставлено', 'Повернення', 'Скасовано']) +
-      dispEditableField('Примітка', r['Примітка'], 'text') +
-    '</div></div>';
-
-  // Save button (hidden by default, shown in edit mode)
-  html += '<div id="dispSaveBar" style="display:none;padding:12px;text-align:center;">' +
-    '<button class="dispatch-action-btn save-btn" onclick="saveDispatchEdits(' + idx + ')" style="background:var(--success);color:#fff;padding:8px 24px;font-size:14px;">💾 Зберегти зміни</button>' +
-    '<button class="dispatch-action-btn" onclick="toggleDispatchEdit(' + idx + ')" style="margin-left:8px;">Скасувати</button>' +
-  '</div>';
+  html += renderRouteDetailSection('Статус / Системні', [
+    ['DISPATCH_ID', r['DISPATCH_ID']], ['PKG_ID', r['PKG_ID']],
+    ['Статус', r['Статус']], ['Примітка', r['Примітка']]
+  ]);
 
   html += '</div>';
   overlay.innerHTML = html;
   overlay.classList.add('open');
 }
 
-function dispReadField(label, val) {
-  return '<div class="route-detail-field"><label>' + label + '</label><div class="val ' + (val ? '' : 'empty') + '">' + (val || '—') + '</div></div>';
-}
-
-function dispEditableField(label, val, type) {
-  var v = val || '';
-  return '<div class="route-detail-field disp-editable-wrap">' +
-    '<label>' + label + '</label>' +
-    '<div class="val disp-view-mode ' + (v ? '' : 'empty') + '">' + (v || '—') + '</div>' +
-    '<input class="disp-edit-input disp-edit-mode" type="' + type + '" value="' + v + '" data-col="' + label + '" style="display:none;" />' +
-  '</div>';
-}
-
-function dispEditableSelect(label, val, options) {
-  var v = val || '';
-  var opts = options.map(function(o) {
-    return '<option value="' + o + '"' + (o === v ? ' selected' : '') + '>' + o + '</option>';
-  }).join('');
-  return '<div class="route-detail-field disp-editable-wrap">' +
-    '<label>' + label + '</label>' +
-    '<div class="val disp-view-mode ' + (v ? '' : 'empty') + '">' + (v || '—') + '</div>' +
-    '<select class="disp-edit-input disp-edit-mode" data-col="' + label + '" style="display:none;">' +
-      '<option value="">— Не вказано —</option>' + opts +
-    '</select>' +
-  '</div>';
-}
-
-var dispatchEditMode = false;
-function toggleDispatchEdit(idx) {
-  dispatchEditMode = !dispatchEditMode;
-  var panel = document.getElementById('dispatchDetailPanel');
-  if (!panel) return;
-  var viewEls = panel.querySelectorAll('.disp-view-mode');
-  var editEls = panel.querySelectorAll('.disp-edit-mode');
-  var saveBar = document.getElementById('dispSaveBar');
-  var toggleBtn = document.getElementById('dispEditToggle');
-
-  viewEls.forEach(function(el) { el.style.display = dispatchEditMode ? 'none' : ''; });
-  editEls.forEach(function(el) { el.style.display = dispatchEditMode ? '' : 'none'; });
-  if (saveBar) saveBar.style.display = dispatchEditMode ? '' : 'none';
-  if (toggleBtn) {
-    toggleBtn.textContent = dispatchEditMode ? '❌ Скасувати' : '✏️ Редагувати';
-    toggleBtn.classList.toggle('active-edit', dispatchEditMode);
-  }
-}
-
-function saveDispatchEdits(idx) {
-  var r = routeData[idx];
-  if (!r) return;
-  var d = dispatches[activeRouteIdx];
-  if (!d) { showToast('Помилка: відправка не знайдена', 'error'); return; }
-
-  var inputs = document.querySelectorAll('#dispatchDetailPanel .disp-edit-input');
-  var changes = [];
-  inputs.forEach(function(inp) {
-    var col = inp.getAttribute('data-col');
-    var newVal = inp.value;
-    var oldVal = r[col] || '';
-    if (String(newVal) !== String(oldVal)) {
-      changes.push({ col: col, value: newVal });
-    }
-  });
-
-  if (changes.length === 0) {
-    showToast('Нічого не змінено', 'info');
-    dispatchEditMode = false;
-    toggleDispatchEdit(idx);
-    return;
-  }
-
-  showToast('Збереження ' + changes.length + ' змін...', 'info');
-
-  var promises = changes.map(function(c) {
-    return apiPost('updateDispatch', {
-      sheetName: d.sheetName,
-      dispatch_id: r['DISPATCH_ID'],
-      col: c.col,
-      value: c.value
-    });
-  });
-
-  Promise.all(promises).then(function(results) {
-    var failed = results.filter(function(res) { return !res.ok; });
-    if (failed.length > 0) {
-      showToast('Помилка збереження: ' + (failed[0].error || 'Невідомо'), 'error');
-      return;
-    }
-    // Update local data
-    changes.forEach(function(c) { r[c.col] = c.value; });
-    showToast('Збережено!', 'success');
-    dispatchEditMode = false;
-    openDispatchDetail(idx); // Refresh the panel
-    renderDispatchView(d);   // Refresh the table
-  }).catch(function() {
-    showToast('Помилка мережі', 'error');
-  });
-}
+// NOTE: dispatch details are READ-ONLY for manager.
+// Creation / edits / status updates happen in driver-crm (водії).
 
 // ===== DISPATCH PRINT LIST =====
 var dispPrintCols = [
@@ -2712,11 +2999,15 @@ function openExpensesView(idx) {
   showToast('Завантаження витрат...', 'info');
 
   var e = expenses[idx];
-  apiPost('getRouteSheet', { sheetName: e.sheetName }).then(function(res) {
+  apiPost('getExpensesSheet', { sheetName: e.sheetName }).then(function(res) {
     if (!res.ok) { showToast('Помилка: ' + res.error, 'error'); return; }
     routeData = res.data.rows || [];
     renderExpensesView(e);
   }).catch(function() { showToast('Помилка завантаження', 'error'); });
+}
+
+function refreshExpensesView() {
+  if (activeRouteIdx !== null && expenses[activeRouteIdx]) openExpensesView(activeRouteIdx);
 }
 
 function renderExpensesView(exp) {
@@ -2728,7 +3019,7 @@ function renderExpensesView(exp) {
       '<div class="route-header-stats">' + routeData.length + ' записів <span class="readonly-badge">READ-ONLY</span></div>' +
     '</div>' +
     '<div class="route-header-actions">' +
-      '<button onclick="refreshRouteView()">🔄 Оновити</button>' +
+      '<button onclick="refreshExpensesView()">🔄 Оновити</button>' +
       '<button onclick="backToParcels()">← Назад</button>' +
     '</div>';
 
@@ -2889,9 +3180,30 @@ async function doAssignToRoute(routeIdx) {
     } catch(e) {}
   }
 
+  // Інвалідуємо кеш доданого маршруту: інакше при відкритті в sidebar
+  // відобразяться старі rows без щойно доданих посилок.
+  if (route) {
+    route.rows = null;
+    route.rowCount = (route.rowCount || 0) + success;
+    route.parcelCount = (route.parcelCount || 0) + success;
+    var allIdx = (typeof allRouteSheets !== 'undefined') ? allRouteSheets.findIndex(function(s) { return s.sheetName === route.sheetName; }) : -1;
+    if (allIdx !== -1) {
+      allRouteSheets[allIdx].rows = null;
+      allRouteSheets[allIdx].rowCount = route.rowCount;
+      allRouteSheets[allIdx].parcelCount = route.parcelCount;
+    }
+  }
+
   showToast('Додано в ' + routeName + ': ' + success + ' з ' + ids.length, success > 0 ? 'success' : 'error');
   if (_routeModalMode === 'bulk') afterBulkAction();
   else renderCards();
+
+  // Якщо юзер прямо зараз відкритий саме на цьому маршруті — перерендеримо одразу
+  if (typeof activeRouteIdx !== 'undefined' && activeRouteIdx === routeIdx) {
+    try { await loadRouteSheetData(routeIdx, true); renderRoutes(); } catch(_) {}
+  }
+  // Оновлюємо лічильники в sidebar
+  if (typeof renderRouteSidebar === 'function') renderRouteSidebar();
 }
 
 // ===== [SECT-COUNTERS] COUNTERS =====
@@ -2900,12 +3212,15 @@ function updateCounters() {
     const active = allData.filter(p => p['Статус CRM'] !== 'Архів');
     const ue = active.filter(p => p['Напрям'] === 'УК→ЄВ');
     const eu = active.filter(p => p['Напрям'] === 'ЄВ→УК');
+    const new24 = active.filter(p => isNew24h(p));
     const setCount = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
     setCount('countUe', ue.length);
     setCount('countEu', eu.length);
+    setCount('countNew24', new24.length);
     setCount('mobCountUe', ue.length);
     setCount('mobCountEu', eu.length);
-    const dirData = currentDirection === 'ue' ? ue : eu;
+    setCount('mobCountNew24', new24.length);
+    const dirData = currentDirection === 'new24' ? new24 : (currentDirection === 'ue' ? ue : eu);
     var cAll = dirData.length;
     var cChecking = dirData.filter(p => p['Контроль перевірки'] === 'В перевірці').length;
     var cReady = dirData.filter(p => p['Контроль перевірки'] === 'Готова до маршруту').length;
@@ -3011,7 +3326,7 @@ async function toggleArchiveView() {
 
   if (showArchive) {
     showToast('Завантаження архіву...', 'info');
-    var dir = currentDirection === 'ue' ? 'ue' : 'eu';
+    var dir = currentDirection === 'eu' ? 'eu' : 'ue';
     var res = await apiPost('getArchive', { direction: dir });
     if (res.ok) {
       archiveData = res.data || [];
@@ -3119,6 +3434,7 @@ function renderArchiveCard(p) {
     ['DATE_ARCHIVE', dateArchive, {readonly:true}],
     ['ARCHIVED_BY', archivedBy, {readonly:true}],
     ['ARCHIVE_REASON', reason, {readonly:true}],
+    ['Був у маршрутах', p['Був у маршрутах'] || '—', {readonly:true}],
     ['SOURCE_SHEET', p['SOURCE_SHEET'] || '', {readonly:true}],
   ], pkgId);
 
@@ -3234,7 +3550,7 @@ async function archiveMassRestore() {
   }
   archiveSelectedIds.clear();
   // Перезавантажити архів
-  var dir = currentDirection === 'ue' ? 'ue' : 'eu';
+  var dir = currentDirection === 'eu' ? 'eu' : 'ue';
   var archRes = await apiPost('getArchive', { direction: dir });
   if (archRes.ok) {
     archiveData = archRes.data || [];
@@ -3268,7 +3584,9 @@ function createRoute() { alert('Створення нового маршруту
 
 // ===== [SECT-ADDFORM] ADD PARCEL FORM =====
 function openAddForm() {
-  addFormDirection = currentDirection;
+  // 'new24' — це віртуальна вкладка (фільтр за свіжістю), не реальний напрям.
+  // У формі додавання дефолтимось на 'ue', щоб не зламати валідацію.
+  addFormDirection = (currentDirection === 'new24') ? 'ue' : currentDirection;
   document.getElementById('fDirection').value = addFormDirection;
   clearAddForm();
   setAddDirection(addFormDirection);
@@ -3331,10 +3649,14 @@ function initSwissPoints() {
   ['Sender', 'Receiver'].forEach(suffix => {
     const list = document.getElementById('swissList' + suffix);
     if (!list) return;
+    if (!SWISS_POINTS.length) {
+      list.innerHTML = '<div class="add-swiss-item" style="opacity:.6;cursor:default">Адрес ще не додано — налаштуйте у Власницькій панелі</div>';
+      return;
+    }
     list.innerHTML = SWISS_POINTS.map((pt, i) => `
       <div class="add-swiss-item" onclick="selectSwissPoint('${suffix}', ${i})">
         <span class="add-swiss-city">${pt.city}</span>
-        <span class="add-swiss-addr">${pt.addr.substring(0, 40)}...</span>
+        <span class="add-swiss-addr">${pt.addr.length > 40 ? pt.addr.substring(0, 40) + '...' : pt.addr}</span>
       </div>
     `).join('');
   });
@@ -3348,7 +3670,7 @@ function toggleSwissList(type) {
 function selectSwissPoint(suffix, idx) {
   const pt = SWISS_POINTS[idx];
   const fieldId = suffix === 'Sender' ? 'fAddressFrom' : 'fAddressTo';
-  document.getElementById(fieldId).value = pt.city + ' — ' + pt.addr;
+  document.getElementById(fieldId).value = pt.addr ? (pt.city + ' — ' + pt.addr) : pt.city;
   document.getElementById('swissList' + suffix).classList.remove('open');
 }
 
@@ -3617,6 +3939,20 @@ function hideLoader() {
   if (el) { el.classList.add('hidden'); }
 }
 
+async function loadRoutePointsCatalog() {
+  try {
+    const res = await apiPost('getRoutePoints', { route_group: 'ua-es-wed' });
+    if (!res.ok || !Array.isArray(res.data)) return;
+    SWISS_POINTS = res.data
+      .filter(p => p.name_ua)
+      .map(p => ({ city: p.name_ua, addr: p.location_name || '' }));
+    // If the form is already rendered, refresh the dropdown contents.
+    try { initSwissPoints(); } catch (_) {}
+  } catch (e) {
+    console.warn('loadRoutePointsCatalog failed:', e);
+  }
+}
+
 async function loadData() {
   if (isLoading) return;
   isLoading = true;
@@ -3626,7 +3962,8 @@ async function loadData() {
     const [dataRes, statsRes, routesRes] = await Promise.all([
       apiPost('getAll', { sheet: 'all', filter: {} }),
       apiPost('getStats', {}),
-      apiPost('getRoutesList', {})
+      apiPost('getRoutesList', {}),
+      loadRoutePointsCatalog()
     ]);
 
     if (dataRes.ok) {

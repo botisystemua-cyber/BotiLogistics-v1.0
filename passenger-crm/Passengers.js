@@ -22,7 +22,7 @@
     if (manifestLink && _tenantName) {
         var params = 'name=' + encodeURIComponent(_tenantName);
         if (_logoUrl) params += '&logo=' + encodeURIComponent(_logoUrl);
-        manifestLink.href = 'manifest.php?' + params;
+        manifestLink.href = '../manifest.php?' + params;
     }
 
     // Update meta tags with tenant name
@@ -39,9 +39,19 @@
         if (appleIcon) appleIcon.href = _logoUrl;
     }
 
-    // Service Worker
+    // Service Worker — спільний для passenger-crm + cargo-crm
+    // (лежить на рівні /BotiLogistics-v1.0/ з scope, що покриває обидва модулі)
     if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('sw.js').catch(function() {});
+        // Спочатку прибираємо старі per-module SW (passenger-crm/sw.js, cargo-crm/sw.js) —
+        // інакше їхній вужчий scope переважає над спільним SW і ламає кеш.
+        navigator.serviceWorker.getRegistrations().then(function(regs) {
+            regs.forEach(function(reg) {
+                if (reg.scope && /\/(passenger-crm|cargo-crm)\/?$/.test(reg.scope)) {
+                    reg.unregister();
+                }
+            });
+        }).catch(function() {});
+        navigator.serviceWorker.register('../sw.js', { scope: '../' }).catch(function() {});
     }
 })();
 
@@ -120,7 +130,7 @@ const COL_MAP = {
     crmStatus:'Статус CRM', tag:'Тег', note:'Примітка', noteSms:'Примітка СМС',
     cliId:'CLI_ID', bookingId:'BOOKING_ID', dateArchive:'DATE_ARCHIVE',
     archivedBy:'ARCHIVED_BY', archiveReason:'ARCHIVE_REASON', archiveId:'ARCHIVE_ID',
-    calId:'CAL_ID'
+    calId:'CAL_ID', messenger:'Месенджер'
 };
 const DEFAULT_OSNOVNE_FIELDS = ['name','phone','phoneReg','direction','date','seats'];
 // Поля які можна показати/сховати на картці
@@ -139,14 +149,15 @@ const CARD_FIELD_OPTIONS = [
     { key:'dateCreated', label:'Дата реєстрації' },
     { key:'leadStatus', label:'Статус ліда (бейдж)' },
     { key:'payStatus', label:'Статус оплати (бейдж)' },
-    { key:'debt', label:'Борг (бейдж)' }
+    { key:'debt', label:'Борг (бейдж)' },
+    { key:'messenger', label:'Месенджер' }
 ];
 const DEFAULT_CARD_FIELDS = ['direction','phone','seats','date','price','deposit','name','pax_id','smartId','route','leadStatus','payStatus','debt'];
 const OTHER_SECTIONS = [
     { key:'route', title:'🗺️ Маршрут', fields:['from','to','timing','vehicle','seatInCar','calId'] },
     { key:'finance', title:'💰 Фінанси', fields:['price','currency','deposit','currencyDeposit','weight','weightPrice','currencyWeight','debt'] },
     { key:'payments', title:'💳 Платежі', fields:[], readonly:true, async:true },
-    { key:'statuses', title:'📊 Статуси', fields:['payStatus','leadStatus','crmStatus','tag'] },
+    { key:'statuses', title:'📊 Статуси', fields:['payStatus','leadStatus','crmStatus','tag','messenger'] },
     { key:'notes', title:'📝 Примітки', fields:['note','noteSms'] },
     { key:'system', title:'🔧 Системні', fields:['pax_id','smartId','dateCreated','sourceSheet','cliId','bookingId'], readonly:true }
 ];
@@ -1083,6 +1094,16 @@ function setSyncStatus(status) {
 // ================================================================
 // VIEW SWITCHING
 // ================================================================
+function goToCargoModule() {
+    var sess = getBotiSession();
+    var modules = (sess && Array.isArray(sess.modules)) ? sess.modules : [];
+    if (modules.indexOf('cargo') !== -1) {
+        location.href = '../cargo-crm/';
+    } else {
+        showToast('📦 Модуль Посилки ще не підключений. Зверніться до BotiSystem для підключення.', 4000);
+    }
+}
+
 function showPaxView(dir) {
     currentView = 'pax';
     currentDir = dir || 'all';
@@ -1994,8 +2015,14 @@ function renderRouteCard(r, idx, sheetName) {
     const rteId = r['RTE_ID'] || r['PAX_ID / PKG_ID'] || r['PAX_ID/PKG_ID'] || ('row_' + idx);
     r._resolvedId = rteId; // зберігаємо для пошуку
     const type = r['Тип запису'] || '';
-    const name = r['Піб пасажира'] || '—';
-    const phone = String(r['Телефон пасажира'] || '—');
+    // Для посилок основне ПІБ у БД лежить у sender_name ('Піб відправника'),
+    // а passenger_name порожній. Fallback щоб картка не показувала "—".
+    const name = r['Піб пасажира'] || r['Піб відправника'] || '—';
+    const phone = String(r['Телефон пасажира'] || r['Телефон відправника'] || '—');
+    const recipName = r['Піб отримувача'] || '';
+    const recipPhone = String(r['Телефон отримувача'] || '');
+    const ttn = r['Номер ТТН'] || '';
+    const desc = r['Опис'] || r['Опис посилки'] || '';
     const date = r['Дата рейсу'] || '';
     const direction = r['Напрям'] || '';
     const auto = r['Номер авто'] || '';
@@ -2043,10 +2070,15 @@ function renderRouteCard(r, idx, sheetName) {
     const isDetailsOpen = routeOpenDetailsId === rteId;
     const isActionsOpen = routeOpenActionsId === rteId;
     const safeSheet = (sheetName || '').replace(/'/g, "\\'");
-    const cleanPhone = (phone || '').replace(/[^+\d]/g, '');
+    // Для посилок у заголовку — пара "відправник → отримувач" і телефон отримувача
+    // (саме йому водій дзвонить при доставці). Для пасажирів — як було.
+    const headerName = isPax ? name : (`${name || '—'} → ${recipName || '—'}`);
+    const headerPhone = isPax ? phone : (recipPhone || phone);
+    const cleanPhone = (headerPhone || '').replace(/[^+\d]/g, '');
     const leadId = r['PAX_ID'] || r['PKG_ID'] || '';
 
-    // All detail fields for expanded view
+    // Для пасажира — старий плаский grid (не чіпаємо).
+    // Для посилки — 4 вкладки (Посилка/Фінанси/Рейс/Примітка) як в cargo-crm.
     const allFields = [
         {label: 'ПІБ', key: 'Піб пасажира', value: name},
         {label: 'Телефон', key: 'Телефон пасажира', value: phone},
@@ -2071,6 +2103,54 @@ function renderRouteCard(r, idx, sheetName) {
         {label: 'Примітка', key: 'Примітка', value: note}
     ];
 
+    // Поля табу "Посилка" для !isPax — дзеркало cargo-crm.
+    const pkgContactsFields = [
+        {label: 'Відправник', key: 'Піб відправника', value: name},
+        {label: 'Тел. відправника', key: 'Телефон відправника', value: phone},
+        {label: 'Отримувач', key: 'Піб отримувача', value: recipName || '—'},
+        {label: 'Тел. отримувача', key: 'Телефон отримувача', value: recipPhone || '—'},
+        {label: 'Напрям', key: 'Напрям', value: direction},
+        {label: 'Статус', key: 'Статус', value: status},
+        {label: 'Номер ТТН', key: 'Номер ТТН', value: ttn},
+        {label: 'Опис', key: 'Опис', value: desc},
+        {label: 'Вага (кг)', key: 'Вага посилки', value: weight},
+    ];
+    const pkgFinanceFields = [
+        {label: 'Сума', key: 'Сума', value: price},
+        {label: 'Валюта', key: 'Валюта', value: curr},
+        {label: 'Завдаток', key: 'Завдаток', value: deposit},
+        {label: 'Валюта завдатку', key: 'Валюта завдатку', value: depositCurr},
+        {label: 'Статус оплати', key: 'Статус оплати', value: payStatus},
+        {label: 'Ціна багажу', key: 'Ціна багажу', value: weightPrice},
+        {label: 'Валюта багажу', key: 'Валюта багажу', value: weightCurr},
+    ];
+    const pkgTripFields = [
+        {label: 'Дата рейсу', key: 'Дата рейсу', value: displayDate},
+        {label: 'Кількість місць', key: 'Кількість місць', value: seats},
+        {label: 'Номер авто', key: 'Номер авто', value: auto},
+        {label: 'Місце в авто', key: 'Місце в авто', value: seat},
+        {label: 'Водій', key: 'Водій', value: driver},
+        {label: 'Адреса відправки', key: 'Адреса відправки', value: from},
+        {label: 'Адреса прибуття', key: 'Адреса прибуття', value: to},
+    ];
+    const pkgNoteFields = [
+        {label: 'Примітка', key: 'Примітка', value: note},
+    ];
+
+    function renderRouteFieldsGrid(fields) {
+        return '<div class="details-grid">' + fields.map(f => {
+            const val = f.value || '—';
+            const safeKey = f.key.replace(/'/g, "\\'");
+            return `<div class="detail-block">
+                <div class="detail-block-label">${f.label}</div>
+                <div class="detail-block-value" id="rdv-${rteId}-${f.key}">${val}</div>
+                <div class="detail-block-actions">
+                    <button class="detail-micro-btn" onclick="event.stopPropagation(); startRouteInlineEdit('${rteId}','${safeKey}','${safeSheet}')">✏️</button>
+                </div>
+            </div>`;
+        }).join('') + '</div>';
+    }
+
     return `<div class="route-card ${statusClass} ${isSelected ? 'selected' : ''}" id="rte-card-${rteId}" data-rte-id="${rteId}" data-lead-id="${leadId}">
         <div class="route-card-header" onclick="toggleRouteDetails('${rteId}')">
             <div class="route-card-top">
@@ -2078,7 +2158,7 @@ function renderRouteCard(r, idx, sheetName) {
                     <input class="card-checkbox" type="checkbox" ${isSelected ? 'checked' : ''} onchange="toggleRouteSelect('${rteId}',this.checked)">
                 </div>
                 ${dirLabel ? `<span class="card-direction ${dirCls}">${dirLabel}</span>` : ''}
-                <span class="route-card-phone">${phone}</span>
+                <span class="route-card-phone">${headerPhone || '—'}</span>
                 <span class="route-card-seats">${seats}м</span>
                 <span class="route-card-date">${displayDate}</span>
                 ${seat ? `<span style="background:#e0e7ff;color:#3730a3;font-size:10px;padding:2px 8px;border-radius:4px;font-weight:700;">💺 ${seat}</span>` : ''}
@@ -2086,7 +2166,7 @@ function renderRouteCard(r, idx, sheetName) {
             </div>
             <div class="route-card-info">
                 <span style="font-size:12px;">${typeIcon}</span>
-                <span class="route-card-name">${name}</span>
+                <span class="route-card-name">${headerName}</span>
                 <span style="color:var(--text-secondary);font-size:10px;">${rteId}</span>
                 ${lsBadge} ${payBadge}
             </div>
@@ -2098,7 +2178,8 @@ function renderRouteCard(r, idx, sheetName) {
                 ${note ? `<span>📝 ${note.substring(0, 30)}${note.length > 30 ? '...' : ''}</span>` : ''}
             </div>
         </div>
-        <div class="route-card-details ${isDetailsOpen ? 'show' : ''}" id="rte-details-${rteId}">
+        <div class="route-card-details ${isDetailsOpen ? 'show' : ''}" id="rte-details-${rteId}" data-rte-id="${rteId}">
+            ${isPax ? `
             <div class="details-grid">
                 ${allFields.map(f => {
                     const val = f.value || '—';
@@ -2113,6 +2194,18 @@ function renderRouteCard(r, idx, sheetName) {
                     </div>`;
                 }).join('')}
             </div>
+            ` : `
+            <div class="detail-tabs">
+                <div class="detail-tab active" data-tab="contacts" onclick="event.stopPropagation(); switchRouteTab('${rteId}','contacts')">📦 Посилка</div>
+                <div class="detail-tab" data-tab="finance" onclick="event.stopPropagation(); switchRouteTab('${rteId}','finance')">💰 Фінанси</div>
+                <div class="detail-tab" data-tab="trip" onclick="event.stopPropagation(); switchRouteTab('${rteId}','trip')">🚖 Рейс</div>
+                <div class="detail-tab" data-tab="note" onclick="event.stopPropagation(); switchRouteTab('${rteId}','note')">📝 Примітка</div>
+            </div>
+            <div class="detail-tab-panel active" data-tab-panel="contacts">${renderRouteFieldsGrid(pkgContactsFields)}</div>
+            <div class="detail-tab-panel" data-tab-panel="finance">${renderRouteFieldsGrid(pkgFinanceFields)}</div>
+            <div class="detail-tab-panel" data-tab-panel="trip">${renderRouteFieldsGrid(pkgTripFields)}</div>
+            <div class="detail-tab-panel" data-tab-panel="note">${renderRouteFieldsGrid(pkgNoteFields)}</div>
+            `}
             <!-- Кнопки дій для ліда: 2 рядки -->
             <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;">
                 <button class="btn-card-action btn-call" style="flex:1 1 calc(33% - 6px)" onclick="event.stopPropagation(); window.open('tel:${cleanPhone}')">📞 Дзвінок</button>
@@ -2124,6 +2217,14 @@ function renderRouteCard(r, idx, sheetName) {
             </div>
         </div>
     </div>`;
+}
+
+// ── Перемикач вкладок розгорнутої картки маршруту (лише для посилок) ──
+function switchRouteTab(rteId, tabName) {
+    const card = document.getElementById('rte-details-' + rteId);
+    if (!card) return;
+    card.querySelectorAll('.detail-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tabName));
+    card.querySelectorAll('.detail-tab-panel').forEach(p => p.classList.toggle('active', p.dataset.tabPanel === tabName));
 }
 
 // ── Деталі картки маршруту ──
@@ -2226,6 +2327,12 @@ async function saveRouteInlineEdit(rteId, colName, sheetName, newVal) {
 
     const res = await apiPost('updateRouteField', { sheet: sheetName, rte_id: rteId, col: colName, value: newVal });
     if (res.ok) {
+        // Мерджимо свіжий GAS-keyed рядок назад у локальний sheet.rows —
+        // без цього картка показує стару інфу (бо ми писали під одним GAS
+        // ключем, а рендер читає інший аліас тієї ж колонки).
+        if (res.data && typeof res.data === 'object') {
+            Object.assign(row, res.data);
+        }
         showToast('✅ Збережено');
         renderRoutes();
     } else {
@@ -2276,7 +2383,7 @@ function openRouteEditModal(rteId, sheetName) {
     document.getElementById('fWeightPrice').value = r['Ціна багажу'] || '';
     document.getElementById('fNote').value = r['Примітка'] || '';
     const _set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v || ''; };
-    _set('fCity', r['Місто']);
+    _set('fMessenger', r['Месенджер']);
     _set('fSeatNumber', r['Місце в авто']);
     _set('fPayStatus', r['Статус оплати']);
     _set('fPayForm', r['Форма оплати']);
@@ -3422,7 +3529,7 @@ function openEditPax(id) {
     document.getElementById('fWeightPrice').value = p['Ціна багажу'] || '';
     document.getElementById('fNote').value = p['Примітка'] || '';
     const _setP = (id, v) => { const el = document.getElementById(id); if (el) el.value = v || ''; };
-    _setP('fCity', p['Місто']);
+    _setP('fMessenger', p['Месенджер']);
     _setP('fSeatNumber', p['Місце в авто']);
     _setP('fPayStatus', p['Статус оплати']);
     _setP('fPayForm', p['Форма оплати']);
@@ -3925,7 +4032,7 @@ async function savePassenger() {
         weightPrice: document.getElementById('fWeightPrice').value.trim(),
         currencyWeight: document.getElementById('fCurrencyWeight').value,
         note: document.getElementById('fNote').value.trim(),
-        city: (document.getElementById('fCity')||{}).value?.trim() || '',
+        messenger: (document.getElementById('fMessenger')||{}).value?.trim() || '',
         seatNumber: (document.getElementById('fSeatNumber')||{}).value?.trim() || '',
         payStatus: (document.getElementById('fPayStatus')||{}).value || '',
         payForm: (document.getElementById('fPayForm')||{}).value || '',
@@ -3951,7 +4058,7 @@ async function savePassenger() {
             'Валюта завдатку': formData.currencyDeposit,
             'Вага багажу': formData.weight,
             'Примітка': formData.note,
-            'Місто': formData.city,
+            'Месенджер': formData.messenger,
             'Місце в авто': formData.seatNumber,
             'Статус оплати': formData.payStatus,
             'Форма оплати': formData.payForm,
@@ -6817,11 +6924,12 @@ function renderArchive() {
         const reason = p['ARCHIVE_REASON'] || '';
         const archDate = p['DATE_ARCHIVE'] || '';
         const archivedBy = p['ARCHIVED_BY'] || '';
+        const fromRoutes = p['Був у маршрутах'] || '';
         const dir = p['Напрям'] || '';
         const isSelected = archiveSelectedIds.has(id);
         const dirLabel = dir.includes('ua-eu') || dir.includes('UA→EU') ? 'UA→EU' : dir.includes('eu-ua') || dir.includes('EU→UA') ? 'EU→UA' : '';
         const dirCls = dirLabel === 'UA→EU' ? 'dir-badge-ua-eu' : dirLabel === 'EU→UA' ? 'dir-badge-eu-ua' : '';
-        const isFromRoute = reason.indexOf('маршрут') !== -1;
+        const isFromRoute = !!fromRoutes || reason.indexOf('маршрут') !== -1;
 
         return `<div class="pax-card ${isSelected ? 'selected' : ''}" style="border-left:3px solid ${isFromRoute ? '#f59e0b' : '#9ca3af'};opacity:0.85;" id="arc-${id}">
             <div class="card-top">
@@ -6843,6 +6951,7 @@ function renderArchive() {
                 ${archDate ? '<span style="font-size:10px;color:#6b7280;">📅 ' + archDate + '</span>' : ''}
                 ${archivedBy ? '<span style="font-size:10px;color:#6b7280;">👤 ' + archivedBy + '</span>' : ''}
                 ${reason ? '<span style="font-size:10px;color:#6b7280;">💬 ' + reason + '</span>' : ''}
+                ${fromRoutes ? '<span style="font-size:10px;color:#b45309;">🚐 Був у маршрутах: ' + fromRoutes + '</span>' : ''}
             </div>
             ${isFromRoute ? '' : `<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
                 <button class="btn-card-action" style="background:#d1fae5;color:#059669;" onclick="event.stopPropagation(); restorePax('${id}','${name}')">♻️ Відновити</button>
@@ -7160,6 +7269,13 @@ function archiveBulkDelete() {
 
 // Архівувати з маршруту (видалити з маршруту + архівувати в CRM)
 async function archiveFromRoute(rteId, sheetName, leadName) {
+    var sheetCheck = routes[activeRouteIdx];
+    var rowCheck = sheetCheck ? (sheetCheck.rows || []).find(function(r) { return r._resolvedId === rteId || r['RTE_ID'] === rteId; }) : null;
+    var isPkgRow = rowCheck && (rowCheck['Тип запису'] || '').toLowerCase().indexOf('посилк') !== -1;
+    if (isPkgRow) {
+        showToast('📦 Посилки архівує cargo-crm. Перейдіть у вкладку посилок.', 'warning');
+        return;
+    }
     showConfirm('Архівувати «' + leadName + '» і видалити з маршруту?', async function(yes) {
         if (!yes) return;
         showLoader('Архівування...');
@@ -7236,7 +7352,19 @@ async function deleteFromRouteFull(rteId, sheetName, leadName) {
 function routeBulkArchive() {
     const ids = Array.from(routeSelectedIds);
     if (!ids.length) return;
-    showConfirm('Архівувати ' + ids.length + ' записів і видалити з маршруту?', async function(yes) {
+    // У passenger-crm архівуємо тільки пасажирські рядки — посилки належать
+    // cargo-crm. Виокремлюємо pax/pkg до confirm, щоб юзер бачив розбивку.
+    const sheetPre = routes[activeRouteIdx];
+    const selectedRows = sheetPre ? (sheetPre.rows || []).filter(r => routeSelectedIds.has(r._resolvedId || r['RTE_ID'])) : [];
+    const pkgCount = selectedRows.filter(r => (r['Тип запису'] || '').toLowerCase().indexOf('посилк') !== -1).length;
+    const paxCount = selectedRows.length - pkgCount;
+    if (paxCount === 0) {
+        showToast('📦 Посилки архівує cargo-crm. Перейдіть у вкладку посилок.', 'warning');
+        return;
+    }
+    const confirmMsg = 'Архівувати ' + paxCount + ' пасажирів і видалити з маршруту?' +
+        (pkgCount ? ' (посилок у виділенні: ' + pkgCount + ' — їх пропустимо)' : '');
+    showConfirm(confirmMsg, async function(yes) {
         if (!yes) return;
         if (activeRouteIdx === null) return;
         const sheet = routes[activeRouteIdx];
@@ -7250,6 +7378,8 @@ function routeBulkArchive() {
             for (const row of (sheet.rows || [])) {
                 const resolvedId = row._resolvedId || row['RTE_ID'];
                 if (!routeSelectedIds.has(resolvedId)) continue;
+                // Пропускаємо посилкові рядки — ними займається cargo-crm.
+                if ((row['Тип запису'] || '').toLowerCase().indexOf('посилк') !== -1) continue;
                 let paxId = row['PAX_ID / PKG_ID'] || row['PAX_ID/PKG_ID'] || row['PAX_ID'] || row['PKG_ID'] || '';
                 // Fallback for legacy route rows with empty pax_id_or_pkg_id:
                 // look up the passenger by phone (+ name) in the local list.

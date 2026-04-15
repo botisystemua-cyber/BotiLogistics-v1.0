@@ -41,8 +41,10 @@ const SB_TO_GAS = {
     archived_at:       'DATE_ARCHIVE',
     archived_by:       'ARCHIVED_BY',
     archive_reason:    'ARCHIVE_REASON',
+    archived_from_routes: 'Був у маршрутах',
     archive_id:        'ARCHIVE_ID',
     cal_id:            'CAL_ID',
+    messenger:         'Месенджер',
     // Extra fields from Supabase not in GAS
     id:                '_uuid',
     tenant_id:         '_tenant',
@@ -142,7 +144,7 @@ const FORM_TO_SB = {
     vehicle: 'vehicle_name',
     seatInCar: 'seat_number',
     seatNumber: 'seat_number',
-    city: 'city',
+    messenger: 'messenger',
     payForm: 'payment_form',
     price: 'ticket_price',
     currency: 'ticket_currency',
@@ -463,21 +465,50 @@ async function sbArchivePassenger(params) {
         const reason = params.reason || 'Архівовано';
         const manager = params.manager || '';
 
-        const { data, error } = await sb
-            .from('passengers')
-            .update({
-                is_archived: true,
-                archived_at: new Date().toISOString(),
-                archived_by: manager || null,
-                archive_reason: reason,
-                updated_at: new Date().toISOString()
-            })
-            .eq('tenant_id', TENANT_ID)
-            .in('pax_id', paxIds)
-            .select();
-        if (error) throw error;
+        // Збираємо імена маршрутів, з яких пасажир виходить в архів — пишемо
+        // їх у `archived_from_routes`, щоб у картці архіву було видно
+        // "Був у маршрутах: X, Y". Потім видаляємо route-рядки (рейс без
+        // архівованого пасажира).
+        const routesByPax = {};
+        if (paxIds.length) {
+            const { data: routeRows } = await sb.from('routes')
+                .select('rte_id, pax_id_or_pkg_id')
+                .eq('tenant_id', TENANT_ID)
+                .eq('record_type', 'Пасажир')
+                .in('pax_id_or_pkg_id', paxIds);
+            (routeRows || []).forEach(r => {
+                if (!r.pax_id_or_pkg_id) return;
+                (routesByPax[r.pax_id_or_pkg_id] = routesByPax[r.pax_id_or_pkg_id] || new Set()).add(r.rte_id);
+            });
 
-        return { ok: true, count: data.length };
+            await sb.from('routes').delete()
+                .eq('tenant_id', TENANT_ID)
+                .eq('record_type', 'Пасажир')
+                .in('pax_id_or_pkg_id', paxIds);
+        }
+
+        let updated = 0;
+        const nowIso = new Date().toISOString();
+        for (const paxId of paxIds) {
+            const routesCsv = routesByPax[paxId] ? Array.from(routesByPax[paxId]).join(', ') : null;
+            const { data, error } = await sb
+                .from('passengers')
+                .update({
+                    is_archived: true,
+                    archived_at: nowIso,
+                    archived_by: manager || null,
+                    archive_reason: reason,
+                    archived_from_routes: routesCsv,
+                    updated_at: nowIso
+                })
+                .eq('tenant_id', TENANT_ID)
+                .eq('pax_id', paxId)
+                .select();
+            if (error) throw error;
+            updated += (data || []).length;
+        }
+
+        return { ok: true, count: updated };
     } catch (e) {
         console.error('sbArchivePassenger error:', e);
         return { ok: false, error: e.message };
@@ -502,6 +533,7 @@ async function sbRestorePassenger(params) {
                 is_archived: false,
                 archived_at: null,
                 archive_reason: null,
+                archived_from_routes: null,
                 updated_at: new Date().toISOString()
             })
             .eq('tenant_id', TENANT_ID)
@@ -820,20 +852,25 @@ const ROUTE_GAS_TO_SB = {
     'Піб':                'passenger_name',
     'Телефон пасажира':   'passenger_phone',
     'Піб відправника':    'sender_name',
+    'Телефон відправника':'passenger_phone',
     'Піб отримувача':     'recipient_name',
     'Телефон отримувача': 'recipient_phone',
     'Адреса отримувача':  'recipient_address',
+    'Адреса в Європі':    'recipient_address',
     'Адреса відправки':   'departure_address',
     'Адреса прибуття':    'arrival_address',
     'Кількість місць':    'seats_count',
     'Вага багажу':        'baggage_weight',
     'Внутрішній №':       'internal_number',
     'Номер ТТН':          'ttn_number',
+    'Опис':               'package_description',
     'Опис посилки':       'package_description',
+    'Кг':                 'package_weight',
     'Вага посилки':       'package_weight',
     'Сума':               'amount',
     'Ціна квитка':        'amount',
     'Валюта':             'amount_currency',
+    'Валюта оплати':      'amount_currency',
     'Валюта квитка':      'amount_currency',
     'Завдаток':           'deposit',
     'Валюта завдатку':    'deposit_currency',
@@ -909,26 +946,35 @@ function routeRowToGas(r) {
         'Піб пасажира':       r.passenger_name || '',
         'Телефон пасажира':   r.passenger_phone || '',
         'Піб відправника':    r.sender_name || '',
+        'Телефон відправника':r.passenger_phone || '',
         'Піб отримувача':     r.recipient_name || '',
         'Телефон отримувача': r.recipient_phone || '',
         'Адреса отримувача':  r.recipient_address || '',
+        'Адреса в Європі':    r.recipient_address || '',
         'Адреса відправки':   r.departure_address || '',
         'Адреса прибуття':    r.arrival_address || '',
         'Кількість місць':    r.seats_count || '',
-        'Вага багажу':        r.baggage_weight || '',
+        // baggage_weight (для пасажирського багажу) і package_weight (вага
+        // посилки) — дві окремі колонки. Рендер картки читає 'Вага багажу';
+        // для посилок цей ключ має fallback на package_weight, інакше
+        // після редагування "Вага (кг)" значення не відображається до reload.
+        'Вага багажу':        r.baggage_weight || r.package_weight || '',
         'Внутрішній №':       r.internal_number || '',
         'Номер ТТН':          r.ttn_number || '',
+        'Опис':               r.package_description || '',
         'Опис посилки':       r.package_description || '',
+        'Кг':                 r.package_weight || '',
         'Вага посилки':       r.package_weight || '',
         'Сума':               r.amount || '',
         'Валюта':             r.amount_currency || '',
+        'Валюта оплати':      r.amount_currency || '',
         'Завдаток':           r.deposit || '',
         'Валюта завдатку':    r.deposit_currency || '',
         'Форма оплати':       r.payment_form || '',
         'Статус оплати':      r.payment_status || '',
         'Борг':               r.debt || '',
         'Примітка оплати':    r.payment_notes || '',
-        'Статус':             r.status || '',
+        'Статус':             (r.status === 'scheduled' ? 'Новий' : (r.status || '')),
         'Статус CRM':         r.crm_status || '',
         'Тег':                r.tag || '',
         'Примітка':           r.notes || '',
@@ -1038,7 +1084,7 @@ async function sbSetRouteOrder(params) {
                 rte_id: sheetName,
                 is_placeholder: true,
                 record_type: 'Пасажир',
-                status: 'scheduled',
+                status: 'Новий',
                 crm_status: 'active',
                 route_date: new Date().toISOString().split('T')[0],
                 ...updateObj
@@ -1059,14 +1105,22 @@ async function sbUpdateRouteField(params) {
         const rteId = params.rte_id;
         const updateObj = {};
 
+        // Захист: якщо GAS-ключ не має DB-колонки в routes, не шлемо PostgREST
+        // запит з кириличним іменем колонки (інакше: "schema cache" помилка).
+        const isValidSbCol = (c) => /^[a-z_][a-z0-9_]*$/.test(c);
+
         if (params.fields) {
             for (const [col, val] of Object.entries(params.fields)) {
                 const sbCol = ROUTE_GAS_TO_SB[col] || col;
+                if (!isValidSbCol(sbCol)) continue;
                 updateObj[sbCol] = (val === '' || val === undefined) ? null : String(val);
             }
         } else {
             const col = params.col;
             const sbCol = ROUTE_GAS_TO_SB[col] || col;
+            if (!isValidSbCol(sbCol)) {
+                return { ok: false, error: 'Поле «' + col + '» не редагується тут' };
+            }
             updateObj[sbCol] = (params.value === '' || params.value === undefined) ? null : String(params.value);
         }
 
@@ -1080,7 +1134,10 @@ async function sbUpdateRouteField(params) {
             .select();
         if (error) throw error;
 
-        return { ok: true, data: data[0] };
+        // GAS-keyed для мержу в локальний sheet.rows (без цього картка
+        // маршруту показує стару інфу до reload).
+        const fresh = data && data[0] ? routeRowToGas(data[0]) : null;
+        return { ok: true, data: fresh };
     } catch (e) {
         console.error('sbUpdateRouteField error:', e);
         return { ok: false, error: e.message };
@@ -1096,6 +1153,7 @@ async function sbAddToRoute(params) {
             const row = gasItemToRouteRow(item);
             row.rte_id = rteId;
             if (!row.record_type) row.record_type = 'Пасажир';
+            if (!row.status || row.status === 'scheduled') row.status = 'Новий';
             return row;
         });
 
@@ -1492,7 +1550,7 @@ async function apiPostSupabase(action, data) {
                 record_type: 'Пасажир',
                 direction: p.direction || '',
                 route_date: new Date().toISOString().split('T')[0],
-                status: 'scheduled',
+                status: 'Новий',
                 crm_status: 'active',
             });
             if (error) return { ok: false, error: error.message };
