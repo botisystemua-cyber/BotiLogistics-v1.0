@@ -895,14 +895,20 @@ function renderCard(p) {
     ['Примітка оплати', p['Примітка оплати'] || ''],
   ], pkgId);
 
-  // 🚖 Рейс
-  const tabRoute = renderDetailGrid([
-    ['Дата відправки', p['Дата відправки'] || ''],
-    ['Таймінг', p['Таймінг'] || ''],
-    ['Номер авто', auto],
-    ['RTE_ID', rteId, {readonly: true}],
-    ['Дата отримання', p['Дата отримання'] || ''],
-  ], pkgId);
+  // 🚖 Рейс — показуємо тільки коли посилка в маршруті
+  // Дані рейсу (дата відправки, авто, RTE_ID) — спільні для всього маршруту,
+  // редагуються в розділі «Маршрути» на рівні рейсу, тому тут readonly.
+  // Таймінг і Дата отримання — специфіка цієї посилки, редагуються.
+  const inRoute = !!rteId;
+  const tabRoute = inRoute
+    ? renderDetailGrid([
+        ['Дата відправки', p['Дата відправки'] || '', {readonly: true}],
+        ['Номер авто', auto, {readonly: true}],
+        ['RTE_ID', rteId, {readonly: true}],
+        ['Таймінг', p['Таймінг'] || ''],
+        ['Дата отримання', p['Дата отримання'] || ''],
+      ], pkgId)
+    : '<div style="padding:16px;color:var(--text-secondary);font-size:13px;text-align:center;">📭 Посилка не прикріплена до маршруту.<br><span style="font-size:12px;">Натисніть «🚖 Маршрут» у меню дій, щоб додати.</span></div>';
 
   // ⚙ Системні
   const tabSystem = renderDetailGrid([
