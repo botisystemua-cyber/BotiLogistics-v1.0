@@ -410,17 +410,117 @@ const MOCK_ROUTES = [
 ];
 
 // ===== [SECT-INIT] INIT =====
-function _getBotiSession() {
+function getBotiSession() {
   try { return JSON.parse(localStorage.getItem('boti_session') || 'null'); } catch (_) { return null; }
+}
+
+function getUserDisplayName() {
+  const s = getBotiSession();
+  if (!s) return '';
+  return s.user_name || s.user_login || '';
+}
+
+function updateAvatarUI() {
+  const name = getUserDisplayName();
+  const avatar = document.getElementById('userAvatar');
+  if (!avatar) return;
+  if (name) {
+    const initials = name.trim().split(/\s+/)
+      .map(function(p) { return p[0] || ''; })
+      .join('')
+      .substring(0, 2)
+      .toUpperCase();
+    avatar.textContent = initials || '?';
+    avatar.title = name;
+  } else {
+    avatar.textContent = '?';
+    avatar.title = 'Увійти';
+  }
+}
+
+function renderProfileSlots() {
+  const session = getBotiSession();
+  const container = document.getElementById('profileSlots');
+  if (!container) return;
+
+  if (!session) {
+    container.innerHTML = '<div style="padding:16px;text-align:center;color:#6b7280;font-size:13px">Сесія відсутня. <a href="../config-crm/" style="color:var(--accent);font-weight:600">Увійти</a></div>';
+    const closeNoSess = document.getElementById('profileModalClose');
+    if (closeNoSess) closeNoSess.style.display = 'none';
+    return;
+  }
+
+  const name = session.user_name || session.user_login || '—';
+  const roleMap = { owner: 'Власник', manager: 'Менеджер', driver: 'Водій' };
+  const roleLabel = roleMap[session.role] || session.role || '';
+  const tenant = session.tenant_name || session.tenant_id || '';
+  const initials = name.trim().split(/\s+/)
+    .map(function(p) { return p[0] || ''; })
+    .join('')
+    .substring(0, 2)
+    .toUpperCase();
+
+  let html = '';
+  html += '<div style="display:flex;align-items:center;gap:14px;padding:16px;border-radius:12px;border:2px solid var(--border);background:#f9fafb;margin-bottom:12px">';
+  html += '<div style="width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,#3b82f6,#6366f1);display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:18px;flex-shrink:0">' + initials + '</div>';
+  html += '<div style="flex:1;min-width:0">';
+  html += '<div style="font-weight:700;font-size:15px;color:#111827;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + name + '</div>';
+  if (roleLabel) html += '<div style="font-size:12px;color:#6b7280;margin-top:2px">' + roleLabel + '</div>';
+  if (tenant)    html += '<div style="font-size:11px;color:#6b7280;margin-top:2px;opacity:.8">🏢 ' + tenant + '</div>';
+  html += '</div>';
+  html += '</div>';
+
+  const roles = session.roles || [session.role];
+  if (roles.indexOf('owner') !== -1) {
+    html += '<button onclick="goToOwnerPanel()" style="width:100%;padding:12px;border:2px solid var(--border);border-radius:10px;background:white;color:#6d28d9;font-weight:700;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:8px;transition:all .2s" onmouseover="this.style.background=\'#f5f3ff\';this.style.borderColor=\'#c4b5fd\'" onmouseout="this.style.background=\'white\';this.style.borderColor=\'var(--border)\'">';
+    html += '<span>👑</span><span>Власницька панель</span>';
+    html += '</button>';
+  }
+
+  html += '<button onclick="botiLogout()" style="width:100%;padding:12px;border:2px solid var(--border);border-radius:10px;background:white;color:#dc2626;font-weight:700;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:all .2s" onmouseover="this.style.background=\'#fef2f2\';this.style.borderColor=\'#fecaca\'" onmouseout="this.style.background=\'white\';this.style.borderColor=\'var(--border)\'">';
+  html += '<span>🚪</span><span>Вийти</span>';
+  html += '</button>';
+
+  container.innerHTML = html;
+
+  const closeBtn = document.getElementById('profileModalClose');
+  if (closeBtn) closeBtn.style.display = '';
+}
+
+function openProfileModal() {
+  renderProfileSlots();
+  document.getElementById('profileModal').classList.add('open');
+}
+
+function closeProfileModal() {
+  document.getElementById('profileModal').classList.remove('open');
+}
+
+function botiLogout() {
+  localStorage.removeItem('boti_session');
+  location.href = '../config-crm/';
+}
+
+function goToOwnerPanel() {
+  try {
+    const s = getBotiSession();
+    if (s) {
+      s.role = 'owner';
+      localStorage.setItem('boti_session', JSON.stringify(s));
+    }
+  } catch (_) {}
+  location.href = '../owner-crm/';
 }
 
 document.addEventListener('DOMContentLoaded', async function() {
   // Swap BotiLogistics brand with tenant name from session
-  const _bs = _getBotiSession();
+  const _bs = getBotiSession();
   if (_bs && _bs.tenant_name) {
     const logoEl = document.querySelector('.logo');
     if (logoEl) logoEl.textContent = _bs.tenant_name;
   }
+
+  updateAvatarUI();
 
   await loadData();
 });

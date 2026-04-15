@@ -105,6 +105,8 @@ body {
   font-weight: 700;
   font-size: 11px;
 }
+.user-avatar { cursor: pointer; transition: transform .15s ease; }
+.user-avatar:hover { transform: scale(1.08); }
 
 /* ===== LAYOUT ===== */
 .app-layout {
