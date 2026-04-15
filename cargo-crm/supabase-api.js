@@ -615,16 +615,55 @@ async function sbPkgAddToRoute(params) {
         if (!rteId) return { ok: false, error: 'Не вказано назву маршруту' };
 
         const leads = params.leads || params.items || [params];
+
+        // ── Збираємо PKG_ID з усіх лідів та підтягуємо повні дані з packages.
+        // Раніше при single-add фронт надсилав лише { pkg_id }, тому
+        // gasItemToRouteRow не знаходив жодного GAS-ключа і у routes падав
+        // майже порожній рядок. Тепер завжди беремо authoritative-дані з БД.
+        const pkgIds = leads
+            .map(it => it && (it['PKG_ID'] || it.pkg_id || it.PKG_ID))
+            .filter(Boolean);
+
+        let pkgById = {};
+        if (pkgIds.length) {
+            const { data: pkgs, error: pkgErr } = await sb.from('packages')
+                .select('*')
+                .eq('tenant_id', TENANT_ID)
+                .in('pkg_id', pkgIds);
+            if (pkgErr) throw pkgErr;
+            (pkgs || []).forEach(r => { pkgById[r.pkg_id] = r; });
+        }
+
+        const today = new Date().toISOString().split('T')[0];
         const insertData = leads.map(item => {
-            const row = gasItemToRouteRow(item);
+            const pkgKey = item && (item['PKG_ID'] || item.pkg_id || item.PKG_ID);
+            const dbRow = pkgKey ? pkgById[pkgKey] : null;
+
+            // Якщо знайшли в БД — спочатку конвертимо повний пакет у GAS-форму,
+            // потім зливаємо з тим, що прислав фронт (на випадок, якщо bulk
+            // передав свіжі правки до синку).
+            const merged = dbRow
+                ? Object.assign({}, sbToGasObjPkg(dbRow), item)
+                : item;
+
+            const row = gasItemToRouteRow(merged);
             row.rte_id = rteId;
             if (!row.record_type) row.record_type = 'Посилка';
-            if (!row.route_date) row.route_date = new Date().toISOString().split('T')[0];
+            if (!row.pax_id_or_pkg_id && pkgKey) row.pax_id_or_pkg_id = pkgKey;
+            if (!row.route_date) row.route_date = today;
             return row;
         });
 
         const { data, error } = await sb.from('routes').insert(insertData).select();
         if (error) throw error;
+
+        // Дзеркалимо RTE_ID назад у packages, щоб картка одразу показувала маршрут
+        if (pkgIds.length) {
+            await sb.from('packages')
+                .update({ route_id: rteId })
+                .eq('tenant_id', TENANT_ID)
+                .in('pkg_id', pkgIds);
+        }
 
         return { ok: true, data };
     } catch (e) {
