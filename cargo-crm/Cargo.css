@@ -1728,3 +1728,13 @@ body {
   color: var(--primary, #1a3a5e);
   letter-spacing: 0.5px;
 }
+
+/* ===== Search hit highlight ===== */
+mark.search-hl {
+  background: #fde68a;          /* теплий жовтий */
+  color: #78350f;
+  padding: 0 2px;
+  border-radius: 3px;
+  font-weight: 700;
+  box-shadow: 0 0 0 1px #fbbf24 inset;
+}

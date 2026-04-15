@@ -106,6 +106,36 @@ let currentFilter = 'all';
 let currentVerifyFilter = 'all';
 let currentPayFilter = 'all';
 let searchQuery = '';
+
+// Поля, по яких працює пошук (узгоджено з тим, що бачить юзер у картці)
+const SEARCHABLE_PKG_FIELDS = [
+  'PKG_ID', 'Ід_смарт',
+  'Піб відправника', 'Телефон відправника', 'Телефон реєстратора',
+  'Піб отримувача', 'Телефон отримувача',
+  'Адреса відправки', 'Адреса в Європі', 'Місто Нова Пошта',
+  'Номер ТТН', 'Внутрішній №',
+  'Опис', 'Деталі',
+  'Тег', 'Примітка', 'Примітка СМС',
+  'Номер авто', 'RTE_ID',
+];
+
+// Підсвічування знайденого фрагмента в тексті картки.
+// Повертає БЕЗПЕЧНИЙ HTML — спочатку екранує текст, потім обгортає
+// збіги у <mark class="search-hl">. Викликати лише з searchQuery !== ''.
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, function(c) {
+    return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
+  });
+}
+function escapeRegExp(s) {
+  return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+function highlightMatch(text) {
+  const safe = escapeHtml(text == null ? '' : text);
+  if (!searchQuery) return safe;
+  const re = new RegExp('(' + escapeRegExp(searchQuery) + ')', 'gi');
+  return safe.replace(re, '<mark class="search-hl">$1</mark>');
+}
 let openCardId = null;
 let stats = {};
 let routes = [];
@@ -662,16 +692,14 @@ function filterData() {
     data = data.filter(p => p['Статус оплати'] === currentPayFilter);
   }
 
-  // Search
+  // Search — шукаємо по всіх корисних полях посилки
   if (searchQuery) {
     const q = searchQuery.toLowerCase();
-    data = data.filter(p =>
-      (p['Піб відправника'] || '').toLowerCase().includes(q) ||
-      (p['Телефон реєстратора'] || '').includes(q) ||
-      (p['PKG_ID'] || '').toLowerCase().includes(q) ||
-      (p['Адреса відправки'] || '').toLowerCase().includes(q) ||
-      (p['Адреса в Європі'] || '').toLowerCase().includes(q)
-    );
+    data = data.filter(p => SEARCHABLE_PKG_FIELDS.some(f => {
+      const v = p[f];
+      if (v === undefined || v === null || v === '') return false;
+      return String(v).toLowerCase().includes(q);
+    }));
   }
 
   filteredData = data;
@@ -786,25 +814,31 @@ function renderCard(p) {
     : '';
 
   // TTN display
-  const ttnHtml = (isUE && ttn) ? `<span class="card-ttn">TTH: ${ttn}</span>` : '';
+  const ttnHtml = (isUE && ttn) ? `<span class="card-ttn">TTH: ${highlightMatch(ttn)}</span>` : '';
 
   // Route strip
   const routeStrip = rteId
-    ? `<div class="card-route-strip">✅ В маршруті: ${rteId}${auto ? ' · 🚐 ' + auto : ''}</div>`
+    ? `<div class="card-route-strip">✅ В маршруті: ${highlightMatch(rteId)}${auto ? ' · 🚐 ' + highlightMatch(auto) : ''}</div>`
     : '';
 
   // Meta tags (configurable via column configurator)
   const visCols = getVisibleCardColumns();
   let metaHtml = '';
-  if (visCols.includes('date') && dateCreated) metaHtml += `<span class="meta-tag">📅 ${dateCreated}</span>`;
-  if (visCols.includes('statusPkg') && statusPkg) metaHtml += `<span class="meta-tag">${statusPkg}</span>`;
-  if (visCols.includes('phone') && phone) metaHtml += `<span class="meta-tag">📞 ${phone}</span>`;
-  if (visCols.includes('phoneRecv') && receiverPhone) metaHtml += `<span class="meta-tag">📱 ${receiverPhone}</span>`;
-  if (visCols.includes('tag') && tag) metaHtml += `<span class="meta-tag ${tag === 'VIP' || tag === 'срочна' ? 'tag-vip' : ''}">#${tag}</span>`;
-  if (visCols.includes('note') && note) metaHtml += `<span class="meta-tag">📝 ${note.substring(0, 30)}${note.length > 30 ? '…' : ''}</span>`;
-  if (visCols.includes('description') && p['Опис']) metaHtml += `<span class="meta-tag">📄 ${(p['Опис']).substring(0, 25)}${(p['Опис']).length > 25 ? '…' : ''}</span>`;
-  if (visCols.includes('qty') && p['Кількість позицій']) metaHtml += `<span class="meta-tag">📊 ${p['Кількість позицій']} шт</span>`;
-  if (visCols.includes('estValue') && p['Оціночна вартість']) metaHtml += `<span class="meta-tag">💎 ${p['Оціночна вартість']}</span>`;
+  if (visCols.includes('date') && dateCreated) metaHtml += `<span class="meta-tag">📅 ${escapeHtml(dateCreated)}</span>`;
+  if (visCols.includes('statusPkg') && statusPkg) metaHtml += `<span class="meta-tag">${escapeHtml(statusPkg)}</span>`;
+  if (visCols.includes('phone') && phone) metaHtml += `<span class="meta-tag">📞 ${highlightMatch(phone)}</span>`;
+  if (visCols.includes('phoneRecv') && receiverPhone) metaHtml += `<span class="meta-tag">📱 ${highlightMatch(receiverPhone)}</span>`;
+  if (visCols.includes('tag') && tag) metaHtml += `<span class="meta-tag ${tag === 'VIP' || tag === 'срочна' ? 'tag-vip' : ''}">#${highlightMatch(tag)}</span>`;
+  if (visCols.includes('note') && note) {
+    const noteShort = note.substring(0, 30) + (note.length > 30 ? '…' : '');
+    metaHtml += `<span class="meta-tag">📝 ${highlightMatch(noteShort)}</span>`;
+  }
+  if (visCols.includes('description') && p['Опис']) {
+    const descShort = (p['Опис']).substring(0, 25) + ((p['Опис']).length > 25 ? '…' : '');
+    metaHtml += `<span class="meta-tag">📄 ${highlightMatch(descShort)}</span>`;
+  }
+  if (visCols.includes('qty') && p['Кількість позицій']) metaHtml += `<span class="meta-tag">📊 ${escapeHtml(String(p['Кількість позицій']))} шт</span>`;
+  if (visCols.includes('estValue') && p['Оціночна вартість']) metaHtml += `<span class="meta-tag">💎 ${escapeHtml(String(p['Оціночна вартість']))}</span>`;
 
   // ===== TAB PANELS =====
   // 📦 Посилка (configurable)
@@ -909,11 +943,11 @@ function renderCard(p) {
         </div>
         <div class="card-row2-wrap">
           <div class="card-row2">
-            <span class="card-pkgid">${pkgId}</span>
-            <span class="card-sender-recv">👤 ${name || '—'} → ${receiver || '—'}</span>
+            <span class="card-pkgid">${highlightMatch(pkgId)}</span>
+            <span class="card-sender-recv">👤 ${name ? highlightMatch(name) : '—'} → ${receiver ? highlightMatch(receiver) : '—'}</span>
             ${visCols.includes('leadBadge') ? leadBadge : ''} ${visCols.includes('payBadge') ? payBadge : ''} ${visCols.includes('checkBadge') ? checkBadge : ''}
           </div>
-          ${visCols.includes('address') && (addressFrom || addressTo) ? `<div class="card-address">📍 ${addressFrom && addressTo ? addressFrom + ' → ' + addressTo : (addressFrom || addressTo)}</div>` : ''}
+          ${visCols.includes('address') && (addressFrom || addressTo) ? `<div class="card-address">📍 ${addressFrom && addressTo ? highlightMatch(addressFrom) + ' → ' + highlightMatch(addressTo) : highlightMatch(addressFrom || addressTo)}</div>` : ''}
           ${metaHtml ? `<div class="card-meta-tags">${metaHtml}</div>` : ''}
         </div>
       </div>
