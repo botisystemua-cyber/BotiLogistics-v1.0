@@ -1477,119 +1477,13 @@ async function bulkArchive() {
 
 // ===== [SECT-VERIFY] VERIFICATION (перевірка посилок) =====
 
-// ---------- Scan TTN modal ----------
+// ---------- Scan TTN (camera scanner page) ----------
 
-function openScanTTNModal() {
-  // Створюємо модалку для сканування ТТН (якщо ще не існує)
-  let overlay = document.getElementById('scan-ttn-overlay');
-  if (!overlay) {
-    overlay = document.createElement('div');
-    overlay.id = 'scan-ttn-overlay';
-    overlay.className = 'confirm-overlay';
-    overlay.innerHTML = `
-      <div class="confirm-box" style="max-width:460px;width:92%;">
-        <h3 style="margin:0 0 12px;font-size:16px;">📷 Сканувати ТТН</h3>
-        <input id="scan-ttn-input" type="text" placeholder="Введіть або відскануйте ТТН..."
-               style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:15px;margin-bottom:12px;box-sizing:border-box;">
-        <div id="scan-ttn-result" style="display:none;margin-bottom:12px;"></div>
-        <div style="display:flex;gap:8px;justify-content:flex-end;">
-          <button onclick="closeScanTTNModal()" style="padding:8px 16px;border:1px solid var(--border);border-radius:8px;background:#fff;cursor:pointer;">Скасувати</button>
-          <button id="scan-ttn-btn" onclick="doScanTTN()" style="padding:8px 16px;border:none;border-radius:8px;background:var(--primary);color:#fff;font-weight:600;cursor:pointer;">Сканувати</button>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(overlay);
-  }
-  // Скидаємо стан
-  document.getElementById('scan-ttn-input').value = '';
-  document.getElementById('scan-ttn-result').style.display = 'none';
-  document.getElementById('scan-ttn-result').innerHTML = '';
-  overlay.classList.add('active');
-  setTimeout(() => document.getElementById('scan-ttn-input').focus(), 100);
-
-  // Enter → сканувати
-  document.getElementById('scan-ttn-input').onkeydown = (e) => {
-    if (e.key === 'Enter') doScanTTN();
-  };
+function openScannerPage() {
+  // Відкриваємо камерний сканер ТТН
+  window.location.href = 'scaner_ttn.html';
 }
 
-function closeScanTTNModal() {
-  const overlay = document.getElementById('scan-ttn-overlay');
-  if (overlay) overlay.classList.remove('active');
-}
-
-async function doScanTTN() {
-  const input = document.getElementById('scan-ttn-input');
-  const resultDiv = document.getElementById('scan-ttn-result');
-  const btn = document.getElementById('scan-ttn-btn');
-  const ttn = (input.value || '').trim();
-  if (!ttn) { showToast('Введіть ТТН', 'error'); return; }
-
-  btn.disabled = true;
-  btn.textContent = '⏳ Шукаю...';
-
-  const res = await apiPost('scanTTN', { ttn });
-
-  btn.disabled = false;
-  btn.textContent = 'Сканувати';
-
-  if (!res.ok) {
-    showToast('Помилка: ' + res.error, 'error');
-    return;
-  }
-
-  resultDiv.style.display = 'block';
-
-  if (res.type === 'found') {
-    // ТИП A — знайдено
-    const p = res.data;
-    // Оновити локальний масив
-    const idx = allData.findIndex(x => x['PKG_ID'] === p['PKG_ID']);
-    if (idx !== -1) {
-      allData[idx]['Контроль перевірки'] = 'В перевірці';
-      allData[idx]['Дата перевірки'] = p['Дата перевірки'];
-    }
-
-    let dupHtml = '';
-    if (res.duplicates && res.duplicates.length > 0) {
-      dupHtml = `<div style="margin-top:8px;padding:8px;background:#fef3c7;border-radius:6px;font-size:13px;">
-        <b>⚠️ Знайдено ${res.duplicates.length} дублікат(ів) по отримувачу:</b><br>
-        ${res.duplicates.map(d => `• ${d['PKG_ID']} — ${d['Піб отримувача'] || '?'} (${d['Телефон отримувача'] || '?'})`).join('<br>')}
-      </div>`;
-    }
-
-    resultDiv.innerHTML = `
-      <div style="padding:10px;background:#dcfce7;border-radius:8px;border:1px solid #86efac;">
-        <b>✅ Знайдено:</b> ${p['PKG_ID']}<br>
-        <span style="font-size:13px;">📦 ${p['Піб відправника'] || '?'} → ${p['Піб отримувача'] || '?'}</span><br>
-        <span style="font-size:13px;">ТТН: ${p['Номер ТТН']} · ${p['Кг'] || '?'} кг</span><br>
-        <span style="font-size:12px;color:#166534;">Статус → «В перевірці»</span>
-      </div>
-      ${dupHtml}
-    `;
-
-    renderCards();
-    updateCounters();
-    showToast('ТТН знайдено — переведено в перевірку', 'success');
-
-  } else if (res.type === 'new') {
-    // ТИП B — створено нову "невідому" посилку
-    const p = res.data;
-    allData.unshift(p);
-
-    resultDiv.innerHTML = `
-      <div style="padding:10px;background:#fef3c7;border-radius:8px;border:1px solid #fbbf24;">
-        <b>📦 Невідома посилка створена:</b> ${p['PKG_ID']}<br>
-        <span style="font-size:13px;">ТТН: ${ttn}</span><br>
-        <span style="font-size:12px;color:#92400e;">Статус ліда → «Невідомий», Контроль → «В перевірці»</span>
-      </div>
-    `;
-
-    renderCards();
-    updateCounters();
-    showToast('Нову посилку створено як "Невідома"', 'info');
-  }
-}
 
 // ---------- Start / Complete / Reject verification ----------
 

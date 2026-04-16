@@ -8,6 +8,7 @@
     <meta name="theme-color" content="#000000">
     <title>Сканер ТТН</title>
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
         html, body { height: 100%; width: 100%; overflow: hidden; }
@@ -369,6 +370,7 @@
         <div class="start-title">Сканер ТТН</div>
         <div class="start-subtitle">Натисни кнопку, дозволь доступ до камери і наведи на штрих-код накладної Нова Пошта</div>
         <button class="start-btn" onclick="startScan()">▶ Увімкнути камеру</button>
+        <button onclick="goBack()" style="margin-top:16px;padding:12px 32px;background:rgba(255,255,255,0.1);color:rgba(255,255,255,0.7);border:1px solid rgba(255,255,255,0.2);border-radius:12px;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;">← Назад до CRM</button>
     </div>
 
     <!-- CAMERA -->
@@ -383,6 +385,7 @@
 
     <!-- TOP BAR -->
     <div class="topbar" id="topbar" style="display:none;">
+        <button class="topbar-btn" onclick="goBack()" title="Назад">←</button>
         <button class="topbar-btn" onclick="openHistory()">≡</button>
         <div class="topbar-counter">
             <div class="counter-pill" id="counterScanned">📊 0</div>
@@ -424,13 +427,33 @@
     </div>
 
     <script>
-        // ==== API ====
-        var GAS_URL = 'https://script.google.com/macros/s/AKfycbwTbVML5OSo43a4J4MPHzHyB06uklbooJrQGscvPZ4f7y4aH0biQvxUBfXs1hzbSw-DxA/exec';
+        // ==== SUPABASE CONFIG ====
+        var SUPABASE_URL = 'https://pgdhuezxkehpjlxoesoe.supabase.co';
+        var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBnZGh1ZXp4a2VocGpseG9lc29lIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQzNDcyNTYsImV4cCI6MjA4OTkyMzI1Nn0.qG8kFr2sTuat4vhQ7NikGaXIa57YAT21ABZ8Q8gkRXg';
+        var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        // Tenant ID from shared session
+        var TENANT_ID = (function() {
+            try {
+                var raw = localStorage.getItem('boti_session');
+                if (!raw) return null;
+                var s = JSON.parse(raw);
+                return s && s.tenant_id ? s.tenant_id : null;
+            } catch(_) { return null; }
+        })();
 
         var scanner = null;
         var scanHistory = [];
         var isScanning = false;
         var isPaused = false;
+
+        function goBack() {
+            if (isScanning) {
+                scanner.stop().catch(function(){});
+                isScanning = false;
+            }
+            window.location.href = 'Cargo.html';
+        }
 
         function startScan() {
             if (isScanning) return;
@@ -470,7 +493,6 @@
                 document.getElementById('bottombar').style.display = 'flex';
                 document.getElementById('mainBtn').style.display = 'none';
             }).catch(function(err) {
-                // Fallback: якщо точно задня не доступна — пробуємо environment без exact
                 scanner.start(
                     { facingMode: 'environment' },
                     config,
@@ -500,7 +522,6 @@
             document.getElementById('lastScanBar').classList.add('show');
             document.getElementById('counterScanned').textContent = '📊 ' + (scanHistory.length + 1);
 
-            // Показуємо проміжний тост "перевірка..."
             showToast({
                 variant: '',
                 icon: '⏳',
@@ -509,42 +530,112 @@
                 status: ''
             });
 
-            // Відправляємо на бекенд
             scanTTN(decodedText);
         }
 
         function scanTTN(ttn) {
-            fetch(GAS_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                body: JSON.stringify({ action: 'scanTTN', ttn: ttn })
-            })
-            .then(function(r) { return r.json(); })
-            .then(function(res) { handleScanResult(ttn, res); })
-            .catch(function(err) {
-                handleScanResult(ttn, { ok: false, error: err.message || 'Немає зв\'язку' });
-            });
+            if (!TENANT_ID) {
+                handleScanResult(ttn, { ok: false, error: 'Сесія не знайдена. Увійдіть в CRM.' });
+                return;
+            }
+
+            // Step 1: search packages by ttn_number
+            sb.from('packages')
+                .select('*')
+                .eq('tenant_id', TENANT_ID)
+                .eq('ttn_number', ttn)
+                .eq('is_archived', false)
+                .limit(1)
+                .then(function(result) {
+                    if (result.error) {
+                        handleScanResult(ttn, { ok: false, error: result.error.message });
+                        return;
+                    }
+
+                    var data = result.data;
+                    if (data && data.length > 0) {
+                        // TYPE A — found: check current status
+                        var row = data[0];
+                        var qc = row.quality_check_required || '';
+
+                        if (qc === 'В перевірці' || qc === 'Готова до маршруту') {
+                            // Already processed
+                            handleScanResult(ttn, {
+                                ok: true, type: 'already',
+                                senderName: row.sender_name || '',
+                                qualityCheck: qc
+                            });
+                            return;
+                        }
+
+                        // Update status to "В перевірці"
+                        var now = new Date().toISOString();
+                        sb.from('packages')
+                            .update({ quality_check_required: 'В перевірці', quality_checked_at: now })
+                            .eq('pkg_id', row.pkg_id)
+                            .eq('tenant_id', TENANT_ID)
+                            .then(function(upd) {
+                                if (upd.error) {
+                                    handleScanResult(ttn, { ok: false, error: upd.error.message });
+                                    return;
+                                }
+                                handleScanResult(ttn, {
+                                    ok: true, type: 'found',
+                                    senderName: row.sender_name || row.recipient_name || '',
+                                    qualityCheck: 'В перевірці'
+                                });
+                            });
+                    } else {
+                        // TYPE B — not found: create unknown package
+                        var pkgId = 'PKG' + Date.now();
+                        var now2 = new Date().toISOString();
+                        sb.from('packages')
+                            .insert({
+                                pkg_id: pkgId,
+                                tenant_id: TENANT_ID,
+                                direction: 'Україна-ЄВ',
+                                created_at: now2,
+                                ttn_number: ttn,
+                                lead_status: 'unknown',
+                                crm_status: 'active',
+                                is_archived: false,
+                                quality_check_required: 'В перевірці',
+                                quality_checked_at: now2,
+                                sender_name: '',
+                                sender_phone: '',
+                                sender_address: '',
+                                recipient_name: '',
+                                recipient_phone: '',
+                                recipient_address: ''
+                            })
+                            .select()
+                            .then(function(ins) {
+                                if (ins.error) {
+                                    handleScanResult(ttn, { ok: false, error: ins.error.message });
+                                    return;
+                                }
+                                handleScanResult(ttn, { ok: true, type: 'new' });
+                            });
+                    }
+                });
         }
 
         function handleScanResult(ttn, res) {
             var variant = 'error', icon = '❌', label = 'Помилка', statusTxt = '';
 
             if (res && res.ok) {
-                if (res.action === 'updated') {
+                if (res.type === 'found') {
                     variant = 'success'; icon = '✅'; label = 'Оформлено';
-                    statusTxt = (res.data && res.data['Піб відправника']) || res.message || '';
-                } else if (res.action === 'already') {
-                    variant = 'already'; icon = 'ℹ️'; label = res.message || 'Вже оброблено';
-                    statusTxt = 'Статус: ' + (res.status || '—');
-                } else if (res.action === 'warn') {
-                    variant = 'warn'; icon = '⚠️'; label = res.message || 'Увага';
-                    statusTxt = 'Статус: ' + (res.status || '—');
-                } else if (res.action === 'created') {
-                    variant = 'created'; icon = '🆕'; label = 'Невідома посилку створено';
-                    statusTxt = 'Статус: Невідомо';
+                    statusTxt = res.senderName || '';
+                } else if (res.type === 'already') {
+                    variant = 'already'; icon = 'ℹ️'; label = 'Вже оброблено';
+                    statusTxt = 'Статус: ' + (res.qualityCheck || '—');
+                } else if (res.type === 'new') {
+                    variant = 'created'; icon = '🆕'; label = 'Невідома — створено';
+                    statusTxt = 'Статус: В перевірці';
                 } else {
                     variant = 'success'; icon = '✅'; label = 'OK';
-                    statusTxt = res.message || '';
+                    statusTxt = '';
                 }
             } else {
                 statusTxt = (res && res.error) || 'Невідома помилка';
