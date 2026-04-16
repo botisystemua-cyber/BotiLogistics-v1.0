@@ -647,6 +647,7 @@ body {
 .badge-check     { background: #e0e7ff; color: #3730a3; }
 .badge-new24     { background: #fef3c7; color: #d97706; font-size: 9px; font-weight: 800; padding: 2px 6px; border-radius: 8px; animation: pulse-new24 2s ease-in-out infinite; }
 @keyframes pulse-new24 { 0%,100%{opacity:1} 50%{opacity:0.6} }
+@keyframes pulse-badge { 0%,100%{transform:scale(1);} 50%{transform:scale(1.15);} }
 
 /* Route Strip */
 .card-route-strip {

@@ -919,21 +919,44 @@ async function sbPkgGetDispatchSheet(params) {
 
 async function sbPkgCheckDuplicates(params) {
     try {
-        const { data } = await sb.from('packages')
-            .select('pkg_id, sender_name, sender_phone, recipient_name, recipient_phone')
-            .or(`sender_phone.eq.${params.phone},sender_name.ilike.%${params.pib}%`)
+        const phone = (params.phone || '').replace(/[\s\-()]/g, '').trim();
+        const pib = (params.pib || '').trim();
+        if (!phone && !pib) return { ok: true, data: [] };
+
+        // Build OR filter for all phone fields + name
+        const filters = [];
+        if (phone && phone.length >= 6) {
+            filters.push(`registrar_phone.ilike.%${phone}%`);
+            filters.push(`sender_phone.ilike.%${phone}%`);
+            filters.push(`recipient_phone.ilike.%${phone}%`);
+        }
+        if (pib && pib.length >= 2) {
+            filters.push(`sender_name.ilike.%${pib}%`);
+            filters.push(`recipient_name.ilike.%${pib}%`);
+        }
+
+        const { data, error } = await sb.from('packages')
+            .select('pkg_id, sender_name, registrar_phone, sender_phone, recipient_name, recipient_phone, direction, lead_status, total_amount, payment_currency')
+            .eq('tenant_id', TENANT_ID)
             .eq('is_archived', false)
-            .limit(10);
+            .or(filters.join(','))
+            .limit(15);
+        if (error) throw error;
 
         const mapped = (data || []).map(r => ({
             'PKG_ID': r.pkg_id,
-            'Піб відправника': r.sender_name,
-            'Телефон реєстратора': r.sender_phone,
-            'Піб отримувача': r.recipient_name,
-            'Телефон отримувача': r.recipient_phone,
+            'Піб відправника': r.sender_name || '',
+            'Телефон реєстратора': r.registrar_phone || '',
+            'Телефон відправника': r.sender_phone || '',
+            'Піб отримувача': r.recipient_name || '',
+            'Телефон отримувача': r.recipient_phone || '',
+            'Напрям': directionToFrontend(r.direction),
+            'Статус ліда': STATUS_SB_TO_UA[r.lead_status] || r.lead_status || '',
+            'Сума': r.total_amount || '',
+            'Валюта оплати': r.payment_currency || '',
         }));
 
-        return { ok: true, data: mapped };
+        return { ok: true, data: mapped, count: mapped.length };
     } catch (e) {
         console.error('sbPkgCheckDuplicates error:', e);
         return { ok: false, error: e.message };
@@ -964,6 +987,107 @@ async function sbPkgGetPayments(params) {
         return { ok: true, data: data || [] };
     } catch (e) {
         return { ok: true, data: [] };
+    }
+}
+
+// ================================================================
+// CLIENT CHAT / MESSENGER (table: messages)
+// ================================================================
+
+async function sbGetClientMessages(params) {
+    try {
+        const cliId = params.cli_id;
+        if (!cliId) return { ok: false, error: 'cli_id required' };
+
+        const { data, error } = await sb.from('messages')
+            .select('*')
+            .eq('tenant_id', TENANT_ID)
+            .eq('client_id', cliId)
+            .order('created_at', { ascending: true });
+        if (error) throw error;
+
+        const messages = (data || []).map(m => ({
+            message_id: m.id || m.message_id,
+            cli_id: m.client_id,
+            date: m.created_at,
+            role: m.sender_role || 'client',
+            sender_name: m.sender_name || (m.sender_role === 'manager' ? 'Менеджер' : 'Клієнт'),
+            text: m.content || m.text || '',
+            read: m.is_read ? 'Так' : '',
+        }));
+
+        return { ok: true, data: messages };
+    } catch (e) {
+        console.error('sbGetClientMessages error:', e);
+        return { ok: true, data: [] };
+    }
+}
+
+async function sbSendManagerMessage(params) {
+    try {
+        const cliId = params.cli_id;
+        const text = (params.text || '').trim();
+        const senderName = params.sender_name || 'Менеджер';
+        if (!cliId || !text) return { ok: false, error: 'cli_id and text required' };
+
+        const msg = {
+            tenant_id: TENANT_ID,
+            client_id: cliId,
+            sender_role: 'manager',
+            sender_name: senderName,
+            content: text,
+            is_read: true,
+            created_at: new Date().toISOString(),
+        };
+
+        const { data, error } = await sb.from('messages').insert(msg).select();
+        if (error) throw error;
+
+        return { ok: true, data: { message_id: data[0]?.id || data[0]?.message_id } };
+    } catch (e) {
+        console.error('sbSendManagerMessage error:', e);
+        return { ok: false, error: e.message };
+    }
+}
+
+async function sbGetUnreadCounts(_params) {
+    try {
+        const { data, error } = await sb.from('messages')
+            .select('client_id')
+            .eq('tenant_id', TENANT_ID)
+            .eq('sender_role', 'client')
+            .eq('is_read', false);
+        if (error) throw error;
+
+        const counts = {};
+        for (const row of (data || [])) {
+            const cid = row.client_id;
+            if (cid) counts[cid] = (counts[cid] || 0) + 1;
+        }
+        return { ok: true, data: counts };
+    } catch (e) {
+        console.error('sbGetUnreadCounts error:', e);
+        return { ok: true, data: {} };
+    }
+}
+
+async function sbMarkClientRead(params) {
+    try {
+        const cliId = params.cli_id;
+        if (!cliId) return { ok: false, error: 'cli_id required' };
+
+        const { error } = await sb.from('messages')
+            .update({ is_read: true })
+            .eq('tenant_id', TENANT_ID)
+            .eq('client_id', cliId)
+            .eq('sender_role', 'client')
+            .eq('is_read', false);
+        if (error) throw error;
+
+        return { ok: true };
+    } catch (e) {
+        console.error('sbMarkClientRead error:', e);
+        return { ok: true };
     }
 }
 
@@ -1669,17 +1793,18 @@ async function apiPostSupabase(action, params) {
         getPhotos:          sbPkgGetPhotos,
         addPhoto:           sbPkgAddPhoto,
 
-        // SMS/Messenger — still stubs (Sprint skipped per user)
-        getClientMessages:  async () => ({ ok: true, data: [] }),
-        sendManagerMessage: async () => ({ ok: true }),
-        getUnreadCounts:    async () => ({ ok: true, data: {} }),
-        markClientRead:     async () => ({ ok: true }),
+        // Client chat / messenger
+        getClientMessages:  sbGetClientMessages,
+        sendManagerMessage: sbSendManagerMessage,
+        getUnreadCounts:    sbGetUnreadCounts,
+        markClientRead:     sbMarkClientRead,
         getOrderInfo:       async (p) => sbPkgGetOne(p),
         getVerificationStats: async () => {
             const { data } = await sb.from('packages')
                 .select('quality_check_required')
+                .eq('tenant_id', TENANT_ID)
                 .eq('is_archived', false);
-            const stats = {};
+            const stats = { none: 0, 'В перевірці': 0, 'Готова до маршруту': 0, 'Відхилено': 0 };
             for (const r of (data || [])) {
                 const s = r.quality_check_required || 'none';
                 stats[s] = (stats[s] || 0) + 1;
