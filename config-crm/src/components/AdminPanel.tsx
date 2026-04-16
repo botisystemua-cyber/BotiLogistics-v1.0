@@ -24,6 +24,14 @@ const MODULE_LABEL: Record<string, string> = {
   driver: 'Водійська',
 };
 
+const TAG_PRESETS = ['Активний', 'Неактивний', 'SmartSender'] as const;
+const TAG_STYLE: Record<string, string> = {
+  'Активний':    'bg-emerald-50 border-emerald-200 text-emerald-700',
+  'Неактивний':  'bg-gray-100 border-gray-300 text-gray-500',
+  'SmartSender': 'bg-blue-50 border-blue-200 text-blue-700',
+};
+const DEFAULT_TAG_STYLE = 'bg-violet-50 border-violet-200 text-violet-700';
+
 export function AdminPanel({ onLogout }: { onLogout: () => void }) {
   const [section, setSection] = useState<Section>('clients');
 
@@ -179,7 +187,16 @@ function ClientsScreen() {
               {clients.map((c) => (
                 <tr key={c.id} className="border-b border-border last:border-0 hover:bg-bg/50">
                   <Td><code className="font-mono text-xs font-bold">{c.tenant_id}</code></Td>
-                  <Td className="font-semibold">{c.name}</Td>
+                  <Td>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-semibold">{c.name}</span>
+                      {(c.tags ?? []).map((t) => (
+                        <span key={t} className={`px-1.5 py-0.5 rounded-md border text-[9px] font-bold uppercase leading-none ${TAG_STYLE[t] ?? DEFAULT_TAG_STYLE}`}>
+                          {t}
+                        </span>
+                      ))}
+                    </div>
+                  </Td>
                   <Td>
                     <div className="flex flex-wrap gap-1">
                       {(c.modules ?? []).filter((m) => MODULE_LABEL[m]).map((m) => (
@@ -247,11 +264,25 @@ function ClientFormModal({
   const LOGO_BASE = 'https://botisystem.com/BotiLogistics-v1.0/logos/';
   const [logoUrl, setLogoUrl] = useState(initial?.logo_url || LOGO_BASE);
   const [modules, setModules] = useState<string[]>(initial?.modules ?? ['passenger']);
+  const [tags, setTags] = useState<string[]>(initial?.tags ?? []);
+  const [customTag, setCustomTag] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
   const toggleModule = (m: string) => {
     setModules((cur) => (cur.includes(m) ? cur.filter((x) => x !== m) : [...cur, m]));
+  };
+
+  const toggleTag = (t: string) => {
+    setTags((cur) => (cur.includes(t) ? cur.filter((x) => x !== t) : [...cur, t]));
+  };
+
+  const addCustomTag = () => {
+    const t = customTag.trim();
+    if (t && !tags.includes(t)) {
+      setTags((cur) => [...cur, t]);
+    }
+    setCustomTag('');
   };
 
   const handleSave = async () => {
@@ -268,6 +299,7 @@ function ClientFormModal({
         password: null,
         logo_url: logoUrl.trim() || null,
         modules,
+        tags,
       };
       if (initial) await updateClient(initial.id, input);
       else await createClient(input);
@@ -334,6 +366,54 @@ function ClientFormModal({
                   </button>
                 );
               })}
+            </div>
+          </Field>
+          <Field label="Мітки">
+            <div className="flex flex-wrap gap-2 mb-2">
+              {TAG_PRESETS.map((t) => {
+                const on = tags.includes(t);
+                const style = TAG_STYLE[t] ?? DEFAULT_TAG_STYLE;
+                return (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => toggleTag(t)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold border-2 cursor-pointer transition-all ${
+                      on
+                        ? style.replace(/border-\w+-200/g, (m) => m.replace('200', '400'))
+                        : 'bg-bg border-border text-muted hover:border-gray-300'
+                    }`}
+                  >
+                    {on ? '✓ ' : ''}{t}
+                  </button>
+                );
+              })}
+            </div>
+            {tags.filter((t) => !TAG_PRESETS.includes(t as typeof TAG_PRESETS[number])).length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                {tags.filter((t) => !TAG_PRESETS.includes(t as typeof TAG_PRESETS[number])).map((t) => (
+                  <span key={t} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-violet-50 border border-violet-200 text-[11px] font-bold text-violet-700">
+                    {t}
+                    <button type="button" onClick={() => toggleTag(t)} className="ml-0.5 text-violet-400 hover:text-violet-700 cursor-pointer">&times;</button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <div className="flex gap-2">
+              <input
+                value={customTag}
+                onChange={(e) => setCustomTag(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCustomTag(); } }}
+                placeholder="Своя мітка..."
+                className="flex-1 px-3 py-2 bg-bg border-2 border-border rounded-xl text-sm focus:outline-none focus:border-violet-400"
+              />
+              <button
+                type="button"
+                onClick={addCustomTag}
+                className="px-3 py-2 rounded-xl border-2 border-border text-xs font-bold text-muted hover:border-violet-300 hover:text-violet-600 cursor-pointer transition-all"
+              >
+                + Додати
+              </button>
             </div>
           </Field>
         </div>
