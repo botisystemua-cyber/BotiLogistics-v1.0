@@ -687,13 +687,15 @@ function filterData() {
     data = data.filter(p => p['Напрям'] === 'ЄВ→УК');
   }
 
-  // Verification filter (sidebar: Всі / В перевірці / Готові / Невідомі)
+  // Verification filter (sidebar: Всі / В перевірці / Готові / Невідомі / Відхилені)
   if (currentVerifyFilter === 'checking') {
     data = data.filter(p => p['Контроль перевірки'] === 'В перевірці');
   } else if (currentVerifyFilter === 'ready') {
     data = data.filter(p => p['Контроль перевірки'] === 'Готова до маршруту');
   } else if (currentVerifyFilter === 'unknown') {
     data = data.filter(p => p['Статус ліда'] === 'Невідомий');
+  } else if (currentVerifyFilter === 'rejected') {
+    data = data.filter(p => p['Контроль перевірки'] === 'Відхилено');
   }
 
   // Lead status filter (chip bar)
@@ -803,6 +805,7 @@ function renderCard(p) {
   let statusClass = '';
   if (controlCheck === 'Готова до маршруту') statusClass = 'status-ready';
   else if (controlCheck === 'В перевірці') statusClass = 'status-checking';
+  else if (controlCheck === 'Відхилено') statusClass = 'status-refused';
   else if (leadStatus === 'Новий') statusClass = 'status-new';
   else if (leadStatus === 'В роботі' || leadStatus === 'Активний') statusClass = 'status-work';
   else if (leadStatus === 'Підтверджено' || leadStatus === 'Зарахований') statusClass = 'status-confirmed';
@@ -979,7 +982,9 @@ function renderCard(p) {
         ${trackBtn}
         <button onclick="event.stopPropagation(); startVerification('${pkgId}')" style="${controlCheck === 'В перевірці' ? 'background:var(--info);color:#fff;' : ''}">🔍 ${controlCheck === 'В перевірці' ? 'В перевірці' : 'В перевірку'}</button>
         ${controlCheck === 'В перевірці' ? `<button onclick="event.stopPropagation(); completeVerification('${pkgId}')" style="background:var(--success);color:#fff;">✅ Готово</button>` : ''}
+        ${controlCheck === 'В перевірці' ? `<button onclick="event.stopPropagation(); rejectVerification('${pkgId}')" style="background:var(--danger);color:#fff;">❌ Відхилити</button>` : ''}
         ${controlCheck === 'Готова до маршруту' ? `<span style="display:inline-flex;align-items:center;padding:6px 12px;background:#dcfce7;color:#166534;border-radius:8px;font-size:12px;font-weight:600;">✅ Готова</span>` : ''}
+        ${controlCheck === 'Відхилено' ? `<span style="display:inline-flex;align-items:center;padding:6px 12px;background:#fee2e2;color:#991b1b;border-radius:8px;font-size:12px;font-weight:600;">❌ Відхилено</span>` : ''}
         <button onclick="event.stopPropagation(); openRouteModal('${pkgId}')">🚖 Маршрут</button>
         ${leadStatus !== 'Невідомий' ? `<button onclick="event.stopPropagation(); setLeadUnknown('${pkgId}')" style="background:#fef3c7;color:#92400e;">❓ Невідомий</button>` : `<span style="display:inline-flex;align-items:center;padding:6px 12px;background:#fef3c7;color:#92400e;border-radius:8px;font-size:12px;font-weight:600;">❓ Невідомий</span>`}
         <button class="btn-danger" onclick="event.stopPropagation(); deleteRecord('${pkgId}')">🗑️</button>
@@ -1043,7 +1048,7 @@ function getFieldOptions(col) {
     'Форма оплати':     ['Готівка', 'Картка', 'Частково'],
     'Адреса відправки': swissAddrs,
     'Адреса в Європі':  swissAddrs,
-    'Контроль перевірки': ['', 'В перевірці', 'Готова до маршруту'],
+    'Контроль перевірки': ['', 'В перевірці', 'Готова до маршруту', 'Відхилено'],
     'Тег':              ['', 'VIP', 'срочна', 'крихке', 'великогабарит'],
   };
   return opts[col] || null;
@@ -1466,6 +1471,122 @@ async function bulkArchive() {
 
 // ===== [SECT-VERIFY] VERIFICATION (перевірка посилок) =====
 
+// ---------- Scan TTN modal ----------
+
+function openScanTTNModal() {
+  // Створюємо модалку для сканування ТТН (якщо ще не існує)
+  let overlay = document.getElementById('scan-ttn-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'scan-ttn-overlay';
+    overlay.className = 'confirm-overlay';
+    overlay.innerHTML = `
+      <div class="confirm-box" style="max-width:460px;width:92%;">
+        <h3 style="margin:0 0 12px;font-size:16px;">📷 Сканувати ТТН</h3>
+        <input id="scan-ttn-input" type="text" placeholder="Введіть або відскануйте ТТН..."
+               style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:15px;margin-bottom:12px;box-sizing:border-box;">
+        <div id="scan-ttn-result" style="display:none;margin-bottom:12px;"></div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;">
+          <button onclick="closeScanTTNModal()" style="padding:8px 16px;border:1px solid var(--border);border-radius:8px;background:#fff;cursor:pointer;">Скасувати</button>
+          <button id="scan-ttn-btn" onclick="doScanTTN()" style="padding:8px 16px;border:none;border-radius:8px;background:var(--primary);color:#fff;font-weight:600;cursor:pointer;">Сканувати</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+  }
+  // Скидаємо стан
+  document.getElementById('scan-ttn-input').value = '';
+  document.getElementById('scan-ttn-result').style.display = 'none';
+  document.getElementById('scan-ttn-result').innerHTML = '';
+  overlay.classList.add('active');
+  setTimeout(() => document.getElementById('scan-ttn-input').focus(), 100);
+
+  // Enter → сканувати
+  document.getElementById('scan-ttn-input').onkeydown = (e) => {
+    if (e.key === 'Enter') doScanTTN();
+  };
+}
+
+function closeScanTTNModal() {
+  const overlay = document.getElementById('scan-ttn-overlay');
+  if (overlay) overlay.classList.remove('active');
+}
+
+async function doScanTTN() {
+  const input = document.getElementById('scan-ttn-input');
+  const resultDiv = document.getElementById('scan-ttn-result');
+  const btn = document.getElementById('scan-ttn-btn');
+  const ttn = (input.value || '').trim();
+  if (!ttn) { showToast('Введіть ТТН', 'error'); return; }
+
+  btn.disabled = true;
+  btn.textContent = '⏳ Шукаю...';
+
+  const res = await apiPost('scanTTN', { ttn });
+
+  btn.disabled = false;
+  btn.textContent = 'Сканувати';
+
+  if (!res.ok) {
+    showToast('Помилка: ' + res.error, 'error');
+    return;
+  }
+
+  resultDiv.style.display = 'block';
+
+  if (res.type === 'found') {
+    // ТИП A — знайдено
+    const p = res.data;
+    // Оновити локальний масив
+    const idx = allData.findIndex(x => x['PKG_ID'] === p['PKG_ID']);
+    if (idx !== -1) {
+      allData[idx]['Контроль перевірки'] = 'В перевірці';
+      allData[idx]['Дата перевірки'] = p['Дата перевірки'];
+    }
+
+    let dupHtml = '';
+    if (res.duplicates && res.duplicates.length > 0) {
+      dupHtml = `<div style="margin-top:8px;padding:8px;background:#fef3c7;border-radius:6px;font-size:13px;">
+        <b>⚠️ Знайдено ${res.duplicates.length} дублікат(ів) по отримувачу:</b><br>
+        ${res.duplicates.map(d => `• ${d['PKG_ID']} — ${d['Піб отримувача'] || '?'} (${d['Телефон отримувача'] || '?'})`).join('<br>')}
+      </div>`;
+    }
+
+    resultDiv.innerHTML = `
+      <div style="padding:10px;background:#dcfce7;border-radius:8px;border:1px solid #86efac;">
+        <b>✅ Знайдено:</b> ${p['PKG_ID']}<br>
+        <span style="font-size:13px;">📦 ${p['Піб відправника'] || '?'} → ${p['Піб отримувача'] || '?'}</span><br>
+        <span style="font-size:13px;">ТТН: ${p['Номер ТТН']} · ${p['Кг'] || '?'} кг</span><br>
+        <span style="font-size:12px;color:#166534;">Статус → «В перевірці»</span>
+      </div>
+      ${dupHtml}
+    `;
+
+    renderCards();
+    updateCounters();
+    showToast('ТТН знайдено — переведено в перевірку', 'success');
+
+  } else if (res.type === 'new') {
+    // ТИП B — створено нову "невідому" посилку
+    const p = res.data;
+    allData.unshift(p);
+
+    resultDiv.innerHTML = `
+      <div style="padding:10px;background:#fef3c7;border-radius:8px;border:1px solid #fbbf24;">
+        <b>📦 Невідома посилка створена:</b> ${p['PKG_ID']}<br>
+        <span style="font-size:13px;">ТТН: ${ttn}</span><br>
+        <span style="font-size:12px;color:#92400e;">Статус ліда → «Невідомий», Контроль → «В перевірці»</span>
+      </div>
+    `;
+
+    renderCards();
+    updateCounters();
+    showToast('Нову посилку створено як "Невідома"', 'info');
+  }
+}
+
+// ---------- Start / Complete / Reject verification ----------
+
 // Перевести лід в перевірку
 function startVerification(pkgId) {
   const item = allData.find(p => p['PKG_ID'] === pkgId);
@@ -1488,15 +1609,42 @@ function startVerification(pkgId) {
   // Відправити на сервер
   apiPost('updateField', { pkg_id: pkgId, col: 'Контроль перевірки', value: 'В перевірці' });
   apiPost('updateField', { pkg_id: pkgId, col: 'Статус ліда', value: 'В роботі' });
+
+  // Автоматично шукати дублікати
+  apiPost('findDuplicatesByRecipient', { pkg_id: pkgId }).then(res => {
+    if (res.ok && res.count > 0) {
+      showToast(`⚠️ Знайдено ${res.count} дублікат(ів) по отримувачу`, 'info');
+    }
+  });
 }
 
 // Завершити перевірку — позначити як "Готово"
-function completeVerification(pkgId) {
+async function completeVerification(pkgId) {
   const item = allData.find(p => p['PKG_ID'] === pkgId);
   if (!item) return;
 
   if (item['Контроль перевірки'] === 'Готова до маршруту') {
     showToast('Вже позначено як готова', 'info');
+    return;
+  }
+
+  // Перевірити чи є внутрішній номер
+  if (!item['Внутрішній №']) {
+    // Автопризначити номер
+    const numRes = await apiPost('assignRouteNumber', { pkg_id: pkgId, route_base: 200 });
+    if (numRes.ok) {
+      item['Внутрішній №'] = String(numRes.number);
+      showToast(`Присвоєно внутрішній № ${numRes.number}`, 'info');
+    } else {
+      showToast('Не вдалося присвоїти внутрішній №: ' + numRes.error, 'error');
+      return;
+    }
+  }
+
+  // Завершити верифікацію через API
+  const res = await apiPost('completeVerification', { pkg_id: pkgId, skip_validation: true });
+  if (!res.ok) {
+    showToast('Помилка: ' + res.error, 'error');
     return;
   }
 
@@ -1508,9 +1656,48 @@ function completeVerification(pkgId) {
   updateCounters();
   showToast('Перевірку завершено — готова до маршруту', 'success');
 
-  // Відправити на сервер
-  apiPost('updateField', { pkg_id: pkgId, col: 'Контроль перевірки', value: 'Готова до маршруту' });
   apiPost('updateField', { pkg_id: pkgId, col: 'Статус ліда', value: 'Підтверджено' });
+}
+
+// Відхилити посилку з причиною
+function rejectVerification(pkgId) {
+  const item = allData.find(p => p['PKG_ID'] === pkgId);
+  if (!item) return;
+
+  const reason = prompt('Причина відхилення:');
+  if (reason === null) return; // скасовано
+
+  item['Контроль перевірки'] = 'Відхилено';
+  item['Статус ліда'] = 'Відмова';
+  item['Примітка'] = reason;
+  renderCards();
+  updateCounters();
+  showToast('Посилку відхилено', 'success');
+
+  apiPost('rejectVerification', { pkg_id: pkgId, reason });
+}
+
+// ---------- Assign Route Number (manual) ----------
+
+async function assignRouteNumber(pkgId, routeBase) {
+  const item = allData.find(p => p['PKG_ID'] === pkgId);
+  if (!item) return;
+
+  if (item['Внутрішній №']) {
+    showToast(`Вже має внутрішній № ${item['Внутрішній №']}`, 'info');
+    return;
+  }
+
+  const base = parseInt(routeBase) || 200;
+  const res = await apiPost('assignRouteNumber', { pkg_id: pkgId, route_base: base });
+  if (!res.ok) {
+    showToast('Помилка: ' + res.error, 'error');
+    return;
+  }
+
+  item['Внутрішній №'] = String(res.number);
+  renderCards();
+  showToast(`Присвоєно внутрішній № ${res.number}`, 'success');
 }
 
 // Призначити статус "Невідомий" ліду
@@ -1543,6 +1730,8 @@ function bulkSetVerifyStatus(status) {
         item['Статус ліда'] = 'В роботі';
       } else if (status === 'Готова до маршруту') {
         item['Статус ліда'] = 'Підтверджено';
+      } else if (status === 'Відхилено') {
+        item['Статус ліда'] = 'Відмова';
       }
     }
   });
@@ -1558,6 +1747,8 @@ function bulkSetVerifyStatus(status) {
       apiPost('updateField', { pkg_id: id, col: 'Статус ліда', value: 'В роботі' });
     } else if (status === 'Готова до маршруту') {
       apiPost('updateField', { pkg_id: id, col: 'Статус ліда', value: 'Підтверджено' });
+    } else if (status === 'Відхилено') {
+      apiPost('updateField', { pkg_id: id, col: 'Статус ліда', value: 'Відмова' });
     }
   });
 
@@ -3225,15 +3416,18 @@ function updateCounters() {
     var cChecking = dirData.filter(p => p['Контроль перевірки'] === 'В перевірці').length;
     var cReady = dirData.filter(p => p['Контроль перевірки'] === 'Готова до маршруту').length;
     var cUnknown = dirData.filter(p => p['Статус ліда'] === 'Невідомий').length;
+    var cRejected = dirData.filter(p => p['Контроль перевірки'] === 'Відхилено').length;
     setCount('countAll', cAll);
     setCount('countChecking', cChecking);
     setCount('countReady', cReady);
     setCount('countUnknown', cUnknown);
+    setCount('countRejected', cRejected);
     // Mobile counters
     setCount('mobCountAll', cAll);
     setCount('mobCountChecking', cChecking);
     setCount('mobCountReady', cReady);
     setCount('mobCountUnknown', cUnknown);
+    setCount('mobCountRejected', cRejected);
   } catch(e) { console.error('updateCounters error:', e); }
 }
 
