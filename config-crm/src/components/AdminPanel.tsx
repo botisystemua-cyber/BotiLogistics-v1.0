@@ -26,7 +26,7 @@ const MODULE_LABEL: Record<string, string> = {
 
 const TAG_PRESETS = ['Активний', 'Неактивний', 'SmartSender'] as const;
 const TAG_STYLE: Record<string, string> = {
-  'Активний':    'bg-emerald-50 border-emerald-200 text-emerald-700',
+  'Активний':    'bg-teal-50 border-teal-200 text-teal-700',
   'Неактивний':  'bg-gray-100 border-gray-300 text-gray-500',
   'SmartSender': 'bg-blue-50 border-blue-200 text-blue-700',
 };
@@ -265,7 +265,6 @@ function ClientFormModal({
   const [logoUrl, setLogoUrl] = useState(initial?.logo_url || LOGO_BASE);
   const [modules, setModules] = useState<string[]>(initial?.modules ?? ['passenger']);
   const [tags, setTags] = useState<string[]>(initial?.tags ?? []);
-  const [customTag, setCustomTag] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -275,14 +274,6 @@ function ClientFormModal({
 
   const toggleTag = (t: string) => {
     setTags((cur) => (cur.includes(t) ? cur.filter((x) => x !== t) : [...cur, t]));
-  };
-
-  const addCustomTag = () => {
-    const t = customTag.trim();
-    if (t && !tags.includes(t)) {
-      setTags((cur) => [...cur, t]);
-    }
-    setCustomTag('');
   };
 
   const handleSave = async () => {
@@ -388,32 +379,6 @@ function ClientFormModal({
                   </button>
                 );
               })}
-            </div>
-            {tags.filter((t) => !TAG_PRESETS.includes(t as typeof TAG_PRESETS[number])).length > 0 && (
-              <div className="flex flex-wrap gap-1.5 mb-2">
-                {tags.filter((t) => !TAG_PRESETS.includes(t as typeof TAG_PRESETS[number])).map((t) => (
-                  <span key={t} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-violet-50 border border-violet-200 text-[11px] font-bold text-violet-700">
-                    {t}
-                    <button type="button" onClick={() => toggleTag(t)} className="ml-0.5 text-violet-400 hover:text-violet-700 cursor-pointer">&times;</button>
-                  </span>
-                ))}
-              </div>
-            )}
-            <div className="flex gap-2">
-              <input
-                value={customTag}
-                onChange={(e) => setCustomTag(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCustomTag(); } }}
-                placeholder="Своя мітка..."
-                className="flex-1 px-3 py-2 bg-bg border-2 border-border rounded-xl text-sm focus:outline-none focus:border-violet-400"
-              />
-              <button
-                type="button"
-                onClick={addCustomTag}
-                className="px-3 py-2 rounded-xl border-2 border-border text-xs font-bold text-muted hover:border-violet-300 hover:text-violet-600 cursor-pointer transition-all"
-              >
-                + Додати
-              </button>
             </div>
           </Field>
         </div>
