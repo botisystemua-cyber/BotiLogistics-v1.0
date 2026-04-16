@@ -93,7 +93,8 @@ const NUMERIC_COLS_PKG = new Set([
 // ── STATUS VALUE MAPPING: Supabase English → Frontend Ukrainian ──
 const STATUS_SB_TO_UA = {
     'new': 'Новий', 'in_progress': 'В роботі', 'confirmed': 'Підтверджено',
-    'refused': 'Відмова', 'active': 'Активний', 'archived': 'Архів',
+    'refused': 'Відмова', 'rejected': 'Відмова', 'active': 'Активний', 'archived': 'Архів',
+    'unknown': 'Невідомий',
     'pending': 'Не оплачено', 'partial': 'Частково', 'paid': 'Оплачено',
     'received': 'Отримано', 'in_transit': 'В дорозі', 'delivered': 'Доставлено',
     'returned': 'Повернуто',
@@ -918,21 +919,44 @@ async function sbPkgGetDispatchSheet(params) {
 
 async function sbPkgCheckDuplicates(params) {
     try {
-        const { data } = await sb.from('packages')
-            .select('pkg_id, sender_name, sender_phone, recipient_name, recipient_phone')
-            .or(`sender_phone.eq.${params.phone},sender_name.ilike.%${params.pib}%`)
+        const phone = (params.phone || '').replace(/[\s\-()]/g, '').trim();
+        const pib = (params.pib || '').trim();
+        if (!phone && !pib) return { ok: true, data: [] };
+
+        // Build OR filter for all phone fields + name
+        const filters = [];
+        if (phone && phone.length >= 6) {
+            filters.push(`registrar_phone.ilike.%${phone}%`);
+            filters.push(`sender_phone.ilike.%${phone}%`);
+            filters.push(`recipient_phone.ilike.%${phone}%`);
+        }
+        if (pib && pib.length >= 2) {
+            filters.push(`sender_name.ilike.%${pib}%`);
+            filters.push(`recipient_name.ilike.%${pib}%`);
+        }
+
+        const { data, error } = await sb.from('packages')
+            .select('pkg_id, sender_name, registrar_phone, sender_phone, recipient_name, recipient_phone, direction, lead_status, total_amount, payment_currency')
+            .eq('tenant_id', TENANT_ID)
             .eq('is_archived', false)
-            .limit(10);
+            .or(filters.join(','))
+            .limit(15);
+        if (error) throw error;
 
         const mapped = (data || []).map(r => ({
             'PKG_ID': r.pkg_id,
-            'Піб відправника': r.sender_name,
-            'Телефон реєстратора': r.sender_phone,
-            'Піб отримувача': r.recipient_name,
-            'Телефон отримувача': r.recipient_phone,
+            'Піб відправника': r.sender_name || '',
+            'Телефон реєстратора': r.registrar_phone || '',
+            'Телефон відправника': r.sender_phone || '',
+            'Піб отримувача': r.recipient_name || '',
+            'Телефон отримувача': r.recipient_phone || '',
+            'Напрям': directionToFrontend(r.direction),
+            'Статус ліда': STATUS_SB_TO_UA[r.lead_status] || r.lead_status || '',
+            'Сума': r.total_amount || '',
+            'Валюта оплати': r.payment_currency || '',
         }));
 
-        return { ok: true, data: mapped };
+        return { ok: true, data: mapped, count: mapped.length };
     } catch (e) {
         console.error('sbPkgCheckDuplicates error:', e);
         return { ok: false, error: e.message };
@@ -963,6 +987,371 @@ async function sbPkgGetPayments(params) {
         return { ok: true, data: data || [] };
     } catch (e) {
         return { ok: true, data: [] };
+    }
+}
+
+// ================================================================
+// CLIENT CHAT / MESSENGER (table: messages)
+// ================================================================
+
+async function sbGetClientMessages(params) {
+    try {
+        const cliId = params.cli_id;
+        if (!cliId) return { ok: false, error: 'cli_id required' };
+
+        const { data, error } = await sb.from('messages')
+            .select('*')
+            .eq('tenant_id', TENANT_ID)
+            .eq('client_id', cliId)
+            .order('created_at', { ascending: true });
+        if (error) throw error;
+
+        const messages = (data || []).map(m => ({
+            message_id: m.id || m.message_id,
+            cli_id: m.client_id,
+            date: m.created_at,
+            role: m.sender_role || 'client',
+            sender_name: m.sender_name || (m.sender_role === 'manager' ? 'Менеджер' : 'Клієнт'),
+            text: m.content || m.text || '',
+            read: m.is_read ? 'Так' : '',
+        }));
+
+        return { ok: true, data: messages };
+    } catch (e) {
+        console.error('sbGetClientMessages error:', e);
+        return { ok: true, data: [] };
+    }
+}
+
+async function sbSendManagerMessage(params) {
+    try {
+        const cliId = params.cli_id;
+        const text = (params.text || '').trim();
+        const senderName = params.sender_name || 'Менеджер';
+        if (!cliId || !text) return { ok: false, error: 'cli_id and text required' };
+
+        const msg = {
+            tenant_id: TENANT_ID,
+            client_id: cliId,
+            sender_role: 'manager',
+            sender_name: senderName,
+            content: text,
+            is_read: true,
+            created_at: new Date().toISOString(),
+        };
+
+        const { data, error } = await sb.from('messages').insert(msg).select();
+        if (error) throw error;
+
+        return { ok: true, data: { message_id: data[0]?.id || data[0]?.message_id } };
+    } catch (e) {
+        console.error('sbSendManagerMessage error:', e);
+        return { ok: false, error: e.message };
+    }
+}
+
+async function sbGetUnreadCounts(_params) {
+    try {
+        const { data, error } = await sb.from('messages')
+            .select('client_id')
+            .eq('tenant_id', TENANT_ID)
+            .eq('sender_role', 'client')
+            .eq('is_read', false);
+        if (error) throw error;
+
+        const counts = {};
+        for (const row of (data || [])) {
+            const cid = row.client_id;
+            if (cid) counts[cid] = (counts[cid] || 0) + 1;
+        }
+        return { ok: true, data: counts };
+    } catch (e) {
+        console.error('sbGetUnreadCounts error:', e);
+        return { ok: true, data: {} };
+    }
+}
+
+async function sbMarkClientRead(params) {
+    try {
+        const cliId = params.cli_id;
+        if (!cliId) return { ok: false, error: 'cli_id required' };
+
+        const { error } = await sb.from('messages')
+            .update({ is_read: true })
+            .eq('tenant_id', TENANT_ID)
+            .eq('client_id', cliId)
+            .eq('sender_role', 'client')
+            .eq('is_read', false);
+        if (error) throw error;
+
+        return { ok: true };
+    } catch (e) {
+        console.error('sbMarkClientRead error:', e);
+        return { ok: true };
+    }
+}
+
+// ================================================================
+// VERIFICATION WORKFLOW (scanTTN, duplicates, route number, complete/reject)
+// ================================================================
+
+/**
+ * scanTTN — сканування ТТН при прибутті посилки
+ * ТИП A: знайдено → оновити статус «В перевірці», показати дублікати
+ * ТИП B: не знайдено → створити «невідому» посилку
+ */
+async function sbScanTTN(params) {
+    try {
+        const ttn = String(params.ttn || '').trim();
+        if (!ttn) return { ok: false, error: 'ТТН не вказано' };
+
+        // Шукаємо в packages по ttn_number
+        const { data, error } = await sb.from('packages')
+            .select('*')
+            .eq('tenant_id', TENANT_ID)
+            .eq('ttn_number', ttn)
+            .eq('is_archived', false)
+            .limit(1);
+        if (error) throw error;
+
+        if (data && data.length > 0) {
+            // ТИП A — знайдено → оновити статус
+            const row = data[0];
+            const now = new Date().toISOString();
+
+            await sb.from('packages')
+                .update({ quality_check_required: 'В перевірці', quality_checked_at: now })
+                .eq('pkg_id', row.pkg_id)
+                .eq('tenant_id', TENANT_ID);
+
+            const obj = sbToGasObjPkg(row);
+            obj['Контроль перевірки'] = 'В перевірці';
+            obj['Дата перевірки'] = now;
+            obj['Борг'] = calcDebtPkg(obj);
+
+            // Пошук дублікатів по отримувачу
+            const duplicates = await _findDuplicatesInternal(
+                row.pkg_id, row.recipient_name, row.recipient_phone
+            );
+
+            return { ok: true, type: 'found', data: obj, duplicates };
+        }
+
+        // ТИП B — не знайдено → створити «невідому» посилку
+        const pkgId = 'PKG' + Date.now();
+        const now = new Date().toISOString();
+        const newPkg = {
+            pkg_id: pkgId,
+            tenant_id: TENANT_ID,
+            direction: 'Україна-ЄВ',
+            created_at: now,
+            ttn_number: ttn,
+            lead_status: 'unknown',
+            crm_status: 'active',
+            is_archived: false,
+            quality_check_required: 'В перевірці',
+            quality_checked_at: now,
+            sender_name: '',
+            sender_phone: '',
+            sender_address: '',
+            recipient_name: '',
+            recipient_phone: '',
+            recipient_address: '',
+        };
+
+        const { data: inserted, error: insErr } = await sb.from('packages')
+            .insert(newPkg).select();
+        if (insErr) throw insErr;
+
+        const obj = sbToGasObjPkg(inserted[0]);
+        obj['Борг'] = calcDebtPkg(obj);
+
+        return { ok: true, type: 'new', data: obj, pkg_id: pkgId };
+    } catch (e) {
+        console.error('sbScanTTN error:', e);
+        return { ok: false, error: e.message };
+    }
+}
+
+/**
+ * Внутрішня функція пошуку дублікатів по отримувачу
+ */
+async function _findDuplicatesInternal(excludePkgId, recipientName, recipientPhone) {
+    try {
+        const name = (recipientName || '').toLowerCase().trim();
+        const phone = (recipientPhone || '').replace(/\s+/g, '').trim();
+        if (!name && !phone) return [];
+
+        // Збираємо всі активні посилки цього тенанта
+        const { data, error } = await sb.from('packages')
+            .select('*')
+            .eq('tenant_id', TENANT_ID)
+            .eq('is_archived', false);
+        if (error) return [];
+
+        const duplicates = [];
+        for (const row of (data || [])) {
+            if (row.pkg_id === excludePkgId) continue;
+            if (row.crm_status === 'archived') continue;
+
+            const pName = (row.recipient_name || '').toLowerCase();
+            const pPhone = (row.recipient_phone || '').replace(/\s+/g, '');
+
+            if ((name && pName.includes(name)) || (phone && phone.length >= 6 && pPhone.includes(phone))) {
+                const obj = sbToGasObjPkg(row);
+                obj['Борг'] = calcDebtPkg(obj);
+                duplicates.push(obj);
+            }
+        }
+        return duplicates;
+    } catch (e) {
+        console.error('_findDuplicatesInternal error:', e);
+        return [];
+    }
+}
+
+/**
+ * findDuplicatesByRecipient — зовнішній endpoint
+ * params: { pkg_id }
+ */
+async function sbFindDuplicatesByRecipient(params) {
+    try {
+        const pkgId = params.pkg_id;
+        if (!pkgId) return { ok: false, error: 'pkg_id обов\'язковий' };
+
+        const { data, error } = await sb.from('packages')
+            .select('recipient_name, recipient_phone')
+            .eq('pkg_id', pkgId)
+            .eq('tenant_id', TENANT_ID)
+            .limit(1);
+        if (error) throw error;
+        if (!data || data.length === 0) return { ok: false, error: 'Посилку не знайдено' };
+
+        const row = data[0];
+        const duplicates = await _findDuplicatesInternal(
+            pkgId, row.recipient_name, row.recipient_phone
+        );
+
+        return { ok: true, duplicates, count: duplicates.length };
+    } catch (e) {
+        console.error('sbFindDuplicatesByRecipient error:', e);
+        return { ok: false, error: e.message };
+    }
+}
+
+/**
+ * assignRouteNumber — автогенерація внутрішнього номера
+ * params: { pkg_id, route_base }
+ * route_base: 200 → діапазон 200-299, overflow 900+
+ */
+async function sbAssignRouteNumber(params) {
+    try {
+        const base = parseInt(params.route_base) || 200;
+        const rangeStart = base;
+        const rangeEnd = base + 99;
+        const overflowStart = (base === 200) ? 900 : 800;
+
+        // Зібрати всі існуючі внутрішні номери
+        const { data, error } = await sb.from('packages')
+            .select('internal_number')
+            .eq('tenant_id', TENANT_ID)
+            .eq('is_archived', false)
+            .not('internal_number', 'is', null);
+        if (error) throw error;
+
+        const existingNums = {};
+        for (const row of (data || [])) {
+            const num = parseInt(row.internal_number);
+            if (!isNaN(num)) existingNums[num] = true;
+        }
+
+        // Знайти наступний вільний номер
+        let nextNum = rangeStart;
+        while (existingNums[nextNum] && nextNum <= rangeEnd) {
+            nextNum++;
+        }
+        // Якщо діапазон повний → overflow
+        if (nextNum > rangeEnd) {
+            nextNum = overflowStart;
+            while (existingNums[nextNum]) {
+                nextNum++;
+            }
+        }
+
+        // Оновити посилку
+        const { error: updErr } = await sb.from('packages')
+            .update({ internal_number: String(nextNum) })
+            .eq('pkg_id', params.pkg_id)
+            .eq('tenant_id', TENANT_ID);
+        if (updErr) throw updErr;
+
+        return { ok: true, number: nextNum, pkg_id: params.pkg_id };
+    } catch (e) {
+        console.error('sbAssignRouteNumber error:', e);
+        return { ok: false, error: e.message };
+    }
+}
+
+/**
+ * completeVerification — завершити перевірку
+ * params: { pkg_id, skip_validation }
+ */
+async function sbCompleteVerification(params) {
+    try {
+        const pkgId = params.pkg_id;
+        if (!pkgId) return { ok: false, error: 'pkg_id обов\'язковий' };
+
+        // Валідація (якщо не skip)
+        if (!params.skip_validation) {
+            const { data } = await sb.from('packages')
+                .select('internal_number')
+                .eq('pkg_id', pkgId)
+                .eq('tenant_id', TENANT_ID)
+                .limit(1);
+            if (data && data[0] && !data[0].internal_number) {
+                return { ok: false, error: 'Внутрішній № обов\'язковий для завершення перевірки' };
+            }
+        }
+
+        const { error } = await sb.from('packages')
+            .update({
+                quality_check_required: 'Готова до маршруту',
+                quality_checked_at: new Date().toISOString()
+            })
+            .eq('pkg_id', pkgId)
+            .eq('tenant_id', TENANT_ID);
+        if (error) throw error;
+
+        return { ok: true, pkg_id: pkgId };
+    } catch (e) {
+        console.error('sbCompleteVerification error:', e);
+        return { ok: false, error: e.message };
+    }
+}
+
+/**
+ * rejectVerification — відхилити посилку
+ * params: { pkg_id, reason }
+ */
+async function sbRejectVerification(params) {
+    try {
+        const pkgId = params.pkg_id;
+        if (!pkgId) return { ok: false, error: 'pkg_id обов\'язковий' };
+
+        const { error } = await sb.from('packages')
+            .update({
+                lead_status: 'rejected',
+                quality_check_required: 'Відхилено',
+                notes: params.reason || ''
+            })
+            .eq('pkg_id', pkgId)
+            .eq('tenant_id', TENANT_ID);
+        if (error) throw error;
+
+        return { ok: true, pkg_id: pkgId };
+    } catch (e) {
+        console.error('sbRejectVerification error:', e);
+        return { ok: false, error: e.message };
     }
 }
 
@@ -1389,20 +1778,14 @@ async function apiPostSupabase(action, params) {
         getExpensesList:    sbPkgGetExpensesList,    // sidebar grouped by rte_id
         getExpensesSheet:   sbPkgGetExpensesSheet,   // detail rows for one rte_id
 
-        // Verification — Nova Poshta
-        scanTTN:            async (p) => {
-            const { data } = await sb.from('packages')
-                .select('*')
-                .eq('tenant_id', TENANT_ID)
-                .eq('ttn_number', p.ttn)
-                .eq('is_archived', false).limit(1);
-            if (data && data.length > 0) {
-                const obj = sbToGasObjPkg(data[0]);
-                obj['Борг'] = calcDebtPkg(obj);
-                return { ok: true, found: true, data: obj };
-            }
-            return { ok: true, found: false };
-        },
+        // Verification workflow
+        scanTTN:                    sbScanTTN,
+        findDuplicatesByRecipient:  sbFindDuplicatesByRecipient,
+        assignRouteNumber:          sbAssignRouteNumber,
+        completeVerification:       sbCompleteVerification,
+        rejectVerification:         sbRejectVerification,
+
+        // Nova Poshta tracking
         trackParcel:        sbPkgTrackParcel,
         checkNpApiKey:      sbPkgCheckNpApiKey,
 
@@ -1410,17 +1793,18 @@ async function apiPostSupabase(action, params) {
         getPhotos:          sbPkgGetPhotos,
         addPhoto:           sbPkgAddPhoto,
 
-        // SMS/Messenger — still stubs (Sprint skipped per user)
-        getClientMessages:  async () => ({ ok: true, data: [] }),
-        sendManagerMessage: async () => ({ ok: true }),
-        getUnreadCounts:    async () => ({ ok: true, data: {} }),
-        markClientRead:     async () => ({ ok: true }),
+        // Client chat / messenger
+        getClientMessages:  sbGetClientMessages,
+        sendManagerMessage: sbSendManagerMessage,
+        getUnreadCounts:    sbGetUnreadCounts,
+        markClientRead:     sbMarkClientRead,
         getOrderInfo:       async (p) => sbPkgGetOne(p),
         getVerificationStats: async () => {
             const { data } = await sb.from('packages')
                 .select('quality_check_required')
+                .eq('tenant_id', TENANT_ID)
                 .eq('is_archived', false);
-            const stats = {};
+            const stats = { none: 0, 'В перевірці': 0, 'Готова до маршруту': 0, 'Відхилено': 0 };
             for (const r of (data || [])) {
                 const s = r.quality_check_required || 'none';
                 stats[s] = (stats[s] || 0) + 1;

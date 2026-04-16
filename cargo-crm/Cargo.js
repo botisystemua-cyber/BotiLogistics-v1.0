@@ -662,6 +662,7 @@ document.addEventListener('DOMContentLoaded', async function() {
   }
 
   await loadData();
+  loadUnreadCounts().then(() => renderCards());
 });
 
 // ===== [SECT-FILTER] FILTERING =====
@@ -687,13 +688,15 @@ function filterData() {
     data = data.filter(p => p['Напрям'] === 'ЄВ→УК');
   }
 
-  // Verification filter (sidebar: Всі / В перевірці / Готові / Невідомі)
+  // Verification filter (sidebar: Всі / В перевірці / Готові / Невідомі / Відхилені)
   if (currentVerifyFilter === 'checking') {
     data = data.filter(p => p['Контроль перевірки'] === 'В перевірці');
   } else if (currentVerifyFilter === 'ready') {
     data = data.filter(p => p['Контроль перевірки'] === 'Готова до маршруту');
   } else if (currentVerifyFilter === 'unknown') {
     data = data.filter(p => p['Статус ліда'] === 'Невідомий');
+  } else if (currentVerifyFilter === 'rejected') {
+    data = data.filter(p => p['Контроль перевірки'] === 'Відхилено');
   }
 
   // Lead status filter (chip bar)
@@ -803,6 +806,7 @@ function renderCard(p) {
   let statusClass = '';
   if (controlCheck === 'Готова до маршруту') statusClass = 'status-ready';
   else if (controlCheck === 'В перевірці') statusClass = 'status-checking';
+  else if (controlCheck === 'Відхилено') statusClass = 'status-refused';
   else if (leadStatus === 'Новий') statusClass = 'status-new';
   else if (leadStatus === 'В роботі' || leadStatus === 'Активний') statusClass = 'status-work';
   else if (leadStatus === 'Підтверджено' || leadStatus === 'Зарахований') statusClass = 'status-confirmed';
@@ -907,7 +911,11 @@ function renderCard(p) {
     ['Статус оплати', payStatus],
     ['Борг', debt ? String(debt) : '', {readonly: true}],
     ['Примітка оплати', p['Примітка оплати'] || ''],
-  ], pkgId);
+  ], pkgId) +
+  `<div style="padding:8px 0 4px;">
+    <button onclick="event.stopPropagation(); showPaymentHistory('${pkgId}')" style="padding:6px 14px;background:var(--info);color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">💳 Історія платежів</button>
+    <div id="payHistory-${pkgId}" style="display:none;margin-top:8px;"></div>
+  </div>`;
 
   // 🚖 Рейс — показуємо тільки коли посилка в маршруті
   // Дані рейсу (дата відправки, авто, RTE_ID) — спільні для всього маршруту,
@@ -966,6 +974,7 @@ function renderCard(p) {
           <div class="card-row2">
             <span class="card-pkgid">${highlightMatch(pkgId)}</span>
             <span class="card-sender-recv">👤 ${name ? highlightMatch(name) : '—'} → ${receiver ? highlightMatch(receiver) : '—'}</span>
+            ${(_unreadCounts[pkgId] || 0) > 0 ? `<span style="display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 6px;border-radius:10px;background:#ef4444;color:#fff;font-size:11px;font-weight:700;animation:pulse-badge 2s infinite;" title="${_unreadCounts[pkgId]} нових повідомлень">${_unreadCounts[pkgId]}</span>` : ''}
             ${visCols.includes('leadBadge') ? leadBadge : ''} ${visCols.includes('payBadge') ? payBadge : ''} ${visCols.includes('checkBadge') ? checkBadge : ''}
           </div>
           ${visCols.includes('address') && (addressFrom || addressTo) ? `<div class="card-address">📍 ${addressFrom && addressTo ? highlightMatch(addressFrom) + ' → ' + highlightMatch(addressTo) : highlightMatch(addressFrom || addressTo)}</div>` : ''}
@@ -975,11 +984,13 @@ function renderCard(p) {
       ${visCols.includes('route') ? routeStrip : ''}
       <div class="card-actions" id="actions-${pkgId}">
         <button onclick="event.stopPropagation(); window.open('tel:${phone}')">📞 Дзвінок</button>
-        <button onclick="event.stopPropagation(); openMessenger('${phone}')">💬 Писати</button>
+        <button onclick="event.stopPropagation(); openMessenger('${phone}','${pkgId}')">💬 Писати</button>
         ${trackBtn}
         <button onclick="event.stopPropagation(); startVerification('${pkgId}')" style="${controlCheck === 'В перевірці' ? 'background:var(--info);color:#fff;' : ''}">🔍 ${controlCheck === 'В перевірці' ? 'В перевірці' : 'В перевірку'}</button>
         ${controlCheck === 'В перевірці' ? `<button onclick="event.stopPropagation(); completeVerification('${pkgId}')" style="background:var(--success);color:#fff;">✅ Готово</button>` : ''}
+        ${controlCheck === 'В перевірці' ? `<button onclick="event.stopPropagation(); rejectVerification('${pkgId}')" style="background:var(--danger);color:#fff;">❌ Відхилити</button>` : ''}
         ${controlCheck === 'Готова до маршруту' ? `<span style="display:inline-flex;align-items:center;padding:6px 12px;background:#dcfce7;color:#166534;border-radius:8px;font-size:12px;font-weight:600;">✅ Готова</span>` : ''}
+        ${controlCheck === 'Відхилено' ? `<span style="display:inline-flex;align-items:center;padding:6px 12px;background:#fee2e2;color:#991b1b;border-radius:8px;font-size:12px;font-weight:600;">❌ Відхилено</span>` : ''}
         <button onclick="event.stopPropagation(); openRouteModal('${pkgId}')">🚖 Маршрут</button>
         ${leadStatus !== 'Невідомий' ? `<button onclick="event.stopPropagation(); setLeadUnknown('${pkgId}')" style="background:#fef3c7;color:#92400e;">❓ Невідомий</button>` : `<span style="display:inline-flex;align-items:center;padding:6px 12px;background:#fef3c7;color:#92400e;border-radius:8px;font-size:12px;font-weight:600;">❓ Невідомий</span>`}
         <button class="btn-danger" onclick="event.stopPropagation(); deleteRecord('${pkgId}')">🗑️</button>
@@ -1043,7 +1054,7 @@ function getFieldOptions(col) {
     'Форма оплати':     ['Готівка', 'Картка', 'Частково'],
     'Адреса відправки': swissAddrs,
     'Адреса в Європі':  swissAddrs,
-    'Контроль перевірки': ['', 'В перевірці', 'Готова до маршруту'],
+    'Контроль перевірки': ['', 'В перевірці', 'Готова до маршруту', 'Відхилено'],
     'Тег':              ['', 'VIP', 'срочна', 'крихке', 'великогабарит'],
   };
   return opts[col] || null;
@@ -1466,6 +1477,16 @@ async function bulkArchive() {
 
 // ===== [SECT-VERIFY] VERIFICATION (перевірка посилок) =====
 
+// ---------- Scan TTN (camera scanner page) ----------
+
+function openScannerPage() {
+  // Відкриваємо камерний сканер ТТН
+  window.location.href = 'scaner_ttn.html';
+}
+
+
+// ---------- Start / Complete / Reject verification ----------
+
 // Перевести лід в перевірку
 function startVerification(pkgId) {
   const item = allData.find(p => p['PKG_ID'] === pkgId);
@@ -1488,15 +1509,42 @@ function startVerification(pkgId) {
   // Відправити на сервер
   apiPost('updateField', { pkg_id: pkgId, col: 'Контроль перевірки', value: 'В перевірці' });
   apiPost('updateField', { pkg_id: pkgId, col: 'Статус ліда', value: 'В роботі' });
+
+  // Автоматично шукати дублікати
+  apiPost('findDuplicatesByRecipient', { pkg_id: pkgId }).then(res => {
+    if (res.ok && res.count > 0) {
+      showToast(`⚠️ Знайдено ${res.count} дублікат(ів) по отримувачу`, 'info');
+    }
+  });
 }
 
 // Завершити перевірку — позначити як "Готово"
-function completeVerification(pkgId) {
+async function completeVerification(pkgId) {
   const item = allData.find(p => p['PKG_ID'] === pkgId);
   if (!item) return;
 
   if (item['Контроль перевірки'] === 'Готова до маршруту') {
     showToast('Вже позначено як готова', 'info');
+    return;
+  }
+
+  // Перевірити чи є внутрішній номер
+  if (!item['Внутрішній №']) {
+    // Автопризначити номер
+    const numRes = await apiPost('assignRouteNumber', { pkg_id: pkgId, route_base: 200 });
+    if (numRes.ok) {
+      item['Внутрішній №'] = String(numRes.number);
+      showToast(`Присвоєно внутрішній № ${numRes.number}`, 'info');
+    } else {
+      showToast('Не вдалося присвоїти внутрішній №: ' + numRes.error, 'error');
+      return;
+    }
+  }
+
+  // Завершити верифікацію через API
+  const res = await apiPost('completeVerification', { pkg_id: pkgId, skip_validation: true });
+  if (!res.ok) {
+    showToast('Помилка: ' + res.error, 'error');
     return;
   }
 
@@ -1508,9 +1556,48 @@ function completeVerification(pkgId) {
   updateCounters();
   showToast('Перевірку завершено — готова до маршруту', 'success');
 
-  // Відправити на сервер
-  apiPost('updateField', { pkg_id: pkgId, col: 'Контроль перевірки', value: 'Готова до маршруту' });
   apiPost('updateField', { pkg_id: pkgId, col: 'Статус ліда', value: 'Підтверджено' });
+}
+
+// Відхилити посилку з причиною
+function rejectVerification(pkgId) {
+  const item = allData.find(p => p['PKG_ID'] === pkgId);
+  if (!item) return;
+
+  const reason = prompt('Причина відхилення:');
+  if (reason === null) return; // скасовано
+
+  item['Контроль перевірки'] = 'Відхилено';
+  item['Статус ліда'] = 'Відмова';
+  item['Примітка'] = reason;
+  renderCards();
+  updateCounters();
+  showToast('Посилку відхилено', 'success');
+
+  apiPost('rejectVerification', { pkg_id: pkgId, reason });
+}
+
+// ---------- Assign Route Number (manual) ----------
+
+async function assignRouteNumber(pkgId, routeBase) {
+  const item = allData.find(p => p['PKG_ID'] === pkgId);
+  if (!item) return;
+
+  if (item['Внутрішній №']) {
+    showToast(`Вже має внутрішній № ${item['Внутрішній №']}`, 'info');
+    return;
+  }
+
+  const base = parseInt(routeBase) || 200;
+  const res = await apiPost('assignRouteNumber', { pkg_id: pkgId, route_base: base });
+  if (!res.ok) {
+    showToast('Помилка: ' + res.error, 'error');
+    return;
+  }
+
+  item['Внутрішній №'] = String(res.number);
+  renderCards();
+  showToast(`Присвоєно внутрішній № ${res.number}`, 'success');
 }
 
 // Призначити статус "Невідомий" ліду
@@ -1543,6 +1630,8 @@ function bulkSetVerifyStatus(status) {
         item['Статус ліда'] = 'В роботі';
       } else if (status === 'Готова до маршруту') {
         item['Статус ліда'] = 'Підтверджено';
+      } else if (status === 'Відхилено') {
+        item['Статус ліда'] = 'Відмова';
       }
     }
   });
@@ -1558,6 +1647,8 @@ function bulkSetVerifyStatus(status) {
       apiPost('updateField', { pkg_id: id, col: 'Статус ліда', value: 'В роботі' });
     } else if (status === 'Готова до маршруту') {
       apiPost('updateField', { pkg_id: id, col: 'Статус ліда', value: 'Підтверджено' });
+    } else if (status === 'Відхилено') {
+      apiPost('updateField', { pkg_id: id, col: 'Статус ліда', value: 'Відмова' });
     }
   });
 
@@ -3225,15 +3316,18 @@ function updateCounters() {
     var cChecking = dirData.filter(p => p['Контроль перевірки'] === 'В перевірці').length;
     var cReady = dirData.filter(p => p['Контроль перевірки'] === 'Готова до маршруту').length;
     var cUnknown = dirData.filter(p => p['Статус ліда'] === 'Невідомий').length;
+    var cRejected = dirData.filter(p => p['Контроль перевірки'] === 'Відхилено').length;
     setCount('countAll', cAll);
     setCount('countChecking', cChecking);
     setCount('countReady', cReady);
     setCount('countUnknown', cUnknown);
+    setCount('countRejected', cRejected);
     // Mobile counters
     setCount('mobCountAll', cAll);
     setCount('mobCountChecking', cChecking);
     setCount('mobCountReady', cReady);
     setCount('mobCountUnknown', cUnknown);
+    setCount('mobCountRejected', cRejected);
   } catch(e) { console.error('updateCounters error:', e); }
 }
 
@@ -3269,21 +3363,193 @@ function setVerFilter(f) {
 }
 // startEdit/saveEdit replaced by startInlineEdit/saveInlineEdit
 
-function openMessenger(phone) {
+// ===== [SECT-PAYMENTS] Payment History =====
+
+async function showPaymentHistory(pkgId) {
+  const container = document.getElementById('payHistory-' + pkgId);
+  if (!container) return;
+
+  // Toggle: якщо вже показано — сховати
+  if (container.style.display === 'block') {
+    container.style.display = 'none';
+    return;
+  }
+
+  container.style.display = 'block';
+  container.innerHTML = '<div style="color:#94a3b8;font-size:12px;padding:8px;">⏳ Завантаження...</div>';
+
+  const res = await apiPost('getPayments', { pkg_id: pkgId });
+
+  if (!res.ok || !res.data || res.data.length === 0) {
+    container.innerHTML = '<div style="color:#94a3b8;font-size:12px;padding:8px;background:#f8fafc;border-radius:6px;">Платежів не знайдено</div>';
+    return;
+  }
+
+  let html = '<table style="width:100%;border-collapse:collapse;font-size:11px;"><thead><tr style="background:#f1f5f9;">' +
+    '<th style="padding:4px 6px;text-align:left;border-bottom:1px solid #e2e8f0;">Дата</th>' +
+    '<th style="padding:4px 6px;text-align:left;border-bottom:1px solid #e2e8f0;">Сума</th>' +
+    '<th style="padding:4px 6px;text-align:left;border-bottom:1px solid #e2e8f0;">Валюта</th>' +
+    '<th style="padding:4px 6px;text-align:left;border-bottom:1px solid #e2e8f0;">Форма</th>' +
+    '<th style="padding:4px 6px;text-align:left;border-bottom:1px solid #e2e8f0;">Статус</th>' +
+    '<th style="padding:4px 6px;text-align:left;border-bottom:1px solid #e2e8f0;">Примітка</th>' +
+  '</tr></thead><tbody>';
+
+  res.data.forEach(p => {
+    const date = p.created_at ? new Date(p.created_at).toLocaleDateString('uk-UA') : '—';
+    const statusColor = p.status === 'completed' ? '#22c55e' : p.status === 'pending' ? '#fbbf24' : '#94a3b8';
+    html += '<tr>' +
+      '<td style="padding:4px 6px;border-bottom:1px solid #f1f5f9;">' + date + '</td>' +
+      '<td style="padding:4px 6px;border-bottom:1px solid #f1f5f9;font-weight:600;">' + (p.amount || '—') + '</td>' +
+      '<td style="padding:4px 6px;border-bottom:1px solid #f1f5f9;">' + (p.currency || '—') + '</td>' +
+      '<td style="padding:4px 6px;border-bottom:1px solid #f1f5f9;">' + (p.payment_form || '—') + '</td>' +
+      '<td style="padding:4px 6px;border-bottom:1px solid #f1f5f9;"><span style="color:' + statusColor + '">' + (p.status || '—') + '</span></td>' +
+      '<td style="padding:4px 6px;border-bottom:1px solid #f1f5f9;color:#64748b;">' + (p.notes || '') + '</td>' +
+    '</tr>';
+  });
+
+  html += '</tbody></table>';
+  container.innerHTML = html;
+}
+
+// ===== [SECT-MESSENGER] Messenger popup + Client Chat =====
+
+let _unreadCounts = {}; // { cli_id: count }
+let _chatCliId = null;
+let _chatPhone = null;
+let _chatPollTimer = null;
+let _chatMessages = [];
+
+function openMessenger(phone, pkgId) {
   const clean = phone.replace(/[^+\d]/g, '');
+  // Знайти pkg_id для чату (якщо не передано)
+  const item = pkgId ? allData.find(p => p['PKG_ID'] === pkgId) : allData.find(p => {
+    const phones = [p['Телефон реєстратора']||'', p['Телефон відправника']||'', p['Телефон отримувача']||''];
+    return phones.some(ph => ph.replace(/[^+\d]/g, '') === clean);
+  });
+  const chatId = item ? item['PKG_ID'] : null;
+
   const menu = document.createElement('div');
   menu.style.cssText = 'position:fixed;inset:0;z-index:700;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.5);';
   menu.innerHTML = `
-    <div style="background:#fff;border-radius:16px;padding:20px;min-width:250px;text-align:center;">
+    <div style="background:#fff;border-radius:16px;padding:20px;min-width:260px;text-align:center;">
       <div style="font-weight:700;margin-bottom:12px;">Написати ${phone}</div>
       <a href="viber://chat?number=${clean}" style="display:block;padding:10px;margin:4px 0;background:#7360f2;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;">Viber</a>
       <a href="https://t.me/${clean}" style="display:block;padding:10px;margin:4px 0;background:#0088cc;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;">Telegram</a>
       <a href="https://wa.me/${clean.replace('+','')}" style="display:block;padding:10px;margin:4px 0;background:#25d366;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;">WhatsApp</a>
+      ${chatId ? `<button onclick="this.closest('div').parentElement.remove();openClientChat('${chatId}','${clean}')" style="display:block;width:100%;padding:10px;margin:4px 0;background:#8b5cf6;color:#fff;border-radius:8px;border:none;font-weight:600;cursor:pointer;font-family:inherit;font-size:14px;">💬 Чат CRM</button>` : ''}
       <button onclick="this.closest('div').parentElement.remove()" style="margin-top:10px;padding:8px 20px;border:1px solid #e2e8f0;border-radius:8px;background:#fff;cursor:pointer;font-family:inherit;">Скасувати</button>
     </div>
   `;
   document.body.appendChild(menu);
   menu.addEventListener('click', e => { if (e.target === menu) menu.remove(); });
+}
+
+// ---------- Chat overlay ----------
+
+function _ensureChatOverlay() {
+  if (document.getElementById('chatOverlay')) return;
+  const el = document.createElement('div');
+  el.id = 'chatOverlay';
+  el.className = 'confirm-overlay';
+  el.style.cssText = 'z-index:1100;';
+  el.onclick = (e) => { if (e.target === el) closeClientChat(); };
+  el.innerHTML = `
+    <div style="background:#fff;width:100%;max-width:440px;height:80vh;max-height:600px;border-radius:16px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+      <div style="padding:12px 16px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;gap:8px;background:#f8fafc;">
+        <span style="font-size:16px;font-weight:700;flex:1;" id="chatTitle">💬 Чат</span>
+        <button onclick="closeClientChat()" style="border:none;background:none;font-size:22px;cursor:pointer;color:#64748b;">&times;</button>
+      </div>
+      <div id="chatMessages" style="flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:6px;background:#f5f7fa;"></div>
+      <div style="padding:8px 12px;border-top:1px solid #e2e8f0;display:flex;gap:8px;background:#fff;">
+        <input type="text" id="chatInput" placeholder="Написати повідомлення..." style="flex:1;padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit;" onkeydown="if(event.key==='Enter')sendChatMessage()">
+        <button onclick="sendChatMessage()" style="padding:8px 14px;background:var(--primary);color:#fff;border:none;border-radius:8px;font-size:16px;cursor:pointer;">➤</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(el);
+}
+
+function openClientChat(cliId, phone) {
+  _ensureChatOverlay();
+  _chatCliId = cliId;
+  _chatPhone = phone;
+  document.getElementById('chatTitle').textContent = '💬 Чат · ' + (phone || cliId);
+  document.getElementById('chatMessages').innerHTML = '<div style="text-align:center;padding:40px;color:#94a3b8;font-size:12px;">⏳ Завантаження...</div>';
+  document.getElementById('chatInput').value = '';
+  document.getElementById('chatOverlay').classList.add('active');
+  loadChatMessages();
+  _chatPollTimer = setInterval(loadChatMessages, 10000);
+}
+
+function closeClientChat() {
+  const el = document.getElementById('chatOverlay');
+  if (el) el.classList.remove('active');
+  if (_chatPollTimer) { clearInterval(_chatPollTimer); _chatPollTimer = null; }
+  _chatCliId = null;
+}
+
+async function loadChatMessages() {
+  if (!_chatCliId) return;
+  try {
+    const res = await apiPost('getClientMessages', { cli_id: _chatCliId });
+    if (res.ok && res.data) {
+      _chatMessages = res.data;
+      _renderChatMessages();
+      await apiPost('markClientRead', { cli_id: _chatCliId });
+      if (_unreadCounts[_chatCliId]) {
+        delete _unreadCounts[_chatCliId];
+        renderCards();
+      }
+    }
+  } catch(e) { console.error('Chat load error:', e); }
+}
+
+function _renderChatMessages() {
+  const container = document.getElementById('chatMessages');
+  if (!_chatMessages.length) {
+    container.innerHTML = '<div style="text-align:center;padding:40px;color:#94a3b8;font-size:12px;">Повідомлень поки немає. Напишіть першим!</div>';
+    return;
+  }
+  container.innerHTML = _chatMessages.map(m => {
+    const isManager = m.role === 'manager';
+    const align = isManager ? 'flex-end' : 'flex-start';
+    const bg = isManager ? 'var(--primary)' : '#e2e8f0';
+    const color = isManager ? '#fff' : '#1e293b';
+    const radius = isManager ? '12px 12px 4px 12px' : '12px 12px 12px 4px';
+    const name = m.sender_name || (isManager ? 'Менеджер' : 'Клієнт');
+    const time = m.date ? new Date(m.date).toLocaleString('uk-UA', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : '';
+    return `<div style="align-self:${align};max-width:80%;padding:8px 12px;border-radius:${radius};background:${bg};color:${color};font-size:13px;line-height:1.4;word-wrap:break-word;">
+      <div style="font-size:10px;font-weight:700;margin-bottom:2px;opacity:0.7;">${name}</div>
+      ${m.text || ''}
+      <div style="font-size:9px;opacity:0.5;margin-top:2px;text-align:right;">${time}</div>
+    </div>`;
+  }).join('');
+  container.scrollTop = container.scrollHeight;
+}
+
+async function sendChatMessage() {
+  const input = document.getElementById('chatInput');
+  const text = (input.value || '').trim();
+  if (!text || !_chatCliId) return;
+
+  const senderName = getUserDisplayName() || 'Менеджер';
+  input.value = '';
+  _chatMessages.push({ role: 'manager', sender_name: senderName, text, date: new Date().toISOString() });
+  _renderChatMessages();
+
+  try {
+    const res = await apiPost('sendManagerMessage', { cli_id: _chatCliId, text, sender_name: senderName });
+    if (!res.ok) showToast('Помилка відправки', 'error');
+  } catch(e) { showToast('Помилка: ' + e.message, 'error'); }
+}
+
+// ---------- Load unread counts on startup ----------
+
+async function loadUnreadCounts() {
+  try {
+    const res = await apiPost('getUnreadCounts', {});
+    if (res.ok) _unreadCounts = res.data || {};
+  } catch(e) { /* ignore */ }
 }
 
 // openRouteModal defined in SECT-ROUTE-MODAL above
@@ -3761,23 +4027,64 @@ function parseSmsText() {
 }
 
 // ===== [SECT-DUPL] DUPLICATE CHECK =====
+let _dupCheckTimer = null;
+
 function checkDuplicatePhone(phone) {
-  if (!phone || phone.length < 8) {
-    document.getElementById('duplicateWarning').classList.remove('visible');
+  const warn = document.getElementById('duplicateWarning');
+  if (!phone || phone.length < 6) {
+    warn.classList.remove('visible');
     return;
   }
+
   const clean = phone.replace(/[\s\-()]/g, '');
-  const dup = allData.find(p =>
-    (p['Телефон реєстратора'] || '').replace(/[\s\-()]/g, '').includes(clean) ||
-    clean.includes((p['Телефон реєстратора'] || '').replace(/[\s\-()]/g, ''))
-  );
-  const warn = document.getElementById('duplicateWarning');
-  if (dup) {
-    warn.textContent = '⚠️ Можливий дублікат: ' + (dup['Піб відправника'] || '') + ' — ' + (dup['Телефон реєстратора'] || '') + ' (ID: ' + dup['PKG_ID'] + ')';
-    warn.classList.add('visible');
+
+  // 1) Швидкий локальний пошук (по всіх телефонних полях)
+  const localDups = allData.filter(p => {
+    const phones = [
+      (p['Телефон реєстратора'] || '').replace(/[\s\-()]/g, ''),
+      (p['Телефон відправника'] || '').replace(/[\s\-()]/g, ''),
+      (p['Телефон отримувача'] || '').replace(/[\s\-()]/g, ''),
+    ];
+    return phones.some(ph => ph && (ph.includes(clean) || clean.includes(ph)));
+  });
+
+  if (localDups.length > 0) {
+    _renderDupWarning(warn, localDups);
   } else {
     warn.classList.remove('visible');
   }
+
+  // 2) Додатково — API-запит (debounce 500ms, може знайти записи з іншого напрямку)
+  clearTimeout(_dupCheckTimer);
+  _dupCheckTimer = setTimeout(async () => {
+    const res = await apiPost('checkDuplicates', { phone: clean });
+    if (res.ok && res.data && res.data.length > 0) {
+      // Об'єднати з локальними (без дублів по PKG_ID)
+      const allDups = [...localDups];
+      const existingIds = new Set(localDups.map(d => d['PKG_ID']));
+      for (const d of res.data) {
+        if (!existingIds.has(d['PKG_ID'])) allDups.push(d);
+      }
+      if (allDups.length > 0) _renderDupWarning(warn, allDups);
+    }
+  }, 500);
+}
+
+function _renderDupWarning(warn, dups) {
+  if (dups.length === 1) {
+    const d = dups[0];
+    warn.innerHTML = '⚠️ Можливий дублікат: <b>' + (d['Піб відправника'] || d['Піб отримувача'] || '?') + '</b> — ' +
+      (d['Телефон реєстратора'] || d['Телефон відправника'] || d['Телефон отримувача'] || '') +
+      ' <span style="opacity:.7">(ID: ' + d['PKG_ID'] + ', ' + (d['Напрям'] || '') + ')</span>';
+  } else {
+    warn.innerHTML = '⚠️ Знайдено <b>' + dups.length + '</b> можливих дублікатів:<br>' +
+      dups.slice(0, 5).map(d =>
+        '• ' + (d['Піб відправника'] || d['Піб отримувача'] || '?') + ' — ' +
+        (d['Телефон реєстратора'] || d['Телефон відправника'] || d['Телефон отримувача'] || '') +
+        ' <span style="opacity:.7">(' + d['PKG_ID'] + ')</span>'
+      ).join('<br>') + (dups.length > 5 ? '<br>...та ще ' + (dups.length - 5) : '');
+  }
+  warn.classList.add('visible');
 }
 
 // ===== [SECT-SAVE] SAVE PARCEL =====

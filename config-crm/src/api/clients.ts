@@ -7,6 +7,7 @@ export interface Client {
   password: string | null;
   logo_url: string | null;
   modules: string[] | null;
+  tags: string[] | null;
   created_at?: string;
   updated_at?: string;
 }

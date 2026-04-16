@@ -179,6 +179,34 @@ body {
 .sidebar-section-body { padding: 4px 0; }
 .sidebar-section-body.hidden { display: none; }
 
+.sidebar-scan-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  padding: 9px 10px;
+  margin: 0 0 6px;
+  border: 1.5px dashed var(--success);
+  border-radius: 8px;
+  background: linear-gradient(135deg, #ecfdf5, #d1fae5);
+  color: #047857;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.sidebar-scan-btn:hover {
+  background: linear-gradient(135deg, #d1fae5, #a7f3d0);
+  border-color: #059669;
+  transform: scale(1.02);
+  box-shadow: 0 2px 8px rgba(16,185,129,0.25);
+}
+.sidebar-scan-btn:active {
+  transform: scale(0.97);
+}
+
 .sidebar-item {
   display: flex;
   align-items: center;
@@ -647,6 +675,7 @@ body {
 .badge-check     { background: #e0e7ff; color: #3730a3; }
 .badge-new24     { background: #fef3c7; color: #d97706; font-size: 9px; font-weight: 800; padding: 2px 6px; border-radius: 8px; animation: pulse-new24 2s ease-in-out infinite; }
 @keyframes pulse-new24 { 0%,100%{opacity:1} 50%{opacity:0.6} }
+@keyframes pulse-badge { 0%,100%{transform:scale(1);} 50%{transform:scale(1.15);} }
 
 /* Route Strip */
 .card-route-strip {
