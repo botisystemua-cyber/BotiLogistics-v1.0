@@ -173,7 +173,7 @@ const FORM_TO_SB = {
 // Supabase columns that require numeric type
 const NUMERIC_COLS = new Set([
     'seats_count', 'baggage_weight', 'ticket_price', 'deposit', 'debt',
-    'baggage_price', 'seat_number', 'driver_rating', 'manager_rating',
+    'baggage_price', 'driver_rating', 'manager_rating',
     'total_seats', 'available_seats', 'occupied_seats',
 ]);
 
