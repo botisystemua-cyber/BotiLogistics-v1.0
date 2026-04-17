@@ -654,8 +654,9 @@ function UsersScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [editing, setEditing] = useState<User | null>(null);
-  const [creating, setCreating] = useState(false);
+  const [creating, setCreating] = useState<ClientsTab | null>(null);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const [tab, setTab] = useState<ClientsTab>('main');
 
   const reload = async () => {
     setLoading(true);
@@ -686,32 +687,73 @@ function UsersScreen() {
   const toggleGroup = (tid: string) =>
     setCollapsed((prev) => ({ ...prev, [tid]: !prev[tid] }));
 
-  // Group users by tenant, keep client order
-  const grouped = clients
+  // Вибрані клієнти для поточної вкладки.
+  // На вкладці "бета" показуємо ВСІ бета-тенанти (навіть без користувачів),
+  // щоб можна було створити першого власника для щойно доданого бета-клієнта.
+  // На вкладці "основна" показуємо тільки тенанти, де вже є юзери (як раніше).
+  const isBetaTab = tab === 'beta';
+  const tabClients = clients.filter((c) => (isBetaTab ? c.is_beta : !c.is_beta));
+  const grouped = tabClients
     .map((c) => ({
       client: c,
       users: users.filter((u) => u.tenant_id === c.tenant_id),
     }))
-    .filter((g) => g.users.length > 0);
+    .filter((g) => (isBetaTab ? true : g.users.length > 0));
 
-  // Users with unknown tenant (shouldn't happen, but just in case)
+  // Лічильники для табів — рахуємо кількість юзерів у кожному сегменті
+  const mainUsersCount = users.filter((u) =>
+    clients.some((c) => c.tenant_id === u.tenant_id && !c.is_beta),
+  ).length;
+  const betaUsersCount = users.filter((u) =>
+    clients.some((c) => c.tenant_id === u.tenant_id && c.is_beta),
+  ).length;
+
+  // Users with unknown tenant — показуємо завжди, незалежно від вкладки
   const knownTenants = new Set(clients.map((c) => c.tenant_id));
   const orphans = users.filter((u) => !knownTenants.has(u.tenant_id));
 
+  // Клієнти для передачі у форму створення — залежить від вкладки
+  const formClients = isBetaTab ? clients.filter((c) => c.is_beta) : clients.filter((c) => !c.is_beta);
+
   return (
     <div className="w-full">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-5">
         <div>
           <h1 className="text-3xl font-black text-text">Користувачі</h1>
           <p className="text-sm text-muted mt-1">Логіни співробітників прив'язані до компаній</p>
         </div>
         <button
-          onClick={() => setCreating(true)}
-          className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-violet-500 to-purple-600 text-white text-sm font-bold flex items-center gap-2 shadow-lg shadow-violet-500/20 hover:brightness-110 active:scale-[0.97] cursor-pointer transition-all"
+          onClick={() => setCreating(tab)}
+          disabled={formClients.length === 0}
+          className={`px-4 py-2.5 rounded-xl text-white text-sm font-bold flex items-center gap-2 shadow-lg hover:brightness-110 active:scale-[0.97] cursor-pointer transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
+            isBetaTab
+              ? 'bg-gradient-to-r from-amber-500 to-orange-600 shadow-amber-500/20'
+              : 'bg-gradient-to-r from-violet-500 to-purple-600 shadow-violet-500/20'
+          }`}
+          title={formClients.length === 0 ? (isBetaTab ? 'Спочатку додай бета-клієнта' : 'Спочатку додай клієнта') : ''}
         >
           <Plus className="w-4 h-4" />
-          Додати користувача
+          {isBetaTab ? 'Додати користувача (бета)' : 'Додати користувача'}
         </button>
+      </div>
+
+      <div className="mb-5 inline-flex p-1 bg-bg border-2 border-border rounded-xl">
+        <TabBtn
+          active={tab === 'main'}
+          onClick={() => setTab('main')}
+          color="violet"
+          icon={UserCog}
+          label="Основна версія"
+          count={mainUsersCount}
+        />
+        <TabBtn
+          active={tab === 'beta'}
+          onClick={() => setTab('beta')}
+          color="amber"
+          icon={FlaskConical}
+          label="Бета"
+          count={betaUsersCount}
+        />
       </div>
 
       {error && (
@@ -732,32 +774,63 @@ function UsersScreen() {
         <div className="bg-card border-2 border-border rounded-2xl p-12 flex items-center justify-center">
           <Loader2 className="w-6 h-6 animate-spin text-muted" />
         </div>
-      ) : users.length === 0 ? (
-        <div className="bg-card border-2 border-border rounded-2xl p-12 text-center text-muted text-sm">Користувачів немає</div>
+      ) : grouped.length === 0 ? (
+        <div className={`border-2 rounded-2xl p-12 text-center text-sm ${
+          isBetaTab ? 'bg-amber-50/40 border-amber-200 text-amber-700' : 'bg-card border-border text-muted'
+        }`}>
+          {isBetaTab
+            ? (clients.some((c) => c.is_beta)
+                ? 'У бета-тенантах ще немає користувачів — натисни «Додати користувача (бета)», щоб створити власника.'
+                : 'Бета-тенантів немає. Створи клієнта з бета-доступом у розділі «Клієнти».')
+            : 'Користувачів немає'}
+        </div>
       ) : (
         <div className="space-y-3">
           {grouped.map(({ client, users: groupUsers }) => {
             const isOpen = !collapsed[client.tenant_id];
+            const cardCls = isBetaTab
+              ? 'bg-amber-50/40 border-amber-200'
+              : 'bg-card border-border';
+            const hoverCls = isBetaTab ? 'hover:bg-amber-100/40' : 'hover:bg-bg/50';
+            const headerHoverCls = isBetaTab ? 'hover:bg-amber-100/60' : 'hover:bg-bg/50';
+            const badgeCls = isBetaTab
+              ? 'bg-amber-100 border-amber-300 text-amber-700'
+              : 'bg-violet-50 border-violet-200 text-violet-700';
             return (
-              <div key={client.tenant_id} className="bg-card border-2 border-border rounded-2xl overflow-hidden">
+              <div key={client.tenant_id} className={`border-2 rounded-2xl overflow-hidden ${cardCls}`}>
                 <button
                   onClick={() => toggleGroup(client.tenant_id)}
-                  className="w-full flex items-center gap-3 px-5 py-4 hover:bg-bg/50 cursor-pointer transition-colors"
+                  className={`w-full flex items-center gap-3 px-5 py-4 cursor-pointer transition-colors ${headerHoverCls}`}
                 >
                   {isOpen
                     ? <ChevronDown className="w-5 h-5 text-muted shrink-0" />
                     : <ChevronRight className="w-5 h-5 text-muted shrink-0" />
                   }
                   <span className="text-base font-black text-text">{client.name}</span>
-                  <span className="px-2.5 py-0.5 rounded-full bg-violet-50 border border-violet-200 text-xs font-bold text-violet-700">
+                  {isBetaTab && (
+                    <span className="px-1.5 py-0.5 rounded-md bg-amber-100 border border-amber-300 text-[9px] font-bold text-amber-700 uppercase leading-none italic">
+                      Beta
+                    </span>
+                  )}
+                  <span className={`px-2.5 py-0.5 rounded-full border text-xs font-bold ${badgeCls}`}>
                     {groupUsers.length}
                   </span>
                 </button>
 
-                {isOpen && (
+                {isOpen && groupUsers.length === 0 && (
+                  <div className={`px-5 py-6 text-sm italic border-t-2 ${
+                    isBetaTab ? 'border-amber-200 text-amber-700 bg-amber-50/60' : 'border-border text-muted'
+                  }`}>
+                    Немає користувачів. Натисни «Додати користувача (бета)» вгорі.
+                  </div>
+                )}
+
+                {isOpen && groupUsers.length > 0 && (
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="bg-bg border-t-2 border-b-2 border-border">
+                      <tr className={`border-t-2 border-b-2 ${
+                        isBetaTab ? 'bg-amber-100/50 border-amber-200' : 'bg-bg border-border'
+                      }`}>
                         <Th>Логін</Th>
                         <Th>ПІБ</Th>
                         <Th>Ролі</Th>
@@ -767,7 +840,9 @@ function UsersScreen() {
                     </thead>
                     <tbody>
                       {groupUsers.map((u) => (
-                        <tr key={u.id} className="border-b border-border last:border-0 hover:bg-bg/50">
+                        <tr key={u.id} className={`border-b last:border-0 ${
+                          isBetaTab ? 'border-amber-200' : 'border-border'
+                        } ${hoverCls}`}>
                           <Td><code className="font-mono text-xs font-bold">{u.login}</code></Td>
                           <Td className="font-semibold">{u.full_name || <span className="text-muted italic">—</span>}</Td>
                           <Td>
@@ -853,9 +928,10 @@ function UsersScreen() {
       {(creating || editing) && (
         <UserFormModal
           initial={editing}
-          clients={clients}
-          onClose={() => { setCreating(false); setEditing(null); }}
-          onSaved={async () => { setCreating(false); setEditing(null); await reload(); }}
+          clients={editing ? clients : formClients}
+          isBeta={editing ? clients.find((c) => c.tenant_id === editing.tenant_id)?.is_beta ?? false : isBetaTab}
+          onClose={() => { setCreating(null); setEditing(null); }}
+          onSaved={async () => { setCreating(null); setEditing(null); await reload(); }}
         />
       )}
     </div>
@@ -863,8 +939,8 @@ function UsersScreen() {
 }
 
 function UserFormModal({
-  initial, clients, onClose, onSaved,
-}: { initial: User | null; clients: Client[]; onClose: () => void; onSaved: () => void }) {
+  initial, clients, isBeta = false, onClose, onSaved,
+}: { initial: User | null; clients: Client[]; isBeta?: boolean; onClose: () => void; onSaved: () => void }) {
   const [login, setLogin] = useState(initial?.login ?? '');
   const [password, setPassword] = useState(initial?.password ?? '');
   const [fullName, setFullName] = useState(initial?.full_name ?? '');
@@ -910,9 +986,18 @@ function UserFormModal({
 
   return (
     <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-[fadeIn_0.15s_ease-out]">
-      <div className="bg-card border-2 border-border rounded-2xl shadow-2xl w-full max-w-md p-6 animate-[scaleIn_0.2s_ease-out]">
+      <div className={`bg-card border-2 rounded-2xl shadow-2xl w-full max-w-md p-6 animate-[scaleIn_0.2s_ease-out] ${
+        isBeta ? 'border-amber-300' : 'border-border'
+      }`}>
         <div className="flex items-center justify-between mb-5">
-          <h2 className="text-xl font-black text-text">{initial ? 'Редагувати користувача' : 'Новий користувач'}</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-black text-text">{initial ? 'Редагувати користувача' : 'Новий користувач'}</h2>
+            {isBeta && (
+              <span className="px-2 py-0.5 rounded-md bg-amber-100 border border-amber-300 text-[10px] font-bold text-amber-700 uppercase italic">
+                Beta
+              </span>
+            )}
+          </div>
           <button onClick={onClose} className="w-8 h-8 rounded-lg flex items-center justify-center text-muted hover:bg-bg cursor-pointer">
             <X className="w-5 h-5" />
           </button>
@@ -975,7 +1060,11 @@ function UserFormModal({
           <button onClick={onClose} className="flex-1 py-2.5 rounded-xl border-2 border-border text-sm font-bold text-text-secondary hover:bg-bg cursor-pointer">Скасувати</button>
           <button
             onClick={handleSave} disabled={saving}
-            className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-violet-500 to-purple-600 text-white text-sm font-bold flex items-center justify-center gap-2 shadow-lg shadow-violet-500/20 hover:brightness-110 disabled:opacity-50 cursor-pointer"
+            className={`flex-1 py-2.5 rounded-xl text-white text-sm font-bold flex items-center justify-center gap-2 shadow-lg hover:brightness-110 disabled:opacity-50 cursor-pointer ${
+              isBeta
+                ? 'bg-gradient-to-r from-amber-500 to-orange-600 shadow-amber-500/20'
+                : 'bg-gradient-to-r from-violet-500 to-purple-600 shadow-violet-500/20'
+            }`}
           >
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
             Зберегти
