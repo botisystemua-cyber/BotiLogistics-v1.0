@@ -6,6 +6,7 @@ import { OnlineTab } from './OnlineTab';
 import { SettingsTab } from './SettingsTab';
 import { listUsersByTenant, type User } from '../api/users';
 import { logout, beatHeartbeat, type BotiSession } from '../lib/session';
+import { supabase } from '../lib/supabase';
 
 type Tab = 'staff' | 'online' | 'settings' | 'finances' | 'crm';
 
@@ -31,6 +32,7 @@ export function AdminPanel({ session }: { session: BotiSession }) {
   const [loading, setLoading] = useState(true);
   const [users, setUsers] = useState<User[]>([]);
   const [error, setError] = useState('');
+  const [isBeta, setIsBeta] = useState(false);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -44,6 +46,21 @@ export function AdminPanel({ session }: { session: BotiSession }) {
   }, [session.tenant_id]);
 
   useEffect(() => { loadAll(); }, [loadAll]);
+
+  // Read is_beta for this tenant so Logo can render the "beta" marker.
+  // Silent fail — стара БД без колонки просто покаже лого без бейджа.
+  useEffect(() => {
+    let cancelled = false;
+    void supabase
+      .from('clients')
+      .select('is_beta')
+      .eq('tenant_id', session.tenant_id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!cancelled) setIsBeta(!!data?.is_beta);
+      }, () => { /* ignore */ });
+    return () => { cancelled = true; };
+  }, [session.tenant_id]);
 
   // Poll online status every 30s (refetch users so last_login updates)
   useEffect(() => {
@@ -84,7 +101,7 @@ export function AdminPanel({ session }: { session: BotiSession }) {
       {/* ═══ Sidebar — desktop ═══ */}
       <aside className="hidden lg:flex w-[280px] shrink-0 flex-col bg-white border-r border-border sticky top-0 h-[100dvh]">
         <div className="px-6 py-6 border-b border-border">
-          <Logo size="md" tenantName={session.tenant_name} />
+          <Logo size="md" tenantName={session.tenant_name} isBeta={isBeta} />
           <div className="mt-3 text-sm font-bold text-text truncate">{session.user_name}</div>
         </div>
         <nav className="flex-1 px-4 py-5 space-y-1.5">
@@ -127,7 +144,7 @@ export function AdminPanel({ session }: { session: BotiSession }) {
       <div className="flex-1 flex flex-col min-w-0">
         {/* Mobile header */}
         <header className="lg:hidden flex items-center justify-between px-4 py-3 bg-white border-b border-border sticky top-0 z-30">
-          <Logo size="sm" tenantName={session.tenant_name} />
+          <Logo size="sm" tenantName={session.tenant_name} isBeta={isBeta} />
           <div className="flex items-center gap-2">
             <button onClick={logout} className="p-2 rounded-lg hover:bg-red-50 cursor-pointer">
               <LogOut className="w-4 h-4 text-muted" />

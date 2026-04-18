@@ -1,10 +1,10 @@
 import { Truck } from 'lucide-react';
 
-export function Logo({ size = 'lg', tenantName }: { size?: 'lg' | 'md' | 'sm'; tenantName?: string }) {
+export function Logo({ size = 'lg', tenantName, isBeta = false }: { size?: 'lg' | 'md' | 'sm'; tenantName?: string; isBeta?: boolean }) {
   const sizeMap = {
-    lg: { box: 'w-12 h-12 sm:w-14 sm:h-14', icon: 'w-6 h-6 sm:w-7 sm:h-7', text: 'text-3xl sm:text-4xl' },
-    md: { box: 'w-10 h-10 sm:w-12 sm:h-12', icon: 'w-5 h-5 sm:w-6 sm:h-6', text: 'text-2xl sm:text-3xl' },
-    sm: { box: 'w-9 h-9', icon: 'w-4.5 h-4.5', text: 'text-xl' },
+    lg: { box: 'w-12 h-12 sm:w-14 sm:h-14', icon: 'w-6 h-6 sm:w-7 sm:h-7', text: 'text-3xl sm:text-4xl', beta: 'text-sm sm:text-base' },
+    md: { box: 'w-10 h-10 sm:w-12 sm:h-12', icon: 'w-5 h-5 sm:w-6 sm:h-6', text: 'text-2xl sm:text-3xl', beta: 'text-xs sm:text-sm' },
+    sm: { box: 'w-9 h-9', icon: 'w-4.5 h-4.5', text: 'text-xl', beta: 'text-[11px]' },
   };
   const s = sizeMap[size];
   return (
@@ -18,6 +18,11 @@ export function Logo({ size = 'lg', tenantName }: { size?: 'lg' | 'md' | 'sm'; t
         <span className={`${s.text} font-black tracking-tight`}>
           <span className="text-text">Boti</span>
           <span className="text-success">Logistics</span>
+        </span>
+      )}
+      {isBeta && (
+        <span className={`${s.beta} italic font-bold text-orange-500 lowercase self-start mt-0.5`} title="Бета-версія">
+          beta
         </span>
       )}
     </div>

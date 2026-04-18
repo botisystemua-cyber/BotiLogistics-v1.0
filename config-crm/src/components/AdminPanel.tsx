@@ -2,16 +2,28 @@ import { useEffect, useState } from 'react';
 import {
   Users, UserCog, BarChart3, CreditCard, Settings, LogOut, Plus, Pencil, Trash2,
   Loader2, AlertCircle, X, Save, ShieldCheck, ChevronDown, ChevronRight,
+  FlaskConical, Rocket,
 } from 'lucide-react';
 import { Logo } from './shared';
 import {
   listClients, createClient, updateClient, deleteClient,
+  promoteTenant, deleteTenantCascade,
   type Client, type ClientInput,
 } from '../api/clients';
 import {
   listUsers, createUser, updateUser, deleteUser, sortRoles,
   type User, type UserInput, type Role,
 } from '../api/users';
+
+type ClientsTab = 'main' | 'beta';
+
+// Повертає інфо про бета-стан: скільки днів залишилось / чи прострочено.
+function betaState(c: Client): { daysLeft: number | null; expired: boolean } {
+  if (!c.is_beta || !c.beta_expires_at) return { daysLeft: null, expired: false };
+  const ms = new Date(c.beta_expires_at).getTime() - Date.now();
+  const days = Math.ceil(ms / 86_400_000);
+  return { daysLeft: days, expired: days <= 0 };
+}
 
 type Section = 'clients' | 'users' | 'stats' | 'billing' | 'settings';
 const ROLES: Role[] = ['owner', 'manager', 'driver'];
@@ -110,7 +122,8 @@ function ClientsScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [editing, setEditing] = useState<Client | null>(null);
-  const [creating, setCreating] = useState(false);
+  const [creating, setCreating] = useState<ClientsTab | null>(null);
+  const [tab, setTab] = useState<ClientsTab>('main');
 
   const reload = async () => {
     setLoading(true);
@@ -127,6 +140,25 @@ function ClientsScreen() {
   useEffect(() => { reload(); }, []);
 
   const handleDelete = async (c: Client) => {
+    if (c.is_beta) {
+      const msg =
+        `УВАГА: видалення бета-тенанта "${c.name}" (${c.tenant_id}) КАСКАДНО.\n\n` +
+        `Буде видалено ВСЕ: пасажирів, посилки, маршрути, платежі, користувачів і т.д. — все, що має tenant_id="${c.tenant_id}".\n\n` +
+        `Це НЕЗВОРОТНО. Продовжити?`;
+      if (!confirm(msg)) return;
+      try {
+        const { total, breakdown } = await deleteTenantCascade(c.tenant_id);
+        const details = Object.entries(breakdown)
+          .map(([t, n]) => `  • ${t}: ${n}`)
+          .join('\n');
+        alert(`Видалено рядків: ${total}\n${details}`);
+        await reload();
+      } catch (e: unknown) {
+        alert('Помилка: ' + (e as Error).message);
+      }
+      return;
+    }
+
     if (!confirm(`Видалити клієнта "${c.name}" (${c.tenant_id})?\nЙого дані в routes/passengers НЕ будуть видалені.`)) return;
     try {
       await deleteClient(c.id);
@@ -136,20 +168,60 @@ function ClientsScreen() {
     }
   };
 
+  const handlePromote = async (c: Client) => {
+    if (!confirm(`Перевести "${c.name}" з бета-версії в основну?\nДані збережуться, прапорець is_beta буде знято.`)) return;
+    try {
+      await promoteTenant(c.tenant_id);
+      await reload();
+    } catch (e: unknown) {
+      alert('Помилка: ' + (e as Error).message);
+    }
+  };
+
+  const mainClients = clients.filter((c) => !c.is_beta);
+  const betaClients = clients.filter((c) => c.is_beta);
+  const visible = tab === 'beta' ? betaClients : mainClients;
+
+  const isBetaTab = tab === 'beta';
+
   return (
     <div className="w-full">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-5">
         <div>
           <h1 className="text-3xl font-black text-text">Клієнти</h1>
           <p className="text-sm text-muted mt-1">Керування тенантами та доступом до модулів</p>
         </div>
         <button
-          onClick={() => setCreating(true)}
-          className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-violet-500 to-purple-600 text-white text-sm font-bold flex items-center gap-2 shadow-lg shadow-violet-500/20 hover:brightness-110 active:scale-[0.97] cursor-pointer transition-all"
+          onClick={() => setCreating(tab)}
+          className={`px-4 py-2.5 rounded-xl text-white text-sm font-bold flex items-center gap-2 shadow-lg hover:brightness-110 active:scale-[0.97] cursor-pointer transition-all ${
+            isBetaTab
+              ? 'bg-gradient-to-r from-amber-500 to-orange-600 shadow-amber-500/20'
+              : 'bg-gradient-to-r from-violet-500 to-purple-600 shadow-violet-500/20'
+          }`}
         >
           <Plus className="w-4 h-4" />
-          Додати клієнта
+          {isBetaTab ? 'Додати бета-клієнта' : 'Додати клієнта'}
         </button>
+      </div>
+
+      {/* Tabs: Main / Beta */}
+      <div className="mb-5 inline-flex p-1 bg-bg border-2 border-border rounded-xl">
+        <TabBtn
+          active={tab === 'main'}
+          onClick={() => setTab('main')}
+          color="violet"
+          icon={Users}
+          label="Основна версія"
+          count={mainClients.length}
+        />
+        <TabBtn
+          active={tab === 'beta'}
+          onClick={() => setTab('beta')}
+          color="amber"
+          icon={FlaskConical}
+          label="Бета"
+          count={betaClients.length}
+        />
       </div>
 
       {error && (
@@ -162,58 +234,104 @@ function ClientsScreen() {
                 Запусти SQL з <code className="bg-red-100 px-1 rounded">sql/2026-04-add-client-auth.sql</code> у Supabase Dashboard → SQL Editor.
               </div>
             ) : null}
+            {error.includes('is_beta') || error.includes('beta_expires_at') ? (
+              <div className="mt-1 text-xs font-normal text-red-700">
+                Запусти SQL з <code className="bg-red-100 px-1 rounded">sql/2026-04-clients-beta-mode.sql</code> у Supabase Dashboard → SQL Editor.
+              </div>
+            ) : null}
           </div>
         </div>
       )}
 
-      <div className="bg-card border-2 border-border rounded-2xl overflow-hidden">
+      <div
+        className={`border-2 rounded-2xl overflow-hidden ${
+          isBetaTab ? 'bg-amber-50/40 border-amber-200' : 'bg-card border-border'
+        }`}
+      >
         {loading ? (
           <div className="p-12 flex items-center justify-center">
             <Loader2 className="w-6 h-6 animate-spin text-muted" />
           </div>
-        ) : clients.length === 0 ? (
-          <div className="p-12 text-center text-muted text-sm">Клієнтів немає</div>
+        ) : visible.length === 0 ? (
+          <div className="p-12 text-center text-muted text-sm">
+            {isBetaTab ? 'Бета-клієнтів немає' : 'Клієнтів немає'}
+          </div>
         ) : (
           <table className="w-full text-sm">
             <thead>
-              <tr className="bg-bg border-b-2 border-border">
+              <tr className={`border-b-2 ${isBetaTab ? 'bg-amber-100/50 border-amber-200' : 'bg-bg border-border'}`}>
                 <Th>Логін</Th>
                 <Th>Назва компанії</Th>
                 <Th>Модулі</Th>
+                {isBetaTab && <Th>Термін</Th>}
                 <Th className="text-right">Дії</Th>
               </tr>
             </thead>
             <tbody>
-              {clients.map((c) => (
-                <tr key={c.id} className="border-b border-border last:border-0 hover:bg-bg/50">
-                  <Td><code className="font-mono text-xs font-bold">{c.tenant_id}</code></Td>
-                  <Td>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-semibold">{c.name}</span>
-                      {(c.tags ?? []).map((t) => (
-                        <span key={t} className={`px-1.5 py-0.5 rounded-md border text-[9px] font-bold uppercase leading-none ${TAG_STYLE[t] ?? DEFAULT_TAG_STYLE}`}>
-                          {t}
-                        </span>
-                      ))}
-                    </div>
-                  </Td>
-                  <Td>
-                    <div className="flex flex-wrap gap-1">
-                      {(c.modules ?? []).filter((m) => MODULE_LABEL[m]).map((m) => (
-                        <span key={m} className="px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-[10px] font-bold text-emerald-700 uppercase">
-                          {MODULE_LABEL[m]}
-                        </span>
-                      ))}
-                    </div>
-                  </Td>
-                  <Td className="text-right">
-                    <div className="inline-flex gap-2">
-                      <IconBtn icon={Pencil} onClick={() => setEditing(c)} title="Редагувати" />
-                      <IconBtn icon={Trash2} onClick={() => handleDelete(c)} title="Видалити" danger />
-                    </div>
-                  </Td>
-                </tr>
-              ))}
+              {visible.map((c) => {
+                const st = betaState(c);
+                return (
+                  <tr
+                    key={c.id}
+                    className={`border-b last:border-0 ${
+                      isBetaTab
+                        ? 'border-amber-200 hover:bg-amber-100/40'
+                        : 'border-border hover:bg-bg/50'
+                    }`}
+                  >
+                    <Td><code className="font-mono text-xs font-bold">{c.tenant_id}</code></Td>
+                    <Td>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-semibold">{c.name}</span>
+                        {(c.tags ?? []).map((t) => (
+                          <span key={t} className={`px-1.5 py-0.5 rounded-md border text-[9px] font-bold uppercase leading-none ${TAG_STYLE[t] ?? DEFAULT_TAG_STYLE}`}>
+                            {t}
+                          </span>
+                        ))}
+                      </div>
+                    </Td>
+                    <Td>
+                      <div className="flex flex-wrap gap-1">
+                        {(c.modules ?? []).filter((m) => MODULE_LABEL[m]).map((m) => (
+                          <span key={m} className="px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-[10px] font-bold text-emerald-700 uppercase">
+                            {MODULE_LABEL[m]}
+                          </span>
+                        ))}
+                      </div>
+                    </Td>
+                    {isBetaTab && (
+                      <Td>
+                        {c.beta_expires_at ? (
+                          st.expired ? (
+                            <span className="px-2 py-0.5 rounded-md bg-red-100 border border-red-300 text-[10px] font-bold text-red-700 uppercase">
+                              Прострочено
+                            </span>
+                          ) : (
+                            <span className={`px-2 py-0.5 rounded-md border text-[10px] font-bold uppercase ${
+                              (st.daysLeft ?? 0) <= 3
+                                ? 'bg-orange-50 border-orange-300 text-orange-700'
+                                : 'bg-amber-50 border-amber-300 text-amber-700'
+                            }`}>
+                              {st.daysLeft} дн.
+                            </span>
+                          )
+                        ) : (
+                          <span className="text-[10px] text-muted">безстроково</span>
+                        )}
+                      </Td>
+                    )}
+                    <Td className="text-right">
+                      <div className="inline-flex gap-2">
+                        {c.is_beta && (
+                          <IconBtn icon={Rocket} onClick={() => handlePromote(c)} title="Перевести в основну версію" tone="emerald" />
+                        )}
+                        <IconBtn icon={Pencil} onClick={() => setEditing(c)} title="Редагувати" />
+                        <IconBtn icon={Trash2} onClick={() => handleDelete(c)} title={c.is_beta ? 'Видалити бета (каскадно)' : 'Видалити'} danger />
+                      </div>
+                    </Td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}
@@ -222,11 +340,44 @@ function ClientsScreen() {
       {(creating || editing) && (
         <ClientFormModal
           initial={editing}
-          onClose={() => { setCreating(false); setEditing(null); }}
-          onSaved={async () => { setCreating(false); setEditing(null); await reload(); }}
+          defaultBeta={!editing && creating === 'beta'}
+          onClose={() => { setCreating(null); setEditing(null); }}
+          onSaved={async () => { setCreating(null); setEditing(null); await reload(); }}
         />
       )}
     </div>
+  );
+}
+
+function TabBtn({
+  active, onClick, color, icon: Icon, label, count,
+}: {
+  active: boolean;
+  onClick: () => void;
+  color: 'violet' | 'amber';
+  icon: typeof Users;
+  label: string;
+  count: number;
+}) {
+  const activeBg = color === 'amber'
+    ? 'bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-md shadow-amber-500/20'
+    : 'bg-gradient-to-r from-violet-500 to-purple-600 text-white shadow-md shadow-violet-500/20';
+  const idleTxt = color === 'amber' ? 'text-amber-700 hover:bg-amber-50' : 'text-text-secondary hover:bg-card';
+  return (
+    <button
+      onClick={onClick}
+      className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold cursor-pointer transition-all ${
+        active ? activeBg : idleTxt
+      }`}
+    >
+      <Icon className="w-4 h-4" />
+      {label}
+      <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold ${
+        active ? 'bg-white/20 text-white' : 'bg-bg border border-border text-muted'
+      }`}>
+        {count}
+      </span>
+    </button>
   );
 }
 
@@ -237,17 +388,25 @@ function Td({ children, className = '' }: { children: React.ReactNode; className
   return <td className={`px-4 py-3 text-text ${className}`}>{children}</td>;
 }
 function IconBtn({
-  icon: Icon, onClick, title, danger,
-}: { icon: typeof Pencil; onClick: () => void; title: string; danger?: boolean }) {
+  icon: Icon, onClick, title, danger, tone,
+}: {
+  icon: typeof Pencil;
+  onClick: () => void;
+  title: string;
+  danger?: boolean;
+  tone?: 'emerald';
+}) {
+  const cls =
+    danger
+      ? 'border-red-200 text-error hover:bg-red-50'
+      : tone === 'emerald'
+        ? 'border-emerald-200 text-emerald-600 hover:bg-emerald-50 hover:border-emerald-300'
+        : 'border-border text-text-secondary hover:bg-bg hover:border-violet-300 hover:text-violet-600';
   return (
     <button
       onClick={onClick}
       title={title}
-      className={`w-8 h-8 rounded-lg flex items-center justify-center cursor-pointer transition-all border-2 ${
-        danger
-          ? 'border-red-200 text-error hover:bg-red-50'
-          : 'border-border text-text-secondary hover:bg-bg hover:border-violet-300 hover:text-violet-600'
-      }`}
+      className={`w-8 h-8 rounded-lg flex items-center justify-center cursor-pointer transition-all border-2 ${cls}`}
     >
       <Icon className="w-4 h-4" />
     </button>
@@ -257,14 +416,23 @@ function IconBtn({
 // ─────────────── Modal ───────────────
 
 function ClientFormModal({
-  initial, onClose, onSaved,
-}: { initial: Client | null; onClose: () => void; onSaved: () => void }) {
+  initial, defaultBeta = false, onClose, onSaved,
+}: { initial: Client | null; defaultBeta?: boolean; onClose: () => void; onSaved: () => void }) {
   const [tenantId, setTenantId] = useState(initial?.tenant_id ?? '');
   const [name, setName] = useState(initial?.name ?? '');
   const LOGO_BASE = 'https://botisystem.com/BotiLogistics-v1.0/logos/';
   const [logoUrl, setLogoUrl] = useState(initial?.logo_url || LOGO_BASE);
   const [modules, setModules] = useState<string[]>(initial?.modules ?? ['passenger']);
   const [tags, setTags] = useState<string[]>(initial?.tags ?? []);
+  const [isBeta, setIsBeta] = useState<boolean>(initial?.is_beta ?? defaultBeta);
+  const [betaDays, setBetaDays] = useState<string>(() => {
+    if (initial?.beta_expires_at) {
+      const ms = new Date(initial.beta_expires_at).getTime() - Date.now();
+      const d = Math.max(0, Math.ceil(ms / 86_400_000));
+      return String(d);
+    }
+    return '10';
+  });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -284,6 +452,17 @@ function ClientFormModal({
     setSaving(true);
     setError('');
     try {
+      let betaExpiresAt: string | null = null;
+      if (isBeta) {
+        const n = parseInt(betaDays, 10);
+        if (!Number.isFinite(n) || n < 0) {
+          setError('Термін бети має бути числом днів (0 = без обмежень)');
+          setSaving(false);
+          return;
+        }
+        betaExpiresAt = n === 0 ? null : new Date(Date.now() + n * 86_400_000).toISOString();
+      }
+
       const input: ClientInput = {
         tenant_id: tenantId.trim(),
         name: name.trim(),
@@ -291,6 +470,8 @@ function ClientFormModal({
         logo_url: logoUrl.trim() || null,
         modules,
         tags,
+        is_beta: isBeta,
+        beta_expires_at: betaExpiresAt,
       };
       if (initial) await updateClient(initial.id, input);
       else await createClient(input);
@@ -304,9 +485,18 @@ function ClientFormModal({
 
   return (
     <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-[fadeIn_0.15s_ease-out]">
-      <div className="bg-card border-2 border-border rounded-2xl shadow-2xl w-full max-w-md p-6 animate-[scaleIn_0.2s_ease-out]">
+      <div className={`bg-card border-2 rounded-2xl shadow-2xl w-full max-w-md p-6 animate-[scaleIn_0.2s_ease-out] ${
+        isBeta ? 'border-amber-300' : 'border-border'
+      }`}>
         <div className="flex items-center justify-between mb-5">
-          <h2 className="text-xl font-black text-text">{initial ? 'Редагувати клієнта' : 'Новий клієнт'}</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-black text-text">{initial ? 'Редагувати клієнта' : 'Новий клієнт'}</h2>
+            {isBeta && (
+              <span className="px-2 py-0.5 rounded-md bg-amber-100 border border-amber-300 text-[10px] font-bold text-amber-700 uppercase">
+                Beta
+              </span>
+            )}
+          </div>
           <button onClick={onClose} className="w-8 h-8 rounded-lg flex items-center justify-center text-muted hover:bg-bg cursor-pointer">
             <X className="w-5 h-5" />
           </button>
@@ -381,6 +571,38 @@ function ClientFormModal({
               })}
             </div>
           </Field>
+          <Field label="Бета-доступ">
+            <div className={`rounded-xl border-2 p-3 space-y-3 ${
+              isBeta ? 'border-amber-300 bg-amber-50/50' : 'border-border bg-bg/60'
+            }`}>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={isBeta}
+                  onChange={(e) => setIsBeta(e.target.checked)}
+                  className="w-4 h-4 accent-amber-500"
+                />
+                <span className="text-sm font-bold text-text">Тимчасовий бета-тенант</span>
+              </label>
+              {isBeta && (
+                <div>
+                  <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-1.5">
+                    Термін дії (днів, 0 = без обмежень)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={betaDays}
+                    onChange={(e) => setBetaDays(e.target.value)}
+                    className="w-full px-3 py-2 bg-card border-2 border-amber-200 rounded-lg text-sm font-mono focus:outline-none focus:border-amber-400"
+                  />
+                  <p className="text-[10px] text-muted mt-1.5">
+                    Після закінчення терміну в списку з'явиться бейдж «Прострочено» — видалити каскадно або промоутнути можна вручну.
+                  </p>
+                </div>
+              )}
+            </div>
+          </Field>
         </div>
 
         {error && (
@@ -400,7 +622,11 @@ function ClientFormModal({
           <button
             onClick={handleSave}
             disabled={saving}
-            className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-violet-500 to-purple-600 text-white text-sm font-bold flex items-center justify-center gap-2 shadow-lg shadow-violet-500/20 hover:brightness-110 disabled:opacity-50 cursor-pointer"
+            className={`flex-1 py-2.5 rounded-xl text-white text-sm font-bold flex items-center justify-center gap-2 shadow-lg hover:brightness-110 disabled:opacity-50 cursor-pointer ${
+              isBeta
+                ? 'bg-gradient-to-r from-amber-500 to-orange-600 shadow-amber-500/20'
+                : 'bg-gradient-to-r from-violet-500 to-purple-600 shadow-violet-500/20'
+            }`}
           >
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
             Зберегти
@@ -428,8 +654,9 @@ function UsersScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [editing, setEditing] = useState<User | null>(null);
-  const [creating, setCreating] = useState(false);
+  const [creating, setCreating] = useState<ClientsTab | null>(null);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const [tab, setTab] = useState<ClientsTab>('main');
 
   const reload = async () => {
     setLoading(true);
@@ -460,32 +687,73 @@ function UsersScreen() {
   const toggleGroup = (tid: string) =>
     setCollapsed((prev) => ({ ...prev, [tid]: !prev[tid] }));
 
-  // Group users by tenant, keep client order
-  const grouped = clients
+  // Вибрані клієнти для поточної вкладки.
+  // На вкладці "бета" показуємо ВСІ бета-тенанти (навіть без користувачів),
+  // щоб можна було створити першого власника для щойно доданого бета-клієнта.
+  // На вкладці "основна" показуємо тільки тенанти, де вже є юзери (як раніше).
+  const isBetaTab = tab === 'beta';
+  const tabClients = clients.filter((c) => (isBetaTab ? c.is_beta : !c.is_beta));
+  const grouped = tabClients
     .map((c) => ({
       client: c,
       users: users.filter((u) => u.tenant_id === c.tenant_id),
     }))
-    .filter((g) => g.users.length > 0);
+    .filter((g) => (isBetaTab ? true : g.users.length > 0));
 
-  // Users with unknown tenant (shouldn't happen, but just in case)
+  // Лічильники для табів — рахуємо кількість юзерів у кожному сегменті
+  const mainUsersCount = users.filter((u) =>
+    clients.some((c) => c.tenant_id === u.tenant_id && !c.is_beta),
+  ).length;
+  const betaUsersCount = users.filter((u) =>
+    clients.some((c) => c.tenant_id === u.tenant_id && c.is_beta),
+  ).length;
+
+  // Users with unknown tenant — показуємо завжди, незалежно від вкладки
   const knownTenants = new Set(clients.map((c) => c.tenant_id));
   const orphans = users.filter((u) => !knownTenants.has(u.tenant_id));
 
+  // Клієнти для передачі у форму створення — залежить від вкладки
+  const formClients = isBetaTab ? clients.filter((c) => c.is_beta) : clients.filter((c) => !c.is_beta);
+
   return (
     <div className="w-full">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-5">
         <div>
           <h1 className="text-3xl font-black text-text">Користувачі</h1>
           <p className="text-sm text-muted mt-1">Логіни співробітників прив'язані до компаній</p>
         </div>
         <button
-          onClick={() => setCreating(true)}
-          className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-violet-500 to-purple-600 text-white text-sm font-bold flex items-center gap-2 shadow-lg shadow-violet-500/20 hover:brightness-110 active:scale-[0.97] cursor-pointer transition-all"
+          onClick={() => setCreating(tab)}
+          disabled={formClients.length === 0}
+          className={`px-4 py-2.5 rounded-xl text-white text-sm font-bold flex items-center gap-2 shadow-lg hover:brightness-110 active:scale-[0.97] cursor-pointer transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
+            isBetaTab
+              ? 'bg-gradient-to-r from-amber-500 to-orange-600 shadow-amber-500/20'
+              : 'bg-gradient-to-r from-violet-500 to-purple-600 shadow-violet-500/20'
+          }`}
+          title={formClients.length === 0 ? (isBetaTab ? 'Спочатку додай бета-клієнта' : 'Спочатку додай клієнта') : ''}
         >
           <Plus className="w-4 h-4" />
-          Додати користувача
+          {isBetaTab ? 'Додати користувача (бета)' : 'Додати користувача'}
         </button>
+      </div>
+
+      <div className="mb-5 inline-flex p-1 bg-bg border-2 border-border rounded-xl">
+        <TabBtn
+          active={tab === 'main'}
+          onClick={() => setTab('main')}
+          color="violet"
+          icon={UserCog}
+          label="Основна версія"
+          count={mainUsersCount}
+        />
+        <TabBtn
+          active={tab === 'beta'}
+          onClick={() => setTab('beta')}
+          color="amber"
+          icon={FlaskConical}
+          label="Бета"
+          count={betaUsersCount}
+        />
       </div>
 
       {error && (
@@ -506,32 +774,63 @@ function UsersScreen() {
         <div className="bg-card border-2 border-border rounded-2xl p-12 flex items-center justify-center">
           <Loader2 className="w-6 h-6 animate-spin text-muted" />
         </div>
-      ) : users.length === 0 ? (
-        <div className="bg-card border-2 border-border rounded-2xl p-12 text-center text-muted text-sm">Користувачів немає</div>
+      ) : grouped.length === 0 ? (
+        <div className={`border-2 rounded-2xl p-12 text-center text-sm ${
+          isBetaTab ? 'bg-amber-50/40 border-amber-200 text-amber-700' : 'bg-card border-border text-muted'
+        }`}>
+          {isBetaTab
+            ? (clients.some((c) => c.is_beta)
+                ? 'У бета-тенантах ще немає користувачів — натисни «Додати користувача (бета)», щоб створити власника.'
+                : 'Бета-тенантів немає. Створи клієнта з бета-доступом у розділі «Клієнти».')
+            : 'Користувачів немає'}
+        </div>
       ) : (
         <div className="space-y-3">
           {grouped.map(({ client, users: groupUsers }) => {
             const isOpen = !collapsed[client.tenant_id];
+            const cardCls = isBetaTab
+              ? 'bg-amber-50/40 border-amber-200'
+              : 'bg-card border-border';
+            const hoverCls = isBetaTab ? 'hover:bg-amber-100/40' : 'hover:bg-bg/50';
+            const headerHoverCls = isBetaTab ? 'hover:bg-amber-100/60' : 'hover:bg-bg/50';
+            const badgeCls = isBetaTab
+              ? 'bg-amber-100 border-amber-300 text-amber-700'
+              : 'bg-violet-50 border-violet-200 text-violet-700';
             return (
-              <div key={client.tenant_id} className="bg-card border-2 border-border rounded-2xl overflow-hidden">
+              <div key={client.tenant_id} className={`border-2 rounded-2xl overflow-hidden ${cardCls}`}>
                 <button
                   onClick={() => toggleGroup(client.tenant_id)}
-                  className="w-full flex items-center gap-3 px-5 py-4 hover:bg-bg/50 cursor-pointer transition-colors"
+                  className={`w-full flex items-center gap-3 px-5 py-4 cursor-pointer transition-colors ${headerHoverCls}`}
                 >
                   {isOpen
                     ? <ChevronDown className="w-5 h-5 text-muted shrink-0" />
                     : <ChevronRight className="w-5 h-5 text-muted shrink-0" />
                   }
                   <span className="text-base font-black text-text">{client.name}</span>
-                  <span className="px-2.5 py-0.5 rounded-full bg-violet-50 border border-violet-200 text-xs font-bold text-violet-700">
+                  {isBetaTab && (
+                    <span className="px-1.5 py-0.5 rounded-md bg-amber-100 border border-amber-300 text-[9px] font-bold text-amber-700 uppercase leading-none italic">
+                      Beta
+                    </span>
+                  )}
+                  <span className={`px-2.5 py-0.5 rounded-full border text-xs font-bold ${badgeCls}`}>
                     {groupUsers.length}
                   </span>
                 </button>
 
-                {isOpen && (
+                {isOpen && groupUsers.length === 0 && (
+                  <div className={`px-5 py-6 text-sm italic border-t-2 ${
+                    isBetaTab ? 'border-amber-200 text-amber-700 bg-amber-50/60' : 'border-border text-muted'
+                  }`}>
+                    Немає користувачів. Натисни «Додати користувача (бета)» вгорі.
+                  </div>
+                )}
+
+                {isOpen && groupUsers.length > 0 && (
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="bg-bg border-t-2 border-b-2 border-border">
+                      <tr className={`border-t-2 border-b-2 ${
+                        isBetaTab ? 'bg-amber-100/50 border-amber-200' : 'bg-bg border-border'
+                      }`}>
                         <Th>Логін</Th>
                         <Th>ПІБ</Th>
                         <Th>Ролі</Th>
@@ -541,7 +840,9 @@ function UsersScreen() {
                     </thead>
                     <tbody>
                       {groupUsers.map((u) => (
-                        <tr key={u.id} className="border-b border-border last:border-0 hover:bg-bg/50">
+                        <tr key={u.id} className={`border-b last:border-0 ${
+                          isBetaTab ? 'border-amber-200' : 'border-border'
+                        } ${hoverCls}`}>
                           <Td><code className="font-mono text-xs font-bold">{u.login}</code></Td>
                           <Td className="font-semibold">{u.full_name || <span className="text-muted italic">—</span>}</Td>
                           <Td>
@@ -627,9 +928,10 @@ function UsersScreen() {
       {(creating || editing) && (
         <UserFormModal
           initial={editing}
-          clients={clients}
-          onClose={() => { setCreating(false); setEditing(null); }}
-          onSaved={async () => { setCreating(false); setEditing(null); await reload(); }}
+          clients={editing ? clients : formClients}
+          isBeta={editing ? clients.find((c) => c.tenant_id === editing.tenant_id)?.is_beta ?? false : isBetaTab}
+          onClose={() => { setCreating(null); setEditing(null); }}
+          onSaved={async () => { setCreating(null); setEditing(null); await reload(); }}
         />
       )}
     </div>
@@ -637,8 +939,8 @@ function UsersScreen() {
 }
 
 function UserFormModal({
-  initial, clients, onClose, onSaved,
-}: { initial: User | null; clients: Client[]; onClose: () => void; onSaved: () => void }) {
+  initial, clients, isBeta = false, onClose, onSaved,
+}: { initial: User | null; clients: Client[]; isBeta?: boolean; onClose: () => void; onSaved: () => void }) {
   const [login, setLogin] = useState(initial?.login ?? '');
   const [password, setPassword] = useState(initial?.password ?? '');
   const [fullName, setFullName] = useState(initial?.full_name ?? '');
@@ -684,9 +986,18 @@ function UserFormModal({
 
   return (
     <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-[fadeIn_0.15s_ease-out]">
-      <div className="bg-card border-2 border-border rounded-2xl shadow-2xl w-full max-w-md p-6 animate-[scaleIn_0.2s_ease-out]">
+      <div className={`bg-card border-2 rounded-2xl shadow-2xl w-full max-w-md p-6 animate-[scaleIn_0.2s_ease-out] ${
+        isBeta ? 'border-amber-300' : 'border-border'
+      }`}>
         <div className="flex items-center justify-between mb-5">
-          <h2 className="text-xl font-black text-text">{initial ? 'Редагувати користувача' : 'Новий користувач'}</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-black text-text">{initial ? 'Редагувати користувача' : 'Новий користувач'}</h2>
+            {isBeta && (
+              <span className="px-2 py-0.5 rounded-md bg-amber-100 border border-amber-300 text-[10px] font-bold text-amber-700 uppercase italic">
+                Beta
+              </span>
+            )}
+          </div>
           <button onClick={onClose} className="w-8 h-8 rounded-lg flex items-center justify-center text-muted hover:bg-bg cursor-pointer">
             <X className="w-5 h-5" />
           </button>
@@ -749,7 +1060,11 @@ function UserFormModal({
           <button onClick={onClose} className="flex-1 py-2.5 rounded-xl border-2 border-border text-sm font-bold text-text-secondary hover:bg-bg cursor-pointer">Скасувати</button>
           <button
             onClick={handleSave} disabled={saving}
-            className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-violet-500 to-purple-600 text-white text-sm font-bold flex items-center justify-center gap-2 shadow-lg shadow-violet-500/20 hover:brightness-110 disabled:opacity-50 cursor-pointer"
+            className={`flex-1 py-2.5 rounded-xl text-white text-sm font-bold flex items-center justify-center gap-2 shadow-lg hover:brightness-110 disabled:opacity-50 cursor-pointer ${
+              isBeta
+                ? 'bg-gradient-to-r from-amber-500 to-orange-600 shadow-amber-500/20'
+                : 'bg-gradient-to-r from-violet-500 to-purple-600 shadow-violet-500/20'
+            }`}
           >
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
             Зберегти
