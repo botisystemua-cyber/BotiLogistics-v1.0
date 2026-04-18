@@ -318,9 +318,18 @@ function UserModal({
 }) {
   const [form, setForm] = useState<FormState>(initial);
   const [saving, setSaving] = useState(false);
+  const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({});
 
-  const set = <K extends keyof FormState>(k: K, v: FormState[K]) =>
+  const set = <K extends keyof FormState>(k: K, v: FormState[K]) => {
     setForm(prev => ({ ...prev, [k]: v }));
+    if (errors[k]) {
+      setErrors(prev => {
+        const next = { ...prev };
+        delete next[k];
+        return next;
+      });
+    }
+  };
 
   const ALL_ROLES: Role[] = ['driver', 'manager', 'owner'];
 
@@ -344,6 +353,14 @@ function UserModal({
   };
 
   const submit = async () => {
+    const fieldErrors: Partial<Record<keyof FormState, string>> = {};
+    if (!form.full_name.trim()) {
+      fieldErrors.full_name = 'Вкажіть ПІБ співробітника';
+    }
+    if (Object.keys(fieldErrors).length > 0) {
+      setErrors(fieldErrors);
+      return;
+    }
     if (!form.login.trim() || !form.password.trim()) {
       alert('Логін і пароль обов’язкові');
       return;
@@ -402,7 +419,7 @@ function UserModal({
             )}
           </div>
 
-          <F label="ПІБ" value={form.full_name} onChange={v => set('full_name', v)} autoFocus />
+          <F label="ПІБ" value={form.full_name} onChange={v => set('full_name', v)} autoFocus error={errors.full_name} />
           <div className="grid grid-cols-2 gap-3 lg:gap-4">
             <F label="Телефон" value={form.phone} onChange={v => set('phone', v)} type="tel" />
             <F label="Email" value={form.email} onChange={v => set('email', v)} type="email" />
@@ -438,13 +455,14 @@ function UserModal({
 }
 
 function F({
-  label, value, onChange, type, autoFocus,
+  label, value, onChange, type, autoFocus, error,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   type?: string;
   autoFocus?: boolean;
+  error?: string;
 }) {
   return (
     <div>
@@ -454,8 +472,12 @@ function F({
         value={value}
         onChange={e => onChange(e.target.value)}
         autoFocus={autoFocus}
-        className="w-full px-3 lg:px-4 py-2.5 lg:py-3 bg-bg border border-border rounded-xl text-sm text-text placeholder:text-muted/50 focus:outline-none focus:border-brand transition-all"
+        aria-invalid={error ? true : undefined}
+        className={`w-full px-3 lg:px-4 py-2.5 lg:py-3 bg-bg border rounded-xl text-sm text-text placeholder:text-muted/50 focus:outline-none transition-all ${
+          error ? 'border-red-400 focus:border-red-500' : 'border-border focus:border-brand'
+        }`}
       />
+      {error && <div className="mt-1 text-xs font-medium text-red-500">{error}</div>}
     </div>
   );
 }
