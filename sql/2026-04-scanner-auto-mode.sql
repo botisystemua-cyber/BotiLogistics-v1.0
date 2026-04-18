@@ -51,6 +51,7 @@ DECLARE
     v_total       numeric;
     v_deposit     numeric;
     v_debt        numeric;
+    v_direction   text;  -- normalised direction for DB storage
 BEGIN
     IF p_tenant_id IS NULL OR p_tenant_id = '' THEN
         RETURN jsonb_build_object('ok', false, 'error', 'tenant_id обов''язковий');
@@ -62,6 +63,15 @@ BEGIN
         RETURN jsonb_build_object('ok', false, 'error',
             'Напрям має бути UA_EU або EU_UA');
     END IF;
+
+    -- The rest of cargo-crm (filterData, sidebar counters, api getAll) keys
+    -- off the legacy Ukrainian direction labels. Translate the scanner's
+    -- machine codes so scanned rows show up in the normal UA→EU / EU→UA tabs.
+    v_direction := CASE p_direction
+        WHEN 'UA_EU' THEN 'Україна-ЄВ'
+        WHEN 'EU_UA' THEN 'Європа-УК'
+        ELSE NULL
+    END;
 
     SELECT * INTO v_row
       FROM public.packages
@@ -84,7 +94,7 @@ BEGIN
                 sender_name, sender_phone, sender_address,
                 recipient_name, recipient_phone, recipient_address
             ) VALUES (
-                v_pkg_id, p_tenant_id, p_direction,
+                v_pkg_id, p_tenant_id, v_direction,
                 v_now, v_now,
                 v_ttn, 'unknown', 'active', false,
                 'received', v_now,
