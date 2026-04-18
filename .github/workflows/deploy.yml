@@ -81,6 +81,13 @@ jobs:
           echo "===== Total size ====="
           du -sh _deploy
 
+          # Bump mtimes на всіх файлах до "now". Без цього lftp mirror
+          # порівнює за size+mtime і якщо артефакт має старший timestamp,
+          # ніж файл на сервері, вважає його несвіжим і НЕ перезаписує
+          # (класична пастка: index.html з новим хешем JS має той самий
+          # розмір, що й старий, mtime старше за server → skip).
+          find _deploy -exec touch {} +
+
       - name: Install lftp
         run: sudo apt-get update && sudo apt-get install -y lftp
 
