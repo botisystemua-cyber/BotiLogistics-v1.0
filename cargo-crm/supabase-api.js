@@ -130,12 +130,15 @@ function sbToGasObjPkg(sbRow) {
     return obj;
 }
 
+// Columns that are GENERATED ALWAYS — reads only, writes will error.
+const GENERATED_COLS_PKG = new Set(['quality_check_required']);
+
 function gasToSbObjPkg(gasObj) {
     const obj = {};
     for (const [key, val] of Object.entries(gasObj)) {
         if (key.startsWith('_')) continue;
         const sbKey = GAS_TO_SB_PKG[key] || FORM_TO_SB_PKG[key] || key;
-        if (sbKey && SB_TO_GAS_PKG[sbKey] !== undefined) {
+        if (sbKey && SB_TO_GAS_PKG[sbKey] !== undefined && !GENERATED_COLS_PKG.has(sbKey)) {
             let v = val === '' ? null : val;
             // Translate Ukrainian status values to English for DB
             if (v !== null && (sbKey === 'lead_status' || sbKey === 'crm_status' || sbKey === 'payment_status' || sbKey === 'package_status' || sbKey === 'np_status') && STATUS_UA_TO_SB[v]) {
@@ -276,17 +279,33 @@ async function sbPkgAdd(params) {
     }
 }
 
+// Legacy UI writes "Контроль перевірки" values directly; since that column
+// is now GENERATED from scan_status, translate the write.
+const VERIFY_UA_TO_SCAN_STATUS = {
+    'В перевірці':       'checked',
+    'Готова до маршруту':'awaiting_route',
+    'Відхилено':         'rejected',
+};
+
 async function sbPkgUpdateField(params) {
     try {
         const pkgId = params.pkg_id;
         const gasCol = params.col;
         const value = params.value;
 
-        const sbCol = GAS_TO_SB_PKG[gasCol] || gasCol;
+        let sbCol = GAS_TO_SB_PKG[gasCol] || gasCol;
         if (!sbCol) return { ok: false, error: 'Unknown column: ' + gasCol };
 
         const updateObj = {};
         let v = value === '' ? null : value;
+
+        // "Контроль перевірки" is a legacy alias — translate target column
+        // and value to the new scan_status pipeline.
+        if (sbCol === 'quality_check_required') {
+            sbCol = 'scan_status';
+            v = v == null ? 'received' : (VERIFY_UA_TO_SCAN_STATUS[v] || v);
+        }
+
         // Convert Ukrainian status values to English for DB
         if (v !== null && (sbCol === 'lead_status' || sbCol === 'crm_status' || sbCol === 'payment_status' || sbCol === 'package_status' || sbCol === 'np_status') && STATUS_UA_TO_SB[v]) {
             v = STATUS_UA_TO_SB[v];
@@ -1096,79 +1115,79 @@ async function sbMarkClientRead(params) {
 // ================================================================
 
 /**
- * scanTTN — сканування ТТН при прибутті посилки
- * ТИП A: знайдено → оновити статус «В перевірці», показати дублікати
- * ТИП B: не знайдено → створити «невідому» посилку
+ * scanTTN — thin wrapper over public.scan_ttn RPC.
+ * The RPC owns the auto state-machine, audit log, and uniqueness guard
+ * (see sql/2026-04-scanner-auto-mode.sql). Signature is now 4-arg — the
+ * operator no longer picks intake/handout; DB decides from current scan_status.
+ *
+ * For back-compat with the legacy cargo-crm scan UI (which expects a full
+ * package row + duplicates list), we re-fetch the row after the RPC and
+ * do the duplicate search client-side.
  */
 async function sbScanTTN(params) {
     try {
         const ttn = String(params.ttn || '').trim();
         if (!ttn) return { ok: false, error: 'ТТН не вказано' };
 
-        // Шукаємо в packages по ttn_number
-        const { data, error } = await sb.from('packages')
-            .select('*')
-            .eq('tenant_id', TENANT_ID)
-            .eq('ttn_number', ttn)
-            .eq('is_archived', false)
-            .limit(1);
-        if (error) throw error;
-
-        if (data && data.length > 0) {
-            // ТИП A — знайдено → оновити статус
-            const row = data[0];
-            const now = new Date().toISOString();
-
-            await sb.from('packages')
-                .update({ quality_check_required: 'В перевірці', quality_checked_at: now })
-                .eq('pkg_id', row.pkg_id)
-                .eq('tenant_id', TENANT_ID);
-
-            const obj = sbToGasObjPkg(row);
-            obj['Контроль перевірки'] = 'В перевірці';
-            obj['Дата перевірки'] = now;
-            obj['Борг'] = calcDebtPkg(obj);
-
-            // Пошук дублікатів по отримувачу
-            const duplicates = await _findDuplicatesInternal(
-                row.pkg_id, row.recipient_name, row.recipient_phone
-            );
-
-            return { ok: true, type: 'found', data: obj, duplicates };
+        const { data: rpcRes, error: rpcErr } = await sb.rpc('scan_ttn', {
+            p_tenant_id: TENANT_ID,
+            p_ttn: ttn,
+            p_direction: params.direction || null,
+            p_user: params.user_login || 'cargo-crm'
+        });
+        if (rpcErr) throw rpcErr;
+        if (!rpcRes || !rpcRes.ok) {
+            return { ok: false, error: (rpcRes && rpcRes.error) || 'scan_ttn failed' };
         }
 
-        // ТИП B — не знайдено → створити «невідому» посилку
-        const pkgId = 'PKG' + Date.now();
-        const now = new Date().toISOString();
-        const newPkg = {
-            pkg_id: pkgId,
-            tenant_id: TENANT_ID,
-            direction: 'Україна-ЄВ',
-            created_at: now,
-            ttn_number: ttn,
-            lead_status: 'unknown',
-            crm_status: 'active',
-            is_archived: false,
-            quality_check_required: 'В перевірці',
-            quality_checked_at: now,
-            sender_name: '',
-            sender_phone: '',
-            sender_address: '',
-            recipient_name: '',
-            recipient_phone: '',
-            recipient_address: '',
-        };
+        // Fetch the full row so the UI has all columns it needs.
+        const { data: rows, error: selErr } = await sb.from('packages')
+            .select('*')
+            .eq('pkg_id', rpcRes.pkg_id)
+            .eq('tenant_id', TENANT_ID)
+            .limit(1);
+        if (selErr) throw selErr;
+        if (!rows || rows.length === 0) {
+            return { ok: false, error: 'Рядок не знайдено після scan_ttn' };
+        }
 
-        const { data: inserted, error: insErr } = await sb.from('packages')
-            .insert(newPkg).select();
-        if (insErr) throw insErr;
-
-        const obj = sbToGasObjPkg(inserted[0]);
+        const obj = sbToGasObjPkg(rows[0]);
         obj['Борг'] = calcDebtPkg(obj);
 
-        return { ok: true, type: 'new', data: obj, pkg_id: pkgId };
+        const duplicates = await _findDuplicatesInternal(
+            rows[0].pkg_id, rows[0].recipient_name, rows[0].recipient_phone
+        );
+
+        return {
+            ok: true,
+            type: rpcRes.type,        // 'found' | 'already' | 'new' | 'rejected'
+            data: obj,
+            duplicates,
+            pkg_id: rpcRes.pkg_id
+        };
     } catch (e) {
         console.error('sbScanTTN error:', e);
+        return { ok: false, error: e.message };
+    }
+}
+
+/**
+ * peekTTN — read-only twin of scanTTN for the Check-mode lookup.
+ * Returns payment fields only (total, deposit, debt, status). Does NOT mutate
+ * scan_status and does NOT write to package_scan_log — by design.
+ */
+async function sbPeekTTN(ttn) {
+    try {
+        const t = String(ttn || '').trim();
+        if (!t) return { ok: false, error: 'ТТН не вказано' };
+        const { data, error } = await sb.rpc('peek_ttn', {
+            p_tenant_id: TENANT_ID,
+            p_ttn: t
+        });
+        if (error) throw error;
+        return data || { ok: false, error: 'peek_ttn returned empty' };
+    } catch (e) {
+        console.error('sbPeekTTN error:', e);
         return { ok: false, error: e.message };
     }
 }
@@ -1315,7 +1334,7 @@ async function sbCompleteVerification(params) {
 
         const { error } = await sb.from('packages')
             .update({
-                quality_check_required: 'Готова до маршруту',
+                scan_status: 'awaiting_route',
                 quality_checked_at: new Date().toISOString()
             })
             .eq('pkg_id', pkgId)
@@ -1341,7 +1360,7 @@ async function sbRejectVerification(params) {
         const { error } = await sb.from('packages')
             .update({
                 lead_status: 'rejected',
-                quality_check_required: 'Відхилено',
+                scan_status: 'rejected',
                 notes: params.reason || ''
             })
             .eq('pkg_id', pkgId)
@@ -1780,6 +1799,7 @@ async function apiPostSupabase(action, params) {
 
         // Verification workflow
         scanTTN:                    sbScanTTN,
+        peekTTN:                    sbPeekTTN,
         findDuplicatesByRecipient:  sbFindDuplicatesByRecipient,
         assignRouteNumber:          sbAssignRouteNumber,
         completeVerification:       sbCompleteVerification,
