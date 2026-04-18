@@ -11,7 +11,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  SFTP_REMOTE_PATH: /home3/onglerie/public_html/BotiLogistics-v1.0
+  SFTP_REMOTE_PATH: /home3/onglerie/botisystem.com/BotiLogistics-v1.0
 
 jobs:
   build-react:
