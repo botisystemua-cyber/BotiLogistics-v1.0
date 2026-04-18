@@ -665,25 +665,10 @@
             scanTTN(decodedText);
         }
 
-        // ─── State machine ────────────────────────────────────────────────
-        // The allowed status transitions per mode. "next" is what scan_status
-        // becomes after a successful scan. "from" is the set of statuses that
-        // are valid starting points — anything else is rejected with `reason`.
-        var STATE_MACHINE = {
-            intake: {
-                next: 'checked',
-                from: [null, 'received'],
-                alreadyIn: ['checked','awaiting_route','loaded','in_transit','arrived','delivered'],
-                rejectReason: null // intake never rejects existing rows, just "already"
-            },
-            handout: {
-                next: 'delivered',
-                from: ['loaded','in_transit','arrived'],
-                alreadyIn: ['delivered'],
-                rejectReason: 'Посилка ще не була завантажена в рейс'
-            }
-        };
-
+        // Scanner is a thin client over public.scan_ttn RPC (see
+        // sql/2026-04-scanner-rpc-and-uniqueness.sql). The state machine,
+        // uniqueness check, and audit log insert all happen inside Postgres
+        // in one transaction.
         var STATUS_LABEL = {
             received: 'Прийнято',
             checked: 'Перевірено',
@@ -691,20 +676,9 @@
             loaded: 'Завантажено',
             in_transit: 'В дорозі',
             arrived: 'Прибула',
-            delivered: 'Видана'
+            delivered: 'Видана',
+            rejected: 'Відхилено'
         };
-
-        function logScan(entry) {
-            // Fire-and-forget audit write. Errors are logged to console only —
-            // we never block the scan UX on audit success.
-            entry.tenant_id = TENANT_ID;
-            entry.scanned_by = USER_LOGIN;
-            entry.direction = SCAN_DIRECTION;
-            entry.user_agent = navigator.userAgent.slice(0, 500);
-            sb.from('package_scan_log').insert(entry).then(function(r) {
-                if (r && r.error) console.warn('[scan_log] insert failed', r.error);
-            });
-        }
 
         function scanTTN(ttn) {
             if (!TENANT_ID) {
@@ -716,130 +690,33 @@
                 return;
             }
 
-            var rules = STATE_MACHINE[SCAN_MODE];
-
-            sb.from('packages')
-                .select('pkg_id,sender_name,recipient_name,scan_status,direction')
-                .eq('tenant_id', TENANT_ID)
-                .eq('ttn_number', ttn)
-                .eq('is_archived', false)
-                .limit(1)
-                .then(function(result) {
-                    if (result.error) {
-                        handleScanResult(ttn, { ok: false, error: result.error.message });
-                        return;
-                    }
-                    var data = result.data || [];
-                    if (data.length > 0) {
-                        processExisting(ttn, data[0], rules);
-                    } else {
-                        processUnknown(ttn, rules);
-                    }
-                });
-        }
-
-        function processExisting(ttn, row, rules) {
-            var cur = row.scan_status; // may be null for legacy rows
-            // Already at or past the target state → just acknowledge.
-            if (rules.alreadyIn.indexOf(cur) !== -1) {
-                logScan({
-                    pkg_id: row.pkg_id, ttn_number: ttn, mode: SCAN_MODE,
-                    from_status: cur, to_status: cur, outcome: 'already'
-                });
-                handleScanResult(ttn, {
-                    ok: true, type: 'already',
-                    senderName: row.sender_name || row.recipient_name || '',
-                    status: cur
-                });
-                return;
-            }
-            // Not a valid starting point → reject (only for handout currently).
-            if (rules.from.indexOf(cur) === -1) {
-                logScan({
-                    pkg_id: row.pkg_id, ttn_number: ttn, mode: SCAN_MODE,
-                    from_status: cur, to_status: cur, outcome: 'rejected',
-                    reject_reason: rules.rejectReason
-                });
-                handleScanResult(ttn, {
-                    ok: false,
-                    error: (rules.rejectReason || 'Неочікуваний статус') +
-                           ' (поточний: ' + (STATUS_LABEL[cur] || cur || '—') + ')'
-                });
-                return;
-            }
-            // Happy path — transition.
-            var nextStatus = rules.next;
-            // Dual-write legacy `quality_check_required` so the old cargo-crm
-            // verification UI (supabase-api.js: getVerificationStats) keeps
-            // showing scanned packages. Safe to remove once legacy UI is gone.
-            var patch = { scan_status: nextStatus, updated_at: new Date().toISOString() };
-            if (SCAN_MODE === 'intake') patch.quality_check_required = 'В перевірці';
-            sb.from('packages')
-                .update(patch)
-                .eq('pkg_id', row.pkg_id)
-                .eq('tenant_id', TENANT_ID)
-                .then(function(upd) {
-                    if (upd.error) {
-                        handleScanResult(ttn, { ok: false, error: upd.error.message });
-                        return;
-                    }
-                    logScan({
-                        pkg_id: row.pkg_id, ttn_number: ttn, mode: SCAN_MODE,
-                        from_status: cur, to_status: nextStatus, outcome: 'updated'
-                    });
+            sb.rpc('scan_ttn', {
+                p_tenant_id: TENANT_ID,
+                p_ttn: ttn,
+                p_mode: SCAN_MODE,
+                p_direction: SCAN_DIRECTION,
+                p_user: USER_LOGIN
+            }).then(function(result) {
+                if (result.error) {
+                    handleScanResult(ttn, { ok: false, error: result.error.message });
+                    return;
+                }
+                var r = result.data || {};
+                if (!r.ok) {
                     handleScanResult(ttn, {
-                        ok: true, type: 'found',
-                        senderName: row.sender_name || row.recipient_name || '',
-                        status: nextStatus
+                        ok: false,
+                        error: (r.error || 'Невідома помилка') +
+                               (r.status ? ' (поточний: ' + (STATUS_LABEL[r.status] || r.status) + ')' : '')
                     });
-                });
-        }
-
-        function processUnknown(ttn, rules) {
-            // Unknown TTN in 'handout' mode = likely wrong scan; reject, no insert.
-            if (SCAN_MODE !== 'intake') {
-                logScan({
-                    pkg_id: null, ttn_number: ttn, mode: SCAN_MODE,
-                    from_status: null, to_status: null, outcome: 'rejected',
-                    reject_reason: 'ТТН не знайдено в системі'
-                });
+                    return;
+                }
                 handleScanResult(ttn, {
-                    ok: false, error: 'ТТН не знайдено. У режимі "Видача" створення заборонено.'
+                    ok: true,
+                    type: r.type,
+                    senderName: r.sender_name || r.recipient_name || '',
+                    status: r.status
                 });
-                return;
-            }
-            // Intake of unknown package — create a stub so it can be filled in later.
-            var pkgId = 'PKG' + Date.now();
-            var now = new Date().toISOString();
-            sb.from('packages')
-                .insert({
-                    pkg_id: pkgId,
-                    tenant_id: TENANT_ID,
-                    direction: SCAN_DIRECTION,
-                    created_at: now,
-                    updated_at: now,
-                    ttn_number: ttn,
-                    lead_status: 'unknown',
-                    crm_status: 'active',
-                    is_archived: false,
-                    scan_status: 'received',
-                    // Legacy dual-write so old verification UI sees this row.
-                    quality_check_required: 'В перевірці',
-                    quality_checked_at: now,
-                    sender_name: '', sender_phone: '', sender_address: '',
-                    recipient_name: '', recipient_phone: '', recipient_address: ''
-                })
-                .then(function(ins) {
-                    if (ins.error) {
-                        handleScanResult(ttn, { ok: false, error: ins.error.message });
-                        return;
-                    }
-                    logScan({
-                        pkg_id: pkgId, ttn_number: ttn, mode: SCAN_MODE,
-                        from_status: null, to_status: 'received', outcome: 'created'
-                    });
-                    handleScanResult(ttn, { ok: true, type: 'new', status: 'received' });
-                });
+            });
         }
 
         function handleScanResult(ttn, res) {
