@@ -705,7 +705,15 @@
                 scanner.stop().catch(function(){});
                 isScanning = false;
             }
-            window.location.href = 'https://botisystem.com/BotiLogistics-v1.0/cargo-crm/index.html';
+            // Prefer history.back() — the browser can restore index.html from
+            // bfcache instantly, avoiding a full loadData() round-trip (≈2–3s
+            // on mobile). Fall back to href if there's no history entry.
+            if (window.history.length > 1 && document.referrer &&
+                document.referrer.indexOf('index.html') !== -1) {
+                window.history.back();
+            } else {
+                window.location.href = 'index.html';
+            }
         }
 
         function startScan() {
