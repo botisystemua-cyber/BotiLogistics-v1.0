@@ -94,34 +94,33 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Credentials → .netrc (printf '%s' не інтерпретує спец-символи в паролі).
-          # lftp автоматично читає ~/.netrc при open без -u.
+          # Escape \ та " для lftp's double-quoted string syntax.
+          # printf '%s' не інтерпретує спец-символи в самому значенні.
+          escape_lftp() {
+            printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
+          }
+
+          SFTP_USER_Q=$(escape_lftp "$SFTP_USER")
+          SFTP_PASS_Q=$(escape_lftp "$SFTP_PASSWORD")
+
+          # Будуємо lftp-скрипт рядок за рядком — жодних проблем зі spec-chars
+          # у паролі (bash expansion виконується один раз на кожному printf).
           {
-            printf 'machine %s\n' "$SFTP_HOST"
-            printf 'login %s\n' "$SFTP_USER"
-            printf 'password %s\n' "$SFTP_PASSWORD"
-          } > "$HOME/.netrc"
-          chmod 600 "$HOME/.netrc"
+            echo "set sftp:auto-confirm yes"
+            echo "set net:max-retries 3"
+            echo "set net:reconnect-interval-base 5"
+            echo "set net:timeout 30"
+            echo "set mirror:parallel-transfer-count 3"
+            echo "set cmd:fail-exit yes"
+            printf 'open sftp://%s:%s\n' "$SFTP_HOST" "$SFTP_PORT"
+            printf 'user "%s" "%s"\n' "$SFTP_USER_Q" "$SFTP_PASS_Q"
+            printf 'mirror --reverse --verbose --parallel=3 --exclude-glob .git* --exclude-glob .DS_Store --exclude-glob node_modules/ --exclude-glob logos/ _deploy/ %s/\n' "$SFTP_REMOTE_PATH"
+            echo "bye"
+          } > /tmp/lftp.script
 
-          cleanup() { rm -f "$HOME/.netrc"; }
-          trap cleanup EXIT
+          trap 'rm -f /tmp/lftp.script' EXIT
 
-          lftp -c "
-            set sftp:auto-confirm yes;
-            set net:max-retries 3;
-            set net:reconnect-interval-base 5;
-            set net:timeout 30;
-            set mirror:parallel-transfer-count 3;
-            set cmd:fail-exit yes;
-            open sftp://$SFTP_HOST:$SFTP_PORT;
-            mirror --reverse --verbose --parallel=3 \
-                   --exclude-glob .git* \
-                   --exclude-glob .DS_Store \
-                   --exclude-glob node_modules/ \
-                   --exclude-glob logos/ \
-                   _deploy/ $SFTP_REMOTE_PATH/;
-            bye
-          "
+          lftp -f /tmp/lftp.script
 
       - name: Deployment summary
         if: success()
