@@ -1,0 +1,128 @@
+name: Deploy to HOSTIQ
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-hostiq
+  cancel-in-progress: false
+
+env:
+  SFTP_REMOTE_PATH: /home3/onglerie/public_html/BotiLogistics-v1.0
+
+jobs:
+  build-react:
+    name: Build ${{ matrix.app }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        app: [driver-crm, client-crm, owner-crm, config-crm]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: ${{ matrix.app }}/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ${{ matrix.app }}
+        run: npm ci
+
+      - name: Build
+        working-directory: ${{ matrix.app }}
+        run: npm run build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.app }}-dist
+          path: ${{ matrix.app }}/dist
+          retention-days: 1
+          if-no-files-found: error
+
+  deploy:
+    name: Assemble & upload to HOSTIQ
+    needs: build-react
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download React build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: _artifacts
+
+      - name: Assemble deploy folder
+        run: |
+          set -euo pipefail
+
+          mkdir -p _deploy
+
+          # Root-level shared files
+          cp manifest.php sw.js _deploy/
+
+          # Vanilla modules (copied as-is, including .htaccess)
+          cp -a passenger-crm _deploy/
+          cp -a cargo-crm     _deploy/
+
+          # React builds (dist/ → module folder)
+          for app in driver-crm client-crm owner-crm config-crm; do
+            mkdir -p "_deploy/$app"
+            cp -a "_artifacts/${app}-dist/." "_deploy/$app/"
+          done
+
+          echo "===== _deploy tree ====="
+          find _deploy -maxdepth 2 -type d | sort
+          echo "===== Total size ====="
+          du -sh _deploy
+
+      - name: Install lftp
+        run: sudo apt-get update && sudo apt-get install -y lftp
+
+      - name: Upload via SFTP (lftp mirror)
+        env:
+          SFTP_HOST: ${{ secrets.SFTP_HOST }}
+          SFTP_PORT: ${{ secrets.SFTP_PORT }}
+          SFTP_USER: ${{ secrets.SFTP_USER }}
+          SFTP_PASSWORD: ${{ secrets.SFTP_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          # Escape \ та " для lftp's double-quoted string syntax.
+          # printf '%s' не інтерпретує спец-символи в самому значенні.
+          escape_lftp() {
+            printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
+          }
+
+          SFTP_USER_Q=$(escape_lftp "$SFTP_USER")
+          SFTP_PASS_Q=$(escape_lftp "$SFTP_PASSWORD")
+
+          # Будуємо lftp-скрипт рядок за рядком — жодних проблем зі spec-chars
+          # у паролі (bash expansion виконується один раз на кожному printf).
+          {
+            echo "set sftp:auto-confirm yes"
+            echo "set net:max-retries 3"
+            echo "set net:reconnect-interval-base 5"
+            echo "set net:timeout 30"
+            echo "set mirror:parallel-transfer-count 3"
+            echo "set cmd:fail-exit yes"
+            printf 'open sftp://%s:%s\n' "$SFTP_HOST" "$SFTP_PORT"
+            printf 'user "%s" "%s"\n' "$SFTP_USER_Q" "$SFTP_PASS_Q"
+            printf 'mirror --reverse --verbose --parallel=3 --exclude-glob .git* --exclude-glob .DS_Store --exclude-glob node_modules/ --exclude-glob logos/ _deploy/ %s/\n' "$SFTP_REMOTE_PATH"
+            echo "bye"
+          } > /tmp/lftp.script
+
+          trap 'rm -f /tmp/lftp.script' EXIT
+
+          lftp -f /tmp/lftp.script
+
+      - name: Deployment summary
+        if: success()
+        run: |
+          echo "Deployed to https://botisystem.com/BotiLogistics-v1.0/"
+          echo "Target path: ${{ env.SFTP_REMOTE_PATH }}"
