@@ -1,7 +1,5 @@
-# Parse as PHP (cookie bridge for Safari PWA branding).
-# На проді файл називається index.html (так зручніше юзеру),
-# у dev-репо — Passengers.html. Покриваємо обидва варіанти.
-<FilesMatch "^(index|Passengers)\.html$">
+# Parse index.html as PHP (cookie bridge for Safari PWA branding).
+<FilesMatch "^index\.html$">
     AddHandler application/x-httpd-php .html
 </FilesMatch>
 

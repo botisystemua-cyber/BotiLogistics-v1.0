@@ -1,20 +1,17 @@
 // BotiLogistics Shared Service Worker — PWA для passenger-crm + cargo-crm
 // Розміщений на рівні /BotiLogistics-v1.0/ щоб scope покривав обидва модулі.
 // ВАЖЛИВО: бампай версію при кожному релізі щоб старий кеш видалявся автоматично.
-var CACHE_NAME = 'botilogistics-suite-v3';
+var CACHE_NAME = 'botilogistics-suite-v4';
 
 // Файли, які ЗАВЖДИ мусять братися з мережі свіжими (щоб не було
 // розсинхрону між HTML/CSS/JS через HTTP-кеш браузера).
 var NO_HTTP_CACHE = [
-  // passenger-crm + cargo-crm — на проді обидва модулі деплояться як
-  // index.html (Passengers.html/Cargo.html — лише в dev-репо).
+  // HTML обох модулів (passenger-crm + cargo-crm)
   'index.html',
-  // passenger-crm (dev-імена)
-  'Passengers.html',
+  // passenger-crm
   'Passengers.js',
   'Passengers.css',
-  // cargo-crm (dev-імена)
-  'Cargo.html',
+  // cargo-crm
   'Cargo.js',
   'Cargo.css',
   // спільні
@@ -61,8 +58,8 @@ self.addEventListener('fetch', function(e) {
   }
 
   // Для «критичних» файлів (HTML/JS/CSS аплікух) ОБХОДИМО HTTP-кеш браузера
-  // через cache: 'no-store' — це єдиний спосіб гарантувати, що Passengers.js
-  // та Passengers.html (і Cargo.*) не розсинхронізуються. Для решти контенту
+  // через cache: 'no-store' — це єдиний спосіб гарантувати, що index.html,
+  // Passengers.js та Cargo.js не розсинхронізуються. Для решти контенту
   // (іконки, картинки, шрифти) лишаємо звичайний fetch.
   var url = e.request.url;
   var isCritical = NO_HTTP_CACHE.some(function(name) {
