@@ -1116,10 +1116,11 @@ async function sbMarkClientRead(params) {
 
 /**
  * scanTTN — thin wrapper over public.scan_ttn RPC.
- * The RPC owns state-machine transitions, audit log, and uniqueness guard
- * (see sql/2026-04-scanner-rpc-and-uniqueness.sql).
+ * The RPC owns the auto state-machine, audit log, and uniqueness guard
+ * (see sql/2026-04-scanner-auto-mode.sql). Signature is now 4-arg — the
+ * operator no longer picks intake/handout; DB decides from current scan_status.
  *
- * For back-compat with the old cargo-crm scan UI (which expects a full
+ * For back-compat with the legacy cargo-crm scan UI (which expects a full
  * package row + duplicates list), we re-fetch the row after the RPC and
  * do the duplicate search client-side.
  */
@@ -1131,7 +1132,6 @@ async function sbScanTTN(params) {
         const { data: rpcRes, error: rpcErr } = await sb.rpc('scan_ttn', {
             p_tenant_id: TENANT_ID,
             p_ttn: ttn,
-            p_mode: params.mode || 'intake',
             p_direction: params.direction || null,
             p_user: params.user_login || 'cargo-crm'
         });
@@ -1160,13 +1160,34 @@ async function sbScanTTN(params) {
 
         return {
             ok: true,
-            type: rpcRes.type,        // 'found' | 'already' | 'new'
+            type: rpcRes.type,        // 'found' | 'already' | 'new' | 'rejected'
             data: obj,
             duplicates,
             pkg_id: rpcRes.pkg_id
         };
     } catch (e) {
         console.error('sbScanTTN error:', e);
+        return { ok: false, error: e.message };
+    }
+}
+
+/**
+ * peekTTN — read-only twin of scanTTN for the Check-mode lookup.
+ * Returns payment fields only (total, deposit, debt, status). Does NOT mutate
+ * scan_status and does NOT write to package_scan_log — by design.
+ */
+async function sbPeekTTN(ttn) {
+    try {
+        const t = String(ttn || '').trim();
+        if (!t) return { ok: false, error: 'ТТН не вказано' };
+        const { data, error } = await sb.rpc('peek_ttn', {
+            p_tenant_id: TENANT_ID,
+            p_ttn: t
+        });
+        if (error) throw error;
+        return data || { ok: false, error: 'peek_ttn returned empty' };
+    } catch (e) {
+        console.error('sbPeekTTN error:', e);
         return { ok: false, error: e.message };
     }
 }
@@ -1778,6 +1799,7 @@ async function apiPostSupabase(action, params) {
 
         // Verification workflow
         scanTTN:                    sbScanTTN,
+        peekTTN:                    sbPeekTTN,
         findDuplicatesByRecipient:  sbFindDuplicatesByRecipient,
         assignRouteNumber:          sbAssignRouteNumber,
         completeVerification:       sbCompleteVerification,

@@ -70,7 +70,8 @@
         }
         .topbar-counter {
             display: flex;
-            gap: 6px;
+            gap: 10px;
+            align-items: center;
         }
         .counter-pill {
             background: rgba(0,0,0,0.6);
@@ -409,6 +410,96 @@
             transition: opacity 0.25s;
         }
         .backdrop.show { opacity: 1; pointer-events: all; }
+
+        /* ==== BOX-COUNT MODAL (bottom-right, shown only on NEW package) ==== */
+        .box-modal {
+            position: absolute;
+            right: 14px;
+            bottom: calc(env(safe-area-inset-bottom) + 160px);
+            z-index: 40;
+            width: min(92vw, 280px);
+            background: rgba(15, 23, 42, 0.96);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(139, 92, 246, 0.55);
+            border-radius: 16px;
+            padding: 14px;
+            flex-direction: column;
+            gap: 10px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+            display: none;
+        }
+        .box-modal.show { display: flex; }
+        .box-modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .box-modal-title {
+            font-size: 12px;
+            font-weight: 800;
+            color: #c4b5fd;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .box-modal-close {
+            width: 26px; height: 26px;
+            background: rgba(255,255,255,0.1);
+            border: none;
+            border-radius: 50%;
+            color: #fff;
+            font-size: 15px;
+            cursor: pointer;
+        }
+        .box-modal-ttn {
+            font-family: "SF Mono", Monaco, monospace;
+            font-size: 11px;
+            color: rgba(255,255,255,0.55);
+            word-break: break-all;
+        }
+        .box-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 6px;
+        }
+        .box-cell {
+            aspect-ratio: 1;
+            background: rgba(139, 92, 246, 0.18);
+            border: 1px solid rgba(139, 92, 246, 0.4);
+            border-radius: 8px;
+            color: #fff;
+            font-family: inherit;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .box-cell:active { transform: scale(0.92); }
+        .box-other {
+            display: flex;
+            gap: 6px;
+        }
+        .box-other input {
+            flex: 1;
+            padding: 8px 10px;
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 8px;
+            color: #fff;
+            font-family: inherit;
+            font-size: 14px;
+            min-width: 0;
+        }
+        .box-other input::placeholder { color: rgba(255,255,255,0.35); }
+        .box-other button {
+            padding: 8px 14px;
+            background: #8b5cf6;
+            border: none;
+            border-radius: 8px;
+            color: #fff;
+            font-family: inherit;
+            font-weight: 700;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
@@ -423,19 +514,19 @@
         <div style="width:100%;max-width:360px;margin-bottom:18px;">
             <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.55);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;text-align:left;">Режим</div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-                <button class="mode-btn" data-mode="intake" onclick="setMode('intake')">
-                    <div style="font-size:22px;">📥</div>
-                    <div style="font-size:12px;font-weight:700;margin-top:2px;">Приймання</div>
+                <button class="mode-btn" data-mode="scan" onclick="setMode('scan')">
+                    <div style="font-size:22px;">🔍</div>
+                    <div style="font-size:12px;font-weight:700;margin-top:2px;">Сканувати</div>
                 </button>
-                <button class="mode-btn" data-mode="handout" onclick="setMode('handout')">
-                    <div style="font-size:22px;">📤</div>
-                    <div style="font-size:12px;font-weight:700;margin-top:2px;">Видача</div>
+                <button class="mode-btn" data-mode="check" onclick="setMode('check')">
+                    <div style="font-size:22px;">✓</div>
+                    <div style="font-size:12px;font-weight:700;margin-top:2px;">Перевіряти</div>
                 </button>
             </div>
         </div>
 
-        <!-- DIRECTION picker -->
-        <div style="width:100%;max-width:360px;margin-bottom:30px;">
+        <!-- DIRECTION picker (shown only for Scan mode — Check is read-only) -->
+        <div id="dirPicker" style="width:100%;max-width:360px;margin-bottom:30px;">
             <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.55);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;text-align:left;">Напрям</div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
                 <button class="dir-btn" data-dir="UA_EU" onclick="setDirection('UA_EU')">🇺🇦 → 🇪🇺</button>
@@ -462,11 +553,11 @@
 
     <!-- TOP BAR -->
     <div class="topbar" id="topbar" style="display:none;">
-        <button class="topbar-btn" onclick="goBack()" title="Назад">←</button>
-        <button class="topbar-btn" onclick="openHistory()">≡</button>
         <div class="topbar-counter">
+            <button class="topbar-btn" onclick="goBack()" title="Назад">←</button>
             <div class="counter-pill" id="counterScanned">📊 0</div>
         </div>
+        <button class="topbar-btn" onclick="openHistory()">≡</button>
     </div>
 
     <!-- RESULT TOAST -->
@@ -503,6 +594,31 @@
         <button class="history-clear-btn" onclick="clearHistory()">🗑 Очистити історію</button>
     </div>
 
+    <!-- BOX-COUNT MODAL (bottom-right, only for newly created packages) -->
+    <div class="box-modal" id="boxModal">
+        <div class="box-modal-header">
+            <div class="box-modal-title">📦 К-сть коробок</div>
+            <button class="box-modal-close" onclick="closeBoxModal()" title="Закрити">×</button>
+        </div>
+        <div class="box-modal-ttn" id="boxModalTtn">—</div>
+        <div class="box-grid">
+            <button class="box-cell" onclick="pickBoxCount(1)">1</button>
+            <button class="box-cell" onclick="pickBoxCount(2)">2</button>
+            <button class="box-cell" onclick="pickBoxCount(3)">3</button>
+            <button class="box-cell" onclick="pickBoxCount(4)">4</button>
+            <button class="box-cell" onclick="pickBoxCount(5)">5</button>
+            <button class="box-cell" onclick="pickBoxCount(6)">6</button>
+            <button class="box-cell" onclick="pickBoxCount(7)">7</button>
+            <button class="box-cell" onclick="pickBoxCount(8)">8</button>
+            <button class="box-cell" onclick="pickBoxCount(9)">9</button>
+            <button class="box-cell" onclick="pickBoxCount(10)">10</button>
+        </div>
+        <div class="box-other">
+            <input type="number" id="boxOther" placeholder="Інше…" min="1" max="999" inputmode="numeric">
+            <button onclick="pickBoxOther()">✓</button>
+        </div>
+    </div>
+
     <script>
         // ==== SUPABASE CONFIG ====
         var SUPABASE_URL = 'https://pgdhuezxkehpjlxoesoe.supabase.co';
@@ -525,24 +641,28 @@
         var scanHistory = [];
         var isScanning = false;
         var isPaused = false;
+        // Per-session tally; in-memory only (resets on reload by design).
+        var sessionCounter = 0;
 
-        // Pre-scan setup state. Camera button only unlocks after both picked.
-        var SCAN_MODE = null;       // 'intake' | 'handout'
+        // Pre-scan setup state. Camera button unlocks when required fields are set.
+        //   'scan'  → mutates DB via scan_ttn RPC; requires SCAN_DIRECTION
+        //   'check' → read-only peek_ttn; direction irrelevant
+        var SCAN_MODE = null;
         var SCAN_DIRECTION = null;  // 'UA_EU' | 'EU_UA'
 
-        // Restore last-used mode/direction from localStorage so returning
-        // users don't re-pick every session.
+        // Restore last-used mode/direction from localStorage (user preference,
+        // not session data) so returning users don't re-pick every session.
         (function restoreSetup() {
             try {
                 var lastMode = localStorage.getItem('scanner_last_mode');
                 var lastDir  = localStorage.getItem('scanner_last_direction');
-                if (lastMode === 'intake' || lastMode === 'handout') SCAN_MODE = lastMode;
+                if (lastMode === 'scan' || lastMode === 'check') SCAN_MODE = lastMode;
                 if (lastDir === 'UA_EU' || lastDir === 'EU_UA') SCAN_DIRECTION = lastDir;
             } catch(_) {}
         })();
 
         function setMode(m) {
-            if (m !== 'intake' && m !== 'handout') return;
+            if (m !== 'scan' && m !== 'check') return;
             SCAN_MODE = m;
             try { localStorage.setItem('scanner_last_mode', m); } catch(_) {}
             refreshSetupUI();
@@ -560,15 +680,22 @@
             document.querySelectorAll('.dir-btn').forEach(function(b) {
                 b.classList.toggle('active', b.getAttribute('data-dir') === SCAN_DIRECTION);
             });
-            var ready = !!(SCAN_MODE && SCAN_DIRECTION);
+
+            // Direction picker is only meaningful in Scan mode (new packages
+            // need a direction stamped). Hide it entirely for Check.
+            var dirPicker = document.getElementById('dirPicker');
+            if (dirPicker) dirPicker.style.display = (SCAN_MODE === 'scan') ? '' : 'none';
+
+            var ready = (SCAN_MODE === 'check') ||
+                        (SCAN_MODE === 'scan' && !!SCAN_DIRECTION);
             document.getElementById('startCameraBtn').disabled = !ready;
 
             // Pill shown over camera
             var pill = document.getElementById('modePill');
-            var modeLbl = SCAN_MODE === 'intake' ? '📥 Приймання'
-                        : SCAN_MODE === 'handout' ? '📤 Видача' : '—';
-            var dirLbl  = SCAN_DIRECTION === 'UA_EU' ? '🇺🇦→🇪🇺'
-                        : SCAN_DIRECTION === 'EU_UA' ? '🇪🇺→🇺🇦' : '';
+            var modeLbl = SCAN_MODE === 'scan'  ? '🔍 Сканую'
+                        : SCAN_MODE === 'check' ? '✓ Перевірка' : '—';
+            var dirLbl  = (SCAN_MODE === 'scan' && SCAN_DIRECTION === 'UA_EU') ? '🇺🇦→🇪🇺'
+                        : (SCAN_MODE === 'scan' && SCAN_DIRECTION === 'EU_UA') ? '🇪🇺→🇺🇦' : '';
             pill.textContent = modeLbl + (dirLbl ? '  ·  ' + dirLbl : '');
         }
         document.addEventListener('DOMContentLoaded', refreshSetupUI);
@@ -647,7 +774,6 @@
 
             document.getElementById('lastScanCode').textContent = decodedText;
             document.getElementById('lastScanBar').classList.add('show');
-            document.getElementById('counterScanned').textContent = '📊 ' + (scanHistory.length + 1);
 
             showToast({
                 variant: '',
@@ -660,46 +786,102 @@
             scanTTN(decodedText);
         }
 
-        // Scanner is a thin client over public.scan_ttn RPC (see
-        // sql/2026-04-scanner-rpc-and-uniqueness.sql). The state machine,
-        // uniqueness check, and audit log insert all happen inside Postgres
-        // in one transaction.
+        // Scanner is a thin client over two RPCs (see sql/2026-04-scanner-auto-mode.sql):
+        //   scan_ttn(tenant, ttn, direction, user)  → auto state-machine, writes+logs
+        //   peek_ttn(tenant, ttn)                   → read-only, no log
+        // State machine, uniqueness, and audit happen inside Postgres in one tx.
         var STATUS_LABEL = {
             received: 'Прийнято',
             checked: 'Перевірено',
-            awaiting_route: 'Чекає рейсу',
+            awaiting_route: 'Чекає маршруту',
             loaded: 'Завантажено',
             in_transit: 'В дорозі',
             arrived: 'Прибула',
             delivered: 'Видана',
             rejected: 'Відхилено'
         };
+        var PAYMENT_LABEL = {
+            paid:     '💚 Оплачено',
+            partial:  '🟡 Частково',
+            pending:  '🔴 Не оплачено',
+            overpaid: '🔵 Переплата'
+        };
+
+        function fmtMoney(n, cur) {
+            if (n === null || n === undefined || n === '') return null;
+            var v = Number(n);
+            if (!isFinite(v)) return null;
+            return v.toFixed(2) + (cur ? ' ' + cur : '');
+        }
+        function buildPaymentStatus(r) {
+            var parts = [];
+            var cur = r.payment_currency || '';
+            var total = fmtMoney(r.total_amount, cur);
+            if (total) parts.push('Сума: ' + total);
+            var debt = fmtMoney(r.debt, cur);
+            if (debt) parts.push('Борг: ' + debt);
+            return parts.join(' · ');
+        }
 
         function scanTTN(ttn) {
             if (!TENANT_ID) {
                 handleScanResult(ttn, { ok: false, error: 'Сесія не знайдена. Увійдіть в CRM.' });
                 return;
             }
-            if (!SCAN_MODE || !SCAN_DIRECTION) {
-                handleScanResult(ttn, { ok: false, error: 'Оберіть режим і напрям перед скануванням' });
+            if (!SCAN_MODE) {
+                handleScanResult(ttn, { ok: false, error: 'Оберіть режим перед скануванням' });
                 return;
             }
 
+            if (SCAN_MODE === 'check') {
+                // Read-only peek: no state change, no audit log. Per product
+                // decision, Check mode does not touch package_scan_log.
+                sb.rpc('peek_ttn', {
+                    p_tenant_id: TENANT_ID,
+                    p_ttn: ttn
+                }).then(function(result) {
+                    if (result.error) {
+                        handleScanResult(ttn, { ok: false, mode: 'check', error: result.error.message });
+                        return;
+                    }
+                    var r = result.data || {};
+                    if (!r.ok) {
+                        handleScanResult(ttn, { ok: false, mode: 'check', error: r.error || 'Невідома помилка' });
+                        return;
+                    }
+                    handleScanResult(ttn, {
+                        ok: true,
+                        mode: 'check',
+                        payment_status: r.payment_status,
+                        payment_currency: r.payment_currency,
+                        total_amount: r.total_amount,
+                        deposit: r.deposit,
+                        debt: r.debt
+                    });
+                });
+                return;
+            }
+
+            // Scan mode → auto state-machine RPC (direction required).
+            if (!SCAN_DIRECTION) {
+                handleScanResult(ttn, { ok: false, error: 'Оберіть напрям' });
+                return;
+            }
             sb.rpc('scan_ttn', {
                 p_tenant_id: TENANT_ID,
                 p_ttn: ttn,
-                p_mode: SCAN_MODE,
                 p_direction: SCAN_DIRECTION,
                 p_user: USER_LOGIN
             }).then(function(result) {
                 if (result.error) {
-                    handleScanResult(ttn, { ok: false, error: result.error.message });
+                    handleScanResult(ttn, { ok: false, mode: 'scan', error: result.error.message });
                     return;
                 }
                 var r = result.data || {};
                 if (!r.ok) {
                     handleScanResult(ttn, {
                         ok: false,
+                        mode: 'scan',
                         error: (r.error || 'Невідома помилка') +
                                (r.status ? ' (поточний: ' + (STATUS_LABEL[r.status] || r.status) + ')' : '')
                     });
@@ -707,33 +889,51 @@
                 }
                 handleScanResult(ttn, {
                     ok: true,
+                    mode: 'scan',
                     type: r.type,
-                    senderName: r.sender_name || r.recipient_name || '',
-                    status: r.status
+                    pkg_id: r.pkg_id,
+                    status: r.status,
+                    prev_status: r.prev_status,
+                    payment_status: r.payment_status,
+                    total_amount: r.total_amount,
+                    deposit: r.deposit,
+                    debt: r.debt
                 });
             });
         }
 
         function handleScanResult(ttn, res) {
             var variant = 'error', icon = '❌', label = 'Помилка', statusTxt = '';
-            // Mode-specific success labels so the operator sees "Прийнято" vs "Видано".
-            var successLabel = SCAN_MODE === 'handout' ? 'Видано'
-                             : SCAN_MODE === 'intake' ? 'Прийнято' : 'OK';
 
             if (res && res.ok) {
-                if (res.type === 'found') {
-                    variant = 'success'; icon = '✅'; label = successLabel;
-                    statusTxt = (res.senderName ? res.senderName + ' · ' : '') +
-                                (STATUS_LABEL[res.status] || res.status || '');
+                if (res.mode === 'check') {
+                    // Check mode: show ONLY payment status + amounts. No name,
+                    // no route (per product spec — it's for payment reconciliation).
+                    variant = 'already';
+                    icon = '💰';
+                    label = PAYMENT_LABEL[res.payment_status] ||
+                            (res.payment_status ? '💰 ' + res.payment_status : '💰 Оплата');
+                    statusTxt = buildPaymentStatus(res);
+                } else if (res.type === 'found') {
+                    // Auto-transitioned (received→checked, checked→delivered, …)
+                    variant = 'success'; icon = '✅';
+                    label = STATUS_LABEL[res.status] || 'Оновлено';
+                    statusTxt = buildPaymentStatus(res);
                 } else if (res.type === 'already') {
-                    variant = 'already'; icon = 'ℹ️'; label = 'Вже оброблено';
-                    statusTxt = 'Статус: ' + (STATUS_LABEL[res.status] || res.status || '—');
+                    variant = 'already'; icon = 'ℹ️';
+                    label = 'Вже: ' + (STATUS_LABEL[res.status] || res.status || '—');
+                    statusTxt = buildPaymentStatus(res);
                 } else if (res.type === 'new') {
-                    variant = 'created'; icon = '🆕'; label = 'Невідома — прийнято';
-                    statusTxt = 'Статус: ' + (STATUS_LABEL[res.status] || 'Прийнято');
+                    variant = 'created'; icon = '🆕';
+                    label = 'Нова посилка';
+                    statusTxt = 'Прийнято';
+                    // Box-count modal only on fresh creation.
+                    openBoxModal(ttn, res.pkg_id);
+                } else if (res.type === 'rejected') {
+                    variant = 'warn'; icon = '⚠️'; label = 'Відхилено';
+                    statusTxt = 'Статус: Відхилено';
                 } else {
-                    variant = 'success'; icon = '✅'; label = successLabel;
-                    statusTxt = '';
+                    variant = 'success'; icon = '✅'; label = 'OK';
                 }
             } else {
                 statusTxt = (res && res.error) || 'Невідома помилка';
@@ -741,13 +941,55 @@
 
             addToHistory(ttn, variant, statusTxt);
             document.getElementById('mainBtn').style.display = 'block';
-            document.getElementById('counterScanned').textContent = '📊 ' + scanHistory.length;
+            sessionCounter += 1;
+            document.getElementById('counterScanned').textContent = '📊 ' + sessionCounter;
 
             showToast({ variant: variant, icon: icon, label: label, value: ttn, status: statusTxt });
 
             setTimeout(function() {
                 document.getElementById('resultToast').classList.remove('show');
             }, 2500);
+        }
+
+        // ==== BOX-COUNT MODAL ====
+        // Opened only when scan_ttn returns type:'new' (package was just created).
+        // Writes item_count back via REST PATCH (anon key; RLS disabled on this project).
+        var boxModalPkg = null;
+        function openBoxModal(ttn, pkg_id) {
+            if (!pkg_id) return;
+            boxModalPkg = pkg_id;
+            document.getElementById('boxModalTtn').textContent = ttn;
+            document.getElementById('boxOther').value = '';
+            document.getElementById('boxModal').classList.add('show');
+        }
+        function closeBoxModal() {
+            document.getElementById('boxModal').classList.remove('show');
+            boxModalPkg = null;
+        }
+        function pickBoxCount(n) { saveBoxCount(n); }
+        function pickBoxOther() {
+            var v = parseInt(document.getElementById('boxOther').value, 10);
+            if (!v || v < 1 || v > 999) return;
+            saveBoxCount(v);
+        }
+        function saveBoxCount(n) {
+            var pkg = boxModalPkg;
+            if (!pkg || !TENANT_ID) { closeBoxModal(); return; }
+            var url = SUPABASE_URL + '/rest/v1/packages' +
+                      '?tenant_id=eq.' + encodeURIComponent(TENANT_ID) +
+                      '&pkg_id=eq.' + encodeURIComponent(pkg);
+            fetch(url, {
+                method: 'PATCH',
+                headers: {
+                    apikey: SUPABASE_ANON_KEY,
+                    Authorization: 'Bearer ' + SUPABASE_ANON_KEY,
+                    'Content-Type': 'application/json',
+                    Prefer: 'return=minimal'
+                },
+                body: JSON.stringify({ item_count: n })
+            }).catch(function(){}).finally(function(){
+                closeBoxModal();
+            });
         }
 
         function showToast(opts) {
@@ -825,6 +1067,7 @@
 
         function clearHistory() {
             scanHistory = [];
+            sessionCounter = 0;
             document.getElementById('counterScanned').textContent = '📊 0';
             renderHistory();
         }
