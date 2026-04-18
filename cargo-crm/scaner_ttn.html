@@ -422,14 +422,10 @@
         <!-- MODE picker -->
         <div style="width:100%;max-width:360px;margin-bottom:18px;">
             <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.55);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;text-align:left;">Режим</div>
-            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
                 <button class="mode-btn" data-mode="intake" onclick="setMode('intake')">
                     <div style="font-size:22px;">📥</div>
                     <div style="font-size:12px;font-weight:700;margin-top:2px;">Приймання</div>
-                </button>
-                <button class="mode-btn" data-mode="load" onclick="setMode('load')" disabled title="Доступно після міграції маршрутів у Supabase">
-                    <div style="font-size:22px;opacity:0.4;">🔒</div>
-                    <div style="font-size:11px;font-weight:700;margin-top:2px;opacity:0.5;">Завантаження</div>
                 </button>
                 <button class="mode-btn" data-mode="handout" onclick="setMode('handout')">
                     <div style="font-size:22px;">📤</div>
@@ -531,12 +527,11 @@
         var isPaused = false;
 
         // Pre-scan setup state. Camera button only unlocks after both picked.
-        var SCAN_MODE = null;       // 'intake' | 'load' (locked) | 'handout'
+        var SCAN_MODE = null;       // 'intake' | 'handout'
         var SCAN_DIRECTION = null;  // 'UA_EU' | 'EU_UA'
 
         // Restore last-used mode/direction from localStorage so returning
-        // users don't re-pick every session. Only 'intake' and 'handout'
-        // are restorable — 'load' is locked for v1.
+        // users don't re-pick every session.
         (function restoreSetup() {
             try {
                 var lastMode = localStorage.getItem('scanner_last_mode');
@@ -547,7 +542,7 @@
         })();
 
         function setMode(m) {
-            if (m !== 'intake' && m !== 'handout') return; // 'load' ignored in v1
+            if (m !== 'intake' && m !== 'handout') return;
             SCAN_MODE = m;
             try { localStorage.setItem('scanner_last_mode', m); } catch(_) {}
             refreshSetupUI();
