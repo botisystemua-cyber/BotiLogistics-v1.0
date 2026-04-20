@@ -1695,6 +1695,28 @@ body {
   background: #fff;
 }
 
+.colcfg-default-tab-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 20px;
+  background: #f9fafb;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text-primary);
+}
+.colcfg-default-tab-row label {
+  font-weight: 600;
+}
+.colcfg-default-tab-row select {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
 .colcfg-list {
   flex: 1;
   overflow-y: auto;

@@ -197,12 +197,22 @@ const ALL_CARD_COLUMNS = [
 const ALL_OSNOVNE_COLUMNS = [
   { key: 'sender',      label: '👤 Піб відправника' },
   { key: 'phone',       label: '📞 Телефон реєстратора' },
+  { key: 'senderPhone', label: '📞 Телефон відправника' },
   { key: 'addressFrom', label: '📍 Адреса відправки' },
   { key: 'receiver',    label: '👤 Піб отримувача' },
   { key: 'phoneRecv',   label: '📱 Телефон отримувача' },
   { key: 'addressTo',   label: '📍 Адреса доставки' },
   { key: 'leadStatus',  label: '🔵 Статус ліда' },
   { key: 'tag',         label: '🏷️ Тег' },
+  { key: 'ttn',         label: '📋 Номер ТТН' },
+  { key: 'innerNum',    label: '🔢 Внутрішній №' },
+  { key: 'smartId',     label: '🆔 Ід_смарт' },
+  { key: 'ttnDate',     label: '📅 Дата створення накладної' },
+  { key: 'dispatchDate',label: '📅 Дата відправки' },
+  { key: 'receivedDate',label: '📅 Дата отримання' },
+  { key: 'note',        label: '📝 Примітка' },
+  { key: 'noteSms',     label: '💬 Примітка СМС' },
+  { key: 'description', label: '📄 Опис' },
 ];
 
 const ALL_PARCEL_COLUMNS = [
@@ -217,9 +227,25 @@ const ALL_PARCEL_COLUMNS = [
   { key: 'sum',         label: '💰 Сума' },
   { key: 'currency',    label: '💱 Валюта оплати' },
   { key: 'payStatus',   label: '💳 Статус оплати' },
+  { key: 'payForm',     label: '💳 Форма оплати' },
+  { key: 'deposit',     label: '💵 Завдаток' },
+  { key: 'depositCurrency', label: '💱 Валюта завдатку' },
+  { key: 'debt',        label: '📛 Борг' },
+  { key: 'payNote',     label: '📝 Примітка оплати' },
+  { key: 'npAmount',    label: '💰 Сума НП' },
+  { key: 'npCurrency',  label: '💱 Валюта НП' },
+  { key: 'npForm',      label: '💳 Форма НП' },
+  { key: 'npStatus',    label: '💳 Статус НП' },
+  { key: 'ttnDate',     label: '📅 Дата створення накладної' },
+  { key: 'dispatchDate',label: '📅 Дата відправки' },
+  { key: 'receivedDate',label: '📅 Дата отримання' },
   { key: 'photo',       label: '📸 Фото посилки' },
   { key: 'rating',      label: '⭐ Рейтинг' },
   { key: 'ratingComment',label: '💬 Коментар рейтингу' },
+  { key: 'tag',         label: '🏷️ Тег' },
+  { key: 'note',        label: '📝 Примітка' },
+  { key: 'noteSms',     label: '💬 Примітка СМС' },
+  { key: 'timing',      label: '⏱️ Таймінг' },
 ];
 
 const DEFAULT_CARD_COLS = ['phone','weight','sum','deposit','debt','ttn','date','statusPkg','tag','address','leadBadge','payBadge','checkBadge','route'];
@@ -229,9 +255,24 @@ const DEFAULT_PARCEL_COLS = ['description','details','qty','weight','estValue','
 const LS_KEY_CARD = 'esco_posylki_card_cols';
 const LS_KEY_OSNOVNE = 'esco_pkg_osnovne';
 const LS_KEY_PARCEL = 'esco_pkg_parcel';
+const LS_KEY_DEFAULT_TAB = 'esco_pkg_default_tab';
+const DEFAULT_TAB_PKG = 'parcel';
+const ALLOWED_TABS = ['parcel','basic','np','finance','route','system'];
 
 let colCfgMode = 'card';
 let colCfgTemp = [];
+
+function getDefaultTab() {
+  try {
+    const v = localStorage.getItem(LS_KEY_DEFAULT_TAB);
+    if (v && ALLOWED_TABS.includes(v)) return v;
+  } catch(e) {}
+  return DEFAULT_TAB_PKG;
+}
+function setDefaultTab(tab) {
+  if (!ALLOWED_TABS.includes(tab)) return;
+  try { localStorage.setItem(LS_KEY_DEFAULT_TAB, tab); } catch(e) {}
+}
 
 function getVisibleCardColumns() {
   try { const s = localStorage.getItem(LS_KEY_CARD); if (s) return JSON.parse(s); } catch(e) {}
@@ -257,8 +298,16 @@ function openColCfg() {
   const cfg = getCfgDataForMode('card');
   colCfgTemp = [...cfg.saved];
   document.getElementById('colCfgOverlay').classList.add('open');
+  const sel = document.getElementById('colCfgDefaultTab');
+  if (sel) sel.value = getDefaultTab();
   renderCfgTabs();
   renderCfgList();
+}
+
+function onDefaultTabChange(tab) {
+  setDefaultTab(tab);
+  showToast('Вкладку за замовчуванням збережено', 'success');
+  renderCards();
 }
 
 function closeColCfg() {
@@ -857,39 +906,57 @@ function renderCard(p) {
   if (visCols.includes('estValue') && p['Оціночна вартість']) metaHtml += `<span class="meta-tag">💎 ${escapeHtml(String(p['Оціночна вартість']))}</span>`;
 
   // ===== TAB PANELS =====
+  // Єдиний пул редагованих полів — обидві вкладки беруть з нього, щоб
+  // користувач міг винести будь-яку колонку у «Основне» чи «Посилка».
+  const allDetailFields = {
+    'sender':         ['Піб відправника', name],
+    'phone':          ['Телефон реєстратора', phone],
+    'senderPhone':    ['Телефон відправника', p['Телефон відправника'] || ''],
+    'addressFrom':    ['Адреса відправки', addressFrom],
+    'receiver':       ['Піб отримувача', receiver],
+    'phoneRecv':      ['Телефон отримувача', receiverPhone],
+    'addressTo':      [isUE ? 'Адреса в Європі' : 'Місто Нова Пошта', addressTo],
+    'leadStatus':     ['Статус ліда', leadStatus],
+    'tag':            ['Тег', tag],
+    'description':    ['Опис', p['Опис'] || ''],
+    'details':        ['Деталі', p['Деталі'] || ''],
+    'qty':            ['Кількість позицій', p['Кількість позицій'] || ''],
+    'weight':         ['Кг', weight],
+    'estValue':       ['Оціночна вартість', p['Оціночна вартість'] || ''],
+    'ttn':            ['Номер ТТН', ttn],
+    'innerNum':       ['Внутрішній №', p['Внутрішній №'] || ''],
+    'smartId':        ['Ід_смарт', p['Ід_смарт'] || '', {readonly: true}],
+    'statusPkg':      ['Статус посилки', statusPkg],
+    'sum':            ['Сума', price],
+    'currency':       ['Валюта оплати', currency],
+    'payStatus':      ['Статус оплати', payStatus],
+    'payForm':        ['Форма оплати', p['Форма оплати'] || ''],
+    'deposit':        ['Завдаток', p['Завдаток'] || ''],
+    'depositCurrency':['Валюта завдатку', p['Валюта завдатку'] || ''],
+    'debt':           ['Борг', debt ? String(debt) : '', {readonly: true}],
+    'payNote':        ['Примітка оплати', p['Примітка оплати'] || ''],
+    'npAmount':       ['Сума НП', p['Сума НП'] || ''],
+    'npCurrency':     ['Валюта НП', p['Валюта НП'] || ''],
+    'npForm':         ['Форма НП', p['Форма НП'] || ''],
+    'npStatus':       ['Статус НП', p['Статус НП'] || ''],
+    'ttnDate':        ['Дата створення накладної', p['Дата створення накладної'] || ''],
+    'dispatchDate':   ['Дата відправки', p['Дата відправки'] || ''],
+    'receivedDate':   ['Дата отримання', p['Дата отримання'] || ''],
+    'photo':          ['Фото посилки', p['Фото посилки'] || ''],
+    'rating':         ['Рейтинг', p['Рейтинг'] || ''],
+    'ratingComment': ['Коментар рейтингу', p['Коментар рейтингу'] || ''],
+    'note':           ['Примітка', note],
+    'noteSms':        ['Примітка СМС', p['Примітка СМС'] || ''],
+    'timing':         ['Таймінг', p['Таймінг'] || ''],
+  };
+
   // 📦 Посилка (configurable)
   const visParcel = getVisibleParcelColumns();
-  const allParcelFields = {
-    'description': ['Опис', p['Опис'] || ''],
-    'details': ['Деталі', p['Деталі'] || ''],
-    'qty': ['Кількість позицій', p['Кількість позицій'] || ''],
-    'weight': ['Кг', weight],
-    'estValue': ['Оціночна вартість', p['Оціночна вартість'] || ''],
-    'ttn': ['Номер ТТН', ttn],
-    'innerNum': ['Внутрішній №', p['Внутрішній №'] || ''],
-    'statusPkg': ['Статус посилки', statusPkg],
-    'sum': ['Сума', price],
-    'currency': ['Валюта оплати', currency],
-    'payStatus': ['Статус оплати', payStatus],
-    'photo': ['Фото посилки', p['Фото посилки'] || ''],
-    'rating': ['Рейтинг', p['Рейтинг'] || ''],
-    'ratingComment': ['Коментар рейтингу', p['Коментар рейтингу'] || ''],
-  };
-  const tabParcel = renderDetailGrid(visParcel.filter(k => allParcelFields[k]).map(k => allParcelFields[k]), pkgId);
+  const tabParcel = renderDetailGrid(visParcel.filter(k => allDetailFields[k]).map(k => allDetailFields[k]), pkgId);
 
   // 📄 Основне (configurable)
   const visOsn = getVisibleOsnovneColumns();
-  const allOsnovneFields = {
-    'sender': ['Піб відправника', name],
-    'phone': ['Телефон реєстратора', phone],
-    'addressFrom': ['Адреса відправки', addressFrom],
-    'receiver': ['Піб отримувача', receiver],
-    'phoneRecv': ['Телефон отримувача', receiverPhone],
-    'addressTo': [isUE ? 'Адреса в Європі' : 'Місто Нова Пошта', addressTo],
-    'leadStatus': ['Статус ліда', leadStatus],
-    'tag': ['Тег', tag],
-  };
-  const tabBasic = renderDetailGrid(visOsn.filter(k => allOsnovneFields[k]).map(k => allOsnovneFields[k]), pkgId);
+  const tabBasic = renderDetailGrid(visOsn.filter(k => allDetailFields[k]).map(k => allDetailFields[k]), pkgId);
 
   // 💰 НП (тільки для УК→ЄВ)
   const tabNP = isUE ? renderDetailGrid([
@@ -948,9 +1015,14 @@ function renderCard(p) {
     ['Примітка СМС', p['Примітка СМС'] || ''],
   ], pkgId);
 
+  // Default tab: user-configurable. If 'np' chosen but card isn't УК→ЄВ, fall back to 'parcel'.
+  let _defTab = getDefaultTab();
+  if (_defTab === 'np' && !isUE) _defTab = 'parcel';
+  const _act = (t) => _defTab === t ? ' active' : '';
+
   // NP tab HTML
-  const npTabBtn = isUE ? `<div class="detail-tab" data-tab="np" onclick="event.stopPropagation(); switchTab('${pkgId}', 'np')">💰 НП</div>` : '';
-  const npTabPanel = isUE ? `<div class="detail-tab-panel" data-tab-panel="np">${tabNP}</div>` : '';
+  const npTabBtn = isUE ? `<div class="detail-tab${_act('np')}" data-tab="np" onclick="event.stopPropagation(); switchTab('${pkgId}', 'np')">💰 НП</div>` : '';
+  const npTabPanel = isUE ? `<div class="detail-tab-panel${_act('np')}" data-tab-panel="np">${tabNP}</div>` : '';
 
   // Tracking button only for УК→ЄВ with ТТН
   const trackBtn = (isUE && ttn) ? `<button onclick="event.stopPropagation(); window.open('https://novaposhta.ua/tracking/?cargo_number=${ttn}', '_blank')">📦 Трекінг</button>` : '';
@@ -998,19 +1070,19 @@ function renderCard(p) {
       </div>
       <div class="card-details ${isOpen ? 'open' : ''}" id="details-${pkgId}">
         <div class="detail-tabs">
-          <div class="detail-tab active" data-tab="parcel" onclick="event.stopPropagation(); switchTab('${pkgId}', 'parcel')">📦 Посилка</div>
-          <div class="detail-tab" data-tab="basic" onclick="event.stopPropagation(); switchTab('${pkgId}', 'basic')">📄 Основне</div>
+          <div class="detail-tab${_act('parcel')}" data-tab="parcel" onclick="event.stopPropagation(); switchTab('${pkgId}', 'parcel')">📦 Посилка</div>
+          <div class="detail-tab${_act('basic')}" data-tab="basic" onclick="event.stopPropagation(); switchTab('${pkgId}', 'basic')">📄 Основне</div>
           ${npTabBtn}
-          <div class="detail-tab" data-tab="finance" onclick="event.stopPropagation(); switchTab('${pkgId}', 'finance')">💰 Фінанси</div>
-          <div class="detail-tab" data-tab="route" onclick="event.stopPropagation(); switchTab('${pkgId}', 'route')">🚖 Рейс</div>
-          <div class="detail-tab" data-tab="system" onclick="event.stopPropagation(); switchTab('${pkgId}', 'system')">⚙ Системні</div>
+          <div class="detail-tab${_act('finance')}" data-tab="finance" onclick="event.stopPropagation(); switchTab('${pkgId}', 'finance')">💰 Фінанси</div>
+          <div class="detail-tab${_act('route')}" data-tab="route" onclick="event.stopPropagation(); switchTab('${pkgId}', 'route')">🚖 Рейс</div>
+          <div class="detail-tab${_act('system')}" data-tab="system" onclick="event.stopPropagation(); switchTab('${pkgId}', 'system')">⚙ Системні</div>
         </div>
-        <div class="detail-tab-panel active" data-tab-panel="parcel">${tabParcel}</div>
-        <div class="detail-tab-panel" data-tab-panel="basic">${tabBasic}</div>
+        <div class="detail-tab-panel${_act('parcel')}" data-tab-panel="parcel">${tabParcel}</div>
+        <div class="detail-tab-panel${_act('basic')}" data-tab-panel="basic">${tabBasic}</div>
         ${npTabPanel}
-        <div class="detail-tab-panel" data-tab-panel="finance">${tabFinance}</div>
-        <div class="detail-tab-panel" data-tab-panel="route">${tabRoute}</div>
-        <div class="detail-tab-panel" data-tab-panel="system">${tabSystem}</div>
+        <div class="detail-tab-panel${_act('finance')}" data-tab-panel="finance">${tabFinance}</div>
+        <div class="detail-tab-panel${_act('route')}" data-tab-panel="route">${tabRoute}</div>
+        <div class="detail-tab-panel${_act('system')}" data-tab-panel="system">${tabSystem}</div>
       </div>
     </div>
   `;

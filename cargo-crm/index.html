@@ -396,6 +396,17 @@
       <button class="colcfg-tab" data-mode="parcel" onclick="switchCfgTab('parcel')">📦 Посилка</button>
     </div>
     <div class="colcfg-subtitle" id="colCfgSubtitle">Які поля показувати на картці ліда</div>
+    <div class="colcfg-default-tab-row">
+      <label for="colCfgDefaultTab">Вкладка за замовчуванням:</label>
+      <select id="colCfgDefaultTab" onchange="onDefaultTabChange(this.value)">
+        <option value="parcel">📦 Посилка</option>
+        <option value="basic">📄 Основне</option>
+        <option value="np">💰 НП</option>
+        <option value="finance">💰 Фінанси</option>
+        <option value="route">🚖 Рейс</option>
+        <option value="system">⚙ Системні</option>
+      </select>
+    </div>
     <div class="colcfg-list" id="colCfgList">
       <!-- Filled by JS -->
     </div>
