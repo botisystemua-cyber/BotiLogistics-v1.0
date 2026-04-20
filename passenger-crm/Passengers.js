@@ -4249,13 +4249,91 @@ async function deletePax(paxId, sheet, name) {
 // ================================================================
 // TRIPS RENDERING
 // ================================================================
+// Рейси для дашборду: 1 минулий + сьогодні (один) + 3 найближчі майбутні.
+// Не враховує user-фільтри (час/напрямок/дата/авто) — дашборд показує завжди.
+function getDashboardTrips() {
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const todayTs = today.getTime();
+    const parseTripDate = (t) => {
+        const parts = String(t.date || '').split('.');
+        let d;
+        if (parts.length === 3) d = new Date(parts[2], parts[1]-1, parts[0]);
+        else d = new Date(t.date);
+        if (isNaN(d)) return null;
+        d.setHours(0, 0, 0, 0);
+        return d;
+    };
+    const active = trips.filter(t => {
+        if (t.status === 'Архів' || t.status === 'Виконано' || t.status === 'Видалено') return false;
+        return parseTripDate(t) !== null;
+    });
+    const withDates = active.map(t => ({ t, ts: parseTripDate(t).getTime() }));
+
+    // Один минулий: найсвіжіший (максимум ts < today)
+    const past = withDates.filter(x => x.ts < todayTs).sort((a, b) => b.ts - a.ts)[0];
+
+    // Сьогодні: перший знайдений (user сказав один, не всі)
+    const todayTrip = withDates.find(x => x.ts === todayTs);
+
+    // Три наступних: ts > today, сортовані зростанням, беремо перші три
+    const upcoming = withDates
+        .filter(x => x.ts > todayTs)
+        .sort((a, b) => a.ts - b.ts)
+        .slice(0, 3);
+
+    const order = [];
+    if (past) order.push({ slot: 'past', t: past.t });
+    if (todayTrip) order.push({ slot: 'today', t: todayTrip.t });
+    upcoming.forEach(x => order.push({ slot: 'upcoming', t: x.t }));
+    return order;
+}
+
+const SLOT_LABELS = { past: '◀ Минулий', today: '● Сьогодні', upcoming: '▶ Наступний' };
+
+function renderTripsDashboard(dashTrips) {
+    const host = document.getElementById('tripsDashboard');
+    if (!host) return;
+    if (!dashTrips.length) {
+        host.innerHTML = '';
+        return;
+    }
+    const collapsed = host.classList.contains('collapsed');
+    const cards = dashTrips.map(({ slot, t }) => {
+        return '<div class="trips-dash-slot">' +
+            '<div class="trips-dash-slot-label slot-' + slot + '">' + SLOT_LABELS[slot] + '</div>' +
+            renderTripCard(t) +
+        '</div>';
+    }).join('');
+    host.innerHTML =
+        '<div class="trips-dash-header" onclick="toggleTripsDashboard()">' +
+            '<span class="trips-dash-title">📌 Близькі рейси <span class="trips-dash-count">' + dashTrips.length + '</span></span>' +
+            '<span class="trips-dash-toggle">' + (collapsed ? '▼' : '▲') + '</span>' +
+        '</div>' +
+        '<div class="trips-dash-grid">' + cards + '</div>';
+}
+
+function toggleTripsDashboard() {
+    const host = document.getElementById('tripsDashboard');
+    if (!host) return;
+    host.classList.toggle('collapsed');
+    const toggle = host.querySelector('.trips-dash-toggle');
+    if (toggle) toggle.textContent = host.classList.contains('collapsed') ? '▼' : '▲';
+}
+
 function renderTrips() {
     const grid = document.getElementById('tripsGrid');
     if (!grid) return;
     autoColorMap = {};
-    const filtered = getFilteredTrips();
 
-    if (filtered.length === 0) {
+    // Спочатку рендеримо дашборд (1 минулий + сьогодні + 3 наступних)
+    const dashTrips = getDashboardTrips();
+    const dashIds = new Set(dashTrips.map(x => x.t.cal_id));
+    renderTripsDashboard(dashTrips);
+
+    // Основний список — з фільтрами, виключаючи ті що вже в дашборді
+    const filtered = getFilteredTrips().filter(t => !dashIds.has(t.cal_id));
+
+    if (filtered.length === 0 && dashTrips.length === 0) {
         grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;">
             <div class="empty-state-icon">🚐</div>
             <div class="empty-state-text">Рейсів ще немає</div>
