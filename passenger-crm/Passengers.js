@@ -230,6 +230,9 @@ let tripTimeFilter = 'future';
 let tripDirFilter = 'all';
 let tripDateFilter = '';
 let tripAutoFilter = 'all';
+let tripsViewMode = 'list'; // 'list' | 'calendar'
+let tripsCalMonth = new Date().getMonth();
+let tripsCalYear = new Date().getFullYear();
 let openDetailsId = null;
 let openActionsId = null;
 let justAddedPaxId = null; // ID щойно доданого ліда (для підсвітки)
@@ -4281,8 +4284,19 @@ function getFeaturedTrips() {
 
 function renderTrips() {
     const grid = document.getElementById('tripsGrid');
-    if (!grid) return;
+    const cal = document.getElementById('tripsCalendar');
+    if (!grid || !cal) return;
     autoColorMap = {};
+
+    if (tripsViewMode === 'calendar') {
+        grid.style.display = 'none';
+        cal.style.display = 'block';
+        renderTripsCalendarView();
+        return;
+    }
+
+    grid.style.display = '';
+    cal.style.display = 'none';
 
     const featured = getFeaturedTrips();
     const featuredIds = new Set(featured.map(t => t.cal_id));
@@ -4299,6 +4313,193 @@ function renderTrips() {
     }
 
     grid.innerHTML = featured.concat(filtered).map(t => renderTripCard(t)).join('');
+}
+
+function setTripsViewMode(mode) {
+    tripsViewMode = (mode === 'calendar') ? 'calendar' : 'list';
+    document.querySelectorAll('.trips-vm-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.mode === tripsViewMode);
+    });
+    renderTrips();
+}
+
+function tripsCalPrev() {
+    tripsCalMonth--;
+    if (tripsCalMonth < 0) { tripsCalMonth = 11; tripsCalYear--; }
+    renderTripsCalendarView();
+}
+function tripsCalNext() {
+    tripsCalMonth++;
+    if (tripsCalMonth > 11) { tripsCalMonth = 0; tripsCalYear++; }
+    renderTripsCalendarView();
+}
+function tripsCalToday() {
+    const now = new Date();
+    tripsCalMonth = now.getMonth();
+    tripsCalYear = now.getFullYear();
+    renderTripsCalendarView();
+}
+
+function parseTripDateObj(t) {
+    const parts = String(t.date || '').split('.');
+    let d;
+    if (parts.length === 3) d = new Date(parts[2], parts[1]-1, parts[0]);
+    else d = new Date(t.date);
+    if (isNaN(d)) return null;
+    d.setHours(0, 0, 0, 0);
+    return d;
+}
+
+function renderTripsCalendarView() {
+    const host = document.getElementById('tripsCalendar');
+    if (!host) return;
+
+    // Групуємо відфільтровані рейси по "dd.MM.YYYY"
+    const filtered = getFilteredTrips();
+    const byDate = {};
+    filtered.forEach(t => {
+        const d = parseTripDateObj(t);
+        if (!d) return;
+        const key = String(d.getDate()).padStart(2,'0') + '.' + String(d.getMonth()+1).padStart(2,'0') + '.' + d.getFullYear();
+        if (!byDate[key]) byDate[key] = [];
+        byDate[key].push(t);
+    });
+
+    const monthNames = ['Січень','Лютий','Березень','Квітень','Травень','Червень','Липень','Серпень','Вересень','Жовтень','Листопад','Грудень'];
+    const dayNames = ['Пн','Вт','Ср','Чт','Пт','Сб','Нд'];
+
+    const firstDay = new Date(tripsCalYear, tripsCalMonth, 1);
+    let startDow = firstDay.getDay() - 1;
+    if (startDow < 0) startDow = 6;
+    const daysInMonth = new Date(tripsCalYear, tripsCalMonth + 1, 0).getDate();
+    const prevMonthDays = new Date(tripsCalYear, tripsCalMonth, 0).getDate();
+
+    const today = new Date(); today.setHours(0,0,0,0);
+
+    let cellsHtml = '';
+    // Попередній місяць
+    for (let i = startDow - 1; i >= 0; i--) {
+        const pd = prevMonthDays - i;
+        const pm = tripsCalMonth === 0 ? 12 : tripsCalMonth;
+        const py = tripsCalMonth === 0 ? tripsCalYear - 1 : tripsCalYear;
+        const pkey = String(pd).padStart(2,'0') + '.' + String(pm).padStart(2,'0') + '.' + py;
+        cellsHtml += renderTripsCalCell(pd, pkey, byDate[pkey] || [], true, false);
+    }
+    // Поточний місяць
+    for (let d = 1; d <= daysInMonth; d++) {
+        const key = String(d).padStart(2,'0') + '.' + String(tripsCalMonth+1).padStart(2,'0') + '.' + tripsCalYear;
+        const isToday = d === today.getDate() && tripsCalMonth === today.getMonth() && tripsCalYear === today.getFullYear();
+        cellsHtml += renderTripsCalCell(d, key, byDate[key] || [], false, isToday);
+    }
+    // Наступний місяць — добиваємо до повних тижнів
+    const total = startDow + daysInMonth;
+    const remaining = (7 - total % 7) % 7;
+    for (let nd = 1; nd <= remaining; nd++) {
+        const nm = tripsCalMonth === 11 ? 1 : tripsCalMonth + 2;
+        const ny = tripsCalMonth === 11 ? tripsCalYear + 1 : tripsCalYear;
+        const nkey = String(nd).padStart(2,'0') + '.' + String(nm).padStart(2,'0') + '.' + ny;
+        cellsHtml += renderTripsCalCell(nd, nkey, byDate[nkey] || [], true, false);
+    }
+
+    host.innerHTML =
+        '<div class="tc-header">' +
+            '<div class="tc-nav">' +
+                '<button class="tc-nav-btn" onclick="tripsCalPrev()">◀</button>' +
+                '<button class="tc-nav-btn tc-today-btn" onclick="tripsCalToday()">Сьогодні</button>' +
+                '<button class="tc-nav-btn" onclick="tripsCalNext()">▶</button>' +
+            '</div>' +
+            '<div class="tc-month-label">' + monthNames[tripsCalMonth] + ' ' + tripsCalYear + '</div>' +
+            '<div class="tc-spacer"></div>' +
+        '</div>' +
+        '<div class="tc-weekdays">' + dayNames.map(n => '<div class="tc-wd">'+n+'</div>').join('') + '</div>' +
+        '<div class="tc-grid">' + cellsHtml + '</div>';
+}
+
+function renderTripsCalCell(dayNum, key, dayTrips, otherMonth, isToday) {
+    const maxVisible = 3;
+    const visible = dayTrips.slice(0, maxVisible);
+    const hidden = dayTrips.length - visible.length;
+    let cls = 'tc-cell';
+    if (otherMonth) cls += ' other-month';
+    if (isToday) cls += ' today';
+
+    const eventsHtml = visible.map(t => {
+        const dir = getTripDirection(t);
+        const dirCls = dir === 'ua-eu' ? 'dir-ua-eu' : dir === 'eu-ua' ? 'dir-eu-ua' : 'dir-other';
+        const dirIcon = dir === 'ua-eu' ? '🇺🇦→🇪🇺' : dir === 'eu-ua' ? '🇪🇺→🇺🇦' : '↔';
+        const maxS = parseInt(t.max_seats) || 0;
+        const occ = parseInt(t.occupied) || 0;
+        const pct = maxS > 0 ? Math.min(100, Math.round(occ/maxS*100)) : 0;
+        const over = occ > maxS && maxS > 0;
+        const auto = cleanAutoName(t.auto_name) || '—';
+        const safeCalId = String(t.cal_id || '').replace(/'/g, "\\'");
+        return '<div class="tc-event ' + dirCls + (over ? ' over' : '') + '" onclick="event.stopPropagation();openTripFromCalendar(\'' + safeCalId + '\')" title="' + tmEsc(auto + ' · ' + (t.city || '—') + ' · ' + occ + '/' + maxS) + '">' +
+            '<span class="tc-event-dir">' + dirIcon + '</span>' +
+            '<span class="tc-event-name">' + tmEsc(auto) + '</span>' +
+            '<span class="tc-event-bar"><span class="tc-event-bar-fill' + (over ? ' over' : pct >= 100 ? ' full' : '') + '" style="width:' + pct + '%"></span></span>' +
+            '<span class="tc-event-seats">' + occ + '/' + maxS + '</span>' +
+        '</div>';
+    }).join('');
+
+    const moreHtml = hidden > 0
+        ? '<div class="tc-more" onclick="event.stopPropagation();showTripsCalDay(\'' + key + '\')">+' + hidden + ' ще</div>'
+        : '';
+
+    return '<div class="' + cls + '" data-key="' + key + '">' +
+        '<div class="tc-day-num">' + dayNum + '</div>' +
+        '<div class="tc-events">' + eventsHtml + moreHtml + '</div>' +
+    '</div>';
+}
+
+// Відкриваємо модалку рейсу — реюзимо картку рейсу з діями
+function openTripFromCalendar(calId) {
+    const t = trips.find(x => x.cal_id === calId);
+    if (!t) return;
+    let overlay = document.getElementById('tripDetailOverlay');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'tripDetailOverlay';
+        overlay.className = 'tc-detail-overlay';
+        overlay.onclick = function(e) { if (e.target === overlay) closeTripDetail(); };
+        document.body.appendChild(overlay);
+    }
+    overlay.innerHTML =
+        '<div class="tc-detail-modal">' +
+            '<button class="tc-detail-close" onclick="closeTripDetail()">✕</button>' +
+            renderTripCard(t) +
+        '</div>';
+    overlay.classList.add('show');
+}
+
+function closeTripDetail() {
+    const o = document.getElementById('tripDetailOverlay');
+    if (o) o.classList.remove('show');
+}
+
+// Популярний день: показуємо всі рейси у нижній панелі
+function showTripsCalDay(key) {
+    const dayTrips = getFilteredTrips().filter(t => {
+        const d = parseTripDateObj(t);
+        if (!d) return false;
+        const k = String(d.getDate()).padStart(2,'0') + '.' + String(d.getMonth()+1).padStart(2,'0') + '.' + d.getFullYear();
+        return k === key;
+    });
+    if (!dayTrips.length) return;
+    let overlay = document.getElementById('tripDetailOverlay');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'tripDetailOverlay';
+        overlay.className = 'tc-detail-overlay';
+        overlay.onclick = function(e) { if (e.target === overlay) closeTripDetail(); };
+        document.body.appendChild(overlay);
+    }
+    overlay.innerHTML =
+        '<div class="tc-detail-modal tc-detail-day">' +
+            '<button class="tc-detail-close" onclick="closeTripDetail()">✕</button>' +
+            '<div class="tc-detail-day-title">Рейси ' + key + ' (' + dayTrips.length + ')</div>' +
+            '<div class="tc-detail-day-grid">' + dayTrips.map(renderTripCard).join('') + '</div>' +
+        '</div>';
+    overlay.classList.add('show');
 }
 
 // Універсальна функція визначення напрямку з будь-якого формату
