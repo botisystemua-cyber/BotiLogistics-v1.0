@@ -1100,6 +1100,7 @@ function renderCard(p) {
         </div>
       </div>
       ${visCols.includes('route') ? routeStrip : ''}
+      ${(controlCheck === 'В перевірці' || leadStatus === 'Невідомий') ? `<div class="fill-cta-wrap"><button class="fill-cta" onclick="event.stopPropagation(); openFillModal('${pkgId}')">📝 Заповнити</button></div>` : ''}
       <div class="card-actions" id="actions-${pkgId}">
         <button onclick="event.stopPropagation(); window.open('tel:${phone}')">📞 Дзвінок</button>
         <button onclick="event.stopPropagation(); openMessenger('${phone}','${pkgId}')">💬 Писати</button>
@@ -1855,13 +1856,115 @@ async function verifyRemoveFromCheck(pkgId, btn) {
   }
 }
 
-// «Редагувати» — відкрити модалку швидкого заповнення пріоритетних полів
-// (C4). Поки що заглушка-заготовка: відкриваємо картку ліда з активною
-// вкладкою «Основне» і прокручуємо до неї. Повноцінний pкс-модал зробимо в C4.
+// «Редагувати» — відкрити модалку швидкого заповнення пріоритетних полів.
 function verifyOpenEdit(pkgId) {
   if (!pkgId) return;
-  clearScanReturn();
-  openCardById(pkgId);
+  openFillModal(pkgId);
+}
+
+// ===== [SECT-FILLMODAL] FILL MODAL (quick-fill priority fields) =====
+// Показується або з кнопки «Заповнити» на картці (в перевірці / невідомий),
+// або з «✏️ Редагувати» у результатах verify-пошуку. Містить 11 полів,
+// з яких обов'язкове лише «Телефон отримувача».
+const _FILL_FIELDS = [
+  ['fill_phoneRecv',   'Телефон отримувача'],
+  ['fill_phoneSender', 'Телефон відправника'],
+  ['fill_addressTo',   'Адреса в Європі'],
+  ['fill_innerNum',    'Внутрішній №'],
+  ['fill_description', 'Опис'],
+  ['fill_qty',         'Кількість позицій'],
+  ['fill_weight',      'Вага'],
+  ['fill_sum',         'Сума'],
+  ['fill_currency',    'Валюта оплати'],
+  ['fill_payStatus',   'Статус оплати'],
+  ['fill_statusPkg',   'Статус посилки'],
+];
+
+function openFillModal(pkgId) {
+  if (!pkgId) return;
+  const row = (allData || []).find(p => p['PKG_ID'] === pkgId);
+  if (!row) { showToast('Лід не знайдено', 'error'); return; }
+
+  document.getElementById('fillPkgId').value = pkgId;
+  _FILL_FIELDS.forEach(([inputId, col]) => {
+    const el = document.getElementById(inputId);
+    if (!el) return;
+    const cur = row[col];
+    if (cur != null && cur !== '') {
+      el.value = cur;
+    } else if (el.tagName === 'SELECT') {
+      // select: лишаємо <option selected>, що стоїть у HTML
+    } else {
+      el.value = '';
+    }
+  });
+
+  document.getElementById('fillOverlay').classList.add('open');
+  setTimeout(() => {
+    const rcv = document.getElementById('fill_phoneRecv');
+    if (rcv) rcv.focus();
+  }, 100);
+}
+
+function closeFillModal() {
+  document.getElementById('fillOverlay').classList.remove('open');
+}
+
+async function saveFillModal() {
+  const pkgId = document.getElementById('fillPkgId').value;
+  if (!pkgId) return;
+
+  const phoneRecv = (document.getElementById('fill_phoneRecv').value || '').trim();
+  if (!phoneRecv) {
+    showToast('Телефон отримувача — обов\'язкове поле', 'error');
+    document.getElementById('fill_phoneRecv').focus();
+    return;
+  }
+
+  const btn = document.getElementById('fillSaveBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Збереження…'; }
+
+  // Порівнюємо з поточним рядком і відправляємо лише ті колонки, що
+  // справді змінилися — так ми не дзвонимо в updateField даремно, і не
+  // створюємо фантомних записів change_logs/audit_logs.
+  const row = (allData || []).find(p => p['PKG_ID'] === pkgId) || {};
+  const toUpdate = [];
+  for (const [inputId, col] of _FILL_FIELDS) {
+    const el = document.getElementById(inputId);
+    if (!el) continue;
+    const newVal = (el.value == null ? '' : String(el.value)).trim();
+    const oldVal = (row[col] == null ? '' : String(row[col])).trim();
+    if (newVal !== oldVal) toUpdate.push([col, newVal]);
+  }
+
+  let failed = 0;
+  for (const [col, val] of toUpdate) {
+    try {
+      const r = await apiPost('updateField', { pkg_id: pkgId, col, value: val });
+      if (r && r.ok) {
+        if (row) row[col] = val;
+      } else {
+        failed++;
+      }
+    } catch (_) { failed++; }
+  }
+
+  if (btn) { btn.disabled = false; btn.textContent = '💾 Зберегти'; }
+
+  if (failed > 0) {
+    showToast('Збережено з помилками: ' + failed, 'error');
+  } else {
+    showToast('Збережено (' + toUpdate.length + ' полів)', 'success');
+  }
+
+  closeFillModal();
+  renderCards();
+  updateCounters();
+
+  // Коротке коло «скан → заповнення → наступний скан»
+  if (hasScanReturn()) {
+    setTimeout(() => backToScanner(), 400);
+  }
 }
 
 async function verifyMarkUnknown() {
