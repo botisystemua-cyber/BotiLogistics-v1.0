@@ -5748,6 +5748,21 @@ let tmMode = 'assign';    // 'assign' | 'form' (з форми додавання
 let tmFormCallback = null; // Callback для форми
 let tmCalMonth = new Date().getMonth();
 let tmCalYear = new Date().getFullYear();
+let tmCurrentDate = ''; // DD.MM.YYYY поточного рейсу пасажира (якщо вже призначений)
+
+// Поточна дата рейсу пасажира — якщо в модалці один конкретний пасажир і він
+// уже прив'язаний до рейсу. Використовується щоб відкрити календар на тому
+// місяці й підсвітити відповідну клітинку.
+function getCurrentTripDateForPax(paxIds) {
+    if (!paxIds || paxIds.length !== 1) return '';
+    var id = paxIds[0];
+    if (id === '__form__') return '';
+    var p = passengers.find(function(x) { return x['PAX_ID'] === id; });
+    if (!p || !p['CAL_ID']) return '';
+    var trip = trips.find(function(t) { return t.cal_id === p['CAL_ID']; });
+    if (!trip) return '';
+    return formatTripDate(trip.date);
+}
 
 // Форматування дати: ISO/будь-який → "dd.MM"
 function formatTripDate(raw) {
@@ -5889,15 +5904,24 @@ function renderTripModalStep1() {
         return;
     }
 
-    // Стартуємо з місяця найближчого майбутнього рейсу, щоб календар відразу показав щось корисне
-    var today = new Date(); today.setHours(0,0,0,0);
-    var upcoming = matchTrips
-        .map(function(t) { return new Date(t.date); })
-        .filter(function(d) { return !isNaN(d) && d >= today; })
-        .sort(function(a, b) { return a - b; })[0];
-    if (upcoming) {
-        tmCalMonth = upcoming.getMonth();
-        tmCalYear = upcoming.getFullYear();
+    // Стартовий місяць:
+    //   1) Якщо у пасажира вже є рейс — відкриваємо календар на місяці того рейсу.
+    //   2) Інакше — місяць найближчого майбутнього рейсу серед доступних.
+    tmCurrentDate = getCurrentTripDateForPax(tmPaxIds);
+    if (tmCurrentDate) {
+        var cparts = tmCurrentDate.split('.');
+        tmCalMonth = parseInt(cparts[1], 10) - 1;
+        tmCalYear = parseInt(cparts[2], 10);
+    } else {
+        var today = new Date(); today.setHours(0,0,0,0);
+        var upcoming = matchTrips
+            .map(function(t) { return new Date(t.date); })
+            .filter(function(d) { return !isNaN(d) && d >= today; })
+            .sort(function(a, b) { return a - b; })[0];
+        if (upcoming) {
+            tmCalMonth = upcoming.getMonth();
+            tmCalYear = upcoming.getFullYear();
+        }
     }
 
     renderTripModalCalendar();
@@ -5967,7 +5991,7 @@ function renderTripModalCalendar() {
                 '<span class="tcal-month-label">' + monthNames[tmCalMonth] + ' ' + tmCalYear + '</span>' +
                 '<div class="tcal-nav">' +
                     '<button class="tcal-nav-btn" onclick="tmCalPrev()">&larr;</button>' +
-                    '<button class="tcal-nav-btn" onclick="tmCalToday()">Сьогодні</button>' +
+                    '<button class="tcal-nav-btn" style="width:auto;padding:0 10px;font-size:11px;" onclick="tmCalToday()">Сьогодні</button>' +
                     '<button class="tcal-nav-btn" onclick="tmCalNext()">&rarr;</button>' +
                 '</div>' +
             '</div>' +
@@ -5987,11 +6011,13 @@ function renderTripModalCalendar() {
 function renderTmCalDay(d, key, info, otherMonth, isToday, selectedKey) {
     var hasTrip = !!info;
     var isSelected = key === selectedKey;
+    var isCurrent = !!tmCurrentDate && key === tmCurrentDate; // поточний рейс пасажира
     var cls = 'tcal-day';
     if (otherMonth) cls += ' other-month';
     if (isToday) cls += ' today';
     if (hasTrip) cls += ' has-trip';
     if (isSelected) cls += ' selected';
+    if (isCurrent) cls += ' tm-current';
     if (info && info.overbooked) cls += ' overbooked';
 
     var dotsHtml = '';
