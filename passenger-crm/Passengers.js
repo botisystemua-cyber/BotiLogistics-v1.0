@@ -5749,6 +5749,26 @@ let tmFormCallback = null; // Callback для форми
 let tmCalMonth = new Date().getMonth();
 let tmCalYear = new Date().getFullYear();
 let tmCurrentDate = ''; // DD.MM.YYYY поточного рейсу пасажира (якщо вже призначений)
+let tmCurrentBadgeText = ''; // Текст бейджа (перше ім'я або "N чол.")
+let tmCurrentFullName = '';  // Повний ПІБ для tooltip
+
+function tmEsc(s) {
+    return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function getCurrentBadgeInfo(paxIds) {
+    if (!paxIds || paxIds.length === 0) return { badge: '', full: '' };
+    if (paxIds.length > 1) return { badge: paxIds.length + ' чол.', full: paxIds.length + ' пасажирів' };
+    var id = paxIds[0];
+    if (id === '__form__') return { badge: 'Ваш', full: '' };
+    var p = passengers.find(function(x) { return x['PAX_ID'] === id; });
+    if (!p) return { badge: 'Ваш', full: '' };
+    var full = String(p['Піб'] || '').trim();
+    if (!full) return { badge: 'Ваш', full: '' };
+    var firstName = full.split(/\s+/)[0];
+    if (firstName.length > 8) firstName = firstName.slice(0, 7) + '…';
+    return { badge: firstName, full: full };
+}
 
 // Поточна дата рейсу пасажира — якщо в модалці один конкретний пасажир і він
 // уже прив'язаний до рейсу. Використовується щоб відкрити календар на тому
@@ -5916,6 +5936,9 @@ function renderTripModalStep1() {
     //   1) Якщо у пасажира вже є рейс — відкриваємо календар на місяці того рейсу.
     //   2) Інакше — місяць найближчого майбутнього рейсу серед доступних.
     tmCurrentDate = getCurrentTripDateForPax(tmPaxIds);
+    var badgeInfo = getCurrentBadgeInfo(tmPaxIds);
+    tmCurrentBadgeText = badgeInfo.badge;
+    tmCurrentFullName = badgeInfo.full;
     if (tmCurrentDate) {
         var cparts = tmCurrentDate.split('.');
         tmCalMonth = parseInt(cparts[1], 10) - 1;
@@ -6008,9 +6031,10 @@ function renderTripModalCalendar() {
             '<div class="tcal-days">' + daysHtml + '</div>' +
             '<div class="tcal-footer">' +
                 '<div class="tcal-legend">' +
-                    '<span class="tcal-legend-item"><span class="tcal-legend-dot" style="background:#2563eb;"></span> UA→EU</span>' +
-                    '<span class="tcal-legend-item"><span class="tcal-legend-dot" style="background:#059669;"></span> EU→UA</span>' +
-                    '<span class="tcal-legend-item"><span class="tcal-legend-dot" style="background:#dc2626;"></span> Перебір</span>' +
+                    '<span class="tcal-legend-item"><span class="tcal-legend-box" style="border-color:#2563eb;"></span> UA→EU</span>' +
+                    '<span class="tcal-legend-item"><span class="tcal-legend-box" style="border-color:#059669;"></span> EU→UA</span>' +
+                    '<span class="tcal-legend-item"><span class="tcal-legend-box" style="border-color:#9ca3af;background:repeating-linear-gradient(45deg,rgba(0,0,0,0.08),rgba(0,0,0,0.08) 2px,transparent 2px,transparent 4px);"></span> Повний</span>' +
+                    '<span class="tcal-legend-item"><span class="tcal-legend-box" style="border-color:#dc2626;"></span> Перебір</span>' +
                 '</div>' +
             '</div>' +
         '</div>' +
@@ -6020,7 +6044,10 @@ function renderTripModalCalendar() {
 function renderTmCalDay(d, key, info, otherMonth, isToday, selectedKey) {
     var hasTrip = !!info;
     var isSelected = key === selectedKey;
-    var isCurrent = !!tmCurrentDate && key === tmCurrentDate; // поточний рейс пасажира
+    var isCurrent = !!tmCurrentDate && key === tmCurrentDate;
+    var free = info ? (info.maxSeats - info.pax) : 0;
+    var isFull = !!(info && !info.overbooked && info.maxSeats > 0 && free <= 0);
+
     var cls = 'tcal-day';
     if (otherMonth) cls += ' other-month';
     if (isToday) cls += ' today';
@@ -6028,53 +6055,48 @@ function renderTmCalDay(d, key, info, otherMonth, isToday, selectedKey) {
     if (isSelected) cls += ' selected';
     if (isCurrent) cls += ' tm-current';
     if (info && info.overbooked) cls += ' overbooked';
-
-    var dotsHtml = '';
+    if (isFull) cls += ' full';
     if (info) {
-        if (info.overbooked) {
-            dotsHtml = '<span class="dot-overbooked"></span>';
-        } else if (info.uaeu > 0 && info.euua > 0) {
-            dotsHtml = '<span class="dot-ua-eu"></span><span class="dot-eu-ua"></span>';
-        } else if (info.uaeu > 0) {
-            dotsHtml = '<span class="dot-ua-eu"></span>';
-        } else if (info.euua > 0) {
-            dotsHtml = '<span class="dot-eu-ua"></span>';
-        }
+        if (info.uaeu > 0 && info.euua > 0) cls += ' dir-both';
+        else if (info.uaeu > 0) cls += ' dir-ua-eu';
+        else if (info.euua > 0) cls += ' dir-eu-ua';
     }
 
-    // Мікроінфа — вільні місця (сумарно по всіх рейсах дати)
+    // Мікроінфа — вільні місця у правому нижньому куті
     var seatsHtml = '';
     if (info && info.maxSeats > 0) {
-        var free = info.maxSeats - info.pax;
         var seatCls = 'tcal-seats';
         if (info.overbooked || free <= 0) seatCls += ' low';
         else if (free <= 2) seatCls += ' warn';
         else seatCls += ' ok';
-        seatsHtml = '<div class="' + seatCls + '">' + (free < 0 ? 0 : free) + 'м</div>';
+        var seatTxt = info.overbooked ? '!' : (free < 0 ? 0 : free) + 'м';
+        seatsHtml = '<div class="' + seatCls + '">' + seatTxt + '</div>';
     }
 
-    // Tooltip при ховері — деталі всіх рейсів дати
-    var titleAttr = '';
+    // Tooltip
+    var titleLines = [];
+    if (isCurrent && tmCurrentFullName) titleLines.push('👤 ' + tmCurrentFullName);
     if (info && info.trips && info.trips.length) {
-        var lines = info.trips.map(function(t) {
+        info.trips.forEach(function(t) {
             var dir = getTripDirection(t) === 'ua-eu' ? 'UA→EU' : 'EU→UA';
             var freeT = parseInt(t.free_seats) || 0;
             var maxT = parseInt(t.max_seats) || 0;
             var occT = parseInt(t.occupied) || 0;
             var seat = (occT > maxT && maxT > 0) ? ('перебір +' + (occT - maxT)) : (freeT + '/' + maxT);
-            return dir + ' · ' + (t.auto_name || 'Авто') + ' · ' + (t.city || '—') + ' · ' + seat;
+            titleLines.push(dir + ' · ' + (t.auto_name || 'Авто') + ' · ' + (t.city || '—') + ' · ' + seat);
         });
-        titleAttr = ' title="' + lines.join('\n').replace(/"/g, '&quot;') + '"';
     } else if (isCurrent) {
-        titleAttr = ' title="Поточний рейс пасажира"';
+        titleLines.push('Поточна дата виїзду');
     }
+    var titleAttr = titleLines.length ? ' title="' + tmEsc(titleLines.join('\n')) + '"' : '';
 
-    var currentBadge = isCurrent ? '<span class="tm-current-badge">Ваш</span>' : '';
+    var currentBadge = isCurrent && tmCurrentBadgeText
+        ? '<span class="tm-current-badge">' + tmEsc(tmCurrentBadgeText) + '</span>'
+        : '';
     var onclick = hasTrip ? ' onclick="selectTripDate(\'' + key + '\')"' : '';
     return '<button class="' + cls + '" data-key="' + key + '"' + onclick + titleAttr + '>' +
         currentBadge +
-        '<span>' + d + '</span>' +
-        (dotsHtml ? '<div class="tcal-dots">' + dotsHtml + '</div>' : '') +
+        '<span class="tcal-day-num">' + d + '</span>' +
         seatsHtml +
     '</button>';
 }
