@@ -2064,6 +2064,91 @@ function closeFillModal() {
   document.getElementById('fillOverlay').classList.remove('open');
 }
 
+// ===== [SECT-CLIENT-LOOKUP] Пошук клієнта за телефоном (Phase A) =====
+// Підтягує попередні адреси та імена отримувачів із таблиці packages
+// по номеру телефону. Якщо є декілька варіантів — показує список,
+// оператор обирає потрібну. Phase B (окрема таблиця clients_directory
+// з тригером + бекфіл) — готується окремо.
+
+async function lookupClientByPhone(phone) {
+  const ph = (phone || '').trim();
+  if (ph.length < 5) return [];
+  const tenantId = (getBotiSession() && getBotiSession().tenant_id) || '';
+  if (!tenantId) return [];
+  try {
+    const url = SUPABASE_URL + '/rest/v1/packages' +
+      '?tenant_id=eq.' + encodeURIComponent(tenantId) +
+      '&recipient_phone=eq.' + encodeURIComponent(ph) +
+      '&is_archived=eq.false' +
+      '&select=pkg_id,recipient_name,recipient_address,nova_poshta_city,created_at' +
+      '&order=created_at.desc&limit=20';
+    const res = await fetch(url, {
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: 'Bearer ' + SUPABASE_ANON_KEY
+      }
+    });
+    const rows = await res.json();
+    if (!Array.isArray(rows)) return [];
+    // Дедупимо по (name, address) — рахуємо кількість повторів
+    const byKey = {};
+    rows.forEach(r => {
+      const name = (r.recipient_name || '').trim();
+      const addr = (r.recipient_address || r.nova_poshta_city || '').trim();
+      if (!name && !addr) return;
+      const key = name + '|' + addr;
+      if (!byKey[key]) byKey[key] = { name, address: addr, count: 0, last: r.created_at };
+      byKey[key].count++;
+      if (r.created_at > byKey[key].last) byKey[key].last = r.created_at;
+    });
+    return Object.values(byKey).sort((a, b) => b.last.localeCompare(a.last));
+  } catch (e) {
+    console.warn('[client lookup]', e);
+    return [];
+  }
+}
+
+function _renderClientSuggestions(container, items, onPick) {
+  container.innerHTML = '';
+  if (!items || !items.length) { container.classList.remove('show'); return; }
+  items.forEach(it => {
+    const row = document.createElement('div');
+    row.className = 'client-suggestion';
+    row.innerHTML =
+      '<div class="client-suggestion-main">' +
+        '<div class="client-suggestion-name">👤 ' + escapeHtml(it.name || '(без імені)') + '</div>' +
+        '<div class="client-suggestion-addr">📍 ' + escapeHtml(it.address || '—') + '</div>' +
+      '</div>' +
+      '<span class="client-suggestion-count">×' + it.count + '</span>' +
+      '<span class="client-suggestion-apply">Застосувати →</span>';
+    row.addEventListener('click', () => onPick(it));
+    container.appendChild(row);
+  });
+  container.classList.add('show');
+}
+
+// CRM fill-modal: слухач на телефоні отримувача
+document.addEventListener('DOMContentLoaded', () => {
+  const ph = document.getElementById('fill_phoneRecv');
+  const sugBox = document.getElementById('fill_clientSuggestions');
+  if (!ph || !sugBox) return;
+  let t = null;
+  const doSearch = async () => {
+    const items = await lookupClientByPhone(ph.value);
+    _renderClientSuggestions(sugBox, items, (picked) => {
+      const addrEl = document.getElementById('fill_addressTo');
+      // Ім'я в fill-модалці наразі нема окремого поля, заповнюємо тільки адресу
+      if (addrEl) addrEl.value = picked.address || addrEl.value;
+      sugBox.classList.remove('show');
+    });
+  };
+  ph.addEventListener('change', doSearch);
+  ph.addEventListener('blur', () => setTimeout(doSearch, 150));
+  ph.addEventListener('input', () => {
+    clearTimeout(t); t = setTimeout(doSearch, 400);
+  });
+});
+
 // Фото-аплоад для CRM fill-модалки — використовує той самий бакет
 // `package-photos` що і сканер. На зміну file input → upload до Storage
 // → URL кладемо в hidden #fill_photoUrl. Кнопка Очистити прибирає URL.

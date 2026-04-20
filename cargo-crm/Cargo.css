@@ -966,6 +966,22 @@ body {
   text-decoration: none; cursor: pointer;
 }
 .badge-photo:hover { background: #a7f3d0; }
+
+/* Підказки клієнта (Phase A: пошук адрес по номеру телефону) */
+.client-suggestions { display: none; flex-direction: column; gap: 4px; margin-top: 6px; }
+.client-suggestions.show { display: flex; }
+.client-suggestion {
+  background: #eff6ff; color: #1e40af;
+  border: 1px solid #bfdbfe; border-radius: 8px;
+  padding: 6px 10px; font-size: 12px; cursor: pointer;
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+}
+.client-suggestion:hover { background: #dbeafe; }
+.client-suggestion-main { flex: 1; min-width: 0; }
+.client-suggestion-name { font-weight: 700; }
+.client-suggestion-addr { color: #3b4a5a; font-size: 11px; }
+.client-suggestion-count { font-size: 10px; color: #64748b; white-space: nowrap; }
+.client-suggestion-apply { color: #1d4ed8; font-weight: 700; font-size: 11px; }
 .card-finance {
   margin-left: auto;
   display: flex; align-items: center; gap: 8px;
