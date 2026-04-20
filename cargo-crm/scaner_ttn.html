@@ -771,6 +771,141 @@
         .cam-btn-cancel { background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.18); }
         .cam-btn-primary { background: linear-gradient(180deg,#3b82f6,#2563eb); color: #fff; box-shadow: 0 4px 10px rgba(37,99,235,0.35); }
         .cam-btn-primary.save { background: linear-gradient(180deg,#10b981,#059669); box-shadow: 0 4px 10px rgba(16,185,129,0.35); }
+
+        /* ==== INLINE EDITOR (C7/2): full-screen модалка прямо на сканері ==== */
+        .inl-overlay {
+            position: fixed; inset: 0;
+            background: rgba(15, 23, 42, 0.95);
+            z-index: 80;
+            display: none;
+            flex-direction: column;
+            padding: 0;
+        }
+        .inl-overlay.open { display: flex; animation: us-fade 0.15s ease-out; }
+        .inl-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 14px;
+            background: #0f172a;
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+            flex-shrink: 0;
+        }
+        .inl-back-btn {
+            background: rgba(255,255,255,0.08);
+            color: #fff;
+            border: none;
+            width: 40px; height: 40px;
+            border-radius: 10px;
+            font-size: 18px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .inl-title {
+            flex: 1;
+            min-width: 0;
+        }
+        .inl-title-label {
+            font-size: 10px;
+            color: rgba(255,255,255,0.5);
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .inl-title-ttn {
+            color: #fff;
+            font-size: 14px;
+            font-weight: 800;
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            word-break: break-all;
+        }
+        .inl-fields-btn {
+            background: rgba(255,255,255,0.08);
+            color: #fff;
+            border: 1px solid rgba(255,255,255,0.15);
+            padding: 8px 12px;
+            border-radius: 10px;
+            font-family: inherit;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .inl-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .inl-row {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        .inl-row label {
+            font-size: 11px;
+            color: rgba(255,255,255,0.6);
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .inl-row label .req { color: #f87171; margin-left: 2px; }
+        .inl-row input,
+        .inl-row select,
+        .inl-row textarea {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 10px;
+            color: #fff;
+            font-family: inherit;
+            font-size: 15px;
+            padding: 11px 12px;
+            outline: none;
+            transition: border-color 0.15s, background 0.15s;
+        }
+        .inl-row input:focus,
+        .inl-row select:focus,
+        .inl-row textarea:focus {
+            border-color: #3b82f6;
+            background: rgba(59,130,246,0.08);
+        }
+        /* Жовта підсвітка полів, які вже мали значення перед редагуванням */
+        .inl-row.has-value input,
+        .inl-row.has-value select,
+        .inl-row.has-value textarea {
+            border-color: #fbbf24;
+            background: rgba(251,191,36,0.08);
+        }
+        .inl-row.has-value label::after {
+            content: ' ✎';
+            color: #fbbf24;
+            font-size: 11px;
+        }
+        .inl-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .inl-footer {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 8px;
+            padding: 12px 14px calc(env(safe-area-inset-bottom) + 12px);
+            background: #0f172a;
+            border-top: 1px solid rgba(255,255,255,0.08);
+            flex-shrink: 0;
+        }
+        .inl-btn {
+            padding: 14px;
+            border: none;
+            border-radius: 10px;
+            font-family: inherit;
+            font-size: 15px;
+            font-weight: 800;
+            cursor: pointer;
+            transition: transform 0.1s;
+        }
+        .inl-btn:active { transform: scale(0.97); }
+        .inl-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .inl-btn-cancel { background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.18); }
+        .inl-btn-save { background: linear-gradient(180deg,#10b981,#059669); color: #fff; box-shadow: 0 4px 10px rgba(16,185,129,0.35); }
     </style>
 </head>
 <body>
@@ -919,6 +1054,93 @@
         <div class="box-other">
             <input type="number" id="boxOther" placeholder="Інше…" min="1" max="999" inputmode="numeric">
             <button onclick="pickBoxOther()">✓</button>
+        </div>
+    </div>
+
+    <!-- INLINE EDITOR (C7/2): full-screen модалка редагування знайденого ТТН -->
+    <div class="inl-overlay" id="inlOverlay">
+        <div class="inl-header">
+            <button type="button" class="inl-back-btn" onclick="closeInlineEditor()" title="Назад">←</button>
+            <div class="inl-title">
+                <div class="inl-title-label">ТТН</div>
+                <div class="inl-title-ttn" id="inlTitleTtn">—</div>
+            </div>
+            <button type="button" class="inl-fields-btn" onclick="openFieldsChooser()" title="Налаштувати видимі поля">⚙️ Поля</button>
+        </div>
+        <div class="inl-body" id="inlBody">
+            <input type="hidden" id="inl_pkgId">
+            <div class="inl-row" data-field="recipient_phone">
+                <label>Тел. отримувача <span class="req">*</span></label>
+                <input type="tel" id="inl_phoneRecv" inputmode="tel" placeholder="+380...">
+            </div>
+            <div class="inl-row" data-field="sender_phone">
+                <label>Тел. відправника</label>
+                <input type="tel" id="inl_phoneSender" inputmode="tel">
+            </div>
+            <div class="inl-row" data-field="recipient_address">
+                <label>Адреса в Європі</label>
+                <input type="text" id="inl_addressTo">
+            </div>
+            <div class="inl-row" data-field="internal_number">
+                <label>Внутрішній №</label>
+                <input type="text" id="inl_innerNum">
+            </div>
+            <div class="inl-row" data-field="description">
+                <label>Опис</label>
+                <textarea id="inl_description" rows="2"></textarea>
+            </div>
+            <div class="inl-grid2">
+                <div class="inl-row" data-field="item_count">
+                    <label>Кількість</label>
+                    <input type="number" id="inl_qty" min="1" max="999" inputmode="numeric">
+                </div>
+                <div class="inl-row" data-field="weight_kg">
+                    <label>Вага, кг</label>
+                    <input type="number" id="inl_weight" min="0" step="0.01" inputmode="decimal">
+                </div>
+            </div>
+            <div class="inl-grid2">
+                <div class="inl-row" data-field="total_amount">
+                    <label>Сума</label>
+                    <input type="number" id="inl_sum" min="0" step="0.01" inputmode="decimal">
+                </div>
+                <div class="inl-row" data-field="payment_currency">
+                    <label>Валюта</label>
+                    <select id="inl_currency">
+                        <option value="">—</option>
+                        <option value="UAH">UAH</option>
+                        <option value="EUR">EUR</option>
+                        <option value="USD">USD</option>
+                        <option value="PLN">PLN</option>
+                        <option value="CZK">CZK</option>
+                        <option value="CHF">CHF</option>
+                    </select>
+                </div>
+            </div>
+            <div class="inl-row" data-field="payment_status">
+                <label>Статус оплати</label>
+                <select id="inl_payStatus">
+                    <option value="">—</option>
+                    <option value="pending">Не оплачено</option>
+                    <option value="partial">Частково</option>
+                    <option value="paid">Оплачено</option>
+                </select>
+            </div>
+            <div class="inl-row" data-field="package_status">
+                <label>Статус посилки</label>
+                <select id="inl_statusPkg">
+                    <option value="">—</option>
+                    <option value="Зареєстровано">Зареєстровано</option>
+                    <option value="Оформлення">Оформлення</option>
+                    <option value="Доставка">Доставка</option>
+                    <option value="Доставлено">Доставлено</option>
+                    <option value="Невідомо">Невідомо</option>
+                </select>
+            </div>
+        </div>
+        <div class="inl-footer">
+            <button type="button" class="inl-btn inl-btn-cancel" onclick="closeInlineEditor()">❌ Скасувати</button>
+            <button type="button" class="inl-btn inl-btn-save" id="inlSaveBtn" onclick="saveInlineEditor()">💾 Зберегти</button>
         </div>
     </div>
 
@@ -1499,12 +1721,168 @@
                     resumeAfterSheet();
                 });
             } else {
-                // Редагувати знайдений → поки редіректимо у CRM fill-модалку.
-                // (C7/2 замінить на inline-редактор на самому сканері.)
+                // Редагувати знайдений → інлайн-модалка прямо на сканері (C7/2)
                 if (!pkg) { closeCheckActionMenu(); resumeAfterSheet(); return; }
-                window.location.href = 'index.html?scan=' + encodeURIComponent(ttn) +
-                                       '&pkg=' + encodeURIComponent(pkg);
+                openInlineEditor(pkg, ttn);
             }
+        }
+
+        // ==== INLINE EDITOR (C7/2) =============================================
+        // Full-screen модалка редагування знайденого ТТН прямо на сторінці
+        // сканера — без редіректу в CRM. Зберігає через прямий REST PATCH,
+        // ставить scan_status='checked' → лід автоматично в «В перевірці».
+        var _INL_FIELDS = [
+            // [input_id,              db_column,          type]
+            ['inl_phoneRecv',          'recipient_phone',  'text'],
+            ['inl_phoneSender',        'sender_phone',     'text'],
+            ['inl_addressTo',          'recipient_address','text'],
+            ['inl_innerNum',           'internal_number',  'text'],
+            ['inl_description',        'description',      'text'],
+            ['inl_qty',                'item_count',       'int'],
+            ['inl_weight',             'weight_kg',        'float'],
+            ['inl_sum',                'total_amount',     'float'],
+            ['inl_currency',           'payment_currency', 'text'],
+            ['inl_payStatus',          'payment_status',   'text'],
+            ['inl_statusPkg',          'package_status',   'text']
+        ];
+        var _inlSnapshot = {};   // server row на момент відкриття (для диффу)
+
+        function openInlineEditor(pkgId, ttn) {
+            if (!pkgId || !TENANT_ID) return;
+            document.getElementById('inl_pkgId').value = pkgId;
+            document.getElementById('inlTitleTtn').textContent = ttn || pkgId;
+
+            // Підтягуємо свіжий рядок з БД (на випадок якщо хтось уже редагував)
+            var url = SUPABASE_URL + '/rest/v1/packages' +
+                      '?tenant_id=eq.' + encodeURIComponent(TENANT_ID) +
+                      '&pkg_id=eq.' + encodeURIComponent(pkgId) +
+                      '&select=recipient_phone,sender_phone,recipient_address,internal_number,description,item_count,weight_kg,total_amount,payment_currency,payment_status,package_status';
+            fetch(url, {
+                headers: {
+                    apikey: SUPABASE_ANON_KEY,
+                    Authorization: 'Bearer ' + SUPABASE_ANON_KEY
+                }
+            }).then(function(r) { return r.json(); })
+              .then(function(rows) {
+                var row = (rows && rows[0]) || {};
+                _inlSnapshot = row;
+                // Наповнюємо форму і підсвічуємо заповнені поля жовтим
+                _INL_FIELDS.forEach(function(f) {
+                    var inputId = f[0], col = f[1];
+                    var el = document.getElementById(inputId);
+                    if (!el) return;
+                    var v = row[col];
+                    el.value = (v == null ? '' : String(v));
+                    var parent = el.closest('.inl-row');
+                    if (parent) {
+                        var hasVal = (v != null && String(v).trim() !== '');
+                        parent.classList.toggle('has-value', hasVal);
+                    }
+                });
+                // Ховаємо action-menu і показуємо редактор
+                document.getElementById('checkActionMenu').classList.remove('show');
+                document.getElementById('inlOverlay').classList.add('open');
+                setTimeout(function() {
+                    var f = document.getElementById('inl_phoneRecv');
+                    if (f) f.focus();
+                }, 120);
+            }).catch(function() {
+                showToast({ variant: 'error', icon: '❌', label: 'Помилка',
+                            value: ttn || '', status: 'Не вдалося завантажити дані' });
+                setTimeout(function(){ document.getElementById('resultToast').classList.remove('show'); }, 2000);
+            });
+        }
+
+        function closeInlineEditor() {
+            document.getElementById('inlOverlay').classList.remove('open');
+            _inlSnapshot = {};
+            closeCheckActionMenu();
+            resumeAfterSheet();
+        }
+
+        function openFieldsChooser() {
+            // C7/3 — поки-що placeholder, реалізація в наступному коміті
+            showToast({ variant: 'success', icon: 'ℹ️', label: 'Скоро',
+                        value: '', status: 'Вибір полів — у C7/3' });
+            setTimeout(function(){ document.getElementById('resultToast').classList.remove('show'); }, 1500);
+        }
+
+        function saveInlineEditor() {
+            var pkg = document.getElementById('inl_pkgId').value;
+            if (!pkg || !TENANT_ID) return;
+
+            var phoneRecv = (document.getElementById('inl_phoneRecv').value || '').trim();
+            if (!phoneRecv) {
+                var el = document.getElementById('inl_phoneRecv');
+                el.focus();
+                showToast({ variant: 'error', icon: '❌', label: 'Обов’язкове поле',
+                            value: '', status: 'Вкажіть телефон отримувача' });
+                setTimeout(function(){ document.getElementById('resultToast').classList.remove('show'); }, 2000);
+                return;
+            }
+
+            // Збираємо лише те, що реально змінилось (по snapshot)
+            var diff = {};
+            _INL_FIELDS.forEach(function(f) {
+                var inputId = f[0], col = f[1], type = f[2];
+                var el = document.getElementById(inputId);
+                if (!el) return;
+                var raw = (el.value == null ? '' : String(el.value)).trim();
+                var oldRaw = _inlSnapshot[col] == null ? '' : String(_inlSnapshot[col]).trim();
+                if (raw === oldRaw) return;
+                if (raw === '') {
+                    diff[col] = null;
+                } else if (type === 'int') {
+                    var i = parseInt(raw, 10);
+                    diff[col] = isNaN(i) ? null : i;
+                } else if (type === 'float') {
+                    var n = parseFloat(raw);
+                    diff[col] = isNaN(n) ? null : n;
+                } else {
+                    diff[col] = raw;
+                }
+            });
+
+            // Будь-яке збереження з редактора = лід іде в «В перевірці»
+            diff.scan_status = 'checked';
+
+            var btn = document.getElementById('inlSaveBtn');
+            btn.disabled = true;
+            btn.textContent = '⏳ Збереження…';
+
+            var url = SUPABASE_URL + '/rest/v1/packages' +
+                      '?tenant_id=eq.' + encodeURIComponent(TENANT_ID) +
+                      '&pkg_id=eq.' + encodeURIComponent(pkg);
+            fetch(url, {
+                method: 'PATCH',
+                headers: {
+                    apikey: SUPABASE_ANON_KEY,
+                    Authorization: 'Bearer ' + SUPABASE_ANON_KEY,
+                    'Content-Type': 'application/json',
+                    Prefer: 'return=minimal'
+                },
+                body: JSON.stringify(diff)
+            }).then(function(r) {
+                btn.disabled = false;
+                btn.textContent = '💾 Зберегти';
+                if (!r.ok) {
+                    return r.text().then(function(t) {
+                        showToast({ variant: 'error', icon: '❌', label: 'Помилка збереження',
+                                    value: pkg, status: t.slice(0, 80) });
+                        setTimeout(function(){ document.getElementById('resultToast').classList.remove('show'); }, 2500);
+                    });
+                }
+                showToast({ variant: 'success', icon: '✅', label: 'Збережено',
+                            value: pkg, status: 'Лід → В перевірці' });
+                setTimeout(function(){ document.getElementById('resultToast').classList.remove('show'); }, 1800);
+                closeInlineEditor();
+            }).catch(function(err) {
+                btn.disabled = false;
+                btn.textContent = '💾 Зберегти';
+                showToast({ variant: 'error', icon: '❌', label: 'Мережа',
+                            value: pkg, status: String(err && err.message || err) });
+                setTimeout(function(){ document.getElementById('resultToast').classList.remove('show'); }, 2500);
+            });
         }
 
         // ==== UNKNOWN-TTN SHEET =================================================
@@ -1793,6 +2171,7 @@
                 closeNpModal();
                 closeUnknownSheet();
                 closeCheckActionMenu();
+                document.getElementById('inlOverlay').classList.remove('open');
                 document.getElementById('startScreen').classList.remove('hidden');
             }).catch(function() {});
         }
