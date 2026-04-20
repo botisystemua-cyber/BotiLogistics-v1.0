@@ -959,6 +959,13 @@ body {
   font-size: 10px; font-weight: 700;
   cursor: help;
 }
+.badge-photo {
+  background: #d1fae5; color: #065f46;
+  padding: 2px 8px; border-radius: 12px;
+  font-size: 12px; font-weight: 700;
+  text-decoration: none; cursor: pointer;
+}
+.badge-photo:hover { background: #a7f3d0; }
 .card-finance {
   margin-left: auto;
   display: flex; align-items: center; gap: 8px;

@@ -938,6 +938,39 @@
             margin-left: 6px;
         }
 
+        /* 📷 Фото посилки */
+        .inl-photo-wrap { display: flex; flex-direction: column; gap: 8px; }
+        .inl-photo-file {
+            color: #fff;
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.18);
+            border-radius: 10px;
+            padding: 8px;
+            font-family: inherit;
+        }
+        .inl-photo-preview {
+            max-width: 100%; max-height: 200px;
+            border-radius: 10px;
+            border: 1px solid rgba(255,255,255,0.15);
+            object-fit: contain;
+            background: rgba(0,0,0,0.25);
+        }
+        .inl-photo-clear {
+            background: rgba(239,68,68,0.3);
+            color: #fee2e2;
+            border: 1px solid rgba(239,68,68,0.5);
+            border-radius: 8px;
+            padding: 6px 10px;
+            font-weight: 700;
+            cursor: pointer;
+            align-self: flex-start;
+            font-family: inherit;
+        }
+        .inl-photo-hint {
+            color: rgba(255,255,255,0.45);
+            font-size: 11px;
+        }
+
         /* ==== FIELDS CHOOSER (C7/3) ==== */
         .fc-overlay {
             position: fixed; inset: 0;
@@ -2117,6 +2150,64 @@
             }
         }
 
+        // ==== PHOTO UPLOAD (Supabase Storage: package-photos bucket) ==========
+        var STORAGE_BUCKET = 'package-photos';
+        function _photoPublicUrl(path) {
+            return SUPABASE_URL + '/storage/v1/object/public/' +
+                   STORAGE_BUCKET + '/' + path;
+        }
+        function onInlinePhotoPick(inputEl) {
+            var file = inputEl.files && inputEl.files[0];
+            if (!file) return;
+            var col = inputEl.getAttribute('data-target');
+            var pkgId = document.getElementById('inl_pkgId').value || 'unknown';
+            var ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+            if (['jpg','jpeg','png','webp'].indexOf(ext) === -1) ext = 'jpg';
+            var path = (TENANT_ID || 'tn') + '/' + pkgId + '-' +
+                       Date.now() + '.' + ext;
+
+            showToast({ variant: 'created', icon: '⏳', label: 'Завантаження фото…',
+                        value: file.name, status: '' });
+
+            sb.storage.from(STORAGE_BUCKET).upload(path, file, {
+                contentType: file.type || ('image/' + ext),
+                upsert: true
+            }).then(function(res) {
+                if (res.error) {
+                    console.error('[photo upload] error:', res.error);
+                    showToast({ variant: 'error', icon: '❌', label: 'Помилка фото',
+                                value: '', status: res.error.message || 'uploadedfailed' });
+                    setTimeout(function(){ document.getElementById('resultToast').classList.remove('show'); }, 3000);
+                    return;
+                }
+                var url = _photoPublicUrl(path);
+                // Записуємо URL у hidden-інпут цього поля
+                var hidden = document.getElementById('inl_col_' + col);
+                if (hidden) hidden.value = url;
+                // Превʼю
+                var prev = document.querySelector('.inl-photo-preview[data-preview="' + col + '"]');
+                if (prev) { prev.src = url; prev.style.display = ''; }
+                var clr = document.querySelector('.inl-photo-clear[data-clear="' + col + '"]');
+                if (clr) clr.style.display = '';
+                showToast({ variant: 'success', icon: '📷', label: 'Фото додано',
+                            value: file.name, status: 'натисни 💾 Зберегти' });
+                setTimeout(function(){ document.getElementById('resultToast').classList.remove('show'); }, 1800);
+            }).catch(function(err) {
+                console.error('[photo upload] network:', err);
+                showToast({ variant: 'error', icon: '❌', label: 'Мережа',
+                            value: '', status: String(err && err.message || err) });
+                setTimeout(function(){ document.getElementById('resultToast').classList.remove('show'); }, 3000);
+            });
+        }
+        function clearInlinePhoto(btn) {
+            var col = btn.getAttribute('data-clear');
+            var hidden = document.getElementById('inl_col_' + col);
+            if (hidden) hidden.value = '';
+            var prev = document.querySelector('.inl-photo-preview[data-preview="' + col + '"]');
+            if (prev) { prev.src = ''; prev.style.display = 'none'; }
+            btn.style.display = 'none';
+        }
+
         // ==== INLINE EDITOR (C7/2) + FIELDS CHOOSER (C7/3) =====================
         // Full-screen модалка редагування ТТН прямо на сканері. Набір полів
         // налаштовується оператором через «⚙️ Поля» і зберігається в
@@ -2183,6 +2274,7 @@
             { col: 'weight_kg',          label: 'Вага, кг',             type: 'float',    category: '📦 Посилка', defaultOn: true },
             { col: 'estimated_value',    label: 'Оціночна вартість',    type: 'float',    category: '📦 Посилка' },
             { col: 'ttn_date',           label: 'Дата створення ТТН',   type: 'date',     category: '📦 Посилка' },
+            { col: 'photo_url',          label: '📷 Фото посилки',      type: 'photo',    category: '📦 Посилка', defaultOn: true },
             // Оплата
             { col: 'total_amount',       label: 'Сума',                 type: 'float',    category: '💰 Оплата', defaultOn: true },
             { col: 'payment_currency',   label: 'Валюта',               type: 'select',   category: '💰 Оплата', opts: _CURRENCY_OPTS, defaultOn: true },
@@ -2191,10 +2283,9 @@
             { col: 'deposit_currency',   label: 'Валюта завдатку',      type: 'select',   category: '💰 Оплата', opts: _CURRENCY_OPTS },
             { col: 'payment_form',       label: 'Форма оплати',         type: 'text',     category: '💰 Оплата' },
             { col: 'payment_notes',      label: 'Примітка оплати',      type: 'textarea', category: '💰 Оплата' },
-            { col: 'np_amount',          label: 'Сума НП',              type: 'float',    category: '💰 Оплата', defaultOn: true },
-            { col: 'np_currency',        label: 'Валюта НП',            type: 'select',   category: '💰 Оплата', opts: _CURRENCY_OPTS, defaultOn: true },
-            { col: 'np_status',          label: 'Статус НП',            type: 'select',   category: '💰 Оплата', opts: _PAYSTATUS_OPTS, defaultOn: true },
-            { col: 'np_form',            label: 'Форма НП (нал/безнал)', type: 'text',     category: '💰 Оплата' },
+            // НП-поля прибрано з редактора — ними керує окрема кнопка
+            // «💰 НП-оплата» в action-меню сканера (через register_np_payment).
+            // Default np_status='paid' ставить scan_ttn RPC.
             // Статуси
             { col: 'package_status',     label: 'Статус посилки',       type: 'select',   category: '🏷️ Статуси', opts: _PKGSTATUS_OPTS, defaultOn: true },
             { col: 'lead_status',        label: 'Статус ліда',          type: 'select',   category: '🏷️ Статуси', opts: _LEADSTATUS_OPTS },
@@ -2275,6 +2366,26 @@
             } else if (f.type === 'date') {
                 el = document.createElement('input');
                 el.type = 'date';
+            } else if (f.type === 'photo') {
+                // photo: spiсhial composite — hidden input з URL + превʼю + file picker
+                el = document.createElement('input');
+                el.type = 'hidden';
+                el.id = 'inl_col_' + f.col;
+                row.appendChild(el);
+
+                var wrap = document.createElement('div');
+                wrap.className = 'inl-photo-wrap';
+                wrap.innerHTML =
+                  '<input type="file" accept="image/*" capture="environment" ' +
+                    'class="inl-photo-file" data-target="' + f.col + '" ' +
+                    'onchange="onInlinePhotoPick(this)">' +
+                  '<img class="inl-photo-preview" data-preview="' + f.col + '" ' +
+                    'style="display:none;">' +
+                  '<button type="button" class="inl-photo-clear" data-clear="' + f.col + '" ' +
+                    'onclick="clearInlinePhoto(this)" style="display:none;">✕ Очистити</button>' +
+                  '<div class="inl-photo-hint">Сфотографуй етикетку або обери з галереї</div>';
+                row.appendChild(wrap);
+                return row;
             } else {
                 el = document.createElement('input');
                 el.type = 'text';
@@ -2386,6 +2497,13 @@
                     if (parent) {
                         var hasVal = (v != null && String(v).trim() !== '');
                         parent.classList.toggle('has-value', hasVal);
+                    }
+                    // photo-поля: якщо URL уже є → показуємо превʼю + кнопку Очистити
+                    var prev = document.querySelector('.inl-photo-preview[data-preview="' + col + '"]');
+                    var clr  = document.querySelector('.inl-photo-clear[data-clear="' + col + '"]');
+                    if (prev) {
+                        if (v) { prev.src = v; prev.style.display = ''; if (clr) clr.style.display = ''; }
+                        else   { prev.src = ''; prev.style.display = 'none'; if (clr) clr.style.display = 'none'; }
                     }
                 });
 

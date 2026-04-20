@@ -1015,6 +1015,7 @@ function renderCard(p) {
   const weight = p['Кг'] || '';
   const npPlaces = parseInt(p['Місця НП'], 10) || 0;
   const itemCount = parseInt(p['Кількість позицій'], 10) || 0;
+  const photoUrl = p['Фото посилки'] || '';
   const price = p['Сума'] || '';
   const currency = p['Валюта оплати'] || '';
   const deposit = parseFloat(p['Завдаток']) || 0;
@@ -1221,6 +1222,7 @@ function renderCard(p) {
           ${npPlaces > 1 ? `<span class="badge-np-places" title="Місць НП: ${npPlaces} фізичних коробок з тим самим ТТН">📥 ${npPlaces}</span>` : ''}
           ${itemCount > 1 ? `<span class="badge-item-count" title="Кількість позицій: ${itemCount} речей всередині">🧾 ${itemCount}</span>` : ''}
           ${weight ? `<span class="badge-weight" title="Вага">⚖️ ${weight} кг</span>` : ''}
+          ${photoUrl ? `<a href="${escapeHtml(photoUrl)}" target="_blank" onclick="event.stopPropagation();" class="badge-photo" title="Відкрити фото посилки">📷</a>` : ''}
           <div class="card-finance">
             ${visCols.includes('sum') && price ? `<span class="card-price ${priceColorClass}">${price} ${currency}</span>` : ''}
             ${visCols.includes('deposit') && deposit > 0 ? `<span class="card-deposit">завд:${deposit}</span>` : ''}
@@ -2017,10 +2019,8 @@ const _FILL_FIELDS = [
   ['fill_sum',         'Сума'],
   ['fill_currency',    'Валюта оплати'],
   ['fill_payStatus',   'Статус оплати'],
-  ['fill_npAmount',    'Сума НП'],
-  ['fill_npCurrency',  'Валюта НП'],
-  ['fill_npStatus',    'Статус НП'],
   ['fill_statusPkg',   'Статус посилки'],
+  ['fill_photoUrl',    'Фото посилки'],
 ];
 
 function openFillModal(pkgId) {
@@ -2042,6 +2042,17 @@ function openFillModal(pkgId) {
     }
   });
 
+  // Фото посилки: ставимо превʼю якщо URL уже є
+  const photoUrl = row['Фото посилки'] || '';
+  const prev = document.getElementById('fill_photoPreview');
+  const clr = document.getElementById('fill_photoClear');
+  const fileInput = document.getElementById('fill_photoInput');
+  if (fileInput) fileInput.value = '';
+  if (prev) {
+    if (photoUrl) { prev.src = photoUrl; prev.style.display = ''; if (clr) clr.style.display = ''; }
+    else { prev.src = ''; prev.style.display = 'none'; if (clr) clr.style.display = 'none'; }
+  }
+
   document.getElementById('fillOverlay').classList.add('open');
   setTimeout(() => {
     const rcv = document.getElementById('fill_phoneRecv');
@@ -2051,6 +2062,55 @@ function openFillModal(pkgId) {
 
 function closeFillModal() {
   document.getElementById('fillOverlay').classList.remove('open');
+}
+
+// Фото-аплоад для CRM fill-модалки — використовує той самий бакет
+// `package-photos` що і сканер. На зміну file input → upload до Storage
+// → URL кладемо в hidden #fill_photoUrl. Кнопка Очистити прибирає URL.
+const _STORAGE_BUCKET_FILL = 'package-photos';
+document.addEventListener('DOMContentLoaded', () => {
+  const fi = document.getElementById('fill_photoInput');
+  if (fi) fi.addEventListener('change', onFillPhotoPick);
+});
+
+async function onFillPhotoPick(ev) {
+  const file = ev.target.files && ev.target.files[0];
+  if (!file) return;
+  const pkgId = document.getElementById('fillPkgId').value || 'unknown';
+  let ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+  if (!['jpg','jpeg','png','webp'].includes(ext)) ext = 'jpg';
+  const tenantId = (getBotiSession() && getBotiSession().tenant_id) || 'tn';
+  const path = `${tenantId}/${pkgId}-${Date.now()}.${ext}`;
+
+  showToast('⏳ Завантаження фото…', 'info');
+  try {
+    const { data, error } = await sb.storage
+      .from(_STORAGE_BUCKET_FILL)
+      .upload(path, file, { contentType: file.type || `image/${ext}`, upsert: true });
+    if (error) throw error;
+    const url = `${SUPABASE_URL}/storage/v1/object/public/${_STORAGE_BUCKET_FILL}/${path}`;
+    const hidden = document.getElementById('fill_photoUrl');
+    if (hidden) hidden.value = url;
+    const prev = document.getElementById('fill_photoPreview');
+    const clr = document.getElementById('fill_photoClear');
+    if (prev) { prev.src = url; prev.style.display = ''; }
+    if (clr) clr.style.display = '';
+    showToast('📷 Фото додано — натисни Зберегти', 'success');
+  } catch (err) {
+    console.error('[fill_photo] upload error:', err);
+    showToast('Помилка фото: ' + (err.message || err), 'error');
+  }
+}
+
+function clearFillPhoto() {
+  const hidden = document.getElementById('fill_photoUrl');
+  if (hidden) hidden.value = '';
+  const fi = document.getElementById('fill_photoInput');
+  if (fi) fi.value = '';
+  const prev = document.getElementById('fill_photoPreview');
+  const clr = document.getElementById('fill_photoClear');
+  if (prev) { prev.src = ''; prev.style.display = 'none'; }
+  if (clr) clr.style.display = 'none';
 }
 
 async function saveFillModal() {
