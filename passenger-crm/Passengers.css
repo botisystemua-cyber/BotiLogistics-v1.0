@@ -655,6 +655,8 @@ body.route-sort-active #rteTogglePay {
 .tcal-day { position: relative; width: 100%; aspect-ratio: 1; border: none; border-radius: 10px; background: transparent; cursor: default; font-size: 12px; font-weight: 600; color: var(--text-secondary); display: flex; flex-direction: column; align-items: center; justify-content: center; transition: all 0.15s; padding: 2px; }
 .tcal-day.other-month { opacity: 0.3; }
 .tcal-day.today { outline: 2px solid var(--orange); outline-offset: -2px; font-weight: 800; }
+.tcal-today-label { position: absolute; top: -8px; left: 50%; transform: translateX(-50%); font-size: 8px; font-weight: 900; color: white; background: var(--orange); padding: 1px 6px; border-radius: 6px; letter-spacing: 0.3px; text-transform: uppercase; white-space: nowrap; pointer-events: none; z-index: 3; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+.tm-cal-wrap .tcal-day.tm-current.today .tcal-today-label { top: -16px; }
 .tcal-day.has-trip { cursor: pointer; font-weight: 800; color: var(--primary); }
 .tcal-day.has-trip:hover { transform: scale(1.12); box-shadow: 0 2px 8px rgba(0,0,0,0.12); }
 .tcal-day.selected { background: var(--orange); color: white !important; box-shadow: 0 2px 10px rgba(255,140,50,0.4); }
@@ -753,11 +755,12 @@ body.route-sort-active #rteTogglePay {
 .tc-weekdays { display: grid; grid-template-columns: repeat(7, 1fr); background: var(--bg-main); border-bottom: 1px solid var(--border); }
 .tc-wd { padding: 8px 4px; text-align: center; font-size: 10px; font-weight: 800; color: var(--text-secondary); letter-spacing: 0.5px; text-transform: uppercase; }
 .tc-grid { display: grid; grid-template-columns: repeat(7, 1fr); background: var(--border); gap: 1px; }
-.tc-cell { background: white; min-height: 110px; padding: 4px 4px 6px; display: flex; flex-direction: column; gap: 3px; cursor: default; transition: background 0.1s; }
+.tc-cell { position: relative; background: white; min-height: 110px; padding: 4px 4px 6px; display: flex; flex-direction: column; gap: 3px; cursor: default; transition: background 0.1s; }
 .tc-cell.other-month { background: #fafafa; }
 .tc-cell.other-month .tc-day-num { color: var(--text-secondary); opacity: 0.5; }
 .tc-cell.today { background: #fffbeb; }
 .tc-cell.today .tc-day-num { background: var(--orange); color: white; width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; font-weight: 800; }
+.tc-today-label { position: absolute; top: 3px; right: 3px; font-size: 8px; font-weight: 900; color: white; background: var(--orange); padding: 1px 6px; border-radius: 6px; letter-spacing: 0.3px; text-transform: uppercase; white-space: nowrap; pointer-events: none; z-index: 2; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
 .tc-day-num { font-size: 12px; font-weight: 700; color: var(--text-primary); padding: 0 2px; flex-shrink: 0; }
 .tc-events { display: flex; flex-direction: column; gap: 2px; overflow: hidden; }
 .tc-event { display: flex; flex-direction: column; gap: 1px; padding: 3px 5px; border-radius: 4px; font-size: 10px; font-weight: 700; cursor: pointer; overflow: hidden; transition: transform 0.1s; border-left: 3px solid transparent; }
@@ -1229,7 +1232,12 @@ body.route-sort-active #rteTogglePay {
 }
 @media (max-width: 640px) {
     .trip-modal-overlay { padding: 0; align-items: flex-end; }
-    .trip-modal { max-width: 100%; max-height: 95vh; border-radius: 16px 16px 0 0; }
+    .trip-modal { max-width: 100%; max-height: 85vh; border-radius: 16px 16px 0 0; }
+    .trip-modal-body { padding: 10px 8px; }
+    .tm-cal-wrap .tcal-days { gap: 2px; }
+    .tm-cal-wrap .tcal-weekdays { gap: 2px; }
+    .tm-cal-wrap .tcal-tripname { font-size: 8px; padding: 1px 2px; margin-bottom: 1px; letter-spacing: -0.4px; }
+    .tm-cal-wrap .tcal-day { font-size: 11px; padding: 1px; }
 }
 
 /* === BULK TOOLBAR: панель масових дій при виборі галочок ===
