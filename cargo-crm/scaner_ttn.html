@@ -1333,6 +1333,10 @@
         var isPaused = false;
         // Per-session tally; in-memory only (resets on reload by design).
         var sessionCounter = 0;
+        // C7/5: лічильник сканів кожного ТТН у поточній сесії. Якщо оператор
+        // сканує той самий ТТН вдруге у check-режимі — це друга коробка тієї
+        // ж накладної: пишемо в лог mode='unpack' і авто +1 до item_count.
+        var _sessionScans = {};
 
         // Last successfully-scanned/peeked package; gates the ✏️ НП-оплата
         // button. Reset when scanner stops.
@@ -1672,7 +1676,16 @@
             // unknown-sheet для нових.
             if (SCAN_MODE === 'check') {
                 if (res && res.ok && res.pkg_id) {
-                    // Знайдено в перевірці — меню Редагувати
+                    // C7/5: дубль в одній сесії = друга коробка тієї ж
+                    // накладної → лог 'unpack' + авто +1 до item_count,
+                    // без action-menu, одразу resume.
+                    var prev = _sessionScans[ttn] || 0;
+                    if (prev >= 1) {
+                        handleDuplicateUnpack(ttn, res.pkg_id, res.item_count);
+                        _sessionScans[ttn] = prev + 1;
+                        return;
+                    }
+                    _sessionScans[ttn] = prev + 1;
                     setTimeout(function() {
                         showCheckActionMenu({
                             ttn: ttn,
@@ -1721,6 +1734,69 @@
                     showUnknownSheet(ttn, pkgForUnknown);
                 }, 900);
             }
+        }
+
+        // ==== DUPLICATE UNPACK (C7/5) ==========================================
+        // Викликається коли в check-режимі той самий ТТН сканується вдруге+
+        // у цій сесії. Трактуємо як другу/третю коробку тієї ж накладної:
+        //   • INSERT у package_scan_log mode='unpack' з timestamp і pkg_id
+        //   • PATCH packages.item_count = item_count + 1 (оптимістично)
+        //   • Toast «Другий знайшовся (коробка #N)»
+        //   • НЕ показуємо action-menu — одразу resume, щоб не гальмувати
+        function handleDuplicateUnpack(ttn, pkgId, prevItemCount) {
+            if (!TENANT_ID || !pkgId) return;
+            var currentBox = (_sessionScans[ttn] || 0) + 1;
+
+            // 1) лог (fire-and-forget)
+            fetch(SUPABASE_URL + '/rest/v1/package_scan_log', {
+                method: 'POST',
+                headers: {
+                    apikey: SUPABASE_ANON_KEY,
+                    Authorization: 'Bearer ' + SUPABASE_ANON_KEY,
+                    'Content-Type': 'application/json',
+                    Prefer: 'return=minimal'
+                },
+                body: JSON.stringify({
+                    tenant_id: TENANT_ID,
+                    pkg_id: pkgId,
+                    ttn_number: ttn,
+                    scanned_by: USER_LOGIN,
+                    mode: 'unpack',
+                    direction: DEFAULT_DIRECTION,
+                    from_status: null,
+                    to_status: 'unpack',
+                    outcome: 'already'
+                })
+            }).catch(function(){});
+
+            // 2) item_count += 1 (оптимістично; якщо item_count в БД було null,
+            //    рахуємо від сесійної позиції)
+            var nextCount = Math.max(currentBox, (parseInt(prevItemCount, 10) || 0) + 1);
+            fetch(SUPABASE_URL + '/rest/v1/packages' +
+                  '?tenant_id=eq.' + encodeURIComponent(TENANT_ID) +
+                  '&pkg_id=eq.' + encodeURIComponent(pkgId), {
+                method: 'PATCH',
+                headers: {
+                    apikey: SUPABASE_ANON_KEY,
+                    Authorization: 'Bearer ' + SUPABASE_ANON_KEY,
+                    'Content-Type': 'application/json',
+                    Prefer: 'return=minimal'
+                },
+                body: JSON.stringify({ item_count: nextCount })
+            }).catch(function(){});
+
+            // 3) toast + авто-resume
+            showToast({
+                variant: 'success',
+                icon: '🎯',
+                label: 'Другий знайшовся!',
+                value: ttn,
+                status: 'Коробка #' + currentBox + ' · item_count=' + nextCount
+            });
+            setTimeout(function() {
+                document.getElementById('resultToast').classList.remove('show');
+                resumeAfterSheet();
+            }, 1600);
         }
 
         // ==== CHECK ACTION MENU (C7/1) =========================================
@@ -2808,6 +2884,7 @@
                 document.getElementById('fcOverlay').classList.remove('open');
                 document.getElementById('hdOverlay').classList.remove('open');
                 document.getElementById('historyDbBtn').style.display = 'none';
+                _sessionScans = {};
                 document.getElementById('startScreen').classList.remove('hidden');
             }).catch(function() {});
         }
@@ -2855,6 +2932,7 @@
         function clearHistory() {
             scanHistory = [];
             sessionCounter = 0;
+            _sessionScans = {};
             document.getElementById('counterScanned').textContent = '📊 0';
             renderHistory();
         }
