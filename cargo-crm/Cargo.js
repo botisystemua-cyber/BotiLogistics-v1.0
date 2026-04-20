@@ -779,7 +779,9 @@ function isScanReturnUnknown() {
 }
 function backToScanner() {
   clearScanReturn();
-  window.location.href = 'scaner_ttn.html';
+  // resume=1 → сканер пропустить стартовий екран і одразу запустить камеру
+  // з останнім обраним режимом (зручніше, ніж знову обирати «Сканувати»/«Перевірка»)
+  window.location.href = 'scaner_ttn.html?resume=1';
 }
 
 // Банер «зі сканера» на верху списку з 4 діями для Невідомих (C5):
