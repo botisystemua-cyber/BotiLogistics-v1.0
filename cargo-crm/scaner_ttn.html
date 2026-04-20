@@ -190,7 +190,13 @@
             z-index: 10;
             display: flex;
             flex-direction: column;
+            align-items: flex-end;   /* right-hand thumb reach */
             gap: 10px;
+        }
+        .bottombar .last-scan-bar,
+        .bottombar .main-btn {
+            width: 100%;
+            max-width: 320px;        /* залишає ліву частину екрану вільною */
         }
         .last-scan-bar {
             background: rgba(0,0,0,0.6);
@@ -606,6 +612,65 @@
         /* Edit button in bottombar — purple to match edit-style accents */
         .main-btn.btn-edit { background: #6366f1; color: #fff; display: none; }
         .main-btn.btn-edit.show { display: block; }
+
+        /* ==== UNKNOWN-TTN SHEET (показується поверх камери для Невідомих) ==== */
+        .unknown-sheet-backdrop {
+            position: absolute; inset: 0;
+            background: rgba(0, 0, 0, 0.55);
+            z-index: 50;
+            display: none;
+            align-items: flex-end;
+            justify-content: flex-end;        /* правий нижній кут */
+            padding: 20px 14px calc(env(safe-area-inset-bottom) + 20px);
+        }
+        .unknown-sheet-backdrop.open { display: flex; animation: us-fade 0.2s ease-out; }
+        @keyframes us-fade { from { opacity: 0; } to { opacity: 1; } }
+        .unknown-sheet {
+            width: 100%;
+            max-width: 320px;
+            background: #1e293b;
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 18px;
+            padding: 16px 14px 14px;
+            box-shadow: 0 -10px 30px rgba(0,0,0,0.4);
+            animation: us-slide 0.25s ease-out;
+        }
+        @keyframes us-slide { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        .unknown-sheet-title {
+            color: #fde68a;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .unknown-sheet-ttn {
+            color: #fff;
+            font-size: 16px;
+            font-weight: 800;
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            margin: 4px 0 14px;
+            word-break: break-all;
+        }
+        .unknown-sheet-btn {
+            width: 100%;
+            padding: 14px 16px;
+            margin-top: 8px;
+            border: none;
+            border-radius: 12px;
+            font-size: 15px;
+            font-weight: 700;
+            font-family: inherit;
+            cursor: pointer;
+            text-align: left;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: transform 0.1s;
+        }
+        .unknown-sheet-btn:active { transform: scale(0.97); }
+        .unknown-sheet-btn.fill { background: linear-gradient(180deg,#ef4444,#dc2626); color: #fff; box-shadow: 0 4px 10px rgba(220,38,38,0.35), 0 0 0 3px rgba(59,130,246,0.2); }
+        .unknown-sheet-btn.save { background: #10b981; color: #fff; }
+        .unknown-sheet-btn.next { background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.18); }
     </style>
 </head>
 <body>
@@ -734,6 +799,17 @@
         <div class="box-other">
             <input type="number" id="boxOther" placeholder="Інше…" min="1" max="999" inputmode="numeric">
             <button onclick="pickBoxOther()">✓</button>
+        </div>
+    </div>
+
+    <!-- UNKNOWN-TTN SHEET: показується одразу на сканері для Невідомих -->
+    <div class="unknown-sheet-backdrop" id="unknownSheet" onclick="if(event.target===this)closeUnknownSheet()">
+        <div class="unknown-sheet">
+            <div class="unknown-sheet-title">📡 Невідомий ТТН</div>
+            <div class="unknown-sheet-ttn" id="unknownSheetTtn">—</div>
+            <button type="button" class="unknown-sheet-btn fill" onclick="unknownAction('fill')">📝 Заповнити</button>
+            <button type="button" class="unknown-sheet-btn save" onclick="unknownAction('save')">💾 Зберегти</button>
+            <button type="button" class="unknown-sheet-btn next" onclick="unknownAction('next')">🔙 Сканувати далі</button>
         </div>
     </div>
 
@@ -1071,27 +1147,115 @@
                 document.getElementById('resultToast').classList.remove('show');
             }, 2500);
 
-            // Сканер — «порт» до CRM. Будь-який успішний скан (і «Сканувати»,
-            // і «Перевірка»/check) веде у розділ «Перевірка» з цим ТТН, щоб
-            // оператор обрав дію. Якщо ТТН не знайдено — ведемо у «Невідомі»
-            // (користувач вирішує: заповнити / видалити / сканувати далі).
+            // Сканер — «порт» до CRM ДЛЯ ВІДОМИХ лідів. Знайдений/уже-готовий/
+            // check-режим з успіхом → ведемо у розділ «Перевірка» з цим ТТН.
+            // Для НЕВІДОМИХ (нова посилка від scan_ttn або «не знайдено» від
+            // peek_ttn) НЕ виходимо зі сканера — показуємо sheet-меню прямо
+            // на камері: Заповнити / Зберегти / Сканувати далі.
             var shouldRedirect = false;
             var asUnknown = false;
+            var pkgForUnknown = null;
             if (res && res.ok) {
-                shouldRedirect = (res.type === 'found' || res.type === 'already' || res.type === 'new' || res.mode === 'check');
-                if (res.type === 'new') asUnknown = true;
+                if (res.type === 'new') {
+                    asUnknown = true;
+                    pkgForUnknown = res.pkg_id || null;
+                } else {
+                    shouldRedirect = (res.type === 'found' || res.type === 'already' || res.mode === 'check');
+                }
             } else if (res && !res.ok && typeof res.error === 'string' && /не знайдено/i.test(res.error)) {
-                // peek_ttn повертає «ТТН не знайдено» — це теж Невідомий
-                shouldRedirect = true;
+                // peek_ttn → ТТН відсутній: треба запропонувати дії на сканері
                 asUnknown = true;
+                pkgForUnknown = null;
             }
             if (shouldRedirect) {
                 setTimeout(function() {
                     var url = 'index.html?scan=' + encodeURIComponent(ttn);
                     if (res && res.pkg_id) url += '&pkg=' + encodeURIComponent(res.pkg_id);
-                    if (asUnknown) url += '&unknown=1';
                     window.location.href = url;
                 }, 1200);
+            } else if (asUnknown) {
+                setTimeout(function() {
+                    showUnknownSheet(ttn, pkgForUnknown);
+                }, 900);
+            }
+        }
+
+        // ==== UNKNOWN-TTN SHEET =================================================
+        // Показується поверх камери, коли скан створив нову посилку (scan_ttn →
+        // type:'new') або коли peek_ttn відповів «не знайдено». Дії:
+        //   📝 Заповнити      → редірект у CRM, відкриється fill-модалка
+        //   💾 Зберегти       → нічого не робимо (лід уже в БД з scan_ttn),
+        //                        просто закриваємо sheet і повертаємося до скану
+        //   🔙 Сканувати далі → НЕ зберігати невідомого: якщо лід створено —
+        //                        видаляємо його через /rest/v1/packages DELETE
+        //                        (peek-режим нічого не створював — просто закриваємо)
+        var _unknownSheetTtn = null;
+        var _unknownSheetPkg = null;
+
+        function showUnknownSheet(ttn, pkgId) {
+            _unknownSheetTtn = ttn || '';
+            _unknownSheetPkg = pkgId || null;
+            document.getElementById('unknownSheetTtn').textContent = ttn || '—';
+            document.getElementById('resultToast').classList.remove('show');
+            document.getElementById('unknownSheet').classList.add('open');
+        }
+
+        function closeUnknownSheet() {
+            document.getElementById('unknownSheet').classList.remove('open');
+            _unknownSheetTtn = null;
+            _unknownSheetPkg = null;
+        }
+
+        function resumeAfterSheet() {
+            // Scanner is paused after each scan; resume so user can scan далі
+            if (scanner && isScanning && isPaused) {
+                scanner.resume();
+                isPaused = false;
+            }
+            document.getElementById('mainBtn').style.display = 'none';
+        }
+
+        function unknownAction(action) {
+            var ttn = _unknownSheetTtn;
+            var pkg = _unknownSheetPkg;
+
+            if (action === 'fill') {
+                // CRM залишається «портом» для Заповнення — форма там
+                var url = 'index.html?scan=' + encodeURIComponent(ttn) + '&unknown=1';
+                if (pkg) url += '&pkg=' + encodeURIComponent(pkg);
+                window.location.href = url;
+                return;
+            }
+
+            if (action === 'save') {
+                // Лід уже в БД (scan_ttn) — просто виходимо зі sheet
+                closeUnknownSheet();
+                resumeAfterSheet();
+                return;
+            }
+
+            if (action === 'next') {
+                // Не зберігати: якщо є pkg_id від scan_ttn — видаляємо запис
+                if (pkg && TENANT_ID) {
+                    var delUrl = SUPABASE_URL + '/rest/v1/packages' +
+                                 '?tenant_id=eq.' + encodeURIComponent(TENANT_ID) +
+                                 '&pkg_id=eq.' + encodeURIComponent(pkg);
+                    fetch(delUrl, {
+                        method: 'DELETE',
+                        headers: {
+                            apikey: SUPABASE_ANON_KEY,
+                            Authorization: 'Bearer ' + SUPABASE_ANON_KEY,
+                            Prefer: 'return=minimal'
+                        }
+                    }).catch(function(){}).finally(function() {
+                        closeUnknownSheet();
+                        resumeAfterSheet();
+                    });
+                } else {
+                    closeUnknownSheet();
+                    resumeAfterSheet();
+                }
+                return;
             }
         }
 
@@ -1268,6 +1432,7 @@
                 lastScannedPkgId = null;
                 lastScannedTtn   = null;
                 closeNpModal();
+                closeUnknownSheet();
                 document.getElementById('startScreen').classList.remove('hidden');
             }).catch(function() {});
         }
