@@ -671,6 +671,416 @@
         .unknown-sheet-btn.fill { background: linear-gradient(180deg,#ef4444,#dc2626); color: #fff; box-shadow: 0 4px 10px rgba(220,38,38,0.35), 0 0 0 3px rgba(59,130,246,0.2); }
         .unknown-sheet-btn.save { background: #10b981; color: #fff; }
         .unknown-sheet-btn.next { background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.18); }
+
+        /* ==== CHECK ACTION MENU (C7/1): показується в режимі «Перевіряти» після скану ==== */
+        .check-action-menu {
+            display: none;
+            flex-direction: column;
+            gap: 10px;
+            width: 100%;
+            max-width: 380px;
+            margin-left: auto;    /* right-hand thumb reach */
+            background: #1e293b;
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 14px;
+            padding: 12px;
+            animation: us-slide 0.2s ease-out;
+        }
+        .check-action-menu.show { display: flex; }
+        .cam-ttn-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .cam-ttn-label {
+            font-size: 10px;
+            font-weight: 700;
+            color: rgba(255,255,255,0.5);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .cam-ttn-code {
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            color: #fff;
+            font-size: 14px;
+            font-weight: 700;
+            word-break: break-all;
+            flex: 1;
+        }
+        .cam-ttn-badge {
+            font-size: 11px;
+            padding: 3px 8px;
+            border-radius: 999px;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+        .cam-ttn-badge.found { background: #10b981; color: #fff; }
+        .cam-ttn-badge.unknown { background: #f59e0b; color: #fff; }
+        .cam-stepper {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 10px;
+            padding: 6px;
+        }
+        .cam-stepper-btn {
+            width: 44px;
+            height: 44px;
+            border-radius: 10px;
+            border: none;
+            background: rgba(255,255,255,0.1);
+            color: #fff;
+            font-size: 22px;
+            font-weight: 800;
+            font-family: inherit;
+            cursor: pointer;
+        }
+        .cam-stepper-btn:active { transform: scale(0.94); }
+        .cam-stepper-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+        .cam-stepper-val {
+            flex: 1;
+            text-align: center;
+            color: #fff;
+            font-size: 22px;
+            font-weight: 800;
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        }
+        .cam-stepper-label {
+            color: rgba(255,255,255,0.6);
+            font-size: 12px;
+            font-weight: 600;
+            padding-right: 8px;
+        }
+        .cam-actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+        .cam-btn {
+            padding: 14px 10px;
+            border-radius: 10px;
+            border: none;
+            font-size: 14px;
+            font-weight: 700;
+            font-family: inherit;
+            cursor: pointer;
+            transition: transform 0.1s;
+        }
+        .cam-btn:active { transform: scale(0.97); }
+        .cam-btn-cancel { background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.18); }
+        .cam-btn-primary { background: linear-gradient(180deg,#3b82f6,#2563eb); color: #fff; box-shadow: 0 4px 10px rgba(37,99,235,0.35); }
+        .cam-btn-primary.save { background: linear-gradient(180deg,#10b981,#059669); box-shadow: 0 4px 10px rgba(16,185,129,0.35); }
+
+        /* ==== INLINE EDITOR (C7/2): full-screen модалка прямо на сканері ==== */
+        .inl-overlay {
+            position: fixed; inset: 0;
+            background: rgba(15, 23, 42, 0.95);
+            z-index: 80;
+            display: none;
+            flex-direction: column;
+            padding: 0;
+        }
+        .inl-overlay.open { display: flex; animation: us-fade 0.15s ease-out; }
+        .inl-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 14px;
+            background: #0f172a;
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+            flex-shrink: 0;
+        }
+        .inl-back-btn {
+            background: rgba(255,255,255,0.08);
+            color: #fff;
+            border: none;
+            width: 40px; height: 40px;
+            border-radius: 10px;
+            font-size: 18px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .inl-title {
+            flex: 1;
+            min-width: 0;
+        }
+        .inl-title-label {
+            font-size: 10px;
+            color: rgba(255,255,255,0.5);
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .inl-title-ttn {
+            color: #fff;
+            font-size: 14px;
+            font-weight: 800;
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            word-break: break-all;
+        }
+        .inl-fields-btn {
+            background: rgba(255,255,255,0.08);
+            color: #fff;
+            border: 1px solid rgba(255,255,255,0.15);
+            padding: 8px 12px;
+            border-radius: 10px;
+            font-family: inherit;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .inl-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .inl-row {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        .inl-row label {
+            font-size: 11px;
+            color: rgba(255,255,255,0.6);
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .inl-row label .req { color: #f87171; margin-left: 2px; }
+        .inl-row input,
+        .inl-row select,
+        .inl-row textarea {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 10px;
+            color: #fff;
+            font-family: inherit;
+            font-size: 15px;
+            padding: 11px 12px;
+            outline: none;
+            transition: border-color 0.15s, background 0.15s;
+        }
+        .inl-row input:focus,
+        .inl-row select:focus,
+        .inl-row textarea:focus {
+            border-color: #3b82f6;
+            background: rgba(59,130,246,0.08);
+        }
+        /* Жовта підсвітка полів, які вже мали значення перед редагуванням */
+        .inl-row.has-value input,
+        .inl-row.has-value select,
+        .inl-row.has-value textarea {
+            border-color: #fbbf24;
+            background: rgba(251,191,36,0.08);
+        }
+        .inl-row.has-value label::after {
+            content: ' ✎';
+            color: #fbbf24;
+            font-size: 11px;
+        }
+        .inl-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .inl-footer {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 8px;
+            padding: 12px 14px calc(env(safe-area-inset-bottom) + 12px);
+            background: #0f172a;
+            border-top: 1px solid rgba(255,255,255,0.08);
+            flex-shrink: 0;
+        }
+        .inl-btn {
+            padding: 14px;
+            border: none;
+            border-radius: 10px;
+            font-family: inherit;
+            font-size: 15px;
+            font-weight: 800;
+            cursor: pointer;
+            transition: transform 0.1s;
+        }
+        .inl-btn:active { transform: scale(0.97); }
+        .inl-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .inl-btn-cancel { background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.18); }
+        .inl-btn-save { background: linear-gradient(180deg,#10b981,#059669); color: #fff; box-shadow: 0 4px 10px rgba(16,185,129,0.35); }
+
+        /* ==== FIELDS CHOOSER (C7/3) ==== */
+        .fc-overlay {
+            position: fixed; inset: 0;
+            background: rgba(15, 23, 42, 0.97);
+            z-index: 90;
+            display: none;
+            flex-direction: column;
+        }
+        .fc-overlay.open { display: flex; animation: us-fade 0.15s ease-out; }
+        .fc-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 14px;
+        }
+        .fc-category {
+            margin-bottom: 16px;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        .fc-category-header {
+            padding: 10px 12px;
+            color: #fbbf24;
+            font-weight: 700;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            background: rgba(0,0,0,0.25);
+        }
+        .fc-category-items {
+            display: flex;
+            flex-direction: column;
+        }
+        .fc-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 11px 12px;
+            border-top: 1px solid rgba(255,255,255,0.05);
+            color: #fff;
+            font-size: 14px;
+            cursor: pointer;
+            user-select: none;
+        }
+        .fc-item:hover { background: rgba(255,255,255,0.03); }
+        .fc-item input[type=checkbox] {
+            width: 20px; height: 20px;
+            accent-color: #10b981;
+            cursor: pointer;
+        }
+        .fc-item-label { flex: 1; }
+        .fc-item-required {
+            font-size: 10px;
+            color: #f87171;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        /* ==== HISTORY OVERLAY (C7/4): cross-session історія сканів оператора ==== */
+        .history-db-btn { background: rgba(16,185,129,0.2); color: #6ee7b7; }
+        .hd-overlay {
+            position: fixed; inset: 0;
+            background: rgba(15, 23, 42, 0.97);
+            z-index: 85;
+            display: none;
+            flex-direction: column;
+        }
+        .hd-overlay.open { display: flex; animation: us-fade 0.15s ease-out; }
+        .hd-tabs {
+            display: flex;
+            gap: 6px;
+            padding: 10px 12px;
+            background: #0f172a;
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+            overflow-x: auto;
+            white-space: nowrap;
+            -webkit-overflow-scrolling: touch;
+        }
+        .hd-tab {
+            background: rgba(255,255,255,0.05);
+            color: rgba(255,255,255,0.7);
+            border: 1px solid rgba(255,255,255,0.1);
+            padding: 7px 10px;
+            border-radius: 20px;
+            font-family: inherit;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+        .hd-tab.active {
+            background: #3b82f6;
+            color: #fff;
+            border-color: #3b82f6;
+        }
+        .hd-tab-count {
+            display: inline-block;
+            background: rgba(0,0,0,0.3);
+            border-radius: 10px;
+            padding: 0 6px;
+            font-size: 10px;
+            margin-left: 4px;
+        }
+        .hd-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px;
+        }
+        .hd-actions {
+            padding: 10px 12px calc(env(safe-area-inset-bottom) + 10px);
+            background: #0f172a;
+            border-top: 1px solid rgba(255,255,255,0.08);
+        }
+        .hd-card {
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 10px;
+            padding: 10px 12px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: transform 0.1s, border-color 0.15s;
+        }
+        .hd-card:hover { border-color: rgba(255,255,255,0.2); }
+        .hd-card:active { transform: scale(0.98); }
+        .hd-card-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .hd-card-ttn {
+            flex: 1;
+            color: #fff;
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            font-size: 13px;
+            font-weight: 700;
+            word-break: break-all;
+        }
+        .hd-card-badge {
+            font-size: 10px;
+            padding: 3px 7px;
+            border-radius: 999px;
+            font-weight: 700;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+        .hd-card-badge.unknown { background: #f59e0b; color: #fff; }
+        .hd-card-badge.checking { background: #3b82f6; color: #fff; }
+        .hd-card-badge.ready { background: #10b981; color: #fff; }
+        .hd-card-badge.rejected { background: #ef4444; color: #fff; }
+        .hd-card-badge.other { background: rgba(255,255,255,0.15); color: #fff; }
+        .hd-card-meta {
+            color: rgba(255,255,255,0.5);
+            font-size: 11px;
+            margin-top: 4px;
+        }
+        .hd-card-phone {
+            color: rgba(255,255,255,0.8);
+            font-size: 12px;
+            margin-top: 3px;
+        }
+        .hd-empty {
+            color: rgba(255,255,255,0.4);
+            text-align: center;
+            padding: 40px 16px;
+            font-size: 14px;
+        }
+        .hd-loading {
+            color: rgba(255,255,255,0.5);
+            text-align: center;
+            padding: 20px;
+            font-size: 13px;
+        }
     </style>
 </head>
 <body>
@@ -720,8 +1130,12 @@
         <div class="topbar-counter">
             <button class="topbar-btn" onclick="goBack()" title="Назад">←</button>
             <div class="counter-pill" id="counterScanned">📊 0</div>
+            <!-- C7/4: «Історія» з БД (cross-session), з'являється коли є скани -->
+            <button class="topbar-btn history-db-btn" id="historyDbBtn"
+                    onclick="openHistoryOverlay()" title="Історія сканувань"
+                    style="display:none;">📋</button>
         </div>
-        <button class="topbar-btn" onclick="openHistory()">≡</button>
+        <button class="topbar-btn" onclick="openHistory()" title="Історія сесії">≡</button>
     </div>
 
     <!-- RESULT TOAST -->
@@ -741,6 +1155,26 @@
                 <div class="last-scan-code" id="lastScanCode">—</div>
             </div>
         </div>
+
+        <!-- C7/1: check-mode action menu (found → Редагувати, unknown → Зберегти) -->
+        <div class="check-action-menu" id="checkActionMenu">
+            <div class="cam-ttn-row">
+                <div class="cam-ttn-label">ТТН:</div>
+                <div class="cam-ttn-code" id="camTtnCode">—</div>
+                <div class="cam-ttn-badge" id="camTtnBadge">—</div>
+            </div>
+            <div class="cam-stepper">
+                <button type="button" class="cam-stepper-btn" onclick="stepperChange(-1)">−</button>
+                <div class="cam-stepper-val" id="camStepperVal">1</div>
+                <button type="button" class="cam-stepper-btn" onclick="stepperChange(1)">+</button>
+                <span class="cam-stepper-label">📦 коробок</span>
+            </div>
+            <div class="cam-actions">
+                <button type="button" class="cam-btn cam-btn-cancel" onclick="checkActionCancel()">❌ Скасувати</button>
+                <button type="button" class="cam-btn cam-btn-primary" id="camBtnPrimary" onclick="checkActionPrimary()">✏️ Редагувати</button>
+            </div>
+        </div>
+
         <button class="main-btn btn-next" id="mainBtn" onclick="mainBtnClick()">🔄 Сканувати далі</button>
         <button class="main-btn btn-edit" id="editBtn" onclick="openNpModal()">✏️ НП-оплата</button>
         <button class="main-btn btn-stop" onclick="stopScan()">✕ Завершити</button>
@@ -802,6 +1236,68 @@
         </div>
     </div>
 
+    <!-- INLINE EDITOR (C7/2): full-screen модалка редагування знайденого ТТН -->
+    <div class="inl-overlay" id="inlOverlay">
+        <div class="inl-header">
+            <button type="button" class="inl-back-btn" onclick="closeInlineEditor()" title="Назад">←</button>
+            <div class="inl-title">
+                <div class="inl-title-label">ТТН</div>
+                <div class="inl-title-ttn" id="inlTitleTtn">—</div>
+            </div>
+            <button type="button" class="inl-fields-btn" onclick="openFieldsChooser()" title="Налаштувати видимі поля">⚙️ Поля</button>
+        </div>
+        <div class="inl-body" id="inlBody">
+            <input type="hidden" id="inl_pkgId">
+            <!-- Поля рендеряться динамічно з FIELD_CATALOG через renderInlineFields() -->
+        </div>
+        <div class="inl-footer">
+            <button type="button" class="inl-btn inl-btn-cancel" onclick="closeInlineEditor()">❌ Скасувати</button>
+            <button type="button" class="inl-btn inl-btn-save" id="inlSaveBtn" onclick="saveInlineEditor()">💾 Зберегти</button>
+        </div>
+    </div>
+
+    <!-- HISTORY OVERLAY (C7/4): усі скани оператора з package_scan_log + поточний стан -->
+    <div class="hd-overlay" id="hdOverlay">
+        <div class="inl-header">
+            <button type="button" class="inl-back-btn" onclick="closeHistoryOverlay()" title="Назад">←</button>
+            <div class="inl-title">
+                <div class="inl-title-label">Історія</div>
+                <div class="inl-title-ttn">Мої скани</div>
+            </div>
+        </div>
+        <div class="hd-tabs" id="hdTabs">
+            <button type="button" class="hd-tab active" data-filter="all" onclick="setHdFilter('all')">Всі <span class="hd-tab-count" id="hdCountAll">0</span></button>
+            <button type="button" class="hd-tab" data-filter="unknown" onclick="setHdFilter('unknown')">🟡 Невідомі <span class="hd-tab-count" id="hdCountUnknown">0</span></button>
+            <button type="button" class="hd-tab" data-filter="checking" onclick="setHdFilter('checking')">🔵 В перевірці <span class="hd-tab-count" id="hdCountChecking">0</span></button>
+            <button type="button" class="hd-tab" data-filter="ready" onclick="setHdFilter('ready')">🟢 Готові <span class="hd-tab-count" id="hdCountReady">0</span></button>
+            <button type="button" class="hd-tab" data-filter="rejected" onclick="setHdFilter('rejected')">🔴 Відхилені <span class="hd-tab-count" id="hdCountRejected">0</span></button>
+        </div>
+        <div class="hd-body" id="hdBody">
+            <div class="hd-empty">Поки порожньо</div>
+        </div>
+        <div class="hd-actions">
+            <button type="button" class="inl-btn inl-btn-save" onclick="refreshHistory()">🔄 Актуалізувати</button>
+        </div>
+    </div>
+
+    <!-- FIELDS CHOOSER (C7/3): вибір полів для inline-редактора за категоріями -->
+    <div class="fc-overlay" id="fcOverlay">
+        <div class="inl-header">
+            <button type="button" class="inl-back-btn" onclick="closeFieldsChooser()" title="Назад">←</button>
+            <div class="inl-title">
+                <div class="inl-title-label">Налаштування</div>
+                <div class="inl-title-ttn">Поля редагування</div>
+            </div>
+        </div>
+        <div class="fc-body" id="fcBody">
+            <!-- Категорії з чекбоксами рендеряться з FIELD_CATALOG -->
+        </div>
+        <div class="inl-footer">
+            <button type="button" class="inl-btn inl-btn-cancel" onclick="resetFieldsToDefault()">↩️ За замовчуванням</button>
+            <button type="button" class="inl-btn inl-btn-save" onclick="saveFieldsChooser()">💾 Зберегти</button>
+        </div>
+    </div>
+
     <!-- UNKNOWN-TTN SHEET: показується одразу на сканері для Невідомих -->
     <div class="unknown-sheet-backdrop" id="unknownSheet" onclick="if(event.target===this)closeUnknownSheet()">
         <div class="unknown-sheet">
@@ -837,6 +1333,10 @@
         var isPaused = false;
         // Per-session tally; in-memory only (resets on reload by design).
         var sessionCounter = 0;
+        // C7/5: лічильник сканів кожного ТТН у поточній сесії. Якщо оператор
+        // сканує той самий ТТН вдруге у check-режимі — це друга коробка тієї
+        // ж накладної: пишемо в лог mode='unpack' і авто +1 до item_count.
+        var _sessionScans = {};
 
         // Last successfully-scanned/peeked package; gates the ✏️ НП-оплата
         // button. Reset when scanner stops.
@@ -949,6 +1449,8 @@
                 document.getElementById('topbar').style.display = 'flex';
                 document.getElementById('bottombar').style.display = 'flex';
                 document.getElementById('mainBtn').style.display = 'none';
+                // C7/4: якщо в оператора вже є скани — показуємо кнопку «📋»
+                showHistoryButtonIfAny();
                 document.getElementById('modePill').classList.add('show');
             }).catch(function(err) {
                 scanner.start(
@@ -1056,6 +1558,8 @@
                     handleScanResult(ttn, {
                         ok: true,
                         mode: 'check',
+                        pkg_id: r.pkg_id,
+                        item_count: r.item_count,
                         payment_status: r.payment_status,
                         payment_currency: r.payment_currency,
                         total_amount: r.total_amount,
@@ -1143,7 +1647,11 @@
             }
 
             addToHistory(ttn, variant, statusTxt);
-            document.getElementById('mainBtn').style.display = 'block';
+            // В check-режимі mainBtn ховається — замість нього показуємо
+            // checkActionMenu (див. нижче). У scan-режимі — як було.
+            document.getElementById('mainBtn').style.display = (SCAN_MODE === 'check') ? 'none' : 'block';
+            // C7/4: після першого успішного скану — кнопка історії
+            document.getElementById('historyDbBtn').style.display = '';
             sessionCounter += 1;
             document.getElementById('counterScanned').textContent = '📊 ' + sessionCounter;
 
@@ -1161,11 +1669,46 @@
                 document.getElementById('resultToast').classList.remove('show');
             }, 2500);
 
-            // Сканер — «порт» до CRM ДЛЯ ВІДОМИХ лідів. Знайдений/уже-готовий/
-            // check-режим з успіхом → ведемо у розділ «Перевірка» з цим ТТН.
-            // Для НЕВІДОМИХ (нова посилка від scan_ttn або «не знайдено» від
-            // peek_ttn) НЕ виходимо зі сканера — показуємо sheet-меню прямо
-            // на камері: Заповнити / Зберегти / Сканувати далі.
+            // C7/1: У режимі «Перевіряти» НЕ виходимо у CRM — показуємо
+            // action-menu прямо в bottombar (Редагувати/Скасувати/stepper
+            // для знайдених; Зберегти/Скасувати/stepper для невідомих).
+            // Scan-режим лишається як був (C5/C6): редірект для знайдених,
+            // unknown-sheet для нових.
+            if (SCAN_MODE === 'check') {
+                if (res && res.ok && res.pkg_id) {
+                    // C7/5: дубль в одній сесії = друга коробка тієї ж
+                    // накладної → лог 'unpack' + авто +1 до item_count,
+                    // без action-menu, одразу resume.
+                    var prev = _sessionScans[ttn] || 0;
+                    if (prev >= 1) {
+                        handleDuplicateUnpack(ttn, res.pkg_id, res.item_count);
+                        _sessionScans[ttn] = prev + 1;
+                        return;
+                    }
+                    _sessionScans[ttn] = prev + 1;
+                    setTimeout(function() {
+                        showCheckActionMenu({
+                            ttn: ttn,
+                            pkg_id: res.pkg_id,
+                            count: Math.max(1, parseInt(res.item_count, 10) || 1),
+                            isUnknown: false
+                        });
+                    }, 600);
+                } else if (res && !res.ok && typeof res.error === 'string' && /не знайдено/i.test(res.error)) {
+                    // Невідомий у перевірці — меню Зберегти
+                    setTimeout(function() {
+                        showCheckActionMenu({
+                            ttn: ttn,
+                            pkg_id: null,
+                            count: 1,
+                            isUnknown: true
+                        });
+                    }, 600);
+                }
+                return;
+            }
+
+            // Scan-mode (не чіпаємо): знайдений → CRM, новий → unknown-sheet.
             var shouldRedirect = false;
             var asUnknown = false;
             var pkgForUnknown = null;
@@ -1174,10 +1717,9 @@
                     asUnknown = true;
                     pkgForUnknown = res.pkg_id || null;
                 } else {
-                    shouldRedirect = (res.type === 'found' || res.type === 'already' || res.mode === 'check');
+                    shouldRedirect = (res.type === 'found' || res.type === 'already');
                 }
             } else if (res && !res.ok && typeof res.error === 'string' && /не знайдено/i.test(res.error)) {
-                // peek_ttn → ТТН відсутній: треба запропонувати дії на сканері
                 asUnknown = true;
                 pkgForUnknown = null;
             }
@@ -1191,6 +1733,864 @@
                 setTimeout(function() {
                     showUnknownSheet(ttn, pkgForUnknown);
                 }, 900);
+            }
+        }
+
+        // ==== DUPLICATE UNPACK (C7/5) ==========================================
+        // Викликається коли в check-режимі той самий ТТН сканується вдруге+
+        // у цій сесії. Трактуємо як другу/третю коробку тієї ж накладної:
+        //   • INSERT у package_scan_log mode='unpack' з timestamp і pkg_id
+        //   • PATCH packages.item_count = item_count + 1 (оптимістично)
+        //   • Toast «Другий знайшовся (коробка #N)»
+        //   • НЕ показуємо action-menu — одразу resume, щоб не гальмувати
+        function handleDuplicateUnpack(ttn, pkgId, prevItemCount) {
+            if (!TENANT_ID || !pkgId) return;
+            var currentBox = (_sessionScans[ttn] || 0) + 1;
+
+            // 1) лог (fire-and-forget)
+            fetch(SUPABASE_URL + '/rest/v1/package_scan_log', {
+                method: 'POST',
+                headers: {
+                    apikey: SUPABASE_ANON_KEY,
+                    Authorization: 'Bearer ' + SUPABASE_ANON_KEY,
+                    'Content-Type': 'application/json',
+                    Prefer: 'return=minimal'
+                },
+                body: JSON.stringify({
+                    tenant_id: TENANT_ID,
+                    pkg_id: pkgId,
+                    ttn_number: ttn,
+                    scanned_by: USER_LOGIN,
+                    mode: 'unpack',
+                    direction: DEFAULT_DIRECTION,
+                    from_status: null,
+                    to_status: 'unpack',
+                    outcome: 'already'
+                })
+            }).catch(function(){});
+
+            // 2) item_count += 1 (оптимістично; якщо item_count в БД було null,
+            //    рахуємо від сесійної позиції)
+            var nextCount = Math.max(currentBox, (parseInt(prevItemCount, 10) || 0) + 1);
+            fetch(SUPABASE_URL + '/rest/v1/packages' +
+                  '?tenant_id=eq.' + encodeURIComponent(TENANT_ID) +
+                  '&pkg_id=eq.' + encodeURIComponent(pkgId), {
+                method: 'PATCH',
+                headers: {
+                    apikey: SUPABASE_ANON_KEY,
+                    Authorization: 'Bearer ' + SUPABASE_ANON_KEY,
+                    'Content-Type': 'application/json',
+                    Prefer: 'return=minimal'
+                },
+                body: JSON.stringify({ item_count: nextCount })
+            }).catch(function(){});
+
+            // 3) toast + авто-resume
+            showToast({
+                variant: 'success',
+                icon: '🎯',
+                label: 'Другий знайшовся!',
+                value: ttn,
+                status: 'Коробка #' + currentBox + ' · item_count=' + nextCount
+            });
+            setTimeout(function() {
+                document.getElementById('resultToast').classList.remove('show');
+                resumeAfterSheet();
+            }, 1600);
+        }
+
+        // ==== CHECK ACTION MENU (C7/1) =========================================
+        // Показується в режимі «Перевіряти» після успішного скану (знайдений
+        // або невідомий ТТН). Містить stepper кількості + 2 кнопки дії.
+        var _camState = { ttn: '', pkg_id: null, count: 1, isUnknown: false };
+
+        function showCheckActionMenu(cfg) {
+            _camState.ttn       = cfg.ttn || '';
+            _camState.pkg_id    = cfg.pkg_id || null;
+            _camState.count     = Math.max(1, parseInt(cfg.count, 10) || 1);
+            _camState.isUnknown = !!cfg.isUnknown;
+
+            document.getElementById('camTtnCode').textContent = _camState.ttn || '—';
+            var badge = document.getElementById('camTtnBadge');
+            if (_camState.isUnknown) {
+                badge.textContent = '📡 Невідомий';
+                badge.className = 'cam-ttn-badge unknown';
+            } else {
+                badge.textContent = '✓ Знайдено';
+                badge.className = 'cam-ttn-badge found';
+            }
+            document.getElementById('camStepperVal').textContent = _camState.count;
+
+            var primary = document.getElementById('camBtnPrimary');
+            if (_camState.isUnknown) {
+                primary.textContent = '💾 Зберегти';
+                primary.classList.add('save');
+            } else {
+                primary.textContent = '✏️ Редагувати';
+                primary.classList.remove('save');
+            }
+
+            // Ховаємо mainBtn / editBtn — діюче меню саме вирішує, що далі
+            document.getElementById('mainBtn').style.display = 'none';
+            document.getElementById('checkActionMenu').classList.add('show');
+        }
+
+        function closeCheckActionMenu() {
+            document.getElementById('checkActionMenu').classList.remove('show');
+            _camState = { ttn: '', pkg_id: null, count: 1, isUnknown: false };
+        }
+
+        function stepperChange(delta) {
+            var next = Math.max(1, Math.min(999, _camState.count + (delta | 0)));
+            if (next === _camState.count) return;
+            _camState.count = next;
+            document.getElementById('camStepperVal').textContent = next;
+
+            // Для відомого pkg — миттєво пишемо в БД. Для невідомого (pkg=null)
+            // тримаємо локально, збережеться коли оператор натисне «Зберегти».
+            if (_camState.pkg_id && TENANT_ID) {
+                var url = SUPABASE_URL + '/rest/v1/packages' +
+                          '?tenant_id=eq.' + encodeURIComponent(TENANT_ID) +
+                          '&pkg_id=eq.' + encodeURIComponent(_camState.pkg_id);
+                fetch(url, {
+                    method: 'PATCH',
+                    headers: {
+                        apikey: SUPABASE_ANON_KEY,
+                        Authorization: 'Bearer ' + SUPABASE_ANON_KEY,
+                        'Content-Type': 'application/json',
+                        Prefer: 'return=minimal'
+                    },
+                    body: JSON.stringify({ item_count: next })
+                }).catch(function(){});
+            }
+        }
+
+        function checkActionCancel() {
+            var ttn = _camState.ttn;
+            var isUnknown = _camState.isUnknown;
+
+            if (isUnknown && TENANT_ID) {
+                // Невідомий + Скасувати: фіксуємо в package_scan_log як 'cancelled'
+                // (без створення pkg). Потрапляє в CRM «Перевірка → Відхилені».
+                var logUrl = SUPABASE_URL + '/rest/v1/package_scan_log';
+                fetch(logUrl, {
+                    method: 'POST',
+                    headers: {
+                        apikey: SUPABASE_ANON_KEY,
+                        Authorization: 'Bearer ' + SUPABASE_ANON_KEY,
+                        'Content-Type': 'application/json',
+                        Prefer: 'return=minimal'
+                    },
+                    body: JSON.stringify({
+                        tenant_id: TENANT_ID,
+                        pkg_id: null,
+                        ttn_number: ttn,
+                        scanned_by: USER_LOGIN,
+                        mode: 'cancelled',
+                        direction: DEFAULT_DIRECTION,
+                        from_status: null,
+                        to_status: 'rejected',
+                        outcome: 'rejected',
+                        reject_reason: 'cancelled_by_user'
+                    })
+                }).catch(function(){}).finally(function() {
+                    closeCheckActionMenu();
+                    resumeAfterSheet();
+                });
+            } else {
+                // Знайдений + Скасувати: просто закриваємо, нічого не пишемо
+                closeCheckActionMenu();
+                resumeAfterSheet();
+            }
+        }
+
+        function checkActionPrimary() {
+            var ttn = _camState.ttn;
+            var pkg = _camState.pkg_id;
+            var count = _camState.count;
+            var isUnknown = _camState.isUnknown;
+
+            if (isUnknown) {
+                // Зберегти невідомого: scan_ttn створює pkg, далі PATCH item_count
+                if (!TENANT_ID) { closeCheckActionMenu(); resumeAfterSheet(); return; }
+                sb.rpc('scan_ttn', {
+                    p_tenant_id: TENANT_ID,
+                    p_ttn: ttn,
+                    p_direction: DEFAULT_DIRECTION,
+                    p_user: USER_LOGIN
+                }).then(function(result) {
+                    var r = (result && result.data) || {};
+                    var newPkg = r && r.pkg_id ? r.pkg_id : null;
+                    if (newPkg && count > 1) {
+                        // Застосовуємо обрану кількість
+                        var url = SUPABASE_URL + '/rest/v1/packages' +
+                                  '?tenant_id=eq.' + encodeURIComponent(TENANT_ID) +
+                                  '&pkg_id=eq.' + encodeURIComponent(newPkg);
+                        fetch(url, {
+                            method: 'PATCH',
+                            headers: {
+                                apikey: SUPABASE_ANON_KEY,
+                                Authorization: 'Bearer ' + SUPABASE_ANON_KEY,
+                                'Content-Type': 'application/json',
+                                Prefer: 'return=minimal'
+                            },
+                            body: JSON.stringify({ item_count: count })
+                        }).catch(function(){});
+                    }
+                    if (newPkg) {
+                        lastScannedPkgId = newPkg;
+                        lastScannedTtn   = ttn;
+                        document.getElementById('editBtn').classList.add('show');
+                    }
+                    showToast({
+                        variant: 'created', icon: '💾',
+                        label: 'Збережено як Невідомий',
+                        value: ttn, status: 'У CRM → Невідомі'
+                    });
+                    setTimeout(function(){
+                        document.getElementById('resultToast').classList.remove('show');
+                    }, 1800);
+                }).catch(function(){}).finally(function() {
+                    closeCheckActionMenu();
+                    resumeAfterSheet();
+                });
+            } else {
+                // Редагувати знайдений → інлайн-модалка прямо на сканері (C7/2)
+                if (!pkg) { closeCheckActionMenu(); resumeAfterSheet(); return; }
+                openInlineEditor(pkg, ttn);
+            }
+        }
+
+        // ==== INLINE EDITOR (C7/2) + FIELDS CHOOSER (C7/3) =====================
+        // Full-screen модалка редагування ТТН прямо на сканері. Набір полів
+        // налаштовується оператором через «⚙️ Поля» і зберігається в
+        // localStorage (персонально).
+
+        // Каталог усіх полів. type: text|textarea|int|float|date|select
+        // opts: для select — масив {value, label}
+        // required: true лише для recipient_phone
+        // defaultOn: поле в стандартному наборі 11 при першому заході
+        var _CURRENCY_OPTS = [
+            { value: '',    label: '—' },
+            { value: 'UAH', label: 'UAH' },
+            { value: 'EUR', label: 'EUR' },
+            { value: 'USD', label: 'USD' },
+            { value: 'PLN', label: 'PLN' },
+            { value: 'CZK', label: 'CZK' },
+            { value: 'CHF', label: 'CHF' }
+        ];
+        var _PAYSTATUS_OPTS = [
+            { value: '',        label: '—' },
+            { value: 'pending', label: 'Не оплачено' },
+            { value: 'partial', label: 'Частково' },
+            { value: 'paid',    label: 'Оплачено' }
+        ];
+        var _PKGSTATUS_OPTS = [
+            { value: '',               label: '—' },
+            { value: 'Зареєстровано',  label: 'Зареєстровано' },
+            { value: 'Оформлення',     label: 'Оформлення' },
+            { value: 'Доставка',       label: 'Доставка' },
+            { value: 'Доставлено',     label: 'Доставлено' },
+            { value: 'Невідомо',       label: 'Невідомо' }
+        ];
+        var _LEADSTATUS_OPTS = [
+            { value: '',           label: '—' },
+            { value: 'new',        label: 'Новий' },
+            { value: 'in_progress',label: 'В роботі' },
+            { value: 'ready',      label: 'Готова' },
+            { value: 'unknown',    label: 'Невідомий' },
+            { value: 'rejected',   label: 'Відхилено' }
+        ];
+        var _DIRECTION_OPTS = [
+            { value: '',      label: '—' },
+            { value: 'UA_EU', label: 'UA → EU' },
+            { value: 'EU_UA', label: 'EU → UA' }
+        ];
+
+        var FIELD_CATALOG = [
+            // Отримувач
+            { col: 'recipient_name',     label: 'ПІБ отримувача',       type: 'text',     category: '👤 Отримувач' },
+            { col: 'recipient_phone',    label: 'Тел. отримувача',      type: 'text',     category: '👤 Отримувач', required: true, defaultOn: true },
+            { col: 'recipient_address',  label: 'Адреса в Європі',      type: 'text',     category: '👤 Отримувач', defaultOn: true },
+            { col: 'nova_poshta_city',   label: 'Місто Нова Пошта',     type: 'text',     category: '👤 Отримувач' },
+            // Відправник
+            { col: 'sender_name',        label: 'ПІБ відправника',      type: 'text',     category: '📤 Відправник' },
+            { col: 'sender_phone',       label: 'Тел. відправника',     type: 'text',     category: '📤 Відправник', defaultOn: true },
+            { col: 'sender_address',     label: 'Адреса відправки',     type: 'text',     category: '📤 Відправник' },
+            { col: 'registrar_phone',    label: 'Тел. реєстратора',     type: 'text',     category: '📤 Відправник' },
+            // Посилка
+            { col: 'internal_number',    label: 'Внутрішній №',         type: 'text',     category: '📦 Посилка', defaultOn: true },
+            { col: 'description',        label: 'Опис',                 type: 'textarea', category: '📦 Посилка', defaultOn: true },
+            { col: 'details',            label: 'Деталі',               type: 'textarea', category: '📦 Посилка' },
+            { col: 'item_count',         label: 'Кількість',            type: 'int',      category: '📦 Посилка', defaultOn: true },
+            { col: 'weight_kg',          label: 'Вага, кг',             type: 'float',    category: '📦 Посилка', defaultOn: true },
+            { col: 'estimated_value',    label: 'Оціночна вартість',    type: 'float',    category: '📦 Посилка' },
+            { col: 'ttn_date',           label: 'Дата створення ТТН',   type: 'date',     category: '📦 Посилка' },
+            // Оплата
+            { col: 'total_amount',       label: 'Сума',                 type: 'float',    category: '💰 Оплата', defaultOn: true },
+            { col: 'payment_currency',   label: 'Валюта',               type: 'select',   category: '💰 Оплата', opts: _CURRENCY_OPTS, defaultOn: true },
+            { col: 'payment_status',     label: 'Статус оплати',        type: 'select',   category: '💰 Оплата', opts: _PAYSTATUS_OPTS, defaultOn: true },
+            { col: 'deposit',            label: 'Завдаток',             type: 'float',    category: '💰 Оплата' },
+            { col: 'deposit_currency',   label: 'Валюта завдатку',      type: 'select',   category: '💰 Оплата', opts: _CURRENCY_OPTS },
+            { col: 'payment_form',       label: 'Форма оплати',         type: 'text',     category: '💰 Оплата' },
+            { col: 'payment_notes',      label: 'Примітка оплати',      type: 'textarea', category: '💰 Оплата' },
+            { col: 'np_amount',          label: 'Сума НП',              type: 'float',    category: '💰 Оплата' },
+            { col: 'np_currency',        label: 'Валюта НП',            type: 'select',   category: '💰 Оплата', opts: _CURRENCY_OPTS },
+            // Статуси
+            { col: 'package_status',     label: 'Статус посилки',       type: 'select',   category: '🏷️ Статуси', opts: _PKGSTATUS_OPTS, defaultOn: true },
+            { col: 'lead_status',        label: 'Статус ліда',          type: 'select',   category: '🏷️ Статуси', opts: _LEADSTATUS_OPTS },
+            // Маршрут
+            { col: 'direction',          label: 'Напрям',               type: 'select',   category: '🗺️ Маршрут', opts: _DIRECTION_OPTS },
+            { col: 'vehicle_id',         label: 'Номер авто',           type: 'text',     category: '🗺️ Маршрут' },
+            // Дати
+            { col: 'dispatch_date',      label: 'Дата відправки',       type: 'date',     category: '📅 Дати' },
+            { col: 'received_date',      label: 'Дата отримання',       type: 'date',     category: '📅 Дати' },
+            // Коментарі
+            { col: 'notes',              label: 'Примітка',             type: 'textarea', category: '💬 Коментарі' },
+            { col: 'sms_notes',          label: 'Примітка СМС',         type: 'textarea', category: '💬 Коментарі' },
+            { col: 'tag',                label: 'Тег',                  type: 'text',     category: '💬 Коментарі' }
+        ];
+
+        var _inlSnapshot = {};   // server row на момент відкриття (для диффу)
+
+        function _fieldsStorageKey() {
+            return 'scanner_fill_fields_' + (USER_LOGIN || 'guest');
+        }
+
+        function getActiveFieldCols() {
+            try {
+                var raw = localStorage.getItem(_fieldsStorageKey());
+                if (raw) {
+                    var arr = JSON.parse(raw);
+                    if (Array.isArray(arr) && arr.length) return arr;
+                }
+            } catch(_) {}
+            // Дефолт — 11 стартових полів
+            return FIELD_CATALOG.filter(function(f) { return f.defaultOn; })
+                                .map(function(f) { return f.col; });
+        }
+
+        function setActiveFieldCols(cols) {
+            try {
+                localStorage.setItem(_fieldsStorageKey(), JSON.stringify(cols));
+            } catch(_) {}
+        }
+
+        function resetFieldsToDefault() {
+            try { localStorage.removeItem(_fieldsStorageKey()); } catch(_) {}
+            renderFieldsChooser();
+        }
+
+        function _buildFieldElement(f) {
+            // Повертає DOM-елемент .inl-row із відповідним контролом
+            var row = document.createElement('div');
+            row.className = 'inl-row';
+            row.setAttribute('data-field', f.col);
+
+            var label = document.createElement('label');
+            label.textContent = f.label;
+            if (f.required) {
+                var req = document.createElement('span');
+                req.className = 'req'; req.textContent = '*';
+                label.appendChild(req);
+            }
+            row.appendChild(label);
+
+            var el;
+            if (f.type === 'textarea') {
+                el = document.createElement('textarea');
+                el.rows = 2;
+            } else if (f.type === 'select') {
+                el = document.createElement('select');
+                (f.opts || []).forEach(function(o) {
+                    var opt = document.createElement('option');
+                    opt.value = o.value; opt.textContent = o.label;
+                    el.appendChild(opt);
+                });
+            } else if (f.type === 'int') {
+                el = document.createElement('input');
+                el.type = 'number'; el.min = '0'; el.inputMode = 'numeric';
+            } else if (f.type === 'float') {
+                el = document.createElement('input');
+                el.type = 'number'; el.min = '0'; el.step = '0.01'; el.inputMode = 'decimal';
+            } else if (f.type === 'date') {
+                el = document.createElement('input');
+                el.type = 'date';
+            } else {
+                el = document.createElement('input');
+                el.type = 'text';
+            }
+            el.id = 'inl_col_' + f.col;
+            row.appendChild(el);
+            return row;
+        }
+
+        function renderInlineFields() {
+            var body = document.getElementById('inlBody');
+            // Видаляємо всі попередні .inl-row (hidden pkgId input лишається)
+            Array.prototype.slice.call(body.querySelectorAll('.inl-row, .inl-grid2'))
+                 .forEach(function(n) { n.remove(); });
+
+            var activeCols = getActiveFieldCols();
+            // Зберігаємо порядок каталогу (не за порядком юзера — просто фільтр)
+            FIELD_CATALOG.forEach(function(f) {
+                if (activeCols.indexOf(f.col) === -1) return;
+                body.appendChild(_buildFieldElement(f));
+            });
+        }
+
+        function openInlineEditor(pkgId, ttn) {
+            if (!pkgId || !TENANT_ID) return;
+            document.getElementById('inl_pkgId').value = pkgId;
+            document.getElementById('inlTitleTtn').textContent = ttn || pkgId;
+
+            // Перебудовуємо поля згідно з вибором оператора (localStorage)
+            renderInlineFields();
+            var activeCols = getActiveFieldCols();
+
+            // Підтягуємо свіжий рядок з БД — лише активні колонки
+            var url = SUPABASE_URL + '/rest/v1/packages' +
+                      '?tenant_id=eq.' + encodeURIComponent(TENANT_ID) +
+                      '&pkg_id=eq.' + encodeURIComponent(pkgId) +
+                      '&select=' + encodeURIComponent(activeCols.join(','));
+            fetch(url, {
+                headers: {
+                    apikey: SUPABASE_ANON_KEY,
+                    Authorization: 'Bearer ' + SUPABASE_ANON_KEY
+                }
+            }).then(function(r) { return r.json(); })
+              .then(function(rows) {
+                var row = (rows && rows[0]) || {};
+                _inlSnapshot = row;
+
+                // Заповнюємо поля + підсвічуємо ті, що вже мали значення
+                activeCols.forEach(function(col) {
+                    var el = document.getElementById('inl_col_' + col);
+                    if (!el) return;
+                    var v = row[col];
+                    el.value = (v == null ? '' : String(v));
+                    var parent = el.closest('.inl-row');
+                    if (parent) {
+                        var hasVal = (v != null && String(v).trim() !== '');
+                        parent.classList.toggle('has-value', hasVal);
+                    }
+                });
+
+                document.getElementById('checkActionMenu').classList.remove('show');
+                document.getElementById('inlOverlay').classList.add('open');
+                setTimeout(function() {
+                    var firstInput = document.querySelector('.inl-row input, .inl-row textarea, .inl-row select');
+                    if (firstInput) firstInput.focus();
+                }, 120);
+            }).catch(function() {
+                showToast({ variant: 'error', icon: '❌', label: 'Помилка',
+                            value: ttn || '', status: 'Не вдалося завантажити дані' });
+                setTimeout(function(){ document.getElementById('resultToast').classList.remove('show'); }, 2000);
+            });
+        }
+
+        function closeInlineEditor() {
+            document.getElementById('inlOverlay').classList.remove('open');
+            _inlSnapshot = {};
+            closeCheckActionMenu();
+            resumeAfterSheet();
+        }
+
+        function saveInlineEditor() {
+            var pkg = document.getElementById('inl_pkgId').value;
+            if (!pkg || !TENANT_ID) return;
+
+            var activeCols = getActiveFieldCols();
+            var catalogMap = {};
+            FIELD_CATALOG.forEach(function(f) { catalogMap[f.col] = f; });
+
+            // Валідація обов'язкових (поки-що тільки recipient_phone, якщо активний)
+            for (var i = 0; i < activeCols.length; i++) {
+                var col = activeCols[i];
+                var meta = catalogMap[col];
+                if (!meta || !meta.required) continue;
+                var el = document.getElementById('inl_col_' + col);
+                if (!el) continue;
+                var v = (el.value || '').trim();
+                if (!v) {
+                    el.focus();
+                    showToast({ variant: 'error', icon: '❌', label: 'Обов’язкове поле',
+                                value: '', status: meta.label });
+                    setTimeout(function(){ document.getElementById('resultToast').classList.remove('show'); }, 2000);
+                    return;
+                }
+            }
+
+            // Диф проти snapshot — пишемо лише те, що змінилось
+            var diff = {};
+            activeCols.forEach(function(col) {
+                var meta = catalogMap[col];
+                if (!meta) return;
+                var el = document.getElementById('inl_col_' + col);
+                if (!el) return;
+                var raw = (el.value == null ? '' : String(el.value)).trim();
+                var oldRaw = _inlSnapshot[col] == null ? '' : String(_inlSnapshot[col]).trim();
+                if (raw === oldRaw) return;
+                if (raw === '') {
+                    diff[col] = null;
+                } else if (meta.type === 'int') {
+                    var n = parseInt(raw, 10);
+                    diff[col] = isNaN(n) ? null : n;
+                } else if (meta.type === 'float') {
+                    var nf = parseFloat(raw);
+                    diff[col] = isNaN(nf) ? null : nf;
+                } else {
+                    diff[col] = raw;
+                }
+            });
+
+            diff.scan_status = 'checked';
+
+            var btn = document.getElementById('inlSaveBtn');
+            btn.disabled = true;
+            btn.textContent = '⏳ Збереження…';
+
+            var url = SUPABASE_URL + '/rest/v1/packages' +
+                      '?tenant_id=eq.' + encodeURIComponent(TENANT_ID) +
+                      '&pkg_id=eq.' + encodeURIComponent(pkg);
+            fetch(url, {
+                method: 'PATCH',
+                headers: {
+                    apikey: SUPABASE_ANON_KEY,
+                    Authorization: 'Bearer ' + SUPABASE_ANON_KEY,
+                    'Content-Type': 'application/json',
+                    Prefer: 'return=minimal'
+                },
+                body: JSON.stringify(diff)
+            }).then(function(r) {
+                btn.disabled = false;
+                btn.textContent = '💾 Зберегти';
+                if (!r.ok) {
+                    return r.text().then(function(t) {
+                        showToast({ variant: 'error', icon: '❌', label: 'Помилка збереження',
+                                    value: pkg, status: t.slice(0, 80) });
+                        setTimeout(function(){ document.getElementById('resultToast').classList.remove('show'); }, 2500);
+                    });
+                }
+                showToast({ variant: 'success', icon: '✅', label: 'Збережено',
+                            value: pkg, status: 'Лід → В перевірці' });
+                setTimeout(function(){ document.getElementById('resultToast').classList.remove('show'); }, 1800);
+                closeInlineEditor();
+            }).catch(function(err) {
+                btn.disabled = false;
+                btn.textContent = '💾 Зберегти';
+                showToast({ variant: 'error', icon: '❌', label: 'Мережа',
+                            value: pkg, status: String(err && err.message || err) });
+                setTimeout(function(){ document.getElementById('resultToast').classList.remove('show'); }, 2500);
+            });
+        }
+
+        // ==== FIELDS CHOOSER (C7/3) ============================================
+        function openFieldsChooser() {
+            renderFieldsChooser();
+            document.getElementById('fcOverlay').classList.add('open');
+        }
+
+        function closeFieldsChooser() {
+            document.getElementById('fcOverlay').classList.remove('open');
+        }
+
+        function renderFieldsChooser() {
+            var body = document.getElementById('fcBody');
+            body.innerHTML = '';
+            var active = getActiveFieldCols();
+            var activeSet = {};
+            active.forEach(function(c) { activeSet[c] = true; });
+
+            // Групуємо по category, зберігаючи порядок появи
+            var groups = [];
+            var byName = {};
+            FIELD_CATALOG.forEach(function(f) {
+                if (!byName[f.category]) {
+                    byName[f.category] = { name: f.category, items: [] };
+                    groups.push(byName[f.category]);
+                }
+                byName[f.category].items.push(f);
+            });
+
+            groups.forEach(function(g) {
+                var cat = document.createElement('div');
+                cat.className = 'fc-category';
+                var h = document.createElement('div');
+                h.className = 'fc-category-header';
+                h.textContent = g.name;
+                cat.appendChild(h);
+                var items = document.createElement('div');
+                items.className = 'fc-category-items';
+                g.items.forEach(function(f) {
+                    var item = document.createElement('label');
+                    item.className = 'fc-item';
+                    var cb = document.createElement('input');
+                    cb.type = 'checkbox';
+                    cb.setAttribute('data-col', f.col);
+                    cb.checked = !!activeSet[f.col];
+                    if (f.required) { cb.checked = true; cb.disabled = true; }
+                    item.appendChild(cb);
+                    var label = document.createElement('div');
+                    label.className = 'fc-item-label';
+                    label.textContent = f.label;
+                    item.appendChild(label);
+                    if (f.required) {
+                        var req = document.createElement('div');
+                        req.className = 'fc-item-required';
+                        req.textContent = 'обов.';
+                        item.appendChild(req);
+                    }
+                    items.appendChild(item);
+                });
+                cat.appendChild(items);
+                body.appendChild(cat);
+            });
+        }
+
+        // ==== HISTORY OVERLAY (C7/4) ==========================================
+        // Cross-session історія сканів поточного оператора з package_scan_log,
+        // з'єднана з актуальним станом пакетів. Показує бейдж-статус (з якого
+        // розділу CRM зараз доступний лід), фільтри-таби і кнопку актуалізації.
+        var _hdFilter = 'all';
+        var _hdItems  = [];     // [{ttn, pkg_id, scanned_at, filter, phone, badge}]
+        var _hdLoading = false;
+
+        function showHistoryButtonIfAny() {
+            // Викликається періодично: показує кнопку 📋 якщо в БД є скани цього
+            // оператора. Одноразовий COUNT-запит щоб не смикати дарма.
+            if (!TENANT_ID || !USER_LOGIN) return;
+            var url = SUPABASE_URL + '/rest/v1/package_scan_log' +
+                      '?tenant_id=eq.' + encodeURIComponent(TENANT_ID) +
+                      '&scanned_by=eq.' + encodeURIComponent(USER_LOGIN) +
+                      '&select=id&limit=1';
+            fetch(url, {
+                headers: {
+                    apikey: SUPABASE_ANON_KEY,
+                    Authorization: 'Bearer ' + SUPABASE_ANON_KEY
+                }
+            }).then(function(r) { return r.json(); })
+              .then(function(rows) {
+                if (rows && rows.length > 0) {
+                    document.getElementById('historyDbBtn').style.display = '';
+                }
+              }).catch(function(){});
+        }
+
+        function openHistoryOverlay() {
+            document.getElementById('hdOverlay').classList.add('open');
+            refreshHistory();
+        }
+
+        function closeHistoryOverlay() {
+            document.getElementById('hdOverlay').classList.remove('open');
+        }
+
+        function setHdFilter(f) {
+            _hdFilter = f;
+            Array.prototype.slice.call(document.querySelectorAll('.hd-tab'))
+                 .forEach(function(t) {
+                    t.classList.toggle('active', t.getAttribute('data-filter') === f);
+                 });
+            renderHistoryList();
+        }
+
+        function _classifyForHistory(log, pkg) {
+            // Повертає { filter, badge }
+            // Якщо pkg відсутній (cancelled лог) — «Відхилено на скані»
+            if (!pkg) {
+                return { filter: 'rejected', badge: { cls: 'rejected', text: 'Скасовано' } };
+            }
+            var lead = (pkg.lead_status || '').toString();
+            var quality = (pkg.quality_check_required || '').toString();
+            if (lead === 'unknown') return { filter: 'unknown', badge: { cls: 'unknown', text: 'Невідомий' } };
+            if (lead === 'rejected' || quality === 'Відхилено') return { filter: 'rejected', badge: { cls: 'rejected', text: 'Відхилено' } };
+            if (quality === 'Готова до маршруту') return { filter: 'ready', badge: { cls: 'ready', text: 'Готова' } };
+            if (quality === 'В перевірці') return { filter: 'checking', badge: { cls: 'checking', text: 'В перевірці' } };
+            return { filter: 'other', badge: { cls: 'other', text: quality || 'Інше' } };
+        }
+
+        function refreshHistory() {
+            if (!TENANT_ID || !USER_LOGIN) return;
+            if (_hdLoading) return;
+            _hdLoading = true;
+            var body = document.getElementById('hdBody');
+            body.innerHTML = '<div class="hd-loading">⏳ Завантаження…</div>';
+
+            // Крок 1: останні 200 записів логу цього оператора
+            var logUrl = SUPABASE_URL + '/rest/v1/package_scan_log' +
+                         '?tenant_id=eq.' + encodeURIComponent(TENANT_ID) +
+                         '&scanned_by=eq.' + encodeURIComponent(USER_LOGIN) +
+                         '&order=scanned_at.desc&limit=200' +
+                         '&select=id,pkg_id,ttn_number,scanned_at,mode,outcome,reject_reason';
+            fetch(logUrl, {
+                headers: {
+                    apikey: SUPABASE_ANON_KEY,
+                    Authorization: 'Bearer ' + SUPABASE_ANON_KEY
+                }
+            }).then(function(r) { return r.json(); })
+              .then(function(logs) {
+                if (!Array.isArray(logs)) logs = [];
+
+                // Дедуп по ТТН: беремо найновіший запис
+                var byTtn = {};
+                logs.forEach(function(l) {
+                    var ttn = l.ttn_number;
+                    if (!ttn) return;
+                    if (!byTtn[ttn] || l.scanned_at > byTtn[ttn].scanned_at) {
+                        byTtn[ttn] = l;
+                    }
+                });
+                var dedup = Object.keys(byTtn).map(function(t) { return byTtn[t]; });
+                // Сортуємо по scanned_at desc
+                dedup.sort(function(a, b) {
+                    return (b.scanned_at || '').localeCompare(a.scanned_at || '');
+                });
+
+                // Крок 2: тягнемо поточний стан пакетів одним батчем
+                var pkgIds = dedup.map(function(l) { return l.pkg_id; })
+                                  .filter(function(p) { return !!p; });
+                var uniquePkgIds = [];
+                var seen = {};
+                pkgIds.forEach(function(p) { if (!seen[p]) { seen[p] = true; uniquePkgIds.push(p); } });
+
+                if (uniquePkgIds.length === 0) {
+                    // Усі скасовані, пакетів немає
+                    _finishHistoryRender(dedup, {});
+                    return;
+                }
+
+                var inList = '(' + uniquePkgIds.map(function(p) {
+                    return '"' + String(p).replace(/"/g, '\\"') + '"';
+                }).join(',') + ')';
+                var pkgUrl = SUPABASE_URL + '/rest/v1/packages' +
+                             '?tenant_id=eq.' + encodeURIComponent(TENANT_ID) +
+                             '&pkg_id=in.' + encodeURIComponent(inList) +
+                             '&select=pkg_id,ttn_number,recipient_phone,lead_status,quality_check_required,scan_status,is_archived';
+                fetch(pkgUrl, {
+                    headers: {
+                        apikey: SUPABASE_ANON_KEY,
+                        Authorization: 'Bearer ' + SUPABASE_ANON_KEY
+                    }
+                }).then(function(r) { return r.json(); })
+                  .then(function(pkgs) {
+                    if (!Array.isArray(pkgs)) pkgs = [];
+                    var byPkg = {};
+                    pkgs.forEach(function(p) { byPkg[p.pkg_id] = p; });
+                    _finishHistoryRender(dedup, byPkg);
+                  }).catch(function() { _finishHistoryRender(dedup, {}); });
+              }).catch(function() {
+                _hdLoading = false;
+                body.innerHTML = '<div class="hd-empty">Помилка завантаження</div>';
+              });
+        }
+
+        function _finishHistoryRender(logs, byPkg) {
+            _hdItems = logs.map(function(l) {
+                var pkg = l.pkg_id ? byPkg[l.pkg_id] : null;
+                // Якщо pkg архівовано — трактуємо як відсутній
+                if (pkg && pkg.is_archived) pkg = null;
+                var cls = _classifyForHistory(l, pkg);
+                return {
+                    ttn: l.ttn_number,
+                    pkg_id: pkg ? pkg.pkg_id : null,
+                    scanned_at: l.scanned_at,
+                    mode: l.mode,
+                    phone: pkg ? (pkg.recipient_phone || '') : '',
+                    filter: cls.filter,
+                    badge: cls.badge
+                };
+            });
+            _hdLoading = false;
+            _updateHistoryCounts();
+            renderHistoryList();
+        }
+
+        function _updateHistoryCounts() {
+            var counts = { all: _hdItems.length, unknown: 0, checking: 0, ready: 0, rejected: 0 };
+            _hdItems.forEach(function(it) {
+                if (counts[it.filter] != null) counts[it.filter]++;
+            });
+            document.getElementById('hdCountAll').textContent = counts.all;
+            document.getElementById('hdCountUnknown').textContent = counts.unknown;
+            document.getElementById('hdCountChecking').textContent = counts.checking;
+            document.getElementById('hdCountReady').textContent = counts.ready;
+            document.getElementById('hdCountRejected').textContent = counts.rejected;
+        }
+
+        function renderHistoryList() {
+            var body = document.getElementById('hdBody');
+            var items = _hdItems;
+            if (_hdFilter !== 'all') {
+                items = items.filter(function(it) { return it.filter === _hdFilter; });
+            }
+            if (items.length === 0) {
+                body.innerHTML = '<div class="hd-empty">Поки порожньо у цій категорії</div>';
+                return;
+            }
+            var html = items.map(function(it) {
+                var time = '';
+                if (it.scanned_at) {
+                    var d = new Date(it.scanned_at);
+                    if (!isNaN(d.getTime())) {
+                        time = d.toLocaleString('uk-UA', { day: '2-digit', month: '2-digit',
+                            year: '2-digit', hour: '2-digit', minute: '2-digit' });
+                    }
+                }
+                var pkgAttr = it.pkg_id ? (' data-pkg="' + _escHtml(it.pkg_id) + '"') : '';
+                return '<div class="hd-card"' + pkgAttr + ' data-ttn="' + _escHtml(it.ttn) + '" ' +
+                       'onclick="hdCardClick(this)">' +
+                       '<div class="hd-card-row">' +
+                         '<div class="hd-card-ttn">' + _escHtml(it.ttn || '—') + '</div>' +
+                         '<div class="hd-card-badge ' + it.badge.cls + '">' + _escHtml(it.badge.text) + '</div>' +
+                       '</div>' +
+                       (it.phone ? '<div class="hd-card-phone">📞 ' + _escHtml(it.phone) + '</div>' : '') +
+                       '<div class="hd-card-meta">' + _escHtml(time) + (it.mode === 'cancelled' ? ' · скасовано на скані' : '') + '</div>' +
+                       '</div>';
+            }).join('');
+            body.innerHTML = html;
+        }
+
+        function _escHtml(s) {
+            return String(s == null ? '' : s)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        function hdCardClick(el) {
+            var pkg = el.getAttribute('data-pkg');
+            var ttn = el.getAttribute('data-ttn');
+            if (!pkg) {
+                // Скасований без pkg — редагувати нічого, просто показуємо тост
+                showToast({ variant: 'warn', icon: '⚠️', label: 'Скасовано на скані',
+                            value: ttn || '', status: 'Ліда немає — CRM → Перевірка → Відхилені' });
+                setTimeout(function(){ document.getElementById('resultToast').classList.remove('show'); }, 2500);
+                return;
+            }
+            closeHistoryOverlay();
+            openInlineEditor(pkg, ttn);
+        }
+
+        function saveFieldsChooser() {
+            var picks = [];
+            Array.prototype.slice.call(document.querySelectorAll('#fcBody input[type=checkbox]'))
+                 .forEach(function(cb) {
+                    if (cb.checked) picks.push(cb.getAttribute('data-col'));
+                 });
+            if (picks.length === 0) {
+                // Нічого не вибрано — скидаємо до дефолту, щоб оператор не лишився з порожньою формою
+                resetFieldsToDefault();
+                closeFieldsChooser();
+                return;
+            }
+            setActiveFieldCols(picks);
+            closeFieldsChooser();
+            // Оновлюємо відкритий редактор (якщо він зараз видимий)
+            var inlOpen = document.getElementById('inlOverlay').classList.contains('open');
+            if (inlOpen) {
+                var pkg = document.getElementById('inl_pkgId').value;
+                var ttn = document.getElementById('inlTitleTtn').textContent;
+                if (pkg) openInlineEditor(pkg, ttn);
             }
         }
 
@@ -1461,6 +2861,7 @@
             isPaused = false;
             document.getElementById('resultToast').classList.remove('show');
             document.getElementById('mainBtn').style.display = 'none';
+            document.getElementById('checkActionMenu').classList.remove('show');
         }
 
         function stopScan() {
@@ -1478,6 +2879,12 @@
                 lastScannedTtn   = null;
                 closeNpModal();
                 closeUnknownSheet();
+                closeCheckActionMenu();
+                document.getElementById('inlOverlay').classList.remove('open');
+                document.getElementById('fcOverlay').classList.remove('open');
+                document.getElementById('hdOverlay').classList.remove('open');
+                document.getElementById('historyDbBtn').style.display = 'none';
+                _sessionScans = {};
                 document.getElementById('startScreen').classList.remove('hidden');
             }).catch(function() {});
         }
@@ -1525,6 +2932,7 @@
         function clearHistory() {
             scanHistory = [];
             sessionCounter = 0;
+            _sessionScans = {};
             document.getElementById('counterScanned').textContent = '📊 0';
             renderHistory();
         }
