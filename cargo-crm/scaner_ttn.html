@@ -275,7 +275,7 @@
         .start-btn:active { transform: scale(0.96); }
         .start-btn:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
 
-        .mode-btn, .dir-btn {
+        .mode-btn {
             padding: 14px 8px;
             background: rgba(255,255,255,0.08);
             border: 2px solid rgba(255,255,255,0.15);
@@ -289,18 +289,13 @@
             justify-content: center;
             transition: all 0.15s;
         }
-        .dir-btn {
-            padding: 16px 8px;
-            font-size: 20px;
-            font-weight: 700;
-        }
         .mode-btn:disabled { cursor: not-allowed; }
-        .mode-btn.active, .dir-btn.active {
+        .mode-btn.active {
             background: rgba(16,185,129,0.25);
             border-color: #10b981;
             box-shadow: 0 4px 16px rgba(16,185,129,0.3);
         }
-        .mode-btn:active:not(:disabled), .dir-btn:active { transform: scale(0.96); }
+        .mode-btn:active:not(:disabled) { transform: scale(0.96); }
 
         /* Pre-scan mode/direction indicator pinned below topbar while scanning */
         .mode-pill {
@@ -525,14 +520,7 @@
             </div>
         </div>
 
-        <!-- DIRECTION picker (shown only for Scan mode — Check is read-only) -->
-        <div id="dirPicker" style="width:100%;max-width:360px;margin-bottom:30px;">
-            <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.55);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;text-align:left;">Напрям</div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-                <button class="dir-btn" data-dir="UA_EU" onclick="setDirection('UA_EU')">🇺🇦 → 🇪🇺</button>
-                <button class="dir-btn" data-dir="EU_UA" onclick="setDirection('EU_UA')">🇪🇺 → 🇺🇦</button>
-            </div>
-        </div>
+        <!-- Напрям видалено — нові пакети завжди UA_EU (Україна-ЄВ). -->
 
         <button class="start-btn" id="startCameraBtn" onclick="startScan()" disabled>▶ Увімкнути камеру</button>
         <button onclick="goBack()" style="margin-top:16px;padding:12px 32px;background:rgba(255,255,255,0.1);color:rgba(255,255,255,0.7);border:1px solid rgba(255,255,255,0.2);border-radius:12px;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;">← Назад до CRM</button>
@@ -644,20 +632,22 @@
         // Per-session tally; in-memory only (resets on reload by design).
         var sessionCounter = 0;
 
-        // Pre-scan setup state. Camera button unlocks when required fields are set.
-        //   'scan'  → mutates DB via scan_ttn RPC; requires SCAN_DIRECTION
-        //   'check' → read-only peek_ttn; direction irrelevant
+        // Pre-scan setup state.
+        //   'scan'  → mutates DB via scan_ttn RPC (new packages default to UA→EU)
+        //   'check' → read-only peek_ttn
         var SCAN_MODE = null;
-        var SCAN_DIRECTION = null;  // 'UA_EU' | 'EU_UA'
 
-        // Restore last-used mode/direction from localStorage (user preference,
-        // not session data) so returning users don't re-pick every session.
+        // New packages always land as UA→EU; product decision (EU→UA parcels
+        // aren't handled at the scan-in stage). Kept as a constant so if we
+        // ever reintroduce the picker, it's one line to wire back.
+        var DEFAULT_DIRECTION = 'UA_EU';
+
+        // Restore last-used mode from localStorage (user preference, not
+        // session data) so returning users don't re-pick every session.
         (function restoreSetup() {
             try {
                 var lastMode = localStorage.getItem('scanner_last_mode');
-                var lastDir  = localStorage.getItem('scanner_last_direction');
                 if (lastMode === 'scan' || lastMode === 'check') SCAN_MODE = lastMode;
-                if (lastDir === 'UA_EU' || lastDir === 'EU_UA') SCAN_DIRECTION = lastDir;
             } catch(_) {}
         })();
 
@@ -667,36 +657,17 @@
             try { localStorage.setItem('scanner_last_mode', m); } catch(_) {}
             refreshSetupUI();
         }
-        function setDirection(d) {
-            if (d !== 'UA_EU' && d !== 'EU_UA') return;
-            SCAN_DIRECTION = d;
-            try { localStorage.setItem('scanner_last_direction', d); } catch(_) {}
-            refreshSetupUI();
-        }
         function refreshSetupUI() {
             document.querySelectorAll('.mode-btn').forEach(function(b) {
                 b.classList.toggle('active', b.getAttribute('data-mode') === SCAN_MODE);
             });
-            document.querySelectorAll('.dir-btn').forEach(function(b) {
-                b.classList.toggle('active', b.getAttribute('data-dir') === SCAN_DIRECTION);
-            });
 
-            // Direction picker is only meaningful in Scan mode (new packages
-            // need a direction stamped). Hide it entirely for Check.
-            var dirPicker = document.getElementById('dirPicker');
-            if (dirPicker) dirPicker.style.display = (SCAN_MODE === 'scan') ? '' : 'none';
-
-            var ready = (SCAN_MODE === 'check') ||
-                        (SCAN_MODE === 'scan' && !!SCAN_DIRECTION);
-            document.getElementById('startCameraBtn').disabled = !ready;
+            document.getElementById('startCameraBtn').disabled = !SCAN_MODE;
 
             // Pill shown over camera
             var pill = document.getElementById('modePill');
-            var modeLbl = SCAN_MODE === 'scan'  ? '🔍 Сканую'
-                        : SCAN_MODE === 'check' ? '✓ Перевірка' : '—';
-            var dirLbl  = (SCAN_MODE === 'scan' && SCAN_DIRECTION === 'UA_EU') ? '🇺🇦→🇪🇺'
-                        : (SCAN_MODE === 'scan' && SCAN_DIRECTION === 'EU_UA') ? '🇪🇺→🇺🇦' : '';
-            pill.textContent = modeLbl + (dirLbl ? '  ·  ' + dirLbl : '');
+            pill.textContent = SCAN_MODE === 'scan'  ? '🔍 Сканую'
+                             : SCAN_MODE === 'check' ? '✓ Перевірка' : '—';
         }
         document.addEventListener('DOMContentLoaded', refreshSetupUI);
 
@@ -870,15 +841,13 @@
                 return;
             }
 
-            // Scan mode → auto state-machine RPC (direction required).
-            if (!SCAN_DIRECTION) {
-                handleScanResult(ttn, { ok: false, error: 'Оберіть напрям' });
-                return;
-            }
+            // Scan mode → auto state-machine RPC. Direction is hard-coded to
+            // UA→EU; the picker was removed by product decision (all new
+            // scans on intake belong to the Ukraine→Europe leg).
             sb.rpc('scan_ttn', {
                 p_tenant_id: TENANT_ID,
                 p_ttn: ttn,
-                p_direction: SCAN_DIRECTION,
+                p_direction: DEFAULT_DIRECTION,
                 p_user: USER_LOGIN
             }).then(function(result) {
                 if (result.error) {
