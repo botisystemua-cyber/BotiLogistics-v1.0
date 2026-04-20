@@ -2,6 +2,14 @@
 
 Universal logistics CRM system for passenger and cargo transportation (UA <-> EU).
 
+## Glossary (важливо не плутати)
+
+- **Рейс** — один конкретний виїзд: авто + дата + водій + список пасажирів.
+  У БД — таблиця `calendar` (CAL_ID). У UI passenger-crm: ліва панель
+  «Рейси» (`pc-sidebar`), модалка «Призначити рейс».
+- **Маршрут** — шаблон/напрямок (напр. «Київ → Варшава»), до якого
+  чіпляються рейси. У БД — таблиця `routes` (RTE_ID). Інше меню, інша сутність.
+
 ## Architecture
 
 ```
