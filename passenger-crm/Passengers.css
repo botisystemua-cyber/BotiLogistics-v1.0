@@ -668,9 +668,14 @@ body.route-sort-active #rteTogglePay {
 .tcal-dots .dot-overbooked { background: #dc2626; animation: pulse-overbook 1.5s ease-in-out infinite; width: 8px; height: 8px; }
 .tcal-day.overbooked { color: #dc2626 !important; }
 .tcal-day.overbooked:not(.selected) { outline: 2px solid #dc2626; outline-offset: -2px; }
-.tcal-day.tm-current:not(.selected) { background: rgba(124,58,237,0.12); outline: 2px solid #7c3aed; outline-offset: -2px; color: #7c3aed; }
-.tcal-day.tm-current::after { content: '●'; position: absolute; top: 2px; right: 4px; font-size: 8px; color: #7c3aed; line-height: 1; }
-.tcal-day.tm-current.selected::after { color: white; }
+.tcal-day.tm-current:not(.selected) { background: rgba(124,58,237,0.18); outline: 3px solid #7c3aed; outline-offset: -3px; color: #7c3aed; font-weight: 800; box-shadow: 0 0 0 1px rgba(124,58,237,0.25); }
+.tcal-day.tm-current.selected { outline: 3px solid #7c3aed; outline-offset: -3px; }
+.tm-current-badge { position: absolute; top: -6px; left: 50%; transform: translateX(-50%); background: #7c3aed; color: white; font-size: 8px; font-weight: 800; padding: 1px 5px; border-radius: 6px; letter-spacing: 0.3px; white-space: nowrap; pointer-events: none; box-shadow: 0 1px 3px rgba(0,0,0,0.15); }
+.tcal-seats { position: absolute; bottom: 2px; right: 3px; font-size: 8px; font-weight: 800; line-height: 1; letter-spacing: -0.2px; pointer-events: none; }
+.tcal-seats.ok { color: #059669; }
+.tcal-seats.warn { color: #d97706; }
+.tcal-seats.low { color: #dc2626; }
+.tcal-day.selected .tcal-seats { color: white !important; }
 .tcal-pax { cursor: pointer; }
 .tcal-pax:hover { text-decoration: underline; }
 .tcal-pax { font-size: 8px; font-weight: 800; color: var(--text-secondary); line-height: 1; margin-top: 1px; }

@@ -5758,10 +5758,18 @@ function getCurrentTripDateForPax(paxIds) {
     var id = paxIds[0];
     if (id === '__form__') return '';
     var p = passengers.find(function(x) { return x['PAX_ID'] === id; });
-    if (!p || !p['CAL_ID']) return '';
-    var trip = trips.find(function(t) { return t.cal_id === p['CAL_ID']; });
-    if (!trip) return '';
-    return formatTripDate(trip.date);
+    if (!p) return '';
+    // Пріоритет — реально прив'язаний рейс (CAL_ID)
+    if (p['CAL_ID']) {
+        var trip = trips.find(function(t) { return t.cal_id === p['CAL_ID']; });
+        if (trip) return formatTripDate(trip.date);
+    }
+    // Fallback — дата виїзду (клієнт її вказує завжди)
+    if (p['Дата виїзду']) {
+        var fd = formatTripDate(p['Дата виїзду']);
+        if (fd && fd !== '—') return fd;
+    }
+    return '';
 }
 
 // Форматування дати: ISO/будь-який → "dd.MM"
@@ -5936,7 +5944,7 @@ function renderTripModalCalendar() {
     matchTrips.forEach(function(t) {
         var fd = formatTripDate(t.date);
         if (!fd || fd === '—') return;
-        if (!tripMap[fd]) tripMap[fd] = { uaeu: 0, euua: 0, pax: 0, maxSeats: 0, overbooked: false, count: 0 };
+        if (!tripMap[fd]) tripMap[fd] = { uaeu: 0, euua: 0, pax: 0, maxSeats: 0, overbooked: false, count: 0, trips: [] };
         var dir = getTripDirection(t);
         if (dir === 'ua-eu') tripMap[fd].uaeu++;
         else if (dir === 'eu-ua') tripMap[fd].euua++;
@@ -5946,6 +5954,7 @@ function renderTripModalCalendar() {
         tripMap[fd].pax += occ;
         tripMap[fd].maxSeats += maxS;
         if (occ > maxS && maxS > 0) tripMap[fd].overbooked = true;
+        tripMap[fd].trips.push(t);
     });
 
     var monthNames = ['Січень','Лютий','Березень','Квітень','Травень','Червень','Липень','Серпень','Вересень','Жовтень','Листопад','Грудень'];
@@ -6033,10 +6042,40 @@ function renderTmCalDay(d, key, info, otherMonth, isToday, selectedKey) {
         }
     }
 
+    // Мікроінфа — вільні місця (сумарно по всіх рейсах дати)
+    var seatsHtml = '';
+    if (info && info.maxSeats > 0) {
+        var free = info.maxSeats - info.pax;
+        var seatCls = 'tcal-seats';
+        if (info.overbooked || free <= 0) seatCls += ' low';
+        else if (free <= 2) seatCls += ' warn';
+        else seatCls += ' ok';
+        seatsHtml = '<div class="' + seatCls + '">' + (free < 0 ? 0 : free) + 'м</div>';
+    }
+
+    // Tooltip при ховері — деталі всіх рейсів дати
+    var titleAttr = '';
+    if (info && info.trips && info.trips.length) {
+        var lines = info.trips.map(function(t) {
+            var dir = getTripDirection(t) === 'ua-eu' ? 'UA→EU' : 'EU→UA';
+            var freeT = parseInt(t.free_seats) || 0;
+            var maxT = parseInt(t.max_seats) || 0;
+            var occT = parseInt(t.occupied) || 0;
+            var seat = (occT > maxT && maxT > 0) ? ('перебір +' + (occT - maxT)) : (freeT + '/' + maxT);
+            return dir + ' · ' + (t.auto_name || 'Авто') + ' · ' + (t.city || '—') + ' · ' + seat;
+        });
+        titleAttr = ' title="' + lines.join('\n').replace(/"/g, '&quot;') + '"';
+    } else if (isCurrent) {
+        titleAttr = ' title="Поточний рейс пасажира"';
+    }
+
+    var currentBadge = isCurrent ? '<span class="tm-current-badge">Ваш</span>' : '';
     var onclick = hasTrip ? ' onclick="selectTripDate(\'' + key + '\')"' : '';
-    return '<button class="' + cls + '" data-key="' + key + '"' + onclick + '>' +
+    return '<button class="' + cls + '" data-key="' + key + '"' + onclick + titleAttr + '>' +
+        currentBadge +
         '<span>' + d + '</span>' +
         (dotsHtml ? '<div class="tcal-dots">' + dotsHtml + '</div>' : '') +
+        seatsHtml +
     '</button>';
 }
 
