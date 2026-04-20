@@ -906,6 +906,65 @@
         .inl-btn:disabled { opacity: 0.5; cursor: not-allowed; }
         .inl-btn-cancel { background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.18); }
         .inl-btn-save { background: linear-gradient(180deg,#10b981,#059669); color: #fff; box-shadow: 0 4px 10px rgba(16,185,129,0.35); }
+
+        /* ==== FIELDS CHOOSER (C7/3) ==== */
+        .fc-overlay {
+            position: fixed; inset: 0;
+            background: rgba(15, 23, 42, 0.97);
+            z-index: 90;
+            display: none;
+            flex-direction: column;
+        }
+        .fc-overlay.open { display: flex; animation: us-fade 0.15s ease-out; }
+        .fc-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 14px;
+        }
+        .fc-category {
+            margin-bottom: 16px;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        .fc-category-header {
+            padding: 10px 12px;
+            color: #fbbf24;
+            font-weight: 700;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            background: rgba(0,0,0,0.25);
+        }
+        .fc-category-items {
+            display: flex;
+            flex-direction: column;
+        }
+        .fc-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 11px 12px;
+            border-top: 1px solid rgba(255,255,255,0.05);
+            color: #fff;
+            font-size: 14px;
+            cursor: pointer;
+            user-select: none;
+        }
+        .fc-item:hover { background: rgba(255,255,255,0.03); }
+        .fc-item input[type=checkbox] {
+            width: 20px; height: 20px;
+            accent-color: #10b981;
+            cursor: pointer;
+        }
+        .fc-item-label { flex: 1; }
+        .fc-item-required {
+            font-size: 10px;
+            color: #f87171;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
     </style>
 </head>
 <body>
@@ -1069,78 +1128,29 @@
         </div>
         <div class="inl-body" id="inlBody">
             <input type="hidden" id="inl_pkgId">
-            <div class="inl-row" data-field="recipient_phone">
-                <label>Тел. отримувача <span class="req">*</span></label>
-                <input type="tel" id="inl_phoneRecv" inputmode="tel" placeholder="+380...">
-            </div>
-            <div class="inl-row" data-field="sender_phone">
-                <label>Тел. відправника</label>
-                <input type="tel" id="inl_phoneSender" inputmode="tel">
-            </div>
-            <div class="inl-row" data-field="recipient_address">
-                <label>Адреса в Європі</label>
-                <input type="text" id="inl_addressTo">
-            </div>
-            <div class="inl-row" data-field="internal_number">
-                <label>Внутрішній №</label>
-                <input type="text" id="inl_innerNum">
-            </div>
-            <div class="inl-row" data-field="description">
-                <label>Опис</label>
-                <textarea id="inl_description" rows="2"></textarea>
-            </div>
-            <div class="inl-grid2">
-                <div class="inl-row" data-field="item_count">
-                    <label>Кількість</label>
-                    <input type="number" id="inl_qty" min="1" max="999" inputmode="numeric">
-                </div>
-                <div class="inl-row" data-field="weight_kg">
-                    <label>Вага, кг</label>
-                    <input type="number" id="inl_weight" min="0" step="0.01" inputmode="decimal">
-                </div>
-            </div>
-            <div class="inl-grid2">
-                <div class="inl-row" data-field="total_amount">
-                    <label>Сума</label>
-                    <input type="number" id="inl_sum" min="0" step="0.01" inputmode="decimal">
-                </div>
-                <div class="inl-row" data-field="payment_currency">
-                    <label>Валюта</label>
-                    <select id="inl_currency">
-                        <option value="">—</option>
-                        <option value="UAH">UAH</option>
-                        <option value="EUR">EUR</option>
-                        <option value="USD">USD</option>
-                        <option value="PLN">PLN</option>
-                        <option value="CZK">CZK</option>
-                        <option value="CHF">CHF</option>
-                    </select>
-                </div>
-            </div>
-            <div class="inl-row" data-field="payment_status">
-                <label>Статус оплати</label>
-                <select id="inl_payStatus">
-                    <option value="">—</option>
-                    <option value="pending">Не оплачено</option>
-                    <option value="partial">Частково</option>
-                    <option value="paid">Оплачено</option>
-                </select>
-            </div>
-            <div class="inl-row" data-field="package_status">
-                <label>Статус посилки</label>
-                <select id="inl_statusPkg">
-                    <option value="">—</option>
-                    <option value="Зареєстровано">Зареєстровано</option>
-                    <option value="Оформлення">Оформлення</option>
-                    <option value="Доставка">Доставка</option>
-                    <option value="Доставлено">Доставлено</option>
-                    <option value="Невідомо">Невідомо</option>
-                </select>
-            </div>
+            <!-- Поля рендеряться динамічно з FIELD_CATALOG через renderInlineFields() -->
         </div>
         <div class="inl-footer">
             <button type="button" class="inl-btn inl-btn-cancel" onclick="closeInlineEditor()">❌ Скасувати</button>
             <button type="button" class="inl-btn inl-btn-save" id="inlSaveBtn" onclick="saveInlineEditor()">💾 Зберегти</button>
+        </div>
+    </div>
+
+    <!-- FIELDS CHOOSER (C7/3): вибір полів для inline-редактора за категоріями -->
+    <div class="fc-overlay" id="fcOverlay">
+        <div class="inl-header">
+            <button type="button" class="inl-back-btn" onclick="closeFieldsChooser()" title="Назад">←</button>
+            <div class="inl-title">
+                <div class="inl-title-label">Налаштування</div>
+                <div class="inl-title-ttn">Поля редагування</div>
+            </div>
+        </div>
+        <div class="fc-body" id="fcBody">
+            <!-- Категорії з чекбоксами рендеряться з FIELD_CATALOG -->
+        </div>
+        <div class="inl-footer">
+            <button type="button" class="inl-btn inl-btn-cancel" onclick="resetFieldsToDefault()">↩️ За замовчуванням</button>
+            <button type="button" class="inl-btn inl-btn-save" onclick="saveFieldsChooser()">💾 Зберегти</button>
         </div>
     </div>
 
@@ -1727,36 +1737,198 @@
             }
         }
 
-        // ==== INLINE EDITOR (C7/2) =============================================
-        // Full-screen модалка редагування знайденого ТТН прямо на сторінці
-        // сканера — без редіректу в CRM. Зберігає через прямий REST PATCH,
-        // ставить scan_status='checked' → лід автоматично в «В перевірці».
-        var _INL_FIELDS = [
-            // [input_id,              db_column,          type]
-            ['inl_phoneRecv',          'recipient_phone',  'text'],
-            ['inl_phoneSender',        'sender_phone',     'text'],
-            ['inl_addressTo',          'recipient_address','text'],
-            ['inl_innerNum',           'internal_number',  'text'],
-            ['inl_description',        'description',      'text'],
-            ['inl_qty',                'item_count',       'int'],
-            ['inl_weight',             'weight_kg',        'float'],
-            ['inl_sum',                'total_amount',     'float'],
-            ['inl_currency',           'payment_currency', 'text'],
-            ['inl_payStatus',          'payment_status',   'text'],
-            ['inl_statusPkg',          'package_status',   'text']
+        // ==== INLINE EDITOR (C7/2) + FIELDS CHOOSER (C7/3) =====================
+        // Full-screen модалка редагування ТТН прямо на сканері. Набір полів
+        // налаштовується оператором через «⚙️ Поля» і зберігається в
+        // localStorage (персонально).
+
+        // Каталог усіх полів. type: text|textarea|int|float|date|select
+        // opts: для select — масив {value, label}
+        // required: true лише для recipient_phone
+        // defaultOn: поле в стандартному наборі 11 при першому заході
+        var _CURRENCY_OPTS = [
+            { value: '',    label: '—' },
+            { value: 'UAH', label: 'UAH' },
+            { value: 'EUR', label: 'EUR' },
+            { value: 'USD', label: 'USD' },
+            { value: 'PLN', label: 'PLN' },
+            { value: 'CZK', label: 'CZK' },
+            { value: 'CHF', label: 'CHF' }
         ];
+        var _PAYSTATUS_OPTS = [
+            { value: '',        label: '—' },
+            { value: 'pending', label: 'Не оплачено' },
+            { value: 'partial', label: 'Частково' },
+            { value: 'paid',    label: 'Оплачено' }
+        ];
+        var _PKGSTATUS_OPTS = [
+            { value: '',               label: '—' },
+            { value: 'Зареєстровано',  label: 'Зареєстровано' },
+            { value: 'Оформлення',     label: 'Оформлення' },
+            { value: 'Доставка',       label: 'Доставка' },
+            { value: 'Доставлено',     label: 'Доставлено' },
+            { value: 'Невідомо',       label: 'Невідомо' }
+        ];
+        var _LEADSTATUS_OPTS = [
+            { value: '',           label: '—' },
+            { value: 'new',        label: 'Новий' },
+            { value: 'in_progress',label: 'В роботі' },
+            { value: 'ready',      label: 'Готова' },
+            { value: 'unknown',    label: 'Невідомий' },
+            { value: 'rejected',   label: 'Відхилено' }
+        ];
+        var _DIRECTION_OPTS = [
+            { value: '',      label: '—' },
+            { value: 'UA_EU', label: 'UA → EU' },
+            { value: 'EU_UA', label: 'EU → UA' }
+        ];
+
+        var FIELD_CATALOG = [
+            // Отримувач
+            { col: 'recipient_name',     label: 'ПІБ отримувача',       type: 'text',     category: '👤 Отримувач' },
+            { col: 'recipient_phone',    label: 'Тел. отримувача',      type: 'text',     category: '👤 Отримувач', required: true, defaultOn: true },
+            { col: 'recipient_address',  label: 'Адреса в Європі',      type: 'text',     category: '👤 Отримувач', defaultOn: true },
+            { col: 'nova_poshta_city',   label: 'Місто Нова Пошта',     type: 'text',     category: '👤 Отримувач' },
+            // Відправник
+            { col: 'sender_name',        label: 'ПІБ відправника',      type: 'text',     category: '📤 Відправник' },
+            { col: 'sender_phone',       label: 'Тел. відправника',     type: 'text',     category: '📤 Відправник', defaultOn: true },
+            { col: 'sender_address',     label: 'Адреса відправки',     type: 'text',     category: '📤 Відправник' },
+            { col: 'registrar_phone',    label: 'Тел. реєстратора',     type: 'text',     category: '📤 Відправник' },
+            // Посилка
+            { col: 'internal_number',    label: 'Внутрішній №',         type: 'text',     category: '📦 Посилка', defaultOn: true },
+            { col: 'description',        label: 'Опис',                 type: 'textarea', category: '📦 Посилка', defaultOn: true },
+            { col: 'details',            label: 'Деталі',               type: 'textarea', category: '📦 Посилка' },
+            { col: 'item_count',         label: 'Кількість',            type: 'int',      category: '📦 Посилка', defaultOn: true },
+            { col: 'weight_kg',          label: 'Вага, кг',             type: 'float',    category: '📦 Посилка', defaultOn: true },
+            { col: 'estimated_value',    label: 'Оціночна вартість',    type: 'float',    category: '📦 Посилка' },
+            { col: 'ttn_date',           label: 'Дата створення ТТН',   type: 'date',     category: '📦 Посилка' },
+            // Оплата
+            { col: 'total_amount',       label: 'Сума',                 type: 'float',    category: '💰 Оплата', defaultOn: true },
+            { col: 'payment_currency',   label: 'Валюта',               type: 'select',   category: '💰 Оплата', opts: _CURRENCY_OPTS, defaultOn: true },
+            { col: 'payment_status',     label: 'Статус оплати',        type: 'select',   category: '💰 Оплата', opts: _PAYSTATUS_OPTS, defaultOn: true },
+            { col: 'deposit',            label: 'Завдаток',             type: 'float',    category: '💰 Оплата' },
+            { col: 'deposit_currency',   label: 'Валюта завдатку',      type: 'select',   category: '💰 Оплата', opts: _CURRENCY_OPTS },
+            { col: 'payment_form',       label: 'Форма оплати',         type: 'text',     category: '💰 Оплата' },
+            { col: 'payment_notes',      label: 'Примітка оплати',      type: 'textarea', category: '💰 Оплата' },
+            { col: 'np_amount',          label: 'Сума НП',              type: 'float',    category: '💰 Оплата' },
+            { col: 'np_currency',        label: 'Валюта НП',            type: 'select',   category: '💰 Оплата', opts: _CURRENCY_OPTS },
+            // Статуси
+            { col: 'package_status',     label: 'Статус посилки',       type: 'select',   category: '🏷️ Статуси', opts: _PKGSTATUS_OPTS, defaultOn: true },
+            { col: 'lead_status',        label: 'Статус ліда',          type: 'select',   category: '🏷️ Статуси', opts: _LEADSTATUS_OPTS },
+            // Маршрут
+            { col: 'direction',          label: 'Напрям',               type: 'select',   category: '🗺️ Маршрут', opts: _DIRECTION_OPTS },
+            { col: 'vehicle_id',         label: 'Номер авто',           type: 'text',     category: '🗺️ Маршрут' },
+            // Дати
+            { col: 'dispatch_date',      label: 'Дата відправки',       type: 'date',     category: '📅 Дати' },
+            { col: 'received_date',      label: 'Дата отримання',       type: 'date',     category: '📅 Дати' },
+            // Коментарі
+            { col: 'notes',              label: 'Примітка',             type: 'textarea', category: '💬 Коментарі' },
+            { col: 'sms_notes',          label: 'Примітка СМС',         type: 'textarea', category: '💬 Коментарі' },
+            { col: 'tag',                label: 'Тег',                  type: 'text',     category: '💬 Коментарі' }
+        ];
+
         var _inlSnapshot = {};   // server row на момент відкриття (для диффу)
+
+        function _fieldsStorageKey() {
+            return 'scanner_fill_fields_' + (USER_LOGIN || 'guest');
+        }
+
+        function getActiveFieldCols() {
+            try {
+                var raw = localStorage.getItem(_fieldsStorageKey());
+                if (raw) {
+                    var arr = JSON.parse(raw);
+                    if (Array.isArray(arr) && arr.length) return arr;
+                }
+            } catch(_) {}
+            // Дефолт — 11 стартових полів
+            return FIELD_CATALOG.filter(function(f) { return f.defaultOn; })
+                                .map(function(f) { return f.col; });
+        }
+
+        function setActiveFieldCols(cols) {
+            try {
+                localStorage.setItem(_fieldsStorageKey(), JSON.stringify(cols));
+            } catch(_) {}
+        }
+
+        function resetFieldsToDefault() {
+            try { localStorage.removeItem(_fieldsStorageKey()); } catch(_) {}
+            renderFieldsChooser();
+        }
+
+        function _buildFieldElement(f) {
+            // Повертає DOM-елемент .inl-row із відповідним контролом
+            var row = document.createElement('div');
+            row.className = 'inl-row';
+            row.setAttribute('data-field', f.col);
+
+            var label = document.createElement('label');
+            label.textContent = f.label;
+            if (f.required) {
+                var req = document.createElement('span');
+                req.className = 'req'; req.textContent = '*';
+                label.appendChild(req);
+            }
+            row.appendChild(label);
+
+            var el;
+            if (f.type === 'textarea') {
+                el = document.createElement('textarea');
+                el.rows = 2;
+            } else if (f.type === 'select') {
+                el = document.createElement('select');
+                (f.opts || []).forEach(function(o) {
+                    var opt = document.createElement('option');
+                    opt.value = o.value; opt.textContent = o.label;
+                    el.appendChild(opt);
+                });
+            } else if (f.type === 'int') {
+                el = document.createElement('input');
+                el.type = 'number'; el.min = '0'; el.inputMode = 'numeric';
+            } else if (f.type === 'float') {
+                el = document.createElement('input');
+                el.type = 'number'; el.min = '0'; el.step = '0.01'; el.inputMode = 'decimal';
+            } else if (f.type === 'date') {
+                el = document.createElement('input');
+                el.type = 'date';
+            } else {
+                el = document.createElement('input');
+                el.type = 'text';
+            }
+            el.id = 'inl_col_' + f.col;
+            row.appendChild(el);
+            return row;
+        }
+
+        function renderInlineFields() {
+            var body = document.getElementById('inlBody');
+            // Видаляємо всі попередні .inl-row (hidden pkgId input лишається)
+            Array.prototype.slice.call(body.querySelectorAll('.inl-row, .inl-grid2'))
+                 .forEach(function(n) { n.remove(); });
+
+            var activeCols = getActiveFieldCols();
+            // Зберігаємо порядок каталогу (не за порядком юзера — просто фільтр)
+            FIELD_CATALOG.forEach(function(f) {
+                if (activeCols.indexOf(f.col) === -1) return;
+                body.appendChild(_buildFieldElement(f));
+            });
+        }
 
         function openInlineEditor(pkgId, ttn) {
             if (!pkgId || !TENANT_ID) return;
             document.getElementById('inl_pkgId').value = pkgId;
             document.getElementById('inlTitleTtn').textContent = ttn || pkgId;
 
-            // Підтягуємо свіжий рядок з БД (на випадок якщо хтось уже редагував)
+            // Перебудовуємо поля згідно з вибором оператора (localStorage)
+            renderInlineFields();
+            var activeCols = getActiveFieldCols();
+
+            // Підтягуємо свіжий рядок з БД — лише активні колонки
             var url = SUPABASE_URL + '/rest/v1/packages' +
                       '?tenant_id=eq.' + encodeURIComponent(TENANT_ID) +
                       '&pkg_id=eq.' + encodeURIComponent(pkgId) +
-                      '&select=recipient_phone,sender_phone,recipient_address,internal_number,description,item_count,weight_kg,total_amount,payment_currency,payment_status,package_status';
+                      '&select=' + encodeURIComponent(activeCols.join(','));
             fetch(url, {
                 headers: {
                     apikey: SUPABASE_ANON_KEY,
@@ -1766,10 +1938,10 @@
               .then(function(rows) {
                 var row = (rows && rows[0]) || {};
                 _inlSnapshot = row;
-                // Наповнюємо форму і підсвічуємо заповнені поля жовтим
-                _INL_FIELDS.forEach(function(f) {
-                    var inputId = f[0], col = f[1];
-                    var el = document.getElementById(inputId);
+
+                // Заповнюємо поля + підсвічуємо ті, що вже мали значення
+                activeCols.forEach(function(col) {
+                    var el = document.getElementById('inl_col_' + col);
                     if (!el) return;
                     var v = row[col];
                     el.value = (v == null ? '' : String(v));
@@ -1779,12 +1951,12 @@
                         parent.classList.toggle('has-value', hasVal);
                     }
                 });
-                // Ховаємо action-menu і показуємо редактор
+
                 document.getElementById('checkActionMenu').classList.remove('show');
                 document.getElementById('inlOverlay').classList.add('open');
                 setTimeout(function() {
-                    var f = document.getElementById('inl_phoneRecv');
-                    if (f) f.focus();
+                    var firstInput = document.querySelector('.inl-row input, .inl-row textarea, .inl-row select');
+                    if (firstInput) firstInput.focus();
                 }, 120);
             }).catch(function() {
                 showToast({ variant: 'error', icon: '❌', label: 'Помилка',
@@ -1800,50 +1972,54 @@
             resumeAfterSheet();
         }
 
-        function openFieldsChooser() {
-            // C7/3 — поки-що placeholder, реалізація в наступному коміті
-            showToast({ variant: 'success', icon: 'ℹ️', label: 'Скоро',
-                        value: '', status: 'Вибір полів — у C7/3' });
-            setTimeout(function(){ document.getElementById('resultToast').classList.remove('show'); }, 1500);
-        }
-
         function saveInlineEditor() {
             var pkg = document.getElementById('inl_pkgId').value;
             if (!pkg || !TENANT_ID) return;
 
-            var phoneRecv = (document.getElementById('inl_phoneRecv').value || '').trim();
-            if (!phoneRecv) {
-                var el = document.getElementById('inl_phoneRecv');
-                el.focus();
-                showToast({ variant: 'error', icon: '❌', label: 'Обов’язкове поле',
-                            value: '', status: 'Вкажіть телефон отримувача' });
-                setTimeout(function(){ document.getElementById('resultToast').classList.remove('show'); }, 2000);
-                return;
+            var activeCols = getActiveFieldCols();
+            var catalogMap = {};
+            FIELD_CATALOG.forEach(function(f) { catalogMap[f.col] = f; });
+
+            // Валідація обов'язкових (поки-що тільки recipient_phone, якщо активний)
+            for (var i = 0; i < activeCols.length; i++) {
+                var col = activeCols[i];
+                var meta = catalogMap[col];
+                if (!meta || !meta.required) continue;
+                var el = document.getElementById('inl_col_' + col);
+                if (!el) continue;
+                var v = (el.value || '').trim();
+                if (!v) {
+                    el.focus();
+                    showToast({ variant: 'error', icon: '❌', label: 'Обов’язкове поле',
+                                value: '', status: meta.label });
+                    setTimeout(function(){ document.getElementById('resultToast').classList.remove('show'); }, 2000);
+                    return;
+                }
             }
 
-            // Збираємо лише те, що реально змінилось (по snapshot)
+            // Диф проти snapshot — пишемо лише те, що змінилось
             var diff = {};
-            _INL_FIELDS.forEach(function(f) {
-                var inputId = f[0], col = f[1], type = f[2];
-                var el = document.getElementById(inputId);
+            activeCols.forEach(function(col) {
+                var meta = catalogMap[col];
+                if (!meta) return;
+                var el = document.getElementById('inl_col_' + col);
                 if (!el) return;
                 var raw = (el.value == null ? '' : String(el.value)).trim();
                 var oldRaw = _inlSnapshot[col] == null ? '' : String(_inlSnapshot[col]).trim();
                 if (raw === oldRaw) return;
                 if (raw === '') {
                     diff[col] = null;
-                } else if (type === 'int') {
-                    var i = parseInt(raw, 10);
-                    diff[col] = isNaN(i) ? null : i;
-                } else if (type === 'float') {
-                    var n = parseFloat(raw);
+                } else if (meta.type === 'int') {
+                    var n = parseInt(raw, 10);
                     diff[col] = isNaN(n) ? null : n;
+                } else if (meta.type === 'float') {
+                    var nf = parseFloat(raw);
+                    diff[col] = isNaN(nf) ? null : nf;
                 } else {
                     diff[col] = raw;
                 }
             });
 
-            // Будь-яке збереження з редактора = лід іде в «В перевірці»
             diff.scan_status = 'checked';
 
             var btn = document.getElementById('inlSaveBtn');
@@ -1883,6 +2059,92 @@
                             value: pkg, status: String(err && err.message || err) });
                 setTimeout(function(){ document.getElementById('resultToast').classList.remove('show'); }, 2500);
             });
+        }
+
+        // ==== FIELDS CHOOSER (C7/3) ============================================
+        function openFieldsChooser() {
+            renderFieldsChooser();
+            document.getElementById('fcOverlay').classList.add('open');
+        }
+
+        function closeFieldsChooser() {
+            document.getElementById('fcOverlay').classList.remove('open');
+        }
+
+        function renderFieldsChooser() {
+            var body = document.getElementById('fcBody');
+            body.innerHTML = '';
+            var active = getActiveFieldCols();
+            var activeSet = {};
+            active.forEach(function(c) { activeSet[c] = true; });
+
+            // Групуємо по category, зберігаючи порядок появи
+            var groups = [];
+            var byName = {};
+            FIELD_CATALOG.forEach(function(f) {
+                if (!byName[f.category]) {
+                    byName[f.category] = { name: f.category, items: [] };
+                    groups.push(byName[f.category]);
+                }
+                byName[f.category].items.push(f);
+            });
+
+            groups.forEach(function(g) {
+                var cat = document.createElement('div');
+                cat.className = 'fc-category';
+                var h = document.createElement('div');
+                h.className = 'fc-category-header';
+                h.textContent = g.name;
+                cat.appendChild(h);
+                var items = document.createElement('div');
+                items.className = 'fc-category-items';
+                g.items.forEach(function(f) {
+                    var item = document.createElement('label');
+                    item.className = 'fc-item';
+                    var cb = document.createElement('input');
+                    cb.type = 'checkbox';
+                    cb.setAttribute('data-col', f.col);
+                    cb.checked = !!activeSet[f.col];
+                    if (f.required) { cb.checked = true; cb.disabled = true; }
+                    item.appendChild(cb);
+                    var label = document.createElement('div');
+                    label.className = 'fc-item-label';
+                    label.textContent = f.label;
+                    item.appendChild(label);
+                    if (f.required) {
+                        var req = document.createElement('div');
+                        req.className = 'fc-item-required';
+                        req.textContent = 'обов.';
+                        item.appendChild(req);
+                    }
+                    items.appendChild(item);
+                });
+                cat.appendChild(items);
+                body.appendChild(cat);
+            });
+        }
+
+        function saveFieldsChooser() {
+            var picks = [];
+            Array.prototype.slice.call(document.querySelectorAll('#fcBody input[type=checkbox]'))
+                 .forEach(function(cb) {
+                    if (cb.checked) picks.push(cb.getAttribute('data-col'));
+                 });
+            if (picks.length === 0) {
+                // Нічого не вибрано — скидаємо до дефолту, щоб оператор не лишився з порожньою формою
+                resetFieldsToDefault();
+                closeFieldsChooser();
+                return;
+            }
+            setActiveFieldCols(picks);
+            closeFieldsChooser();
+            // Оновлюємо відкритий редактор (якщо він зараз видимий)
+            var inlOpen = document.getElementById('inlOverlay').classList.contains('open');
+            if (inlOpen) {
+                var pkg = document.getElementById('inl_pkgId').value;
+                var ttn = document.getElementById('inlTitleTtn').textContent;
+                if (pkg) openInlineEditor(pkg, ttn);
+            }
         }
 
         // ==== UNKNOWN-TTN SHEET =================================================
@@ -2172,6 +2434,7 @@
                 closeUnknownSheet();
                 closeCheckActionMenu();
                 document.getElementById('inlOverlay').classList.remove('open');
+                document.getElementById('fcOverlay').classList.remove('open');
                 document.getElementById('startScreen').classList.remove('hidden');
             }).catch(function() {});
         }
