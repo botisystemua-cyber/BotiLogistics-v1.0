@@ -649,9 +649,9 @@ body.route-sort-active #rteTogglePay {
 .tcal-nav { display: flex; gap: 4px; }
 .tcal-nav-btn { width: 30px; height: 30px; border: none; border-radius: 8px; background: var(--bg-main); cursor: pointer; font-size: 14px; font-weight: 700; color: var(--text-secondary); display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
 .tcal-nav-btn:hover { background: var(--orange); color: white; }
-.tcal-weekdays { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; margin-bottom: 4px; }
+.tcal-weekdays { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; margin-bottom: 4px; }
 .tcal-wd { text-align: center; font-size: 10px; font-weight: 700; color: var(--text-secondary); padding: 4px 0; text-transform: uppercase; letter-spacing: 0.5px; }
-.tcal-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+.tcal-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; }
 .tcal-day { position: relative; width: 100%; aspect-ratio: 1; border: none; border-radius: 10px; background: transparent; cursor: default; font-size: 12px; font-weight: 600; color: var(--text-secondary); display: flex; flex-direction: column; align-items: center; justify-content: center; transition: all 0.15s; padding: 2px; }
 .tcal-day.other-month { opacity: 0.3; }
 .tcal-day.today { outline: 2px solid var(--orange); outline-offset: -2px; font-weight: 800; }
@@ -684,15 +684,16 @@ body.route-sort-active #rteTogglePay {
 .tm-cal-wrap .tcal-day.has-trip:not(.selected):not(.tm-current):not(.overbooked):not(.full).dir-both { outline: 2px solid #2563eb; outline-offset: -2px; background: linear-gradient(135deg, rgba(37,99,235,0.1) 50%, rgba(5,150,105,0.15) 50%); }
 .tm-cal-wrap .tcal-day.full:not(.selected):not(.tm-current) { outline: 2px dashed #9ca3af; outline-offset: -2px; color: #6b7280 !important; background: repeating-linear-gradient(45deg, rgba(0,0,0,0.06), rgba(0,0,0,0.06) 3px, transparent 3px, transparent 7px); cursor: not-allowed; opacity: 0.85; }
 .tm-cal-wrap .tcal-day.full .tcal-day-num { text-decoration: line-through; }
-.tcal-day.tm-current:not(.selected) { background: rgba(124,58,237,0.18); color: #7c3aed; font-weight: 800; box-shadow: 0 0 0 1px rgba(124,58,237,0.25); }
-.tcal-day.tm-current.tm-bound:not(.selected) { outline: 3px solid #7c3aed; outline-offset: -3px; }
-.tcal-day.tm-current.tm-soft:not(.selected) { outline: 3px dashed #7c3aed; outline-offset: -3px; background: rgba(124,58,237,0.08); }
-.tcal-day.tm-current.selected { outline: 3px solid #7c3aed; outline-offset: -3px; }
+.tcal-day.tm-current:not(.selected) { background: rgba(124,58,237,0.12); color: #7c3aed; font-weight: 800; }
+.tcal-day.tm-current.tm-bound:not(.selected) { outline: 2px solid #7c3aed; outline-offset: -2px; }
+.tcal-day.tm-current.tm-soft:not(.selected) { outline: 1px solid rgba(124,58,237,0.5); outline-offset: -1px; background: rgba(124,58,237,0.08); }
+.tcal-day.tm-current.selected { outline: 2px solid #7c3aed; outline-offset: -2px; }
 .tm-cal-wrap .tcal-day.partial:not(.selected):not(.tm-current):not(.overbooked):not(.full) { box-shadow: inset 0 0 0 2px #d97706; }
 .tcal-partial { position: absolute; top: 2px; right: 3px; font-size: 8px; font-weight: 800; line-height: 1; color: #d97706; background: rgba(217,119,6,0.15); padding: 1px 3px; border-radius: 3px; pointer-events: none; }
 .tcal-day.selected .tcal-partial { color: white; background: rgba(255,255,255,0.25); }
 .tm-day-popup { position: fixed; display: none; z-index: 9999; max-width: 260px; padding: 8px 10px; background: #1f2937; color: white; font-size: 11px; line-height: 1.4; border-radius: 8px; white-space: pre-line; box-shadow: 0 4px 20px rgba(0,0,0,0.3); pointer-events: none; }
-.tm-current-badge { position: absolute; top: -7px; left: 50%; transform: translateX(-50%); max-width: calc(100% + 10px); background: #7c3aed; color: white; font-size: 9px; font-weight: 800; padding: 1px 5px; border-radius: 6px; letter-spacing: 0.2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; box-shadow: 0 1px 3px rgba(0,0,0,0.2); z-index: 2; }
+.tm-current-badge { position: absolute; top: -7px; left: 50%; transform: translateX(-50%); max-width: calc(100% + 10px); background: #7c3aed; color: white; font-size: 9px; font-weight: 800; padding: 1px 5px 1px 3px; border-radius: 6px; letter-spacing: 0.2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; box-shadow: 0 1px 3px rgba(0,0,0,0.2); z-index: 2; display: inline-flex; align-items: center; gap: 2px; }
+.tm-current-badge-ico { font-size: 9px; line-height: 1; filter: grayscale(1) brightness(2); }
 .tcal-seats { position: absolute; bottom: 2px; right: 3px; font-size: 8px; font-weight: 800; line-height: 1; letter-spacing: -0.2px; pointer-events: none; }
 .tcal-seats.ok { color: #059669; }
 .tcal-seats.warn { color: #d97706; }
@@ -752,9 +753,9 @@ body.route-sort-active #rteTogglePay {
 .tc-nav-btn { border: 1px solid var(--border); background: white; border-radius: 8px; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 12px; font-family: inherit; font-weight: 700; color: var(--text-primary); transition: all 0.15s; }
 .tc-nav-btn:hover { background: var(--bg-main); border-color: var(--primary); }
 .tc-today-btn { width: auto; padding: 0 12px; font-size: 11px; }
-.tc-weekdays { display: grid; grid-template-columns: repeat(7, 1fr); background: var(--bg-main); border-bottom: 1px solid var(--border); }
+.tc-weekdays { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); background: var(--bg-main); border-bottom: 1px solid var(--border); }
 .tc-wd { padding: 8px 4px; text-align: center; font-size: 10px; font-weight: 800; color: var(--text-secondary); letter-spacing: 0.5px; text-transform: uppercase; }
-.tc-grid { display: grid; grid-template-columns: repeat(7, 1fr); background: var(--border); gap: 1px; }
+.tc-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); background: var(--border); gap: 1px; }
 .tc-cell { position: relative; background: white; min-height: 110px; padding: 4px 4px 6px; display: flex; flex-direction: column; gap: 3px; cursor: default; transition: background 0.1s; }
 .tc-cell.other-month { background: #fafafa; }
 .tc-cell.other-month .tc-day-num { color: var(--text-secondary); opacity: 0.5; }
