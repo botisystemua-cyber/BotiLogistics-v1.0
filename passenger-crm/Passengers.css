@@ -668,14 +668,23 @@ body.route-sort-active #rteTogglePay {
 .tcal-dots .dot-overbooked { background: #dc2626; animation: pulse-overbook 1.5s ease-in-out infinite; width: 8px; height: 8px; }
 .tcal-day.overbooked { color: #dc2626 !important; }
 .tcal-day.overbooked:not(.selected) { outline: 2px solid #dc2626; outline-offset: -2px; }
+/* ── Модалка призначення рейсу ── */
+.tm-cal-wrap .tcal-dots { display: none; }
+.tm-cal-wrap .tcal-day-num { display: inline-block; padding: 1px 4px; border-radius: 4px; }
+.tm-cal-wrap .tcal-day.has-trip:not(.selected):not(.tm-current):not(.overbooked):not(.full).dir-ua-eu { outline: 2px solid #2563eb; outline-offset: -2px; }
+.tm-cal-wrap .tcal-day.has-trip:not(.selected):not(.tm-current):not(.overbooked):not(.full).dir-eu-ua { outline: 2px solid #059669; outline-offset: -2px; }
+.tm-cal-wrap .tcal-day.has-trip:not(.selected):not(.tm-current):not(.overbooked):not(.full).dir-both { outline: 2px solid #2563eb; outline-offset: -2px; background: linear-gradient(135deg, rgba(37,99,235,0.1) 50%, rgba(5,150,105,0.15) 50%); }
+.tm-cal-wrap .tcal-day.full:not(.selected):not(.tm-current) { outline: 2px dashed #9ca3af; outline-offset: -2px; color: #6b7280 !important; background: repeating-linear-gradient(45deg, rgba(0,0,0,0.06), rgba(0,0,0,0.06) 3px, transparent 3px, transparent 7px); cursor: not-allowed; opacity: 0.85; }
+.tm-cal-wrap .tcal-day.full .tcal-day-num { text-decoration: line-through; }
 .tcal-day.tm-current:not(.selected) { background: rgba(124,58,237,0.18); outline: 3px solid #7c3aed; outline-offset: -3px; color: #7c3aed; font-weight: 800; box-shadow: 0 0 0 1px rgba(124,58,237,0.25); }
 .tcal-day.tm-current.selected { outline: 3px solid #7c3aed; outline-offset: -3px; }
-.tm-current-badge { position: absolute; top: -6px; left: 50%; transform: translateX(-50%); background: #7c3aed; color: white; font-size: 8px; font-weight: 800; padding: 1px 5px; border-radius: 6px; letter-spacing: 0.3px; white-space: nowrap; pointer-events: none; box-shadow: 0 1px 3px rgba(0,0,0,0.15); }
+.tm-current-badge { position: absolute; top: -7px; left: 50%; transform: translateX(-50%); max-width: calc(100% + 10px); background: #7c3aed; color: white; font-size: 9px; font-weight: 800; padding: 1px 5px; border-radius: 6px; letter-spacing: 0.2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; box-shadow: 0 1px 3px rgba(0,0,0,0.2); z-index: 2; }
 .tcal-seats { position: absolute; bottom: 2px; right: 3px; font-size: 8px; font-weight: 800; line-height: 1; letter-spacing: -0.2px; pointer-events: none; }
 .tcal-seats.ok { color: #059669; }
 .tcal-seats.warn { color: #d97706; }
 .tcal-seats.low { color: #dc2626; }
 .tcal-day.selected .tcal-seats { color: white !important; }
+.tcal-legend-box { display: inline-block; width: 12px; height: 12px; border: 2px solid; border-radius: 3px; vertical-align: middle; margin-right: 2px; }
 .tcal-pax { cursor: pointer; }
 .tcal-pax:hover { text-decoration: underline; }
 .tcal-pax { font-size: 8px; font-weight: 800; color: var(--text-secondary); line-height: 1; margin-top: 1px; }
