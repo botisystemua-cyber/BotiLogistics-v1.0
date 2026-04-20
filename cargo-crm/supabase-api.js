@@ -19,6 +19,7 @@ const SB_TO_GAS_PKG = {
     nova_poshta_city:   'Місто Нова Пошта',
     internal_number:    'Внутрішній №',
     ttn_number:         'Номер ТТН',
+    ttn_date:           'Дата створення накладної',
     description:        'Опис',
     details:            'Деталі',
     item_count:         'Кількість позицій',
@@ -201,9 +202,33 @@ async function sbPkgGetAll(params) {
         const { data, error } = await query.order('created_at', { ascending: false });
         if (error) throw error;
 
+        // packages.route_id (uuid) is not populated by our addToRoute flow —
+        // the authoritative linkage is routes.pax_id_or_pkg_id. One batched
+        // lookup so the lead card can render «✅ В маршруті» after reload.
+        const pkgIds = (data || []).map(r => r.pkg_id).filter(Boolean);
+        const rteByPkg = {};
+        if (pkgIds.length) {
+            const { data: rteRows } = await sb.from('routes')
+                .select('pax_id_or_pkg_id, rte_id, vehicle_name')
+                .eq('tenant_id', TENANT_ID)
+                .in('pax_id_or_pkg_id', pkgIds);
+            (rteRows || []).forEach(r => {
+                if (r.pax_id_or_pkg_id && r.rte_id && !rteByPkg[r.pax_id_or_pkg_id]) {
+                    rteByPkg[r.pax_id_or_pkg_id] = r;
+                }
+            });
+        }
+
         const results = data.map(row => {
             const obj = sbToGasObjPkg(row);
             obj['Борг'] = calcDebtPkg(obj);
+            const rte = rteByPkg[row.pkg_id];
+            if (rte) {
+                obj['RTE_ID'] = rte.rte_id || '';
+                if (rte.vehicle_name && !obj['Номер авто']) {
+                    obj['Номер авто'] = rte.vehicle_name;
+                }
+            }
             return obj;
         });
 
