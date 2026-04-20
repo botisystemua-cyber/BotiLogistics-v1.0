@@ -990,6 +990,31 @@
         .inl-client-sug-addr { color: rgba(255,255,255,0.8); font-size: 11px; margin-top: 2px; }
         .inl-client-sug-count { font-size: 10px; color: rgba(255,255,255,0.6); white-space: nowrap; }
 
+        /* 💬 Месенджери — 4 toggle-кнопки */
+        .inl-msg-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 6px; }
+        .inl-msg-btn {
+            background: rgba(255,255,255,0.05);
+            color: rgba(255,255,255,0.6);
+            border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 8px;
+            padding: 10px 8px;
+            font-family: inherit;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .inl-msg-btn:active { transform: scale(0.97); }
+        .inl-msg-btn.active {
+            color: #fff;
+            border-color: rgba(59,130,246,0.6);
+            background: rgba(59,130,246,0.25);
+        }
+        .inl-msg-btn.msg-viber.active    { border-color: #7d41e2; background: rgba(125,65,226,0.25); }
+        .inl-msg-btn.msg-whatsapp.active { border-color: #25d366; background: rgba(37,211,102,0.25); }
+        .inl-msg-btn.msg-telegram.active { border-color: #2aabee; background: rgba(42,171,238,0.25); }
+        .inl-msg-btn.msg-chat.active     { border-color: #f59e0b; background: rgba(245,158,11,0.25); }
+
         /* ==== FIELDS CHOOSER (C7/3) ==== */
         .fc-overlay {
             position: fixed; inset: 0;
@@ -2280,6 +2305,7 @@
             // Отримувач
             { col: 'recipient_name',     label: 'ПІБ отримувача',       type: 'text',     category: '👤 Отримувач', defaultOn: true },
             { col: 'recipient_phone',    label: 'Тел. отримувача',      type: 'phone',    category: '👤 Отримувач', required: true, defaultOn: true },
+            { col: 'messengers',         label: '💬 Месенджери клієнта',type: 'messengers', category: '👤 Отримувач', defaultOn: true },
             { col: 'recipient_address',  label: 'Адреса в Європі',      type: 'text',     category: '👤 Отримувач', defaultOn: true },
             { col: 'nova_poshta_city',   label: 'Місто Нова Пошта',     type: 'text',     category: '👤 Отримувач' },
             // Відправник
@@ -2400,6 +2426,27 @@
                 sugBox.setAttribute('data-for', f.col);
                 row.appendChild(sugBox);
                 return row;
+            } else if (f.type === 'messengers') {
+                // 4 toggle-кнопки — які месенджери в клієнта є
+                el = document.createElement('input');
+                el.type = 'hidden';
+                el.id = 'inl_col_' + f.col;
+                el.value = '[]';
+                row.appendChild(el);
+                var mgrid = document.createElement('div');
+                mgrid.className = 'inl-msg-grid';
+                mgrid.setAttribute('data-for', f.col);
+                ['viber','whatsapp','telegram','chat'].forEach(function(key) {
+                    var b = document.createElement('button');
+                    b.type = 'button';
+                    b.className = 'inl-msg-btn msg-' + key;
+                    b.setAttribute('data-msg', key);
+                    b.onclick = function() { _toggleMessenger(f.col, key, b); };
+                    b.innerHTML = _MSG_ICON[key] + ' ' + _MSG_LABEL[key];
+                    mgrid.appendChild(b);
+                });
+                row.appendChild(mgrid);
+                return row;
             } else if (f.type === 'photo') {
                 // photo: spiсhial composite — hidden input з URL + превʼю + file picker
                 el = document.createElement('input');
@@ -2443,6 +2490,34 @@
             });
         }
 
+        // 💬 Месенджери: лейбли та іконки для 4 кнопок
+        var _MSG_ICON = { viber: '💜', whatsapp: '💚', telegram: '✈️', chat: '💬' };
+        var _MSG_LABEL = { viber: 'Viber', whatsapp: 'WhatsApp', telegram: 'Telegram', chat: 'Чат' };
+
+        function _getMessengersForCol(col) {
+            var hidden = document.getElementById('inl_col_' + col);
+            if (!hidden) return [];
+            try { return JSON.parse(hidden.value || '[]'); } catch (_) { return []; }
+        }
+        function _setMessengersForCol(col, arr) {
+            var hidden = document.getElementById('inl_col_' + col);
+            if (!hidden) return;
+            hidden.value = JSON.stringify(arr || []);
+            // Підсвічуємо активні кнопки
+            var grid = document.querySelector('.inl-msg-grid[data-for="' + col + '"]');
+            if (grid) {
+                Array.prototype.slice.call(grid.querySelectorAll('.inl-msg-btn')).forEach(function(b) {
+                    b.classList.toggle('active', arr.indexOf(b.getAttribute('data-msg')) !== -1);
+                });
+            }
+        }
+        function _toggleMessenger(col, key, btn) {
+            var cur = _getMessengersForCol(col);
+            var i = cur.indexOf(key);
+            if (i === -1) cur.push(key); else cur.splice(i, 1);
+            _setMessengersForCol(col, cur);
+        }
+
         // 📇 Пошук клієнта за телефоном + автопідказки на сканері (Phase A)
         function _lookupClientInline(phone) {
             phone = (phone || '').trim();
@@ -2457,7 +2532,7 @@
                       '?tenant_id=eq.' + encodeURIComponent(TENANT_ID) +
                       '&recipient_phone=ilike.*' + encodeURIComponent(tail) + '*' +
                       '&is_archived=eq.false' +
-                      '&select=pkg_id,recipient_name,recipient_address,nova_poshta_city,created_at,recipient_phone' +
+                      '&select=pkg_id,recipient_name,recipient_address,nova_poshta_city,created_at,recipient_phone,messengers' +
                       '&order=created_at.desc&limit=20';
             return fetch(url, {
                 headers: {
@@ -2472,12 +2547,19 @@
                     var addr = (r.recipient_address || r.nova_poshta_city || '').trim();
                     if (!name && !addr) return;
                     var key = name + '|' + addr;
-                    if (!byKey[key]) byKey[key] = { name: name, address: addr, count: 0, last: r.created_at };
+                    if (!byKey[key]) byKey[key] = { name: name, address: addr, count: 0, last: r.created_at, messengers: {} };
                     byKey[key].count++;
                     if (r.created_at > byKey[key].last) byKey[key].last = r.created_at;
+                    // union месенджерів по всіх збігах цієї адреси
+                    (Array.isArray(r.messengers) ? r.messengers : []).forEach(function(m) {
+                        byKey[key].messengers[m] = true;
+                    });
                 });
-                return Object.keys(byKey).map(function(k){ return byKey[k]; })
-                    .sort(function(a, b){ return (b.last || '').localeCompare(a.last || ''); });
+                return Object.keys(byKey).map(function(k){
+                    var it = byKey[k];
+                    return { name: it.name, address: it.address, count: it.count, last: it.last,
+                             messengers: Object.keys(it.messengers) };
+                }).sort(function(a, b){ return (b.last || '').localeCompare(a.last || ''); });
             }).catch(function(){ return []; });
         }
 
@@ -2504,6 +2586,10 @@
                     [nameEl, addrEl].forEach(function(el) {
                         if (el) el.closest('.inl-row').classList.add('has-value');
                     });
+                    // 💬 Підтягуємо месенджери з попередніх лідів (union)
+                    if (Array.isArray(it.messengers) && it.messengers.length) {
+                        _setMessengersForCol('messengers', it.messengers);
+                    }
                     box.classList.remove('show');
                 });
                 box.appendChild(row);
@@ -2639,6 +2725,12 @@
                     var el = document.getElementById('inl_col_' + col);
                     if (!el) return;
                     var v = row[col];
+                    // messengers — jsonb[]; вмикаємо відповідні кнопки
+                    if (col === 'messengers') {
+                        var arr = Array.isArray(v) ? v : [];
+                        _setMessengersForCol('messengers', arr);
+                        return;
+                    }
                     el.value = (v == null ? '' : String(v));
                     var parent = el.closest('.inl-row');
                     if (parent) {
@@ -2758,6 +2850,15 @@
                 if (!meta) return;
                 var el = document.getElementById('inl_col_' + col);
                 if (!el) return;
+                // messengers — jsonb[]; порівнюємо як масиви, а не рядки
+                if (meta.type === 'messengers') {
+                    var newArr = _getMessengersForCol(col);
+                    var oldArr = Array.isArray(_inlSnapshot[col]) ? _inlSnapshot[col] : [];
+                    var aSorted = newArr.slice().sort().join(',');
+                    var bSorted = oldArr.slice().sort().join(',');
+                    if (aSorted !== bSorted) diff[col] = newArr;
+                    return;
+                }
                 var raw = (el.value == null ? '' : String(el.value)).trim();
                 var oldRaw = _inlSnapshot[col] == null ? '' : String(_inlSnapshot[col]).trim();
                 if (raw === oldRaw) return;

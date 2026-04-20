@@ -2021,7 +2021,11 @@ const _FILL_FIELDS = [
   ['fill_payStatus',   'Статус оплати'],
   ['fill_statusPkg',   'Статус посилки'],
   ['fill_photoUrl',    'Фото посилки'],
+  ['fill_messengers',  'Месенджери'],
 ];
+
+// Поля, що зберігають JSON-масив у hidden → треба порівнювати як масиви
+const _FILL_JSONB_FIELDS = new Set(['fill_messengers']);
 
 function openFillModal(pkgId) {
   if (!pkgId) return;
@@ -2033,6 +2037,13 @@ function openFillModal(pkgId) {
     const el = document.getElementById(inputId);
     if (!el) return;
     const cur = row[col];
+    // JSONB (messengers) — hidden input з JSON.stringify + підсвітити кнопки
+    if (_FILL_JSONB_FIELDS.has(inputId)) {
+      const arr = Array.isArray(cur) ? cur : [];
+      el.value = JSON.stringify(arr);
+      _applyFillMessengersUI(arr);
+      return;
+    }
     if (cur != null && cur !== '') {
       el.value = cur;
     } else if (el.tagName === 'SELECT') {
@@ -2062,6 +2073,28 @@ function openFillModal(pkgId) {
 
 function closeFillModal() {
   document.getElementById('fillOverlay').classList.remove('open');
+}
+
+// 💬 Месенджери у fill-модалці — toggle + UI-підсвічення
+function _getFillMessengers() {
+  const hidden = document.getElementById('fill_messengers');
+  if (!hidden) return [];
+  try { return JSON.parse(hidden.value || '[]'); } catch (_) { return []; }
+}
+function _applyFillMessengersUI(arr) {
+  const hidden = document.getElementById('fill_messengers');
+  if (hidden) hidden.value = JSON.stringify(arr || []);
+  const grid = document.getElementById('fill_messengersGrid');
+  if (!grid) return;
+  Array.from(grid.querySelectorAll('.fill-msg-btn')).forEach(b => {
+    b.classList.toggle('active', (arr || []).indexOf(b.getAttribute('data-msg')) !== -1);
+  });
+}
+function toggleFillMessenger(key /*, btn */) {
+  const cur = _getFillMessengers();
+  const i = cur.indexOf(key);
+  if (i === -1) cur.push(key); else cur.splice(i, 1);
+  _applyFillMessengersUI(cur);
 }
 
 // ===== [SECT-PHONE-NORMALIZE] Нормалізація телефону =====
@@ -2131,7 +2164,7 @@ async function lookupClientByPhone(phone) {
       '?tenant_id=eq.' + encodeURIComponent(tenantId) +
       '&recipient_phone=ilike.*' + encodeURIComponent(tail) + '*' +
       '&is_archived=eq.false' +
-      '&select=pkg_id,recipient_name,recipient_address,nova_poshta_city,created_at,recipient_phone' +
+      '&select=pkg_id,recipient_name,recipient_address,nova_poshta_city,created_at,recipient_phone,messengers' +
       '&order=created_at.desc&limit=20';
     const res = await fetch(url, {
       headers: {
@@ -2148,11 +2181,18 @@ async function lookupClientByPhone(phone) {
       const addr = (r.recipient_address || r.nova_poshta_city || '').trim();
       if (!name && !addr) return;
       const key = name + '|' + addr;
-      if (!byKey[key]) byKey[key] = { name, address: addr, count: 0, last: r.created_at };
+      if (!byKey[key]) byKey[key] = { name, address: addr, count: 0, last: r.created_at, messengers: {} };
       byKey[key].count++;
       if (r.created_at > byKey[key].last) byKey[key].last = r.created_at;
+      // union месенджерів по всіх збігах
+      (Array.isArray(r.messengers) ? r.messengers : []).forEach(m => {
+        byKey[key].messengers[m] = true;
+      });
     });
-    return Object.values(byKey).sort((a, b) => b.last.localeCompare(a.last));
+    return Object.values(byKey).map(it => ({
+      name: it.name, address: it.address, count: it.count, last: it.last,
+      messengers: Object.keys(it.messengers),
+    })).sort((a, b) => b.last.localeCompare(a.last));
   } catch (e) {
     console.warn('[client lookup]', e);
     return [];
@@ -2196,6 +2236,10 @@ document.addEventListener('DOMContentLoaded', () => {
       const addrEl = document.getElementById('fill_addressTo');
       // Ім'я в fill-модалці наразі нема окремого поля, заповнюємо тільки адресу
       if (addrEl) addrEl.value = picked.address || addrEl.value;
+      // 💬 Підтягуємо месенджери з попередніх лідів (union)
+      if (Array.isArray(picked.messengers) && picked.messengers.length) {
+        _applyFillMessengersUI(picked.messengers);
+      }
       sugBox.classList.remove('show');
     });
   };
@@ -2277,6 +2321,17 @@ async function saveFillModal() {
   for (const [inputId, col] of _FILL_FIELDS) {
     const el = document.getElementById(inputId);
     if (!el) continue;
+    // JSONB (messengers) — порівнюємо як масиви, а не рядки
+    if (_FILL_JSONB_FIELDS.has(inputId)) {
+      let newArr = [];
+      try { newArr = JSON.parse(el.value || '[]'); } catch (_) { newArr = []; }
+      if (!Array.isArray(newArr)) newArr = [];
+      const oldArr = Array.isArray(row[col]) ? row[col] : [];
+      const aS = newArr.slice().sort().join(',');
+      const bS = oldArr.slice().sort().join(',');
+      if (aS !== bS) toUpdate.push([col, newArr]);
+      continue;
+    }
     const newVal = (el.value == null ? '' : String(el.value)).trim();
     const oldVal = (row[col] == null ? '' : String(row[col])).trim();
     if (newVal !== oldVal) toUpdate.push([col, newVal]);

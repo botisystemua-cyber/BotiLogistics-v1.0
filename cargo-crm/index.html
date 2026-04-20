@@ -400,6 +400,17 @@
       </div>
 
       <div class="fill-row">
+        <label>💬 Месенджери клієнта</label>
+        <input type="hidden" id="fill_messengers" value="[]">
+        <div class="fill-msg-grid" id="fill_messengersGrid">
+          <button type="button" class="fill-msg-btn msg-viber"    data-msg="viber"    onclick="toggleFillMessenger('viber', this)">💜 Viber</button>
+          <button type="button" class="fill-msg-btn msg-whatsapp" data-msg="whatsapp" onclick="toggleFillMessenger('whatsapp', this)">💚 WhatsApp</button>
+          <button type="button" class="fill-msg-btn msg-telegram" data-msg="telegram" onclick="toggleFillMessenger('telegram', this)">✈️ Telegram</button>
+          <button type="button" class="fill-msg-btn msg-chat"     data-msg="chat"     onclick="toggleFillMessenger('chat', this)">💬 Чат</button>
+        </div>
+      </div>
+
+      <div class="fill-row">
         <label>Телефон відправника</label>
         <input type="tel" id="fill_phoneSender" placeholder="+380…">
       </div>
