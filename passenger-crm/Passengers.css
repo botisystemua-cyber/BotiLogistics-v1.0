@@ -676,8 +676,14 @@ body.route-sort-active #rteTogglePay {
 .tm-cal-wrap .tcal-day.has-trip:not(.selected):not(.tm-current):not(.overbooked):not(.full).dir-both { outline: 2px solid #2563eb; outline-offset: -2px; background: linear-gradient(135deg, rgba(37,99,235,0.1) 50%, rgba(5,150,105,0.15) 50%); }
 .tm-cal-wrap .tcal-day.full:not(.selected):not(.tm-current) { outline: 2px dashed #9ca3af; outline-offset: -2px; color: #6b7280 !important; background: repeating-linear-gradient(45deg, rgba(0,0,0,0.06), rgba(0,0,0,0.06) 3px, transparent 3px, transparent 7px); cursor: not-allowed; opacity: 0.85; }
 .tm-cal-wrap .tcal-day.full .tcal-day-num { text-decoration: line-through; }
-.tcal-day.tm-current:not(.selected) { background: rgba(124,58,237,0.18); outline: 3px solid #7c3aed; outline-offset: -3px; color: #7c3aed; font-weight: 800; box-shadow: 0 0 0 1px rgba(124,58,237,0.25); }
+.tcal-day.tm-current:not(.selected) { background: rgba(124,58,237,0.18); color: #7c3aed; font-weight: 800; box-shadow: 0 0 0 1px rgba(124,58,237,0.25); }
+.tcal-day.tm-current.tm-bound:not(.selected) { outline: 3px solid #7c3aed; outline-offset: -3px; }
+.tcal-day.tm-current.tm-soft:not(.selected) { outline: 3px dashed #7c3aed; outline-offset: -3px; background: rgba(124,58,237,0.08); }
 .tcal-day.tm-current.selected { outline: 3px solid #7c3aed; outline-offset: -3px; }
+.tm-cal-wrap .tcal-day.partial:not(.selected):not(.tm-current):not(.overbooked):not(.full) { box-shadow: inset 0 0 0 2px #d97706; }
+.tcal-partial { position: absolute; top: 2px; right: 3px; font-size: 8px; font-weight: 800; line-height: 1; color: #d97706; background: rgba(217,119,6,0.15); padding: 1px 3px; border-radius: 3px; pointer-events: none; }
+.tcal-day.selected .tcal-partial { color: white; background: rgba(255,255,255,0.25); }
+.tm-day-popup { position: fixed; display: none; z-index: 9999; max-width: 260px; padding: 8px 10px; background: #1f2937; color: white; font-size: 11px; line-height: 1.4; border-radius: 8px; white-space: pre-line; box-shadow: 0 4px 20px rgba(0,0,0,0.3); pointer-events: none; }
 .tm-current-badge { position: absolute; top: -7px; left: 50%; transform: translateX(-50%); max-width: calc(100% + 10px); background: #7c3aed; color: white; font-size: 9px; font-weight: 800; padding: 1px 5px; border-radius: 6px; letter-spacing: 0.2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; box-shadow: 0 1px 3px rgba(0,0,0,0.2); z-index: 2; }
 .tcal-seats { position: absolute; bottom: 2px; right: 3px; font-size: 8px; font-weight: 800; line-height: 1; letter-spacing: -0.2px; pointer-events: none; }
 .tcal-seats.ok { color: #059669; }
@@ -1106,16 +1112,6 @@ body.route-sort-active #rteTogglePay {
 .trip-modal-foot .btn-save { flex: 1; padding: 10px; border: none; border-radius: 10px; background: var(--orange); color: white; font-size: 12px; font-weight: 700; cursor: pointer; }
 .trip-modal-foot .btn-save:disabled { opacity: 0.4; cursor: not-allowed; }
 .trip-modal-foot .btn-unassign { flex: 1; padding: 10px; border: 1px solid var(--danger); border-radius: 10px; background: white; color: var(--danger); font-size: 12px; font-weight: 700; cursor: pointer; }
-
-/* Date pills in trip modal */
-.tm-dates-grid { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
-.tm-date-pill { padding: 8px 12px; border-radius: 10px; border: 2px solid var(--border); background: white; cursor: pointer; text-align: center; min-width: 70px; transition: all 0.15s; }
-.tm-date-pill:hover { border-color: var(--primary); background: #f0f7ff; }
-.tm-date-pill.active { border-color: var(--orange); background: #fff7ed; }
-.tm-date-day { font-size: 10px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; }
-.tm-date-num { font-size: 14px; font-weight: 800; color: var(--text-primary); line-height: 1.2; }
-.tm-date-month { font-size: 9px; color: var(--text-secondary); font-weight: 600; }
-.tm-date-trips { font-size: 9px; color: var(--success); font-weight: 700; margin-top: 2px; }
 
 /* Vehicle cards in trip modal */
 .tm-section-label { font-size: 10px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; margin: 12px 0 8px; letter-spacing: 0.5px; }
