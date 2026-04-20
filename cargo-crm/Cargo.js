@@ -2002,6 +2002,9 @@ const _FILL_FIELDS = [
   ['fill_sum',         'Сума'],
   ['fill_currency',    'Валюта оплати'],
   ['fill_payStatus',   'Статус оплати'],
+  ['fill_npAmount',    'Сума НП'],
+  ['fill_npCurrency',  'Валюта НП'],
+  ['fill_npStatus',    'Статус НП'],
   ['fill_statusPkg',   'Статус посилки'],
 ];
 

@@ -757,6 +757,7 @@
             grid-template-columns: 1fr 1fr;
             gap: 8px;
         }
+        .cam-actions.with-fill { grid-template-columns: 1fr 1fr 1fr; }
         .cam-btn {
             padding: 14px 10px;
             border-radius: 10px;
@@ -771,6 +772,7 @@
         .cam-btn-cancel { background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.18); }
         .cam-btn-primary { background: linear-gradient(180deg,#3b82f6,#2563eb); color: #fff; box-shadow: 0 4px 10px rgba(37,99,235,0.35); }
         .cam-btn-primary.save { background: linear-gradient(180deg,#10b981,#059669); box-shadow: 0 4px 10px rgba(16,185,129,0.35); }
+        .cam-btn-fill { background: linear-gradient(180deg,#ef4444,#dc2626); color: #fff; box-shadow: 0 4px 10px rgba(220,38,38,0.35), 0 0 0 3px rgba(59,130,246,0.18); }
 
         /* ==== INLINE EDITOR (C7/2): full-screen модалка прямо на сканері ==== */
         .inl-overlay {
@@ -1179,9 +1181,11 @@
                 <button type="button" class="cam-stepper-btn" onclick="stepperChange(1)">+</button>
                 <span class="cam-stepper-label">📥 Місць НП</span>
             </div>
-            <div class="cam-actions">
+            <div class="cam-actions" id="camActions">
                 <button type="button" class="cam-btn cam-btn-cancel" onclick="checkActionCancel()">❌ Скасувати</button>
                 <button type="button" class="cam-btn cam-btn-primary" id="camBtnPrimary" onclick="checkActionPrimary()">✏️ Редагувати</button>
+                <!-- Третя кнопка, лише для невідомого ТТН: Зберегти + одразу відкрити редактор -->
+                <button type="button" class="cam-btn cam-btn-fill" id="camBtnFill" onclick="checkActionFill()" style="display:none;">📝 Заповнити</button>
             </div>
         </div>
 
@@ -1728,12 +1732,18 @@
             document.getElementById('camStepperVal').textContent = _camState.count;
 
             var primary = document.getElementById('camBtnPrimary');
+            var fillBtn = document.getElementById('camBtnFill');
+            var actions = document.getElementById('camActions');
             if (_camState.isUnknown) {
                 primary.textContent = '💾 Зберегти';
                 primary.classList.add('save');
+                fillBtn.style.display = '';
+                actions.classList.add('with-fill');
             } else {
                 primary.textContent = '✏️ Редагувати';
                 primary.classList.remove('save');
+                fillBtn.style.display = 'none';
+                actions.classList.remove('with-fill');
             }
 
             // Ховаємо mainBtn / editBtn — діюче меню саме вирішує, що далі
@@ -1809,6 +1819,73 @@
                 closeCheckActionMenu();
                 resumeAfterSheet();
             }
+        }
+
+        // «📝 Заповнити» для невідомого ТТН: створюємо лід через scan_ttn,
+        // потім одразу відкриваємо inline-редактор — оператор заповнює поля
+        // і зберігає; авто-перехід знімає «Невідомий» → лід у «В перевірці».
+        function checkActionFill() {
+            var ttn = _camState.ttn;
+            var count = _camState.count;
+            if (!TENANT_ID) {
+                showToast({ variant: 'error', icon: '❌', label: 'Немає сесії',
+                            value: ttn, status: 'Увійдіть у CRM заново' });
+                setTimeout(function(){ document.getElementById('resultToast').classList.remove('show'); }, 2500);
+                closeCheckActionMenu();
+                resumeAfterSheet();
+                return;
+            }
+            sb.rpc('scan_ttn', {
+                p_tenant_id: TENANT_ID, p_ttn: ttn,
+                p_direction: DEFAULT_DIRECTION, p_user: USER_LOGIN
+            }).then(function(result) {
+                if (result.error || !result.data || !result.data.ok) {
+                    var msg = (result.error && result.error.message) ||
+                              (result.data && result.data.error) || 'невідома причина';
+                    showToast({ variant: 'error', icon: '❌', label: 'Не вдалось створити лід',
+                                value: ttn, status: String(msg) });
+                    setTimeout(function(){ document.getElementById('resultToast').classList.remove('show'); }, 3000);
+                    closeCheckActionMenu();
+                    resumeAfterSheet();
+                    return;
+                }
+                var newPkg = result.data.pkg_id;
+                if (!newPkg) {
+                    showToast({ variant: 'error', icon: '⚠️', label: 'Лід не створено',
+                                value: ttn, status: 'pkg_id порожній' });
+                    setTimeout(function(){ document.getElementById('resultToast').classList.remove('show'); }, 3000);
+                    closeCheckActionMenu();
+                    resumeAfterSheet();
+                    return;
+                }
+                // Якщо stepper був >1 — PATCH np_places, потім відкриваємо редактор
+                var patchPromise = Promise.resolve();
+                if (count > 1) {
+                    patchPromise = fetch(SUPABASE_URL + '/rest/v1/packages' +
+                              '?tenant_id=eq.' + encodeURIComponent(TENANT_ID) +
+                              '&pkg_id=eq.' + encodeURIComponent(newPkg), {
+                        method: 'PATCH',
+                        headers: {
+                            apikey: SUPABASE_ANON_KEY,
+                            Authorization: 'Bearer ' + SUPABASE_ANON_KEY,
+                            'Content-Type': 'application/json',
+                            Prefer: 'return=minimal'
+                        },
+                        body: JSON.stringify({ np_places: count })
+                    }).catch(function(){});
+                }
+                patchPromise.then(function() {
+                    _sessionScans[ttn] = (_sessionScans[ttn] || 0) + 1;
+                    // Відразу відкриваємо редактор для цього нового ліда
+                    openInlineEditor(newPkg, ttn);
+                });
+            }).catch(function(err) {
+                showToast({ variant: 'error', icon: '❌', label: 'Мережа',
+                            value: ttn, status: String(err && err.message || err) });
+                setTimeout(function(){ document.getElementById('resultToast').classList.remove('show'); }, 3000);
+                closeCheckActionMenu();
+                resumeAfterSheet();
+            });
         }
 
         function checkActionPrimary() {
@@ -2015,8 +2092,10 @@
             { col: 'deposit_currency',   label: 'Валюта завдатку',      type: 'select',   category: '💰 Оплата', opts: _CURRENCY_OPTS },
             { col: 'payment_form',       label: 'Форма оплати',         type: 'text',     category: '💰 Оплата' },
             { col: 'payment_notes',      label: 'Примітка оплати',      type: 'textarea', category: '💰 Оплата' },
-            { col: 'np_amount',          label: 'Сума НП',              type: 'float',    category: '💰 Оплата' },
-            { col: 'np_currency',        label: 'Валюта НП',            type: 'select',   category: '💰 Оплата', opts: _CURRENCY_OPTS },
+            { col: 'np_amount',          label: 'Сума НП',              type: 'float',    category: '💰 Оплата', defaultOn: true },
+            { col: 'np_currency',        label: 'Валюта НП',            type: 'select',   category: '💰 Оплата', opts: _CURRENCY_OPTS, defaultOn: true },
+            { col: 'np_status',          label: 'Статус НП',            type: 'select',   category: '💰 Оплата', opts: _PAYSTATUS_OPTS, defaultOn: true },
+            { col: 'np_form',            label: 'Форма НП (нал/безнал)', type: 'text',     category: '💰 Оплата' },
             // Статуси
             { col: 'package_status',     label: 'Статус посилки',       type: 'select',   category: '🏷️ Статуси', opts: _PKGSTATUS_OPTS, defaultOn: true },
             { col: 'lead_status',        label: 'Статус ліда',          type: 'select',   category: '🏷️ Статуси', opts: _LEADSTATUS_OPTS },

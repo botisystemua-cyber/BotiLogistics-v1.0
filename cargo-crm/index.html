@@ -465,6 +465,32 @@
         </select>
       </div>
 
+      <div class="fill-grid2">
+        <div class="fill-row">
+          <label>💰 Сума НП</label>
+          <input type="number" id="fill_npAmount" min="0" step="0.01" placeholder="0">
+        </div>
+        <div class="fill-row">
+          <label>Валюта НП</label>
+          <select id="fill_npCurrency">
+            <option value="UAH">UAH</option>
+            <option value="EUR">EUR</option>
+            <option value="USD">USD</option>
+            <option value="PLN">PLN</option>
+            <option value="CZK">CZK</option>
+            <option value="CHF">CHF</option>
+          </select>
+        </div>
+      </div>
+      <div class="fill-row">
+        <label>Статус НП</label>
+        <select id="fill_npStatus">
+          <option value="Не оплачено" selected>Не оплачено</option>
+          <option value="Частково">Частково</option>
+          <option value="Оплачено">Оплачено</option>
+        </select>
+      </div>
+
       <div class="fill-row">
         <label>Статус посилки</label>
         <select id="fill_statusPkg">
