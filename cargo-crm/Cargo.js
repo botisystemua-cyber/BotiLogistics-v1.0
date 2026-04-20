@@ -922,7 +922,7 @@ function renderCard(p) {
   const inRoute = !!rteId;
   const tabRoute = inRoute
     ? renderDetailGrid([
-        ['Дата відправки', p['Дата відправки'] || '', {readonly: true}],
+        ['Дата відправки', p['Дата відправки'] || ''],
         ['Номер авто', auto, {readonly: true}],
         ['RTE_ID', rteId, {readonly: true}],
         ['Таймінг', p['Таймінг'] || ''],
@@ -935,6 +935,9 @@ function renderCard(p) {
     ['PKG_ID', pkgId, {readonly: true}],
     ['Ід_смарт', p['Ід_смарт'] || '', {readonly: true}],
     ['Дата створення', dateCreated, {readonly: true}],
+    ['Дата створення накладної', p['Дата створення накладної'] || ''],
+    ['Дата відправки', p['Дата відправки'] || ''],
+    ['Дата отримання', p['Дата отримання'] || ''],
     ['SOURCE_SHEET', p['SOURCE_SHEET'] || '', {readonly: true}],
     ['CLI_ID', p['CLI_ID'] || '', {readonly: true}],
     ['ORDER_ID', p['ORDER_ID'] || '', {readonly: true}],
@@ -1062,6 +1065,20 @@ function _isAddressField(col) {
   return col === 'Адреса відправки' || col === 'Адреса в Європі';
 }
 
+// Дата-поля для inline-редагування: рендеримо <input type="date">, а у БД
+// лежить просто YYYY-MM-DD (колонки типу date).
+const _DATE_FIELDS = new Set([
+  'Дата відправки', 'Дата отримання', 'Дата створення накладної',
+]);
+function _isDateField(col) { return _DATE_FIELDS.has(col); }
+function _toDateInputValue(v) {
+  if (!v) return '';
+  const s = String(v);
+  // ISO timestamp → take YYYY-MM-DD; plain date → leave as-is.
+  const m = s.match(/^\d{4}-\d{2}-\d{2}/);
+  return m ? m[0] : '';
+}
+
 function startInlineEdit(el, pkgId, col) {
   // If dropdown or input already exists — skip
   if (el.querySelector('.qe-dropdown-wrap') || el.querySelector('input')) return;
@@ -1076,6 +1093,17 @@ function startInlineEdit(el, pkgId, col) {
     _createAddressCombo(el, pkgId, col, currentVal, options || []);
   } else if (options) {
     _createQeDropdown(el, pkgId, col, currentVal, options);
+  } else if (_isDateField(col)) {
+    const input = document.createElement('input');
+    input.type = 'date';
+    input.value = _toDateInputValue(currentVal);
+    input.onblur = function() { saveInlineEdit(pkgId, col, input.value, el); };
+    input.onkeydown = function(e) {
+      if (e.key === 'Enter') input.blur();
+      if (e.key === 'Escape') { restoreBlock(el, currentVal, pkgId, col); }
+    };
+    el.appendChild(input);
+    input.focus();
   } else {
     const input = document.createElement('input');
     input.type = 'text';

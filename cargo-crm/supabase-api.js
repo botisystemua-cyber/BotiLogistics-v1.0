@@ -19,6 +19,7 @@ const SB_TO_GAS_PKG = {
     nova_poshta_city:   'Місто Нова Пошта',
     internal_number:    'Внутрішній №',
     ttn_number:         'Номер ТТН',
+    ttn_date:           'Дата створення накладної',
     description:        'Опис',
     details:            'Деталі',
     item_count:         'Кількість позицій',
