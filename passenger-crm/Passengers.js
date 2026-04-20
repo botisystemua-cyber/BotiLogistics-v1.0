@@ -4252,36 +4252,6 @@ async function deletePax(paxId, sheet, name) {
 // ================================================================
 // TRIPS RENDERING
 // ================================================================
-// Один минулий + сьогодні (якщо є) + один наступний — для верхнього ряду tripsGrid.
-// Не враховує user-фільтри: ці три рейси завжди показуються зверху.
-function getFeaturedTrips() {
-    const today = new Date(); today.setHours(0, 0, 0, 0);
-    const todayTs = today.getTime();
-    const parseTripDate = (t) => {
-        const parts = String(t.date || '').split('.');
-        let d;
-        if (parts.length === 3) d = new Date(parts[2], parts[1]-1, parts[0]);
-        else d = new Date(t.date);
-        if (isNaN(d)) return null;
-        d.setHours(0, 0, 0, 0);
-        return d;
-    };
-    const active = trips.filter(t => {
-        if (t.status === 'Архів' || t.status === 'Виконано' || t.status === 'Видалено') return false;
-        return parseTripDate(t) !== null;
-    }).map(t => ({ t, ts: parseTripDate(t).getTime() }));
-
-    const past = active.filter(x => x.ts < todayTs).sort((a, b) => b.ts - a.ts)[0];
-    const todayTrip = active.find(x => x.ts === todayTs);
-    const upcoming = active.filter(x => x.ts > todayTs).sort((a, b) => a.ts - b.ts)[0];
-
-    const list = [];
-    if (past) list.push(past.t);
-    if (todayTrip) list.push(todayTrip.t);
-    if (upcoming) list.push(upcoming.t);
-    return list;
-}
-
 function renderTrips() {
     const grid = document.getElementById('tripsGrid');
     const cal = document.getElementById('tripsCalendar');
@@ -4298,11 +4268,25 @@ function renderTrips() {
     grid.style.display = '';
     cal.style.display = 'none';
 
-    const featured = getFeaturedTrips();
-    const featuredIds = new Set(featured.map(t => t.cal_id));
-    const filtered = getFilteredTrips().filter(t => !featuredIds.has(t.cal_id));
+    const today = new Date(); today.setHours(0,0,0,0);
+    const todayTs = today.getTime();
 
-    if (featured.length === 0 && filtered.length === 0) {
+    // В list-режимі ігноруємо time-фільтр (минулі зліва завжди доступні скролом).
+    // Напрям/авто/дата — поважаємо.
+    const base = trips.filter(t => {
+        if (t.status === 'Архів' || t.status === 'Виконано' || t.status === 'Видалено') return false;
+        if (tripDirFilter !== 'all' && getTripDirection(t) !== tripDirFilter) return false;
+        if (tripAutoFilter !== 'all' && cleanAutoName(t.auto_name) !== tripAutoFilter) return false;
+        if (tripDateFilter) {
+            const fd = formatTripDate(t.date);
+            const p = tripDateFilter.split('-');
+            const target = p[2] + '.' + p[1] + '.' + p[0];
+            if (fd !== target) return false;
+        }
+        return parseTripDateObj(t) !== null;
+    });
+
+    if (base.length === 0) {
         grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;">
             <div class="empty-state-icon">🚐</div>
             <div class="empty-state-text">Рейсів ще немає</div>
@@ -4312,7 +4296,90 @@ function renderTrips() {
         return;
     }
 
-    grid.innerHTML = featured.concat(filtered).map(t => renderTripCard(t)).join('');
+    // Групуємо по «Місто + напрям» — різні напрями → різні рядки
+    const groups = {};
+    base.forEach(t => {
+        const city = String(t.city || '—').trim();
+        const dir = getTripDirection(t);
+        const key = dir + '||' + city.toLowerCase();
+        if (!groups[key]) groups[key] = { city, dir, trips: [] };
+        groups[key].trips.push(t);
+    });
+
+    // Сортуємо рейси в рядку по даті ASC, рахуємо ранг групи
+    const groupList = Object.values(groups).map(g => {
+        g.trips.sort((a, b) => parseTripDateObj(a) - parseTripDateObj(b));
+        const tsList = g.trips.map(t => parseTripDateObj(t).getTime());
+        const future = tsList.filter(ts => ts >= todayTs);
+        let rank;
+        if (future.length) {
+            rank = future[0] - todayTs; // менше = ближче до сьогодні
+        } else {
+            // Тільки минулі — на самий низ, чим давніше тим нижче
+            rank = Number.MAX_SAFE_INTEGER - (todayTs - tsList[tsList.length - 1]);
+        }
+        g.rank = rank;
+        return g;
+    });
+    groupList.sort((a, b) => a.rank - b.rank);
+
+    grid.innerHTML = groupList.map(g => renderTripRow(g, todayTs)).join('');
+
+    // Скрол кожного рядка так, щоб сьогоднішній/найближчий майбутній був зліва
+    requestAnimationFrame(() => {
+        document.querySelectorAll('.trow-scroll').forEach(row => {
+            const cards = row.querySelectorAll('.trow-card');
+            let anchor = null;
+            for (const c of cards) {
+                if (parseInt(c.dataset.ts) >= todayTs) { anchor = c; break; }
+            }
+            if (anchor) {
+                row.scrollLeft = anchor.offsetLeft - row.offsetLeft;
+            } else {
+                row.scrollLeft = row.scrollWidth;
+            }
+        });
+    });
+}
+
+function renderTripRow(g, todayTs) {
+    const dirCls = g.dir === 'ua-eu' ? 'trow-ua-eu' : g.dir === 'eu-ua' ? 'trow-eu-ua' : 'trow-other';
+    const dirLabel = g.dir === 'ua-eu' ? '🇺🇦 → 🇪🇺' : g.dir === 'eu-ua' ? '🇪🇺 → 🇺🇦' : '↔';
+
+    const cardsHtml = g.trips.map(t => {
+        const ts = parseTripDateObj(t).getTime();
+        const isToday = ts === todayTs;
+        const isPast = ts < todayTs;
+        let cls = 'trow-card';
+        if (isToday) cls += ' trow-today';
+        if (isPast) cls += ' trow-past';
+        const badge = isToday ? '<div class="trow-today-badge">Сьогодні</div>' : '';
+        return '<div class="' + cls + '" data-ts="' + ts + '">' + badge + renderTripCard(t) + '</div>';
+    }).join('');
+
+    const safeGroupId = ('trow-' + g.dir + '-' + g.city).replace(/[^a-zA-Z0-9-]/g, '_');
+    return '<div class="trow ' + dirCls + '">' +
+        '<div class="trow-header">' +
+            '<span class="trow-dir">' + dirLabel + '</span>' +
+            '<span class="trow-name">' + tmEsc(g.city) + '</span>' +
+            '<span class="trow-count">' + g.trips.length + '</span>' +
+            '<div class="trow-nav">' +
+                '<button class="trow-nav-btn" onclick="trowScroll(this,-1)" title="Назад">◀</button>' +
+                '<button class="trow-nav-btn" onclick="trowScroll(this,1)" title="Вперед">▶</button>' +
+            '</div>' +
+        '</div>' +
+        '<div class="trow-scroll" id="' + safeGroupId + '">' + cardsHtml + '</div>' +
+    '</div>';
+}
+
+function trowScroll(btn, dir) {
+    const trow = btn.closest('.trow');
+    if (!trow) return;
+    const scroll = trow.querySelector('.trow-scroll');
+    if (!scroll) return;
+    const card = scroll.querySelector('.trow-card');
+    const step = card ? card.offsetWidth + 14 : 300;
+    scroll.scrollBy({ left: dir * step, behavior: 'smooth' });
 }
 
 function setTripsViewMode(mode) {
@@ -4431,13 +4498,20 @@ function renderTripsCalCell(dayNum, key, dayTrips, otherMonth, isToday) {
         const occ = parseInt(t.occupied) || 0;
         const pct = maxS > 0 ? Math.min(100, Math.round(occ/maxS*100)) : 0;
         const over = occ > maxS && maxS > 0;
-        const auto = cleanAutoName(t.auto_name) || '—';
+        const auto = cleanAutoName(t.auto_name) || '';
+        const city = t.city || '—';
         const safeCalId = String(t.cal_id || '').replace(/'/g, "\\'");
-        return '<div class="tc-event ' + dirCls + (over ? ' over' : '') + '" onclick="event.stopPropagation();openTripFromCalendar(\'' + safeCalId + '\')" title="' + tmEsc(auto + ' · ' + (t.city || '—') + ' · ' + occ + '/' + maxS) + '">' +
-            '<span class="tc-event-dir">' + dirIcon + '</span>' +
-            '<span class="tc-event-name">' + tmEsc(auto) + '</span>' +
-            '<span class="tc-event-bar"><span class="tc-event-bar-fill' + (over ? ' over' : pct >= 100 ? ' full' : '') + '" style="width:' + pct + '%"></span></span>' +
-            '<span class="tc-event-seats">' + occ + '/' + maxS + '</span>' +
+        const autoHtml = auto ? '<span class="tc-event-auto">' + tmEsc(auto) + '</span>' : '';
+        return '<div class="tc-event ' + dirCls + (over ? ' over' : '') + '" onclick="event.stopPropagation();openTripFromCalendar(\'' + safeCalId + '\')" title="' + tmEsc(city + (auto ? ' · ' + auto : '') + ' · ' + occ + '/' + maxS) + '">' +
+            '<div class="tc-event-row1">' +
+                '<span class="tc-event-dir">' + dirIcon + '</span>' +
+                '<span class="tc-event-name">' + tmEsc(city) + '</span>' +
+                '<span class="tc-event-seats">' + occ + '/' + maxS + '</span>' +
+            '</div>' +
+            '<div class="tc-event-row2">' +
+                autoHtml +
+                '<span class="tc-event-bar"><span class="tc-event-bar-fill' + (over ? ' over' : pct >= 100 ? ' full' : '') + '" style="width:' + pct + '%"></span></span>' +
+            '</div>' +
         '</div>';
     }).join('');
 
@@ -4460,7 +4534,10 @@ function openTripFromCalendar(calId) {
         overlay = document.createElement('div');
         overlay.id = 'tripDetailOverlay';
         overlay.className = 'tc-detail-overlay';
-        overlay.onclick = function(e) { if (e.target === overlay) closeTripDetail(); };
+        overlay.onclick = function(e) {
+            if (e.target === overlay) { closeTripDetail(); return; }
+            if (e.target.closest('.trip-action-btn, .trip-progress-text, .trip-card-city')) closeTripDetail();
+        };
         document.body.appendChild(overlay);
     }
     overlay.innerHTML =
@@ -4490,7 +4567,10 @@ function showTripsCalDay(key) {
         overlay = document.createElement('div');
         overlay.id = 'tripDetailOverlay';
         overlay.className = 'tc-detail-overlay';
-        overlay.onclick = function(e) { if (e.target === overlay) closeTripDetail(); };
+        overlay.onclick = function(e) {
+            if (e.target === overlay) { closeTripDetail(); return; }
+            if (e.target.closest('.trip-action-btn, .trip-progress-text, .trip-card-city')) closeTripDetail();
+        };
         document.body.appendChild(overlay);
     }
     overlay.innerHTML =
