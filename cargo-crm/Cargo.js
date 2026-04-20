@@ -1855,6 +1855,31 @@ function bulkSetVerifyStatus(status) {
   afterBulkAction();
 }
 
+// Масове видалення з перевірки — повертає Контроль перевірки в порожнє (scan_status='received')
+function bulkRemoveFromVerify() {
+  const ids = getSelectedIds();
+  if (ids.length === 0) return;
+  if (!confirm('Видалити ' + ids.length + ' записів з перевірки?')) return;
+
+  ids.forEach(id => {
+    const item = allData.find(p => p['PKG_ID'] === id);
+    if (item) {
+      item['Контроль перевірки'] = '';
+      item['Дата перевірки'] = '';
+    }
+  });
+
+  renderCards();
+  updateCounters();
+  showToast(ids.length + ' записів знято з перевірки', 'success');
+
+  ids.forEach(id => {
+    apiPost('updateField', { pkg_id: id, col: 'Контроль перевірки', value: '' });
+  });
+
+  afterBulkAction();
+}
+
 // Масове додавання в маршрут
 function bulkAddToRoute() {
   const ids = getSelectedIds();
