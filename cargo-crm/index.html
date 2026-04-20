@@ -383,6 +383,97 @@
   </div>
 </nav>
 
+<!-- ===== FILL MODAL (quick-fill priority fields during verification) ===== -->
+<div class="fill-overlay" id="fillOverlay" onclick="if(event.target===this)closeFillModal()">
+  <div class="fill-sheet">
+    <div class="fill-header">
+      <h3>📝 Заповнити посилку</h3>
+      <button class="fill-close" onclick="closeFillModal()">&times;</button>
+    </div>
+    <div class="fill-body" id="fillBody">
+      <input type="hidden" id="fillPkgId">
+
+      <div class="fill-row required">
+        <label>Телефон отримувача <span class="req">*</span></label>
+        <input type="tel" id="fill_phoneRecv" required placeholder="+380…">
+      </div>
+
+      <div class="fill-row">
+        <label>Телефон відправника</label>
+        <input type="tel" id="fill_phoneSender" placeholder="+380…">
+      </div>
+
+      <div class="fill-row">
+        <label>Адреса доставки</label>
+        <input type="text" id="fill_addressTo" placeholder="Місто, вулиця, №">
+      </div>
+
+      <div class="fill-row">
+        <label>Внутрішній номер посилки</label>
+        <input type="text" id="fill_innerNum" placeholder="ВН-…">
+      </div>
+
+      <div class="fill-row">
+        <label>Опис посилки</label>
+        <textarea id="fill_description" placeholder="Що всередині…"></textarea>
+      </div>
+
+      <div class="fill-grid2">
+        <div class="fill-row">
+          <label>Кількість посилок</label>
+          <input type="number" id="fill_qty" min="1" step="1" placeholder="1">
+        </div>
+        <div class="fill-row">
+          <label>Вага (кг)</label>
+          <input type="number" id="fill_weight" min="0" step="0.01" placeholder="0">
+        </div>
+      </div>
+
+      <div class="fill-grid2">
+        <div class="fill-row">
+          <label>Сума</label>
+          <input type="number" id="fill_sum" min="0" step="0.01" placeholder="0">
+        </div>
+        <div class="fill-row">
+          <label>Валюта</label>
+          <select id="fill_currency">
+            <option value="UAH">UAH</option>
+            <option value="EUR">EUR</option>
+            <option value="CHF">CHF</option>
+            <option value="PLN">PLN</option>
+            <option value="CZK">CZK</option>
+            <option value="USD">USD</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="fill-row">
+        <label>Статус оплати</label>
+        <select id="fill_payStatus">
+          <option value="Не оплачено" selected>Не оплачено</option>
+          <option value="Частково">Частково</option>
+          <option value="Оплачено">Оплачено</option>
+        </select>
+      </div>
+
+      <div class="fill-row">
+        <label>Статус посилки</label>
+        <select id="fill_statusPkg">
+          <option value="Зареєстровано" selected>Зареєстровано</option>
+          <option value="Оформлення">Оформлення</option>
+          <option value="Доставка">Доставка</option>
+          <option value="Доставлено">Доставлено</option>
+          <option value="Невідомо">Невідомо</option>
+        </select>
+      </div>
+    </div>
+    <div class="fill-footer">
+      <button class="fill-btn fill-btn-cancel" onclick="closeFillModal()">Скасувати</button>
+      <button class="fill-btn fill-btn-save" id="fillSaveBtn" onclick="saveFillModal()">💾 Зберегти</button>
+    </div>
+  </div>
+</div>
+
 <!-- ===== COLUMN CONFIGURATOR OVERLAY ===== -->
 <div class="colcfg-overlay" id="colCfgOverlay" onclick="if(event.target===this)closeColCfg()">
   <div class="colcfg-panel">
@@ -396,6 +487,17 @@
       <button class="colcfg-tab" data-mode="parcel" onclick="switchCfgTab('parcel')">📦 Посилка</button>
     </div>
     <div class="colcfg-subtitle" id="colCfgSubtitle">Які поля показувати на картці ліда</div>
+    <div class="colcfg-default-tab-row">
+      <label for="colCfgDefaultTab">Вкладка за замовчуванням:</label>
+      <select id="colCfgDefaultTab" onchange="onDefaultTabChange(this.value)">
+        <option value="parcel">📦 Посилка</option>
+        <option value="basic">📄 Основне</option>
+        <option value="np">💰 НП</option>
+        <option value="finance">💰 Фінанси</option>
+        <option value="route">🚖 Рейс</option>
+        <option value="system">⚙ Системні</option>
+      </select>
+    </div>
     <div class="colcfg-list" id="colCfgList">
       <!-- Filled by JS -->
     </div>

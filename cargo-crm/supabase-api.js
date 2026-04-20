@@ -272,7 +272,10 @@ async function sbPkgAdd(params) {
         sbData.is_archived = false;
         sbData.crm_status = sbData.crm_status || 'active';
         sbData.lead_status = sbData.lead_status || 'new';
-        sbData.package_status = sbData.package_status || 'pending';
+        // Default для нових посилок — «Зареєстровано» (UA raw).
+        // Раніше було 'pending' → через спільний STATUS_SB_TO_UA мапилось
+        // в «Не оплачено», що неконсистентно з новим set'ом значень.
+        sbData.package_status = sbData.package_status || 'Зареєстровано';
 
         // Direction from sheet param
         if (!sbData.direction && params.sheet) {
@@ -843,15 +846,28 @@ async function sbPkgAddToRoute(params) {
 
 async function sbPkgRemoveFromRoute(params) {
     try {
-        // Frontend may pass row uuid (from RTE_ID column)
-        const rowId = params.rte_id || params.id || params.pkg_id;
-        if (!rowId) return { ok: false, error: 'Не вказано id рядка' };
-        const { error } = await sb.from('routes').delete()
+        const pkgId = params.pkg_id || params.PKG_ID;
+        const rteIdOrRowId = params.rte_id || params.id;
+
+        let q = sb.from('routes').delete()
             .eq('tenant_id', TENANT_ID)
-            .eq('id', rowId)
             .eq('is_placeholder', false);
+
+        // Cargo.js bulkRemoveFromRoute надсилає pkg_id + rte_id (назва аркуша).
+        // Видаляємо саме рядок для цього пакунка у цьому маршруті.
+        if (pkgId) {
+            q = q.eq('pax_id_or_pkg_id', pkgId);
+            if (rteIdOrRowId) q = q.eq('rte_id', rteIdOrRowId);
+        } else if (rteIdOrRowId) {
+            // Легасі-шлях: передали uuid рядка як rte_id/id.
+            q = q.eq('id', rteIdOrRowId);
+        } else {
+            return { ok: false, error: 'Не вказано ні pkg_id, ні id рядка' };
+        }
+
+        const { error, count } = await q.select('id', { count: 'exact' });
         if (error) throw error;
-        return { ok: true };
+        return { ok: true, removed: count || 0 };
     } catch (e) {
         console.error('sbPkgRemoveFromRoute error:', e);
         return { ok: false, error: e.message };
@@ -1489,12 +1505,16 @@ async function sbPkgCheckNpApiKey(_params) {
 }
 
 // NP StatusCode → Ukrainian package_status (як у GAS Script-cargo.gs)
+// NP StatusCode → нові 5 значень «Статус посилки».
+// 3-8 у НП — це «оформлено/прийнято»/видача/в дорозі, мапимо на Доставка.
+// 9-11 — доставлено. Решту (затримано/втрачено/не існує) ховаємо під «Невідомо»,
+// щоб не захаращувати dropdown нестандартними значеннями (узгоджено з користувачем).
 const NP_STATUS_MAP = {
-    '3':'В дорозі','4':'В дорозі','5':'В дорозі','6':'В дорозі','7':'В дорозі','8':'В дорозі',
+    '3':'Доставка','4':'Доставка','5':'Доставка','6':'Доставка','7':'Доставка','8':'Доставка',
     '9':'Доставлено','10':'Доставлено','11':'Доставлено',
-    '12':'Затримано','14':'Затримано','103':'Затримано','104':'Затримано','106':'Затримано',
-    '111':'Затримано','112':'Затримано',
-    '101':'Втрачено','102':'Втрачено',
+    '12':'Невідомо','14':'Невідомо','103':'Невідомо','104':'Невідомо','106':'Невідомо',
+    '111':'Невідомо','112':'Невідомо',
+    '101':'Невідомо','102':'Невідомо',
 };
 
 async function sbPkgTrackParcel(params) {

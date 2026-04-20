@@ -354,6 +354,209 @@ body {
 .verify-search-hit-status.ready    { color: #059669; }
 .verify-search-hit-status.rejected { color: #b91c1c; }
 .verify-search-hit-status.unknown  { color: #991b1b; }
+.verify-search-hit-status.in-route { color: #6d28d9; }
+
+/* Терминальний бейдж замість меню дій — клік відкриває картку ліда */
+.verify-search-hit-terminal {
+  display: inline-flex; align-items: center;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 12px; font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  border: 1px solid transparent;
+  transition: transform 0.1s;
+}
+.verify-search-hit-terminal:hover { transform: translateY(-1px); }
+.verify-search-hit-terminal.ready    { background: #dcfce7; color: #166534; border-color: #bbf7d0; }
+.verify-search-hit-terminal.in-route { background: #ede9fe; color: #5b21b6; border-color: #ddd6fe; }
+.verify-search-hit-terminal.rejected { background: #fee2e2; color: #991b1b; border-color: #fecaca; }
+.verify-search-hit-terminal.unknown  { background: #fef3c7; color: #92400e; border-color: #fde68a; }
+
+/* Меню дій (3 кнопки) у результатах пошуку перевірки */
+.verify-search-hit-actions {
+  display: flex; gap: 6px; flex-wrap: wrap;
+}
+.verify-act-btn {
+  border: none;
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 11px; font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  font-family: inherit;
+}
+.verify-act-btn.add  { background: var(--primary, #2563eb); color: #fff; }
+.verify-act-btn.edit { background: #f59e0b;                 color: #fff; }
+.verify-act-btn.del  { background: #ef4444;                 color: #fff; }
+.verify-act-btn:disabled { background: #cbd5e1; cursor: not-allowed; }
+
+/* ============ FILL CTA — червона випукла кнопка «Заповнити» ============ */
+/* Показується всередині ліда коли «В перевірці» або статус «Невідомий» */
+.fill-cta-wrap {
+  display: flex; justify-content: center;
+  padding: 8px 14px 4px;
+}
+.fill-cta {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 10px 22px;
+  border: none;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #ef4444 0%, #dc2626 100%);
+  color: #fff;
+  font-size: 13px; font-weight: 800;
+  font-family: inherit;
+  cursor: pointer;
+  letter-spacing: 0.2px;
+  box-shadow:
+    0 4px 10px rgba(220, 38, 38, 0.35),
+    0 0 0 3px rgba(59, 130, 246, 0.18),
+    inset 0 1px 0 rgba(255,255,255,0.25);
+  transition: transform 0.1s, box-shadow 0.15s;
+  animation: fill-cta-pulse 2.4s ease-in-out infinite;
+}
+.fill-cta:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    0 6px 14px rgba(220, 38, 38, 0.45),
+    0 0 0 4px rgba(59, 130, 246, 0.28),
+    inset 0 1px 0 rgba(255,255,255,0.3);
+}
+.fill-cta:active { transform: translateY(0); }
+@keyframes fill-cta-pulse {
+  0%,100% { box-shadow: 0 4px 10px rgba(220, 38, 38, 0.35), 0 0 0 3px rgba(59, 130, 246, 0.18), inset 0 1px 0 rgba(255,255,255,0.25); }
+  50%     { box-shadow: 0 4px 12px rgba(220, 38, 38, 0.5),  0 0 0 5px rgba(59, 130, 246, 0.28), inset 0 1px 0 rgba(255,255,255,0.3); }
+}
+
+/* ============ FILL MODAL — модалка пріоритетних полів ============ */
+.fill-overlay {
+  position: fixed; inset: 0;
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(4px);
+  display: none;
+  z-index: 10000;
+  align-items: flex-end; justify-content: center;
+}
+.fill-overlay.open { display: flex; }
+.fill-sheet {
+  background: #fff;
+  width: 100%;
+  max-width: 520px;
+  max-height: 92vh;
+  border-radius: 18px 18px 0 0;
+  display: flex; flex-direction: column;
+  box-shadow: 0 -10px 40px rgba(0,0,0,0.25);
+  overflow: hidden;
+}
+.fill-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 18px;
+  background: linear-gradient(180deg,#1e293b,#0f172a);
+  color: #fff;
+}
+.fill-header h3 { margin: 0; font-size: 15px; font-weight: 700; }
+.fill-header .fill-close {
+  background: transparent; border: none; color: #fff;
+  font-size: 22px; cursor: pointer;
+}
+.fill-body {
+  flex: 1; overflow-y: auto;
+  padding: 12px 14px 4px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.fill-row { display: flex; flex-direction: column; gap: 4px; }
+.fill-row label {
+  font-size: 11px; font-weight: 600; color: #475569;
+  letter-spacing: 0.2px;
+}
+.fill-row label .req { color: #ef4444; margin-left: 2px; }
+.fill-row input, .fill-row select, .fill-row textarea {
+  padding: 9px 11px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: inherit;
+  background: #fff;
+  outline: none;
+}
+.fill-row input:focus, .fill-row select:focus, .fill-row textarea:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59,130,246,0.2);
+}
+.fill-row textarea { min-height: 54px; resize: vertical; }
+.fill-row.required input:invalid { border-color: #ef4444; }
+.fill-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.fill-footer {
+  display: flex; gap: 10px;
+  padding: 12px 14px;
+  border-top: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+.fill-btn {
+  flex: 1;
+  padding: 11px 16px;
+  border: none; border-radius: 8px;
+  font-size: 13px; font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+}
+.fill-btn-cancel { background: #e2e8f0; color: #1e293b; }
+.fill-btn-save   { background: #10b981; color: #fff; }
+.fill-btn-save:disabled { background: #94a3b8; cursor: not-allowed; }
+
+/* ============ SCAN-RETURN BANNER — «зі сканера, Невідомий ТТН» ============ */
+.scan-return-banner {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 12px;
+  margin: 10px 10px 14px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  border: 1px solid #f59e0b;
+  box-shadow: 0 4px 10px rgba(245, 158, 11, 0.15);
+  animation: scan-banner-in 0.25s ease-out;
+}
+@keyframes scan-banner-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.scan-return-info {
+  display: flex; align-items: center; gap: 10px;
+  flex: 1 1 auto;
+  min-width: 180px;
+}
+.scan-return-icon {
+  font-size: 24px;
+  animation: scan-ping 1.5s ease-in-out infinite;
+}
+@keyframes scan-ping {
+  0%,100% { transform: scale(1); }
+  50%     { transform: scale(1.15); }
+}
+.scan-return-title {
+  font-size: 11px; font-weight: 700; color: #92400e;
+  text-transform: uppercase; letter-spacing: 0.4px;
+}
+.scan-return-ttn {
+  font-size: 14px; font-weight: 800; color: #7c2d12;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.scan-return-actions {
+  display: flex; gap: 6px; flex-wrap: wrap;
+}
+.scan-return-btn {
+  border: none;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 12px; font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.scan-return-btn.fill { background: #ef4444; color: #fff; }
+.scan-return-btn.next { background: #3b82f6; color: #fff; }
+.scan-return-btn.save { background: #10b981; color: #fff; }
+.scan-return-btn.del  { background: #6b7280; color: #fff; }
+.scan-return-btn:hover { transform: translateY(-1px); transition: transform 0.1s; }
 .verify-add-btn {
   background: var(--primary, #2563eb);
   color: #fff;
@@ -1693,6 +1896,28 @@ body {
   font-weight: 500;
   border-bottom: 1px solid var(--border);
   background: #fff;
+}
+
+.colcfg-default-tab-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 20px;
+  background: #f9fafb;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text-primary);
+}
+.colcfg-default-tab-row label {
+  font-weight: 600;
+}
+.colcfg-default-tab-row select {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
 }
 
 .colcfg-list {

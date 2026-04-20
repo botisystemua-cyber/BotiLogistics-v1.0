@@ -1039,8 +1039,9 @@
                     variant = 'created'; icon = '🆕';
                     label = 'Нова посилка';
                     statusTxt = 'Прийнято';
-                    // Box-count modal only on fresh creation.
-                    openBoxModal(ttn, res.pkg_id);
+                    // New package → редірект на CRM «Невідомі», де оператор
+                    // обирає «Заповнити / Сканувати далі / Видалити / Зберегти».
+                    // (box-count модалку перенесено в CRM — див. Cargo.js)
                 } else if (res.type === 'rejected') {
                     variant = 'warn'; icon = '⚠️'; label = 'Відхилено';
                     statusTxt = 'Статус: Відхилено';
@@ -1069,6 +1070,18 @@
             setTimeout(function() {
                 document.getElementById('resultToast').classList.remove('show');
             }, 2500);
+
+            // Сканер — «порт» до CRM. Після успішного scan_ttn (не check-mode)
+            // ведемо оператора в розділ «Перевірка» з цим ТТН, щоб він обрав дію
+            // (+В перевірку / Редагувати / Видалити) або заповнив новий Невідомий.
+            if (res && res.ok && SCAN_MODE !== 'check' && (res.type === 'found' || res.type === 'already' || res.type === 'new')) {
+                setTimeout(function() {
+                    var url = 'index.html?scan=' + encodeURIComponent(ttn);
+                    if (res.pkg_id) url += '&pkg=' + encodeURIComponent(res.pkg_id);
+                    if (res.type === 'new') url += '&unknown=1';
+                    window.location.href = url;
+                }, 1200);
+            }
         }
 
         // ==== BOX-COUNT MODAL ====

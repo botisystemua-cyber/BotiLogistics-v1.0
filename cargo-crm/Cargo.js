@@ -197,12 +197,22 @@ const ALL_CARD_COLUMNS = [
 const ALL_OSNOVNE_COLUMNS = [
   { key: 'sender',      label: '👤 Піб відправника' },
   { key: 'phone',       label: '📞 Телефон реєстратора' },
+  { key: 'senderPhone', label: '📞 Телефон відправника' },
   { key: 'addressFrom', label: '📍 Адреса відправки' },
   { key: 'receiver',    label: '👤 Піб отримувача' },
   { key: 'phoneRecv',   label: '📱 Телефон отримувача' },
   { key: 'addressTo',   label: '📍 Адреса доставки' },
   { key: 'leadStatus',  label: '🔵 Статус ліда' },
   { key: 'tag',         label: '🏷️ Тег' },
+  { key: 'ttn',         label: '📋 Номер ТТН' },
+  { key: 'innerNum',    label: '🔢 Внутрішній №' },
+  { key: 'smartId',     label: '🆔 Ід_смарт' },
+  { key: 'ttnDate',     label: '📅 Дата створення накладної' },
+  { key: 'dispatchDate',label: '📅 Дата відправки' },
+  { key: 'receivedDate',label: '📅 Дата отримання' },
+  { key: 'note',        label: '📝 Примітка' },
+  { key: 'noteSms',     label: '💬 Примітка СМС' },
+  { key: 'description', label: '📄 Опис' },
 ];
 
 const ALL_PARCEL_COLUMNS = [
@@ -217,9 +227,25 @@ const ALL_PARCEL_COLUMNS = [
   { key: 'sum',         label: '💰 Сума' },
   { key: 'currency',    label: '💱 Валюта оплати' },
   { key: 'payStatus',   label: '💳 Статус оплати' },
+  { key: 'payForm',     label: '💳 Форма оплати' },
+  { key: 'deposit',     label: '💵 Завдаток' },
+  { key: 'depositCurrency', label: '💱 Валюта завдатку' },
+  { key: 'debt',        label: '📛 Борг' },
+  { key: 'payNote',     label: '📝 Примітка оплати' },
+  { key: 'npAmount',    label: '💰 Сума НП' },
+  { key: 'npCurrency',  label: '💱 Валюта НП' },
+  { key: 'npForm',      label: '💳 Форма НП' },
+  { key: 'npStatus',    label: '💳 Статус НП' },
+  { key: 'ttnDate',     label: '📅 Дата створення накладної' },
+  { key: 'dispatchDate',label: '📅 Дата відправки' },
+  { key: 'receivedDate',label: '📅 Дата отримання' },
   { key: 'photo',       label: '📸 Фото посилки' },
   { key: 'rating',      label: '⭐ Рейтинг' },
   { key: 'ratingComment',label: '💬 Коментар рейтингу' },
+  { key: 'tag',         label: '🏷️ Тег' },
+  { key: 'note',        label: '📝 Примітка' },
+  { key: 'noteSms',     label: '💬 Примітка СМС' },
+  { key: 'timing',      label: '⏱️ Таймінг' },
 ];
 
 const DEFAULT_CARD_COLS = ['phone','weight','sum','deposit','debt','ttn','date','statusPkg','tag','address','leadBadge','payBadge','checkBadge','route'];
@@ -229,9 +255,24 @@ const DEFAULT_PARCEL_COLS = ['description','details','qty','weight','estValue','
 const LS_KEY_CARD = 'esco_posylki_card_cols';
 const LS_KEY_OSNOVNE = 'esco_pkg_osnovne';
 const LS_KEY_PARCEL = 'esco_pkg_parcel';
+const LS_KEY_DEFAULT_TAB = 'esco_pkg_default_tab';
+const DEFAULT_TAB_PKG = 'parcel';
+const ALLOWED_TABS = ['parcel','basic','np','finance','route','system'];
 
 let colCfgMode = 'card';
 let colCfgTemp = [];
+
+function getDefaultTab() {
+  try {
+    const v = localStorage.getItem(LS_KEY_DEFAULT_TAB);
+    if (v && ALLOWED_TABS.includes(v)) return v;
+  } catch(e) {}
+  return DEFAULT_TAB_PKG;
+}
+function setDefaultTab(tab) {
+  if (!ALLOWED_TABS.includes(tab)) return;
+  try { localStorage.setItem(LS_KEY_DEFAULT_TAB, tab); } catch(e) {}
+}
 
 function getVisibleCardColumns() {
   try { const s = localStorage.getItem(LS_KEY_CARD); if (s) return JSON.parse(s); } catch(e) {}
@@ -257,8 +298,16 @@ function openColCfg() {
   const cfg = getCfgDataForMode('card');
   colCfgTemp = [...cfg.saved];
   document.getElementById('colCfgOverlay').classList.add('open');
+  const sel = document.getElementById('colCfgDefaultTab');
+  if (sel) sel.value = getDefaultTab();
   renderCfgTabs();
   renderCfgList();
+}
+
+function onDefaultTabChange(tab) {
+  setDefaultTab(tab);
+  showToast('Вкладку за замовчуванням збережено', 'success');
+  renderCards();
 }
 
 function closeColCfg() {
@@ -661,7 +710,154 @@ document.addEventListener('DOMContentLoaded', async function() {
 
   await loadData();
   loadUnreadCounts().then(() => renderCards());
+
+  // Якщо сторінка відкрита через сканер (index.html?scan=<ТТН>[&pkg=…][&unknown=1])
+  // — одразу переходимо в розділ «Перевірка» і показуємо меню дій для ТТН.
+  handleScanReturn();
 });
+
+// ===== [SECT-SCANRETURN] SCANNER → CRM HAND-OFF =====
+// Сканер (scaner_ttn.html) після успішного скану редіректить сюди з
+// ?scan=<ТТН>&pkg=<PKG_ID>[&unknown=1]. CRM відкриває «Перевірка»:
+//   — знайдений лід → пошуковий бар + меню «➕ В перевірку / ✏️ Редагувати / 🗑️ Видалити»
+//   — unknown=1 (type=new у scan_ttn) → розділ «Невідомі» з тим самим ТТН
+// `sessionStorage._scanReturnTTN` тримаємо, щоб дії меню повертали оператора
+// на сторінку сканера (коротке коло «скан → дія → скан»).
+function handleScanReturn() {
+  const params = new URLSearchParams(window.location.search);
+  const ttn = params.get('scan');
+  if (!ttn) return;
+  const pkgId = params.get('pkg') || '';
+  const isUnknown = params.get('unknown') === '1';
+  try {
+    sessionStorage.setItem('_scanReturnTTN', ttn);
+    if (pkgId)    sessionStorage.setItem('_scanReturnPkg', pkgId);
+    if (isUnknown) sessionStorage.setItem('_scanReturnUnknown', '1');
+  } catch(_) {}
+
+  // Прибираємо параметри з URL, щоб F5 не повторював сценарій
+  try { history.replaceState({}, '', 'index.html'); } catch(_) {}
+
+  setTimeout(() => {
+    setVerFilter(isUnknown ? 'unknown' : 'ready');
+    const inp = document.getElementById('verifySearchInput');
+    if (inp) {
+      inp.value = ttn;
+      onVerifySearchInput(ttn);
+      inp.focus();
+    }
+    renderScanReturnBanner();
+    // Для нового Невідомого ліда одразу відкриваємо Заповнити —
+    // оператор щойно сканував, ми знаємо яку посилку він хоче заповнити.
+    if (isUnknown && pkgId) {
+      setTimeout(() => openFillModal(pkgId), 350);
+    }
+    showToast('🔍 ТТН зі сканера: ' + ttn, 'info');
+  }, 50);
+}
+
+function clearScanReturn() {
+  try {
+    sessionStorage.removeItem('_scanReturnTTN');
+    sessionStorage.removeItem('_scanReturnPkg');
+    sessionStorage.removeItem('_scanReturnUnknown');
+  } catch(_) {}
+  const b = document.getElementById('scanReturnBanner');
+  if (b) b.remove();
+}
+function hasScanReturn() {
+  try { return !!sessionStorage.getItem('_scanReturnTTN'); } catch(_) { return false; }
+}
+function getScanReturnPkg() {
+  try { return sessionStorage.getItem('_scanReturnPkg') || ''; } catch(_) { return ''; }
+}
+function getScanReturnTTN() {
+  try { return sessionStorage.getItem('_scanReturnTTN') || ''; } catch(_) { return ''; }
+}
+function isScanReturnUnknown() {
+  try { return sessionStorage.getItem('_scanReturnUnknown') === '1'; } catch(_) { return false; }
+}
+function backToScanner() {
+  clearScanReturn();
+  window.location.href = 'scaner_ttn.html';
+}
+
+// Банер «зі сканера» на верху списку з 4 діями для Невідомих (C5):
+// Заповнити / Сканувати далі / Видалити / Зберегти. Для відомих лідів
+// достатньо verify-пошуку (C3), банер не показуємо.
+function renderScanReturnBanner() {
+  const existing = document.getElementById('scanReturnBanner');
+  if (existing) existing.remove();
+  if (!hasScanReturn() || !isScanReturnUnknown()) return;
+
+  const ttn = getScanReturnTTN();
+  const pkg = getScanReturnPkg();
+
+  const banner = document.createElement('div');
+  banner.id = 'scanReturnBanner';
+  banner.className = 'scan-return-banner';
+  banner.innerHTML =
+    '<div class="scan-return-info">' +
+      '<span class="scan-return-icon">📡</span>' +
+      '<div>' +
+        '<div class="scan-return-title">Нова ТТН зі сканера</div>' +
+        '<div class="scan-return-ttn">' + escapeHtmlVerify(ttn) + '</div>' +
+      '</div>' +
+    '</div>' +
+    '<div class="scan-return-actions">' +
+      '<button class="scan-return-btn fill" onclick="scanReturnAction(\'fill\')">📝 Заповнити</button>' +
+      '<button class="scan-return-btn next" onclick="scanReturnAction(\'next\')">🔙 Сканувати далі</button>' +
+      '<button class="scan-return-btn save" onclick="scanReturnAction(\'save\')">💾 Зберегти</button>' +
+      '<button class="scan-return-btn del" onclick="scanReturnAction(\'del\')">🗑️ Видалити</button>' +
+    '</div>';
+
+  // Вставляємо над картками
+  const mainSect = document.querySelector('.main-content') || document.body;
+  const firstChild = mainSect.firstChild;
+  mainSect.insertBefore(banner, firstChild);
+
+  banner.dataset.pkg = pkg;
+}
+
+async function scanReturnAction(action) {
+  const pkg = getScanReturnPkg();
+
+  if (action === 'fill') {
+    if (pkg) openFillModal(pkg);
+    else showToast('PKG_ID не знайдено', 'error');
+    return;
+  }
+
+  if (action === 'next') {
+    backToScanner();
+    return;
+  }
+
+  if (action === 'save') {
+    // «Зберегти» — ТТН уже збережена RPC scan_ttn'ом; просто закриваємо
+    // банер і лишаємо оператора в CRM, щоб далі редагувати вручну.
+    clearScanReturn();
+    showToast('💾 ТТН збережено в «Невідомі»', 'success');
+    return;
+  }
+
+  if (action === 'del') {
+    if (!pkg) { showToast('PKG_ID не знайдено', 'error'); return; }
+    if (!confirm('Видалити (архівувати) новий невідомий ТТН зі сканера?')) return;
+    const res = await apiPost('deleteParcel', {
+      pkg_id: pkg, reason: 'scan unknown — discarded', archived_by: 'scanner'
+    });
+    if (!res || !res.ok) {
+      showToast((res && res.error) || 'Не вдалося видалити', 'error');
+      return;
+    }
+    // Прибираємо з локального кешу
+    const idx = (allData || []).findIndex(p => p['PKG_ID'] === pkg);
+    if (idx >= 0) allData.splice(idx, 1);
+    showToast('Видалено', 'success');
+    backToScanner();
+  }
+}
 
 // ===== [SECT-FILTER] FILTERING =====
 // Нові (24 год): посилка вважається новою, якщо з моменту її створення
@@ -857,39 +1053,57 @@ function renderCard(p) {
   if (visCols.includes('estValue') && p['Оціночна вартість']) metaHtml += `<span class="meta-tag">💎 ${escapeHtml(String(p['Оціночна вартість']))}</span>`;
 
   // ===== TAB PANELS =====
+  // Єдиний пул редагованих полів — обидві вкладки беруть з нього, щоб
+  // користувач міг винести будь-яку колонку у «Основне» чи «Посилка».
+  const allDetailFields = {
+    'sender':         ['Піб відправника', name],
+    'phone':          ['Телефон реєстратора', phone],
+    'senderPhone':    ['Телефон відправника', p['Телефон відправника'] || ''],
+    'addressFrom':    ['Адреса відправки', addressFrom],
+    'receiver':       ['Піб отримувача', receiver],
+    'phoneRecv':      ['Телефон отримувача', receiverPhone],
+    'addressTo':      [isUE ? 'Адреса в Європі' : 'Місто Нова Пошта', addressTo],
+    'leadStatus':     ['Статус ліда', leadStatus],
+    'tag':            ['Тег', tag],
+    'description':    ['Опис', p['Опис'] || ''],
+    'details':        ['Деталі', p['Деталі'] || ''],
+    'qty':            ['Кількість позицій', p['Кількість позицій'] || ''],
+    'weight':         ['Кг', weight],
+    'estValue':       ['Оціночна вартість', p['Оціночна вартість'] || ''],
+    'ttn':            ['Номер ТТН', ttn],
+    'innerNum':       ['Внутрішній №', p['Внутрішній №'] || ''],
+    'smartId':        ['Ід_смарт', p['Ід_смарт'] || '', {readonly: true}],
+    'statusPkg':      ['Статус посилки', statusPkg],
+    'sum':            ['Сума', price],
+    'currency':       ['Валюта оплати', currency],
+    'payStatus':      ['Статус оплати', payStatus],
+    'payForm':        ['Форма оплати', p['Форма оплати'] || ''],
+    'deposit':        ['Завдаток', p['Завдаток'] || ''],
+    'depositCurrency':['Валюта завдатку', p['Валюта завдатку'] || ''],
+    'debt':           ['Борг', debt ? String(debt) : '', {readonly: true}],
+    'payNote':        ['Примітка оплати', p['Примітка оплати'] || ''],
+    'npAmount':       ['Сума НП', p['Сума НП'] || ''],
+    'npCurrency':     ['Валюта НП', p['Валюта НП'] || ''],
+    'npForm':         ['Форма НП', p['Форма НП'] || ''],
+    'npStatus':       ['Статус НП', p['Статус НП'] || ''],
+    'ttnDate':        ['Дата створення накладної', p['Дата створення накладної'] || ''],
+    'dispatchDate':   ['Дата відправки', p['Дата відправки'] || ''],
+    'receivedDate':   ['Дата отримання', p['Дата отримання'] || ''],
+    'photo':          ['Фото посилки', p['Фото посилки'] || ''],
+    'rating':         ['Рейтинг', p['Рейтинг'] || ''],
+    'ratingComment': ['Коментар рейтингу', p['Коментар рейтингу'] || ''],
+    'note':           ['Примітка', note],
+    'noteSms':        ['Примітка СМС', p['Примітка СМС'] || ''],
+    'timing':         ['Таймінг', p['Таймінг'] || ''],
+  };
+
   // 📦 Посилка (configurable)
   const visParcel = getVisibleParcelColumns();
-  const allParcelFields = {
-    'description': ['Опис', p['Опис'] || ''],
-    'details': ['Деталі', p['Деталі'] || ''],
-    'qty': ['Кількість позицій', p['Кількість позицій'] || ''],
-    'weight': ['Кг', weight],
-    'estValue': ['Оціночна вартість', p['Оціночна вартість'] || ''],
-    'ttn': ['Номер ТТН', ttn],
-    'innerNum': ['Внутрішній №', p['Внутрішній №'] || ''],
-    'statusPkg': ['Статус посилки', statusPkg],
-    'sum': ['Сума', price],
-    'currency': ['Валюта оплати', currency],
-    'payStatus': ['Статус оплати', payStatus],
-    'photo': ['Фото посилки', p['Фото посилки'] || ''],
-    'rating': ['Рейтинг', p['Рейтинг'] || ''],
-    'ratingComment': ['Коментар рейтингу', p['Коментар рейтингу'] || ''],
-  };
-  const tabParcel = renderDetailGrid(visParcel.filter(k => allParcelFields[k]).map(k => allParcelFields[k]), pkgId);
+  const tabParcel = renderDetailGrid(visParcel.filter(k => allDetailFields[k]).map(k => allDetailFields[k]), pkgId);
 
   // 📄 Основне (configurable)
   const visOsn = getVisibleOsnovneColumns();
-  const allOsnovneFields = {
-    'sender': ['Піб відправника', name],
-    'phone': ['Телефон реєстратора', phone],
-    'addressFrom': ['Адреса відправки', addressFrom],
-    'receiver': ['Піб отримувача', receiver],
-    'phoneRecv': ['Телефон отримувача', receiverPhone],
-    'addressTo': [isUE ? 'Адреса в Європі' : 'Місто Нова Пошта', addressTo],
-    'leadStatus': ['Статус ліда', leadStatus],
-    'tag': ['Тег', tag],
-  };
-  const tabBasic = renderDetailGrid(visOsn.filter(k => allOsnovneFields[k]).map(k => allOsnovneFields[k]), pkgId);
+  const tabBasic = renderDetailGrid(visOsn.filter(k => allDetailFields[k]).map(k => allDetailFields[k]), pkgId);
 
   // 💰 НП (тільки для УК→ЄВ)
   const tabNP = isUE ? renderDetailGrid([
@@ -948,9 +1162,14 @@ function renderCard(p) {
     ['Примітка СМС', p['Примітка СМС'] || ''],
   ], pkgId);
 
+  // Default tab: user-configurable. If 'np' chosen but card isn't УК→ЄВ, fall back to 'parcel'.
+  let _defTab = getDefaultTab();
+  if (_defTab === 'np' && !isUE) _defTab = 'parcel';
+  const _act = (t) => _defTab === t ? ' active' : '';
+
   // NP tab HTML
-  const npTabBtn = isUE ? `<div class="detail-tab" data-tab="np" onclick="event.stopPropagation(); switchTab('${pkgId}', 'np')">💰 НП</div>` : '';
-  const npTabPanel = isUE ? `<div class="detail-tab-panel" data-tab-panel="np">${tabNP}</div>` : '';
+  const npTabBtn = isUE ? `<div class="detail-tab${_act('np')}" data-tab="np" onclick="event.stopPropagation(); switchTab('${pkgId}', 'np')">💰 НП</div>` : '';
+  const npTabPanel = isUE ? `<div class="detail-tab-panel${_act('np')}" data-tab-panel="np">${tabNP}</div>` : '';
 
   // Tracking button only for УК→ЄВ with ТТН
   const trackBtn = (isUE && ttn) ? `<button onclick="event.stopPropagation(); window.open('https://novaposhta.ua/tracking/?cargo_number=${ttn}', '_blank')">📦 Трекінг</button>` : '';
@@ -983,6 +1202,7 @@ function renderCard(p) {
         </div>
       </div>
       ${visCols.includes('route') ? routeStrip : ''}
+      ${(controlCheck === 'В перевірці' || leadStatus === 'Невідомий') ? `<div class="fill-cta-wrap"><button class="fill-cta" onclick="event.stopPropagation(); openFillModal('${pkgId}')">📝 Заповнити</button></div>` : ''}
       <div class="card-actions" id="actions-${pkgId}">
         <button onclick="event.stopPropagation(); window.open('tel:${phone}')">📞 Дзвінок</button>
         <button onclick="event.stopPropagation(); openMessenger('${phone}','${pkgId}')">💬 Писати</button>
@@ -998,19 +1218,19 @@ function renderCard(p) {
       </div>
       <div class="card-details ${isOpen ? 'open' : ''}" id="details-${pkgId}">
         <div class="detail-tabs">
-          <div class="detail-tab active" data-tab="parcel" onclick="event.stopPropagation(); switchTab('${pkgId}', 'parcel')">📦 Посилка</div>
-          <div class="detail-tab" data-tab="basic" onclick="event.stopPropagation(); switchTab('${pkgId}', 'basic')">📄 Основне</div>
+          <div class="detail-tab${_act('parcel')}" data-tab="parcel" onclick="event.stopPropagation(); switchTab('${pkgId}', 'parcel')">📦 Посилка</div>
+          <div class="detail-tab${_act('basic')}" data-tab="basic" onclick="event.stopPropagation(); switchTab('${pkgId}', 'basic')">📄 Основне</div>
           ${npTabBtn}
-          <div class="detail-tab" data-tab="finance" onclick="event.stopPropagation(); switchTab('${pkgId}', 'finance')">💰 Фінанси</div>
-          <div class="detail-tab" data-tab="route" onclick="event.stopPropagation(); switchTab('${pkgId}', 'route')">🚖 Рейс</div>
-          <div class="detail-tab" data-tab="system" onclick="event.stopPropagation(); switchTab('${pkgId}', 'system')">⚙ Системні</div>
+          <div class="detail-tab${_act('finance')}" data-tab="finance" onclick="event.stopPropagation(); switchTab('${pkgId}', 'finance')">💰 Фінанси</div>
+          <div class="detail-tab${_act('route')}" data-tab="route" onclick="event.stopPropagation(); switchTab('${pkgId}', 'route')">🚖 Рейс</div>
+          <div class="detail-tab${_act('system')}" data-tab="system" onclick="event.stopPropagation(); switchTab('${pkgId}', 'system')">⚙ Системні</div>
         </div>
-        <div class="detail-tab-panel active" data-tab-panel="parcel">${tabParcel}</div>
-        <div class="detail-tab-panel" data-tab-panel="basic">${tabBasic}</div>
+        <div class="detail-tab-panel${_act('parcel')}" data-tab-panel="parcel">${tabParcel}</div>
+        <div class="detail-tab-panel${_act('basic')}" data-tab-panel="basic">${tabBasic}</div>
         ${npTabPanel}
-        <div class="detail-tab-panel" data-tab-panel="finance">${tabFinance}</div>
-        <div class="detail-tab-panel" data-tab-panel="route">${tabRoute}</div>
-        <div class="detail-tab-panel" data-tab-panel="system">${tabSystem}</div>
+        <div class="detail-tab-panel${_act('finance')}" data-tab-panel="finance">${tabFinance}</div>
+        <div class="detail-tab-panel${_act('route')}" data-tab-panel="route">${tabRoute}</div>
+        <div class="detail-tab-panel${_act('system')}" data-tab-panel="system">${tabSystem}</div>
       </div>
     </div>
   `;
@@ -1045,7 +1265,7 @@ function getFieldOptions(col) {
   const opts = {
     'Статус ліда':      ['Новий', 'В роботі', 'Підтверджено', 'Відмова'],
     'Статус оплати':    ['Не оплачено', 'Частково', 'Оплачено'],
-    'Статус посилки':   ['Прийнято', 'В дорозі', 'На складі', 'Доставлено', 'Видано', 'Невідомий'],
+    'Статус посилки':   ['Зареєстровано', 'Оформлення', 'Доставка', 'Доставлено', 'Невідомо'],
     'Статус CRM':       ['Активний', 'Архів'],
     'Валюта оплати':    ['UAH', 'EUR', 'CHF', 'USD', 'PLN', 'CZK'],
     'Валюта завдатку':  ['UAH', 'EUR', 'CHF', 'USD', 'PLN', 'CZK'],
@@ -1576,12 +1796,17 @@ function verifyHitStatus(p) {
   // Returns { label, cls } describing where the package sits in the QC
   // pipeline — so the operator knows if it's already in перевірка before
   // pressing «➕». Mirrors the sidebar filter taxonomy.
+  //
+  // Пріоритет: у маршруті > Невідомий > Контроль перевірки.
+  // «В маршруті» перекриває все, бо це фінальний стан для оператора.
+  const rteId = p['RTE_ID'];
+  if (rteId) return { label: '🚖 В маршруті (' + rteId + ')', cls: 'in-route' };
   const leadStatus = p['Статус ліда'];
   if (leadStatus === 'Невідомий') return { label: 'Невідомий', cls: 'unknown' };
   const v = p['Контроль перевірки'];
   if (v === 'В перевірці')        return { label: 'Вже в перевірці', cls: 'checking' };
-  if (v === 'Готова до маршруту') return { label: 'Готова до маршруту', cls: 'ready' };
-  if (v === 'Відхилено')          return { label: 'Відхилено', cls: 'rejected' };
+  if (v === 'Готова до маршруту') return { label: '✅ Готова до маршруту', cls: 'ready' };
+  if (v === 'Відхилено')          return { label: '❌ Відхилено', cls: 'rejected' };
   return { label: '', cls: '' };
 }
 
@@ -1613,23 +1838,48 @@ function renderVerifySearchResults(q) {
     const sender    = p['Піб відправника'] || '—';
     const recipient = p['Піб отримувача']  || '—';
     const st = verifyHitStatus(p);
-    const alreadyInCheck = st.cls === 'checking';
-    const btn = alreadyInCheck
-      ? '<button class="verify-add-btn success" disabled>✓ Вже в перевірці</button>'
-      : '<button class="verify-add-btn" onclick="verifyAddToCheck(\'' + escapeHtmlVerify(pkgId) + '\', this)">➕ В перевірку</button>';
-    return '<div class="verify-search-hit" data-pkg="' + escapeHtmlVerify(pkgId) + '">' +
+    // Термінальні стани (готова до маршруту / у маршруті / відхилено / невідомий)
+    // → ховаємо меню дій, лишаємо лише клікабельний бейдж-статус, щоб оператор
+    // бачив, що лід уже закрито для перевірки.
+    const isTerminal = ['ready','in-route','rejected','unknown'].includes(st.cls);
+    const pkgEsc = escapeHtmlVerify(pkgId);
+    const actions = isTerminal
+      ? '<div class="verify-search-hit-terminal ' + st.cls + '" onclick="openCardById(\'' + pkgEsc + '\')">' +
+          escapeHtmlVerify(st.label) +
+        '</div>'
+      : '<div class="verify-search-hit-actions">' +
+          '<button class="verify-act-btn add" onclick="verifyAddToCheck(\'' + pkgEsc + '\', this)">➕ В перевірку</button>' +
+          '<button class="verify-act-btn edit" onclick="verifyOpenEdit(\'' + pkgEsc + '\')">✏️ Редагувати</button>' +
+          '<button class="verify-act-btn del" onclick="verifyRemoveFromCheck(\'' + pkgEsc + '\', this)">🗑️ Видалити з перевірки</button>' +
+        '</div>';
+    return '<div class="verify-search-hit" data-pkg="' + pkgEsc + '">' +
              '<div class="verify-search-hit-info">' +
                '<div class="verify-search-hit-ttn">' + escapeHtmlVerify(ttn) + '</div>' +
                '<div class="verify-search-hit-meta">' +
                  escapeHtmlVerify(sender) + ' → ' + escapeHtmlVerify(recipient) +
                '</div>' +
-               (st.label
+               (st.label && !isTerminal
                  ? '<div class="verify-search-hit-status ' + st.cls + '">' + st.label + '</div>'
                  : '') +
              '</div>' +
-             btn +
+             actions +
            '</div>';
   }).join('');
+}
+
+// Відкрити картку ліда за PKG_ID (використовується у бейджах-статусах
+// «Готова до маршруту / В маршруті / Відхилено / Невідомий» у результатах
+// пошуку Перевірки).
+function openCardById(pkgId) {
+  if (!pkgId) return;
+  clearScanReturn();
+  openCardId = pkgId;
+  clearVerifySearch();
+  renderCards();
+  setTimeout(() => {
+    const el = document.querySelector('.lead-card[data-id="' + pkgId + '"]');
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, 60);
 }
 
 // Standalone escape — renderCards has its own escapeHtml but it lives deeper
@@ -1667,6 +1917,156 @@ async function verifyAddToCheck(pkgId, btn) {
   renderCards();
   updateCounters();
   showToast('Додано в перевірку', 'success');
+
+  // Якщо оператор прийшов зі сканера — коротким колом повертаємо назад
+  // сканувати наступну ТТН; інакше лишаємо в CRM.
+  if (hasScanReturn()) {
+    setTimeout(() => backToScanner(), 400);
+  }
+}
+
+// Видалити з перевірки (скидає scan_status до 'received' через api-мапінг
+// у supabase-api.js — колонку 'Контроль перевірки' = '').
+async function verifyRemoveFromCheck(pkgId, btn) {
+  if (!pkgId) return;
+  if (!confirm('Видалити «' + pkgId + '» з перевірки?')) return;
+  if (btn) { btn.disabled = true; btn.textContent = '⏳…'; }
+
+  const res = await apiPost('updateField', {
+    pkg_id: pkgId, col: 'Контроль перевірки', value: ''
+  });
+
+  if (!res || !res.ok) {
+    if (btn) { btn.disabled = false; btn.textContent = '🗑️ Видалити з перевірки'; }
+    showToast((res && res.error) || 'Помилка видалення', 'error');
+    return;
+  }
+
+  const row = (allData || []).find(p => p['PKG_ID'] === pkgId);
+  if (row) { row['Контроль перевірки'] = ''; row['Дата перевірки'] = ''; }
+
+  renderCards();
+  updateCounters();
+  showToast('Знято з перевірки', 'success');
+
+  if (hasScanReturn()) {
+    setTimeout(() => backToScanner(), 400);
+  } else {
+    // Оновити випадайку результатів, щоб кнопка не була застарілою
+    const input = document.getElementById('verifySearchInput');
+    if (input && input.value) onVerifySearchInput(input.value);
+  }
+}
+
+// «Редагувати» — відкрити модалку швидкого заповнення пріоритетних полів.
+function verifyOpenEdit(pkgId) {
+  if (!pkgId) return;
+  openFillModal(pkgId);
+}
+
+// ===== [SECT-FILLMODAL] FILL MODAL (quick-fill priority fields) =====
+// Показується або з кнопки «Заповнити» на картці (в перевірці / невідомий),
+// або з «✏️ Редагувати» у результатах verify-пошуку. Містить 11 полів,
+// з яких обов'язкове лише «Телефон отримувача».
+const _FILL_FIELDS = [
+  ['fill_phoneRecv',   'Телефон отримувача'],
+  ['fill_phoneSender', 'Телефон відправника'],
+  ['fill_addressTo',   'Адреса в Європі'],
+  ['fill_innerNum',    'Внутрішній №'],
+  ['fill_description', 'Опис'],
+  ['fill_qty',         'Кількість позицій'],
+  ['fill_weight',      'Вага'],
+  ['fill_sum',         'Сума'],
+  ['fill_currency',    'Валюта оплати'],
+  ['fill_payStatus',   'Статус оплати'],
+  ['fill_statusPkg',   'Статус посилки'],
+];
+
+function openFillModal(pkgId) {
+  if (!pkgId) return;
+  const row = (allData || []).find(p => p['PKG_ID'] === pkgId);
+  if (!row) { showToast('Лід не знайдено', 'error'); return; }
+
+  document.getElementById('fillPkgId').value = pkgId;
+  _FILL_FIELDS.forEach(([inputId, col]) => {
+    const el = document.getElementById(inputId);
+    if (!el) return;
+    const cur = row[col];
+    if (cur != null && cur !== '') {
+      el.value = cur;
+    } else if (el.tagName === 'SELECT') {
+      // select: лишаємо <option selected>, що стоїть у HTML
+    } else {
+      el.value = '';
+    }
+  });
+
+  document.getElementById('fillOverlay').classList.add('open');
+  setTimeout(() => {
+    const rcv = document.getElementById('fill_phoneRecv');
+    if (rcv) rcv.focus();
+  }, 100);
+}
+
+function closeFillModal() {
+  document.getElementById('fillOverlay').classList.remove('open');
+}
+
+async function saveFillModal() {
+  const pkgId = document.getElementById('fillPkgId').value;
+  if (!pkgId) return;
+
+  const phoneRecv = (document.getElementById('fill_phoneRecv').value || '').trim();
+  if (!phoneRecv) {
+    showToast('Телефон отримувача — обов\'язкове поле', 'error');
+    document.getElementById('fill_phoneRecv').focus();
+    return;
+  }
+
+  const btn = document.getElementById('fillSaveBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Збереження…'; }
+
+  // Порівнюємо з поточним рядком і відправляємо лише ті колонки, що
+  // справді змінилися — так ми не дзвонимо в updateField даремно, і не
+  // створюємо фантомних записів change_logs/audit_logs.
+  const row = (allData || []).find(p => p['PKG_ID'] === pkgId) || {};
+  const toUpdate = [];
+  for (const [inputId, col] of _FILL_FIELDS) {
+    const el = document.getElementById(inputId);
+    if (!el) continue;
+    const newVal = (el.value == null ? '' : String(el.value)).trim();
+    const oldVal = (row[col] == null ? '' : String(row[col])).trim();
+    if (newVal !== oldVal) toUpdate.push([col, newVal]);
+  }
+
+  let failed = 0;
+  for (const [col, val] of toUpdate) {
+    try {
+      const r = await apiPost('updateField', { pkg_id: pkgId, col, value: val });
+      if (r && r.ok) {
+        if (row) row[col] = val;
+      } else {
+        failed++;
+      }
+    } catch (_) { failed++; }
+  }
+
+  if (btn) { btn.disabled = false; btn.textContent = '💾 Зберегти'; }
+
+  if (failed > 0) {
+    showToast('Збережено з помилками: ' + failed, 'error');
+  } else {
+    showToast('Збережено (' + toUpdate.length + ' полів)', 'success');
+  }
+
+  closeFillModal();
+  renderCards();
+  updateCounters();
+
+  // Коротке коло «скан → заповнення → наступний скан»
+  if (hasScanReturn()) {
+    setTimeout(() => backToScanner(), 400);
+  }
 }
 
 async function verifyMarkUnknown() {
