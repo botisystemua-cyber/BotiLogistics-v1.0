@@ -1693,12 +1693,17 @@ function verifyHitStatus(p) {
   // Returns { label, cls } describing where the package sits in the QC
   // pipeline — so the operator knows if it's already in перевірка before
   // pressing «➕». Mirrors the sidebar filter taxonomy.
+  //
+  // Пріоритет: у маршруті > Невідомий > Контроль перевірки.
+  // «В маршруті» перекриває все, бо це фінальний стан для оператора.
+  const rteId = p['RTE_ID'];
+  if (rteId) return { label: '🚖 В маршруті (' + rteId + ')', cls: 'in-route' };
   const leadStatus = p['Статус ліда'];
   if (leadStatus === 'Невідомий') return { label: 'Невідомий', cls: 'unknown' };
   const v = p['Контроль перевірки'];
   if (v === 'В перевірці')        return { label: 'Вже в перевірці', cls: 'checking' };
-  if (v === 'Готова до маршруту') return { label: 'Готова до маршруту', cls: 'ready' };
-  if (v === 'Відхилено')          return { label: 'Відхилено', cls: 'rejected' };
+  if (v === 'Готова до маршруту') return { label: '✅ Готова до маршруту', cls: 'ready' };
+  if (v === 'Відхилено')          return { label: '❌ Відхилено', cls: 'rejected' };
   return { label: '', cls: '' };
 }
 
@@ -1730,23 +1735,48 @@ function renderVerifySearchResults(q) {
     const sender    = p['Піб відправника'] || '—';
     const recipient = p['Піб отримувача']  || '—';
     const st = verifyHitStatus(p);
-    const alreadyInCheck = st.cls === 'checking';
-    const btn = alreadyInCheck
-      ? '<button class="verify-add-btn success" disabled>✓ Вже в перевірці</button>'
-      : '<button class="verify-add-btn" onclick="verifyAddToCheck(\'' + escapeHtmlVerify(pkgId) + '\', this)">➕ В перевірку</button>';
-    return '<div class="verify-search-hit" data-pkg="' + escapeHtmlVerify(pkgId) + '">' +
+    // Термінальні стани (готова до маршруту / у маршруті / відхилено / невідомий)
+    // → ховаємо меню дій, лишаємо лише клікабельний бейдж-статус, щоб оператор
+    // бачив, що лід уже закрито для перевірки.
+    const isTerminal = ['ready','in-route','rejected','unknown'].includes(st.cls);
+    const pkgEsc = escapeHtmlVerify(pkgId);
+    const actions = isTerminal
+      ? '<div class="verify-search-hit-terminal ' + st.cls + '" onclick="openCardById(\'' + pkgEsc + '\')">' +
+          escapeHtmlVerify(st.label) +
+        '</div>'
+      : '<div class="verify-search-hit-actions">' +
+          '<button class="verify-act-btn add" onclick="verifyAddToCheck(\'' + pkgEsc + '\', this)">➕ В перевірку</button>' +
+          '<button class="verify-act-btn edit" onclick="verifyOpenEdit(\'' + pkgEsc + '\')">✏️ Редагувати</button>' +
+          '<button class="verify-act-btn del" onclick="verifyRemoveFromCheck(\'' + pkgEsc + '\', this)">🗑️ Видалити з перевірки</button>' +
+        '</div>';
+    return '<div class="verify-search-hit" data-pkg="' + pkgEsc + '">' +
              '<div class="verify-search-hit-info">' +
                '<div class="verify-search-hit-ttn">' + escapeHtmlVerify(ttn) + '</div>' +
                '<div class="verify-search-hit-meta">' +
                  escapeHtmlVerify(sender) + ' → ' + escapeHtmlVerify(recipient) +
                '</div>' +
-               (st.label
+               (st.label && !isTerminal
                  ? '<div class="verify-search-hit-status ' + st.cls + '">' + st.label + '</div>'
                  : '') +
              '</div>' +
-             btn +
+             actions +
            '</div>';
   }).join('');
+}
+
+// Відкрити картку ліда за PKG_ID (використовується у бейджах-статусах
+// «Готова до маршруту / В маршруті / Відхилено / Невідомий» у результатах
+// пошуку Перевірки).
+function openCardById(pkgId) {
+  if (!pkgId) return;
+  clearScanReturn();
+  openCardId = pkgId;
+  clearVerifySearch();
+  renderCards();
+  setTimeout(() => {
+    const el = document.querySelector('.lead-card[data-id="' + pkgId + '"]');
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, 60);
 }
 
 // Standalone escape — renderCards has its own escapeHtml but it lives deeper
@@ -1784,6 +1814,54 @@ async function verifyAddToCheck(pkgId, btn) {
   renderCards();
   updateCounters();
   showToast('Додано в перевірку', 'success');
+
+  // Якщо оператор прийшов зі сканера — коротким колом повертаємо назад
+  // сканувати наступну ТТН; інакше лишаємо в CRM.
+  if (hasScanReturn()) {
+    setTimeout(() => backToScanner(), 400);
+  }
+}
+
+// Видалити з перевірки (скидає scan_status до 'received' через api-мапінг
+// у supabase-api.js — колонку 'Контроль перевірки' = '').
+async function verifyRemoveFromCheck(pkgId, btn) {
+  if (!pkgId) return;
+  if (!confirm('Видалити «' + pkgId + '» з перевірки?')) return;
+  if (btn) { btn.disabled = true; btn.textContent = '⏳…'; }
+
+  const res = await apiPost('updateField', {
+    pkg_id: pkgId, col: 'Контроль перевірки', value: ''
+  });
+
+  if (!res || !res.ok) {
+    if (btn) { btn.disabled = false; btn.textContent = '🗑️ Видалити з перевірки'; }
+    showToast((res && res.error) || 'Помилка видалення', 'error');
+    return;
+  }
+
+  const row = (allData || []).find(p => p['PKG_ID'] === pkgId);
+  if (row) { row['Контроль перевірки'] = ''; row['Дата перевірки'] = ''; }
+
+  renderCards();
+  updateCounters();
+  showToast('Знято з перевірки', 'success');
+
+  if (hasScanReturn()) {
+    setTimeout(() => backToScanner(), 400);
+  } else {
+    // Оновити випадайку результатів, щоб кнопка не була застарілою
+    const input = document.getElementById('verifySearchInput');
+    if (input && input.value) onVerifySearchInput(input.value);
+  }
+}
+
+// «Редагувати» — відкрити модалку швидкого заповнення пріоритетних полів
+// (C4). Поки що заглушка-заготовка: відкриваємо картку ліда з активною
+// вкладкою «Основне» і прокручуємо до неї. Повноцінний pкс-модал зробимо в C4.
+function verifyOpenEdit(pkgId) {
+  if (!pkgId) return;
+  clearScanReturn();
+  openCardById(pkgId);
 }
 
 async function verifyMarkUnknown() {
