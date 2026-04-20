@@ -23,6 +23,7 @@ const SB_TO_GAS_PKG = {
     description:        'Опис',
     details:            'Деталі',
     item_count:         'Кількість позицій',
+    np_places:          'Місця НП',
     weight_kg:          'Кг',
     estimated_value:    'Оціночна вартість',
     np_amount:          'Сума НП',
@@ -87,7 +88,7 @@ const FORM_TO_SB_PKG = {
 
 // ── NUMERIC COLUMNS ──
 const NUMERIC_COLS_PKG = new Set([
-    'item_count', 'weight_kg', 'estimated_value', 'np_amount',
+    'item_count', 'np_places', 'weight_kg', 'estimated_value', 'np_amount',
     'total_amount', 'deposit', 'debt', 'rating',
 ]);
 

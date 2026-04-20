@@ -1995,6 +1995,7 @@ const _FILL_FIELDS = [
   ['fill_innerNum',    'Внутрішній №'],
   ['fill_description', 'Опис'],
   ['fill_qty',         'Кількість позицій'],
+  ['fill_npPlaces',    'Місця НП'],
   ['fill_weight',      'Вага'],
   ['fill_sum',         'Сума'],
   ['fill_currency',    'Валюта оплати'],
