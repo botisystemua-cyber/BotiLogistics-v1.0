@@ -1482,6 +1482,208 @@ function openScannerPage() {
   window.location.href = 'scaner_ttn.html';
 }
 
+// ---------- Verify search (top-of-section quick lookup + mark-unknown) ----------
+//
+// Shown only while a Перевірка filter is active (set by setVerFilter).
+// Hidden when the operator moves to another sidebar section (direction / pay
+// filter / status chip / route view). Queries the in-memory `allData` across
+// 5 fields user confirmed: ТТН, Ід_смарт, адреса, відправник, отримувач.
+//
+// Per result:  «➕ В перевірку» — posts Контроль перевірки='В перевірці'
+//              (supabase-api translates it to scan_status='checked' for us,
+//              so scanner pipeline and manual pipeline stay synced).
+// Empty:       «⚠️ Позначити невідомим» — creates a new package with
+//              Статус ліда='Невідомий', query text stored as ТТН. Operator
+//              then edits the rest of the fields in the normal card UI.
+
+let isVerifyActive = false;
+let verifySearchDebounce = null;
+
+const VERIFY_SEARCH_FIELDS = [
+  'Номер ТТН', 'Ід_смарт', 'Адреса в Європі',
+  'Піб відправника', 'Піб отримувача',
+];
+
+function showVerifyPanel() {
+  isVerifyActive = true;
+  const p = document.getElementById('verifySearchPanel');
+  if (p) p.style.display = 'block';
+}
+
+function hideVerifyPanel() {
+  isVerifyActive = false;
+  const p = document.getElementById('verifySearchPanel');
+  if (p) p.style.display = 'none';
+  clearVerifySearch();
+}
+
+function clearVerifySearch() {
+  const input = document.getElementById('verifySearchInput');
+  const clear = document.getElementById('verifySearchClear');
+  const res   = document.getElementById('verifySearchResults');
+  if (input) input.value = '';
+  if (clear) clear.style.display = 'none';
+  if (res)   { res.style.display = 'none'; res.innerHTML = ''; }
+}
+
+function onVerifySearchInput(raw) {
+  const q = (raw || '').trim();
+  const clear = document.getElementById('verifySearchClear');
+  const res   = document.getElementById('verifySearchResults');
+  if (clear) clear.style.display = q ? 'flex' : 'none';
+  if (!q) { if (res) { res.style.display = 'none'; res.innerHTML = ''; } return; }
+
+  // Minimum 2 chars — prevents dumping 1000-row results on a single letter.
+  if (q.length < 2) {
+    res.style.display = 'block';
+    res.innerHTML = '<div class="verify-empty">Введіть мінімум 2 символи…</div>';
+    return;
+  }
+
+  clearTimeout(verifySearchDebounce);
+  verifySearchDebounce = setTimeout(() => renderVerifySearchResults(q), 150);
+}
+
+function verifyHitStatus(p) {
+  // Returns { label, cls } describing where the package sits in the QC
+  // pipeline — so the operator knows if it's already in перевірка before
+  // pressing «➕». Mirrors the sidebar filter taxonomy.
+  const leadStatus = p['Статус ліда'];
+  if (leadStatus === 'Невідомий') return { label: 'Невідомий', cls: 'unknown' };
+  const v = p['Контроль перевірки'];
+  if (v === 'В перевірці')        return { label: 'Вже в перевірці', cls: 'checking' };
+  if (v === 'Готова до маршруту') return { label: 'Готова до маршруту', cls: 'ready' };
+  if (v === 'Відхилено')          return { label: 'Відхилено', cls: 'rejected' };
+  return { label: '', cls: '' };
+}
+
+function renderVerifySearchResults(q) {
+  const res = document.getElementById('verifySearchResults');
+  if (!res) return;
+  res.style.display = 'block';
+
+  const ql = q.toLowerCase();
+  const hits = (allData || []).filter(p => VERIFY_SEARCH_FIELDS.some(f => {
+    const v = p[f];
+    return v != null && v !== '' && String(v).toLowerCase().includes(ql);
+  })).slice(0, 20); // cap to keep dropdown lightweight
+
+  if (hits.length === 0) {
+    res.innerHTML =
+      '<div class="verify-empty">' +
+        'Нічого не знайдено' +
+        '<div><button class="verify-mark-unknown-btn" onclick="verifyMarkUnknown()">' +
+          '⚠️ Позначити невідомим «' + escapeHtmlVerify(q) + '»' +
+        '</button></div>' +
+      '</div>';
+    return;
+  }
+
+  res.innerHTML = hits.map(p => {
+    const pkgId = p['PKG_ID'] || '';
+    const ttn   = p['Номер ТТН'] || '(без ТТН)';
+    const sender    = p['Піб відправника'] || '—';
+    const recipient = p['Піб отримувача']  || '—';
+    const st = verifyHitStatus(p);
+    const alreadyInCheck = st.cls === 'checking';
+    const btn = alreadyInCheck
+      ? '<button class="verify-add-btn success" disabled>✓ Вже в перевірці</button>'
+      : '<button class="verify-add-btn" onclick="verifyAddToCheck(\'' + escapeHtmlVerify(pkgId) + '\', this)">➕ В перевірку</button>';
+    return '<div class="verify-search-hit" data-pkg="' + escapeHtmlVerify(pkgId) + '">' +
+             '<div class="verify-search-hit-info">' +
+               '<div class="verify-search-hit-ttn">' + escapeHtmlVerify(ttn) + '</div>' +
+               '<div class="verify-search-hit-meta">' +
+                 escapeHtmlVerify(sender) + ' → ' + escapeHtmlVerify(recipient) +
+               '</div>' +
+               (st.label
+                 ? '<div class="verify-search-hit-status ' + st.cls + '">' + st.label + '</div>'
+                 : '') +
+             '</div>' +
+             btn +
+           '</div>';
+  }).join('');
+}
+
+// Standalone escape — renderCards has its own escapeHtml but it lives deeper
+// in the file; a local helper keeps this section self-contained.
+function escapeHtmlVerify(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, ch =>
+    ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[ch]));
+}
+
+async function verifyAddToCheck(pkgId, btn) {
+  if (!pkgId) return;
+  if (btn) { btn.disabled = true; btn.textContent = '⏳…'; }
+
+  const res = await apiPost('updateField', {
+    pkg_id: pkgId, col: 'Контроль перевірки', value: 'В перевірці'
+  });
+
+  if (!res || !res.ok) {
+    if (btn) { btn.disabled = false; btn.textContent = '➕ В перевірку'; }
+    showToast((res && res.error) || 'Помилка додавання', 'error');
+    return;
+  }
+
+  // Reflect the change in the in-memory list so filters/counters update
+  // without a full reload.
+  const row = (allData || []).find(p => p['PKG_ID'] === pkgId);
+  if (row) row['Контроль перевірки'] = 'В перевірці';
+
+  if (btn) {
+    btn.textContent = '✓ Вже в перевірці';
+    btn.classList.add('success');
+    btn.disabled = true;
+  }
+
+  renderCards();
+  updateCounters();
+  showToast('Додано в перевірку', 'success');
+}
+
+async function verifyMarkUnknown() {
+  const input = document.getElementById('verifySearchInput');
+  const q = (input && input.value || '').trim();
+  if (!q) return;
+
+  // Default direction matches the scanner's RPC — new leads land as UA→EU
+  // (operator can flip it in the card later if needed). We only set
+  // lead_status='unknown' — the sidebar's «Невідомі» filter is keyed on that
+  // field alone, so the new lead lands there immediately. Контроль перевірки
+  // is a GENERATED column off scan_status and can't be inserted directly.
+  const data = {
+    'Номер ТТН':     q,
+    'Напрям':        'УК→ЄВ',
+    'Статус ліда':   'Невідомий',
+  };
+
+  const res = await apiPost('addParcel', { sheet: 'Реєстрація ТТН УК-єв', data });
+
+  if (!res || !res.ok) {
+    showToast((res && res.error) || 'Не вдалося створити', 'error');
+    return;
+  }
+
+  // Build a minimal local row so the just-created lead shows up in counters
+  // and the list without a round-trip reload.
+  const newItem = {
+    'PKG_ID':          res.pkg_id || ('PKG_' + Date.now()),
+    'Напрям':          data['Напрям'],
+    'Номер ТТН':       q,
+    'Піб відправника': '',
+    'Піб отримувача':  '',
+    'Статус ліда':     'Невідомий',
+    'Створено':        new Date().toISOString(),
+  };
+  allData = allData || [];
+  allData.unshift(newItem);
+
+  // Jump the operator to the Unknown filter so they see the new row.
+  setVerFilter('unknown');
+  clearVerifySearch();
+  showToast('Створено ліда зі статусом «Невідомий»', 'success');
+}
+
 
 // ---------- Start / Complete / Reject verification ----------
 
@@ -1710,6 +1912,8 @@ function setDirection(dir) {
   document.querySelectorAll('#mobileSidebar [data-dir]').forEach(el => {
     el.className = 'mob-item' + (el.dataset.dir === dir ? ' ' + activeCls : '');
   });
+  // Moved out of Перевірка section → hide the verify search bar.
+  hideVerifyPanel();
   // Switch back to parcels view if in route/other view
   if (currentView !== 'parcels') backToParcels();
   else renderCards();
@@ -1855,6 +2059,11 @@ function switchMainView(view) {
   currentView = view;
   document.getElementById('cardsList').style.display = view === 'parcels' ? '' : 'none';
   document.getElementById('routeView').style.display = view !== 'parcels' ? '' : 'none';
+  // Verify search panel only makes sense inside the parcels list; hide it
+  // when switching to route/dispatch/etc., re-show on return if user was in
+  // Перевірка before.
+  const vsp = document.getElementById('verifySearchPanel');
+  if (vsp) vsp.style.display = (view === 'parcels' && isVerifyActive) ? 'block' : 'none';
   renderRouteSidebar();
 }
 
@@ -3937,6 +4146,8 @@ function setVerFilter(f) {
   document.querySelectorAll('#mobileSidebar [data-mfilter]').forEach(el => {
     el.classList.toggle('active', el.dataset.mfilter === f);
   });
+  // Entering Перевірка → reveal the search panel at the top of the list.
+  showVerifyPanel();
   // Switch back to parcels view if in route/other view
   if (currentView !== 'parcels') backToParcels();
   else renderCards();
