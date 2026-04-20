@@ -49,6 +49,8 @@ const SB_TO_GAS_PKG = {
     quality_check_required: 'Контроль перевірки',
     quality_checked_at: 'Дата перевірки',
     photo_url:          'Фото посилки',
+    messengers:         'Месенджери',
+    extra_phones:       'Ще телефони',
     rating:             'Рейтинг',
     rating_comment:     'Коментар рейтингу',
     tag:                'Тег',
@@ -91,6 +93,9 @@ const NUMERIC_COLS_PKG = new Set([
     'item_count', 'np_places', 'weight_kg', 'estimated_value', 'np_amount',
     'total_amount', 'deposit', 'debt', 'rating',
 ]);
+
+// ── JSONB COLUMNS ── (масиви/обʼєкти; передаються без JSON.stringify)
+const JSONB_COLS_PKG = new Set(['messengers', 'extra_phones']);
 
 // ── STATUS VALUE MAPPING: Supabase English → Frontend Ukrainian ──
 const STATUS_SB_TO_UA = {
@@ -149,6 +154,12 @@ function gasToSbObjPkg(gasObj) {
             if (v !== null && NUMERIC_COLS_PKG.has(sbKey)) {
                 const n = parseFloat(v);
                 v = isNaN(n) ? null : n;
+            }
+            if (v !== null && JSONB_COLS_PKG.has(sbKey)) {
+                if (typeof v === 'string') {
+                    try { v = JSON.parse(v); } catch (_) { v = []; }
+                }
+                if (!Array.isArray(v)) v = [];
             }
             obj[sbKey] = v;
         }
@@ -343,6 +354,13 @@ async function sbPkgUpdateField(params) {
         if (v !== null && NUMERIC_COLS_PKG.has(sbCol)) {
             const n = parseFloat(v);
             v = isNaN(n) ? null : n;
+        }
+        // JSONB-колонки: приймаємо масив або JSON-рядок → парсимо у масив
+        if (v !== null && JSONB_COLS_PKG.has(sbCol)) {
+            if (typeof v === 'string') {
+                try { v = JSON.parse(v); } catch (_) { v = []; }
+            }
+            if (!Array.isArray(v)) v = [];
         }
         updateObj[sbCol] = v;
         updateObj.updated_at = new Date().toISOString();

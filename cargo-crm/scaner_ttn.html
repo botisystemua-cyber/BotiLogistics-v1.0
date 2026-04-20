@@ -990,6 +990,71 @@
         .inl-client-sug-addr { color: rgba(255,255,255,0.8); font-size: 11px; margin-top: 2px; }
         .inl-client-sug-count { font-size: 10px; color: rgba(255,255,255,0.6); white-space: nowrap; }
 
+        /* 💬 Месенджери — 4 toggle-кнопки */
+        .inl-msg-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 6px; }
+        .inl-msg-btn {
+            background: rgba(255,255,255,0.05);
+            color: rgba(255,255,255,0.6);
+            border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 8px;
+            padding: 10px 8px;
+            font-family: inherit;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .inl-msg-btn:active { transform: scale(0.97); }
+        .inl-msg-btn.active {
+            color: #fff;
+            border-color: rgba(59,130,246,0.6);
+            background: rgba(59,130,246,0.25);
+        }
+        .inl-msg-btn.msg-viber.active    { border-color: #7d41e2; background: rgba(125,65,226,0.25); }
+        .inl-msg-btn.msg-whatsapp.active { border-color: #25d366; background: rgba(37,211,102,0.25); }
+        .inl-msg-btn.msg-telegram.active { border-color: #2aabee; background: rgba(42,171,238,0.25); }
+        .inl-msg-btn.msg-chat.active     { border-color: #f59e0b; background: rgba(245,158,11,0.25); }
+
+        /* 📞 Додаткові номери отримувача */
+        .inl-phones-box { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+        .inl-phone-row { display: flex; gap: 6px; align-items: stretch; }
+        .inl-phone-row input.inl-phone-extra {
+            flex: 1;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.12);
+            color: #fff;
+            border-radius: 8px;
+            padding: 8px 10px;
+            font-family: inherit;
+            font-size: 14px;
+        }
+        .inl-phone-row input.inl-phone-extra:focus {
+            outline: none;
+            border-color: rgba(59,130,246,0.6);
+            background: rgba(59,130,246,0.08);
+        }
+        .inl-phone-rm {
+            background: rgba(239,68,68,0.15);
+            color: #fca5a5;
+            border: 1px solid rgba(239,68,68,0.3);
+            border-radius: 8px;
+            width: 34px;
+            cursor: pointer;
+            font-size: 18px;
+        }
+        .inl-phones-add {
+            margin-top: 6px;
+            background: rgba(59,130,246,0.15);
+            color: #93c5fd;
+            border: 1px dashed rgba(59,130,246,0.5);
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-family: inherit;
+            font-size: 13px;
+            cursor: pointer;
+        }
+        .inl-phones-add:hover { background: rgba(59,130,246,0.25); }
+
         /* ==== FIELDS CHOOSER (C7/3) ==== */
         .fc-overlay {
             position: fixed; inset: 0;
@@ -1993,7 +2058,10 @@
                 }
                 patchPromise.then(function() {
                     _sessionScans[ttn] = (_sessionScans[ttn] || 0) + 1;
-                    // Відразу відкриваємо редактор для цього нового ліда
+                    // Маркуємо лід як «pending-cancel»: якщо оператор
+                    // закриє редактор без збереження — перекидаємо у
+                    // Відхилені (щоб не висів Невідомим без даних).
+                    _inlPendingCancelPkg = newPkg;
                     openInlineEditor(newPkg, ttn);
                 });
             }).catch(function(err) {
@@ -2277,6 +2345,8 @@
             // Отримувач
             { col: 'recipient_name',     label: 'ПІБ отримувача',       type: 'text',     category: '👤 Отримувач', defaultOn: true },
             { col: 'recipient_phone',    label: 'Тел. отримувача',      type: 'phone',    category: '👤 Отримувач', required: true, defaultOn: true },
+            { col: 'extra_phones',       label: '📞 Ще номери (UA+EU)',  type: 'phones_multi', category: '👤 Отримувач', defaultOn: true },
+            { col: 'messengers',         label: '💬 Месенджери клієнта',type: 'messengers', category: '👤 Отримувач', defaultOn: true },
             { col: 'recipient_address',  label: 'Адреса в Європі',      type: 'text',     category: '👤 Отримувач', defaultOn: true },
             { col: 'nova_poshta_city',   label: 'Місто Нова Пошта',     type: 'text',     category: '👤 Отримувач' },
             // Відправник
@@ -2397,6 +2467,46 @@
                 sugBox.setAttribute('data-for', f.col);
                 row.appendChild(sugBox);
                 return row;
+            } else if (f.type === 'phones_multi') {
+                // Масив додаткових номерів: 0..3 input-полів + «+» кнопка
+                el = document.createElement('input');
+                el.type = 'hidden';
+                el.id = 'inl_col_' + f.col;
+                el.value = '[]';
+                row.appendChild(el);
+                var box = document.createElement('div');
+                box.className = 'inl-phones-box';
+                box.id = 'inl_phones_box_' + f.col;
+                box.setAttribute('data-for', f.col);
+                row.appendChild(box);
+                var addBtn = document.createElement('button');
+                addBtn.type = 'button';
+                addBtn.className = 'inl-phones-add';
+                addBtn.textContent = '+ ще номер';
+                addBtn.onclick = function() { _addExtraPhoneInput(f.col); };
+                row.appendChild(addBtn);
+                return row;
+            } else if (f.type === 'messengers') {
+                // 4 toggle-кнопки — які месенджери в клієнта є
+                el = document.createElement('input');
+                el.type = 'hidden';
+                el.id = 'inl_col_' + f.col;
+                el.value = '[]';
+                row.appendChild(el);
+                var mgrid = document.createElement('div');
+                mgrid.className = 'inl-msg-grid';
+                mgrid.setAttribute('data-for', f.col);
+                ['viber','whatsapp','telegram','chat'].forEach(function(key) {
+                    var b = document.createElement('button');
+                    b.type = 'button';
+                    b.className = 'inl-msg-btn msg-' + key;
+                    b.setAttribute('data-msg', key);
+                    b.onclick = function() { _toggleMessenger(f.col, key, b); };
+                    b.innerHTML = _MSG_ICON[key] + ' ' + _MSG_LABEL[key];
+                    mgrid.appendChild(b);
+                });
+                row.appendChild(mgrid);
+                return row;
             } else if (f.type === 'photo') {
                 // photo: spiсhial composite — hidden input з URL + превʼю + file picker
                 el = document.createElement('input');
@@ -2440,15 +2550,119 @@
             });
         }
 
+        // 💬 Месенджери: лейбли та іконки для 4 кнопок
+        var _MSG_ICON = { viber: '💜', whatsapp: '💚', telegram: '✈️', chat: '💬' };
+        var _MSG_LABEL = { viber: 'Viber', whatsapp: 'WhatsApp', telegram: 'Telegram', chat: 'Чат' };
+
+        function _getMessengersForCol(col) {
+            var hidden = document.getElementById('inl_col_' + col);
+            if (!hidden) return [];
+            try { return JSON.parse(hidden.value || '[]'); } catch (_) { return []; }
+        }
+        function _setMessengersForCol(col, arr) {
+            var hidden = document.getElementById('inl_col_' + col);
+            if (!hidden) return;
+            hidden.value = JSON.stringify(arr || []);
+            // Підсвічуємо активні кнопки
+            var grid = document.querySelector('.inl-msg-grid[data-for="' + col + '"]');
+            if (grid) {
+                Array.prototype.slice.call(grid.querySelectorAll('.inl-msg-btn')).forEach(function(b) {
+                    b.classList.toggle('active', arr.indexOf(b.getAttribute('data-msg')) !== -1);
+                });
+            }
+        }
+        function _toggleMessenger(col, key, btn) {
+            var cur = _getMessengersForCol(col);
+            var i = cur.indexOf(key);
+            if (i === -1) cur.push(key); else cur.splice(i, 1);
+            _setMessengersForCol(col, cur);
+        }
+
+        // 📞 Додаткові номери отримувача (UA + EU тощо) — масив рядків
+        var _MAX_EXTRA_PHONES = 2; // без головного (разом з recipient_phone = 3)
+
+        function _getExtraPhones(col) {
+            var hidden = document.getElementById('inl_col_' + col);
+            if (!hidden) return [];
+            try { return JSON.parse(hidden.value || '[]'); } catch (_) { return []; }
+        }
+        function _syncExtraPhonesHidden(col) {
+            var box = document.getElementById('inl_phones_box_' + col);
+            var hidden = document.getElementById('inl_col_' + col);
+            if (!box || !hidden) return;
+            var arr = Array.prototype.slice.call(box.querySelectorAll('input.inl-phone-extra'))
+                .map(function(i){ return (i.value || '').trim(); })
+                .filter(function(v){ return !!v; });
+            hidden.value = JSON.stringify(arr);
+        }
+        function _setExtraPhones(col, arr) {
+            var box = document.getElementById('inl_phones_box_' + col);
+            var hidden = document.getElementById('inl_col_' + col);
+            if (!box || !hidden) return;
+            arr = Array.isArray(arr) ? arr : [];
+            box.innerHTML = '';
+            arr.slice(0, _MAX_EXTRA_PHONES).forEach(function(p){ _addExtraPhoneInput(col, p); });
+            hidden.value = JSON.stringify(arr);
+        }
+        function _addExtraPhoneInput(col, initial) {
+            var box = document.getElementById('inl_phones_box_' + col);
+            if (!box) return;
+            var count = box.querySelectorAll('input.inl-phone-extra').length;
+            if (count >= _MAX_EXTRA_PHONES) {
+                showToast({ variant: 'error', icon: 'ℹ️', label: 'Максимум 3 номери',
+                            value: '', status: 'Більше не можна додати' });
+                setTimeout(function(){ document.getElementById('resultToast').classList.remove('show'); }, 1500);
+                return;
+            }
+            var wrap = document.createElement('div');
+            wrap.className = 'inl-phone-row';
+            var inp = document.createElement('input');
+            inp.type = 'tel';
+            inp.className = 'inl-phone-extra';
+            inp.placeholder = '+380… або +48… +420…';
+            inp.value = (initial || '');
+            inp.addEventListener('focus', function() { if (!inp.value) inp.value = '+380'; });
+            inp.addEventListener('paste', function(e) {
+                e.preventDefault();
+                var pasted = (e.clipboardData || window.clipboardData).getData('text');
+                inp.value = _normalizePhoneIntl(pasted);
+                _syncExtraPhonesHidden(col);
+            });
+            inp.addEventListener('blur', function() {
+                if (inp.value && inp.value !== '+380') inp.value = _normalizePhoneIntl(inp.value);
+                _syncExtraPhonesHidden(col);
+            });
+            inp.addEventListener('input', function(){ _syncExtraPhonesHidden(col); });
+            var rm = document.createElement('button');
+            rm.type = 'button';
+            rm.className = 'inl-phone-rm';
+            rm.textContent = '×';
+            rm.title = 'Прибрати цей номер';
+            rm.onclick = function() {
+                wrap.remove();
+                _syncExtraPhonesHidden(col);
+            };
+            wrap.appendChild(inp);
+            wrap.appendChild(rm);
+            box.appendChild(wrap);
+            if (!initial) setTimeout(function(){ inp.focus(); }, 50);
+        }
+
         // 📇 Пошук клієнта за телефоном + автопідказки на сканері (Phase A)
         function _lookupClientInline(phone) {
             phone = (phone || '').trim();
             if (phone.length < 5 || !TENANT_ID) return Promise.resolve([]);
+            // По останніх 9 цифрах — щоб формат не заважав:
+            //   +380639763485 / 380639763485 / 0639763485 / «063 976-34-85»
+            //   → всі дають tail '639763485' → одна підказка з усіма адресами
+            var digits = phone.replace(/\D/g, '');
+            if (digits.length < 5) return Promise.resolve([]);
+            var tail = digits.length >= 9 ? digits.slice(-9) : digits;
             var url = SUPABASE_URL + '/rest/v1/packages' +
                       '?tenant_id=eq.' + encodeURIComponent(TENANT_ID) +
-                      '&recipient_phone=eq.' + encodeURIComponent(phone) +
+                      '&recipient_phone=ilike.*' + encodeURIComponent(tail) + '*' +
                       '&is_archived=eq.false' +
-                      '&select=pkg_id,recipient_name,recipient_address,nova_poshta_city,created_at' +
+                      '&select=pkg_id,recipient_name,recipient_address,nova_poshta_city,created_at,recipient_phone,messengers' +
                       '&order=created_at.desc&limit=20';
             return fetch(url, {
                 headers: {
@@ -2463,12 +2677,19 @@
                     var addr = (r.recipient_address || r.nova_poshta_city || '').trim();
                     if (!name && !addr) return;
                     var key = name + '|' + addr;
-                    if (!byKey[key]) byKey[key] = { name: name, address: addr, count: 0, last: r.created_at };
+                    if (!byKey[key]) byKey[key] = { name: name, address: addr, count: 0, last: r.created_at, messengers: {} };
                     byKey[key].count++;
                     if (r.created_at > byKey[key].last) byKey[key].last = r.created_at;
+                    // union месенджерів по всіх збігах цієї адреси
+                    (Array.isArray(r.messengers) ? r.messengers : []).forEach(function(m) {
+                        byKey[key].messengers[m] = true;
+                    });
                 });
-                return Object.keys(byKey).map(function(k){ return byKey[k]; })
-                    .sort(function(a, b){ return (b.last || '').localeCompare(a.last || ''); });
+                return Object.keys(byKey).map(function(k){
+                    var it = byKey[k];
+                    return { name: it.name, address: it.address, count: it.count, last: it.last,
+                             messengers: Object.keys(it.messengers) };
+                }).sort(function(a, b){ return (b.last || '').localeCompare(a.last || ''); });
             }).catch(function(){ return []; });
         }
 
@@ -2495,6 +2716,10 @@
                     [nameEl, addrEl].forEach(function(el) {
                         if (el) el.closest('.inl-row').classList.add('has-value');
                     });
+                    // 💬 Підтягуємо месенджери з попередніх лідів (union)
+                    if (Array.isArray(it.messengers) && it.messengers.length) {
+                        _setMessengersForCol('messengers', it.messengers);
+                    }
                     box.classList.remove('show');
                 });
                 box.appendChild(row);
@@ -2502,9 +2727,32 @@
             box.classList.add('show');
         }
 
+        // Нормалізація номера телефону: з 0XXXXXXXXX → +380XXXXXXXXX,
+        // з 9 цифр → +380XXXXXXXXX, решта просто з «+».
+        function _normalizePhoneIntl(raw) {
+            var s = String(raw || '').trim();
+            if (!s) return '';
+            var digits = s.replace(/\D/g, '');
+            if (!digits) return '';
+            if (digits.length === 10 && digits.charAt(0) === '0') return '+380' + digits.slice(1);
+            if (digits.length === 9) return '+380' + digits;
+            return '+' + digits;
+        }
+
         function _attachPhoneListener(col) {
             var el = document.getElementById('inl_col_' + col);
             if (!el) return;
+            // Автопрефікс при фокусі на пустому полі
+            el.addEventListener('focus', function() {
+                if (!el.value) el.value = '+380';
+            });
+            // На вставці — нормалізуємо одразу
+            el.addEventListener('paste', function(e) {
+                e.preventDefault();
+                var pasted = (e.clipboardData || window.clipboardData).getData('text');
+                el.value = _normalizePhoneIntl(pasted);
+                el.dispatchEvent(new Event('change'));
+            });
             var tmr = null;
             var fire = function() {
                 _lookupClientInline(el.value).then(function(items) {
@@ -2512,7 +2760,13 @@
                 });
             };
             el.addEventListener('change', fire);
-            el.addEventListener('blur', function(){ setTimeout(fire, 150); });
+            el.addEventListener('blur', function() {
+                // Нормалізуємо якщо щось ввели вручну
+                if (el.value && el.value !== '+380') {
+                    el.value = _normalizePhoneIntl(el.value);
+                }
+                setTimeout(fire, 150);
+            });
             el.addEventListener('input', function() {
                 clearTimeout(tmr); tmr = setTimeout(fire, 400);
             });
@@ -2601,6 +2855,21 @@
                     var el = document.getElementById('inl_col_' + col);
                     if (!el) return;
                     var v = row[col];
+                    // messengers — jsonb[]; вмикаємо відповідні кнопки
+                    if (col === 'messengers') {
+                        var arr = Array.isArray(v) ? v : [];
+                        _setMessengersForCol('messengers', arr);
+                        return;
+                    }
+                    // extra_phones — jsonb[]; показуємо по input на кожен номер
+                    if (col === 'extra_phones') {
+                        var phArr = Array.isArray(v) ? v : [];
+                        _setExtraPhones('extra_phones', phArr);
+                        // Підсвічуємо «has-value» якщо є хоча б один
+                        var parent = el.closest('.inl-row');
+                        if (parent) parent.classList.toggle('has-value', phArr.length > 0);
+                        return;
+                    }
                     el.value = (v == null ? '' : String(v));
                     var parent = el.closest('.inl-row');
                     if (parent) {
@@ -2644,9 +2913,46 @@
             });
         }
 
+        // Прапорець: лід був щойно створений через «📝 Заповнити» для
+        // невідомого ТТН. Якщо оператор закриває редактор без збереження →
+        // маркуємо лід як «Відхилено» (він щойно передумав, не збираємо
+        // дані). Для редагування існуючого ліда прапорець не встановлюється.
+        var _inlPendingCancelPkg = null;
+
         function closeInlineEditor() {
+            var pendingPkg = _inlPendingCancelPkg;
+            _inlPendingCancelPkg = null;
+
             document.getElementById('inlOverlay').classList.remove('open');
             _inlSnapshot = {};
+
+            // Якщо лід щойно створювався «Заповнити»-шляхом, а зараз закриваємо
+            // без сейву — переводимо в «Відхилено», щоб він не висів як
+            // Невідомий у CRM без даних.
+            if (pendingPkg && TENANT_ID) {
+                fetch(SUPABASE_URL + '/rest/v1/packages' +
+                      '?tenant_id=eq.' + encodeURIComponent(TENANT_ID) +
+                      '&pkg_id=eq.' + encodeURIComponent(pendingPkg), {
+                    method: 'PATCH',
+                    headers: {
+                        apikey: SUPABASE_ANON_KEY,
+                        Authorization: 'Bearer ' + SUPABASE_ANON_KEY,
+                        'Content-Type': 'application/json',
+                        Prefer: 'return=minimal'
+                    },
+                    body: JSON.stringify({
+                        lead_status: 'rejected',
+                        scan_status: 'rejected'
+                    })
+                }).then(function() {
+                    showToast({ variant: 'warn', icon: '🚫',
+                                label: 'Скасовано',
+                                value: pendingPkg,
+                                status: 'Лід → Відхилені (частково заповнений)' });
+                    setTimeout(function(){ document.getElementById('resultToast').classList.remove('show'); }, 2000);
+                }).catch(function(){});
+            }
+
             closeCheckActionMenu();
             resumeAfterSheet();
         }
@@ -2683,6 +2989,23 @@
                 if (!meta) return;
                 var el = document.getElementById('inl_col_' + col);
                 if (!el) return;
+                // messengers — jsonb[]; порівнюємо як масиви, а не рядки
+                if (meta.type === 'messengers') {
+                    var newArr = _getMessengersForCol(col);
+                    var oldArr = Array.isArray(_inlSnapshot[col]) ? _inlSnapshot[col] : [];
+                    var aSorted = newArr.slice().sort().join(',');
+                    var bSorted = oldArr.slice().sort().join(',');
+                    if (aSorted !== bSorted) diff[col] = newArr;
+                    return;
+                }
+                // extra_phones — jsonb[] рядків, порядок важливий
+                if (meta.type === 'phones_multi') {
+                    _syncExtraPhonesHidden(col);
+                    var newPh = _getExtraPhones(col);
+                    var oldPh = Array.isArray(_inlSnapshot[col]) ? _inlSnapshot[col] : [];
+                    if (newPh.join('|') !== oldPh.join('|')) diff[col] = newPh;
+                    return;
+                }
                 var raw = (el.value == null ? '' : String(el.value)).trim();
                 var oldRaw = _inlSnapshot[col] == null ? '' : String(_inlSnapshot[col]).trim();
                 if (raw === oldRaw) return;
@@ -2740,6 +3063,8 @@
                 showToast({ variant: 'success', icon: '✅', label: 'Збережено',
                             value: pkg, status: 'Лід → В перевірці' });
                 setTimeout(function(){ document.getElementById('resultToast').classList.remove('show'); }, 1800);
+                // Save відбувся → прапорець автоматичного «→ Відхилено» знімаємо
+                _inlPendingCancelPkg = null;
                 closeInlineEditor();
             }).catch(function(err) {
                 btn.disabled = false;

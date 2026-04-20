@@ -982,6 +982,43 @@ body {
 .client-suggestion-addr { color: #3b4a5a; font-size: 11px; }
 .client-suggestion-count { font-size: 10px; color: #64748b; white-space: nowrap; }
 .client-suggestion-apply { color: #1d4ed8; font-weight: 700; font-size: 11px; }
+
+/* 💬 Месенджери — 4 toggle-кнопки у fill-modal */
+.fill-msg-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 4px;
+}
+.fill-msg-btn {
+  background: #f8fafc; color: #64748b;
+  border: 1px solid #cbd5e1; border-radius: 8px;
+  padding: 8px 10px; font-family: inherit; font-size: 13px; font-weight: 600;
+  cursor: pointer; transition: all 0.15s;
+}
+.fill-msg-btn:active { transform: scale(0.97); }
+.fill-msg-btn.active { color: #fff; }
+.fill-msg-btn.msg-viber.active    { background: #7d41e2; border-color: #7d41e2; }
+.fill-msg-btn.msg-whatsapp.active { background: #25d366; border-color: #25d366; }
+.fill-msg-btn.msg-telegram.active { background: #2aabee; border-color: #2aabee; }
+.fill-msg-btn.msg-chat.active     { background: #f59e0b; border-color: #f59e0b; }
+
+/* 📞 Додаткові номери отримувача */
+.fill-phones-box { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+.fill-phone-row { display: flex; gap: 6px; align-items: stretch; }
+.fill-phone-row input.fill-phone-extra {
+  flex: 1;
+  border: 1px solid #cbd5e1; border-radius: 8px; padding: 8px 10px;
+  font-family: inherit; font-size: 14px;
+}
+.fill-phone-rm {
+  background: #fef2f2; color: #b91c1c;
+  border: 1px solid #fecaca; border-radius: 8px; width: 34px;
+  cursor: pointer; font-size: 18px;
+}
+.fill-phones-add {
+  margin-top: 6px; background: #eff6ff; color: #1d4ed8;
+  border: 1px dashed #93c5fd; border-radius: 8px;
+  padding: 8px 12px; font-family: inherit; font-size: 13px; cursor: pointer;
+}
+.fill-phones-add:hover { background: #dbeafe; }
 .card-finance {
   margin-left: auto;
   display: flex; align-items: center; gap: 8px;
