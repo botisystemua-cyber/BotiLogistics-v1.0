@@ -671,12 +671,12 @@ body.route-sort-active #rteTogglePay {
 /* ── Модалка призначення рейсу ── */
 .tm-cal-wrap .tcal-dots { display: none; }
 .tm-cal-wrap .tcal-day-num { display: inline-block; padding: 1px 4px; border-radius: 4px; }
-.tm-cal-wrap .tcal-tripname { display: block; font-size: 8px; font-weight: 700; line-height: 1.1; color: var(--text-secondary); max-width: 96%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 1px; padding: 0 2px; letter-spacing: -0.2px; pointer-events: none; }
-.tm-cal-wrap .tcal-day.dir-ua-eu .tcal-tripname { color: #1d4ed8; }
-.tm-cal-wrap .tcal-day.dir-eu-ua .tcal-tripname { color: #047857; }
-.tm-cal-wrap .tcal-day.dir-both .tcal-tripname { color: #1d4ed8; }
-.tm-cal-wrap .tcal-day.overbooked .tcal-tripname { color: #dc2626; }
-.tm-cal-wrap .tcal-day.selected .tcal-tripname { color: white !important; }
+.tm-cal-wrap .tcal-tripname { display: block; font-size: 10px; font-weight: 800; line-height: 1.1; color: var(--text-primary); width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 2px; padding: 1px 3px; letter-spacing: -0.3px; pointer-events: none; background: rgba(0,0,0,0.05); border-radius: 4px; text-align: center; }
+.tm-cal-wrap .tcal-day.dir-ua-eu .tcal-tripname { color: #1d4ed8; background: rgba(37,99,235,0.12); }
+.tm-cal-wrap .tcal-day.dir-eu-ua .tcal-tripname { color: #047857; background: rgba(5,150,105,0.12); }
+.tm-cal-wrap .tcal-day.dir-both .tcal-tripname { color: #1d4ed8; background: rgba(37,99,235,0.12); }
+.tm-cal-wrap .tcal-day.overbooked .tcal-tripname { color: #dc2626; background: rgba(220,38,38,0.12); }
+.tm-cal-wrap .tcal-day.selected .tcal-tripname { color: white !important; background: rgba(255,255,255,0.25) !important; }
 .tm-cal-wrap .tcal-day.has-trip:not(.selected):not(.tm-current):not(.overbooked):not(.full).dir-ua-eu { outline: 2px solid #2563eb; outline-offset: -2px; }
 .tm-cal-wrap .tcal-day.has-trip:not(.selected):not(.tm-current):not(.overbooked):not(.full).dir-eu-ua { outline: 2px solid #059669; outline-offset: -2px; }
 .tm-cal-wrap .tcal-day.has-trip:not(.selected):not(.tm-current):not(.overbooked):not(.full).dir-both { outline: 2px solid #2563eb; outline-offset: -2px; background: linear-gradient(135deg, rgba(37,99,235,0.1) 50%, rgba(5,150,105,0.15) 50%); }
@@ -1192,9 +1192,9 @@ body.route-sort-active #rteTogglePay {
 .trip-dd-empty { padding: 16px; text-align: center; font-size: 11px; color: var(--text-secondary); }
 
 /* TRIP ASSIGN MODAL */
-.trip-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1100; display: none; justify-content: center; align-items: flex-end; }
+.trip-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1100; display: none; justify-content: center; align-items: center; padding: 20px; }
 .trip-modal-overlay.show { display: flex; }
-.trip-modal { background: white; border-radius: 16px 16px 0 0; width: 100%; max-width: 420px; max-height: 85vh; overflow: hidden; display: flex; flex-direction: column; animation: slideUp 0.25s ease; }
+.trip-modal { background: white; border-radius: 16px; width: 100%; max-width: 720px; max-height: 92vh; overflow: hidden; display: flex; flex-direction: column; animation: slideUp 0.25s ease; }
 @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
 .trip-modal-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid var(--border); }
 .trip-modal-title { font-size: 14px; font-weight: 800; color: var(--text-primary); }
@@ -1225,8 +1225,11 @@ body.route-sort-active #rteTogglePay {
 .tm-no-vehicles { text-align: center; padding: 20px; color: var(--text-secondary); font-size: 11px; }
 
 @media (min-width: 901px) {
-    .trip-modal-overlay { align-items: center; }
-    .trip-modal { border-radius: 16px; max-height: 70vh; }
+    .trip-modal { max-height: 88vh; }
+}
+@media (max-width: 640px) {
+    .trip-modal-overlay { padding: 0; align-items: flex-end; }
+    .trip-modal { max-width: 100%; max-height: 95vh; border-radius: 16px 16px 0 0; }
 }
 
 /* === BULK TOOLBAR: панель масових дій при виборі галочок ===

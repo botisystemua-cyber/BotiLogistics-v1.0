@@ -6528,8 +6528,8 @@ function renderTmCalDay(d, key, info, otherMonth, isToday, selectedKey) {
     else if (isFull) onclick = ' onclick="showTmDayInfo(\'' + key + '\', this)"';
     return '<button class="' + cls + '" data-key="' + key + '"' + onclick + titleAttr + '>' +
         currentBadge +
-        '<span class="tcal-day-num">' + d + '</span>' +
         nameHtml +
+        '<span class="tcal-day-num">' + d + '</span>' +
         partialHtml +
         seatsHtml +
     '</button>';
