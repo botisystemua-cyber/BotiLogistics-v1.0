@@ -703,7 +703,34 @@ body.route-sort-active #rteTogglePay {
 .tcal-legend-item { display: flex; align-items: center; gap: 3px; font-size: 9px; font-weight: 600; color: var(--text-secondary); }
 .tcal-legend-dot { width: 8px; height: 8px; border-radius: 50%; }
 
-.trips-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 14px; }
+.trips-grid { display: flex; flex-direction: column; gap: 16px; }
+/* ── Згрупований список: рядок на кожен маршрут ── */
+.trow { background: white; border: 1px solid var(--border); border-radius: 14px; overflow: hidden; box-shadow: var(--shadow); }
+.trow.trow-ua-eu { border-left: 4px solid #2563eb; }
+.trow.trow-eu-ua { border-left: 4px solid #059669; }
+.trow.trow-other { border-left: 4px solid #6b7280; }
+.trow-header { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: var(--bg-main); border-bottom: 1px solid var(--border); }
+.trow-dir { font-size: 12px; font-weight: 900; letter-spacing: 0.5px; flex-shrink: 0; }
+.trow.trow-ua-eu .trow-dir { color: #1d4ed8; }
+.trow.trow-eu-ua .trow-dir { color: #047857; }
+.trow.trow-other .trow-dir { color: #4b5563; }
+.trow-name { font-size: 15px; font-weight: 800; color: var(--text-primary); letter-spacing: -0.2px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trow-count { font-size: 11px; font-weight: 700; color: var(--text-secondary); background: white; padding: 3px 9px; border-radius: 10px; border: 1px solid var(--border); }
+.trow-nav { display: flex; gap: 4px; }
+.trow-nav-btn { width: 28px; height: 28px; border: 1px solid var(--border); background: white; border-radius: 8px; font-size: 11px; font-weight: 700; color: var(--text-secondary); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
+.trow-nav-btn:hover { background: var(--bg-main); color: var(--text-primary); }
+.trow-scroll { display: flex; gap: 14px; padding: 14px; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x proximity; scroll-padding-left: 14px; scrollbar-width: thin; }
+.trow-scroll::-webkit-scrollbar { height: 8px; }
+.trow-scroll::-webkit-scrollbar-track { background: var(--bg-main); border-radius: 4px; }
+.trow-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+.trow-scroll::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+.trow-card { position: relative; flex: 0 0 320px; max-width: 320px; scroll-snap-align: start; }
+.trow-card.trow-past { opacity: 0.55; filter: grayscale(0.3); }
+.trow-card.trow-past:hover { opacity: 1; filter: none; }
+.trow-card.trow-today { outline: 3px solid #f59e0b; outline-offset: 2px; border-radius: 14px; }
+.trow-today-badge { position: absolute; top: -10px; left: 14px; z-index: 2; background: #f59e0b; color: white; font-size: 10px; font-weight: 900; padding: 3px 10px; border-radius: 999px; letter-spacing: 0.5px; text-transform: uppercase; box-shadow: 0 2px 6px rgba(245,158,11,0.4); }
+.trow-card .trip-card { width: 100%; height: 100%; }
+.trow-card .trip-card:hover { transform: none; }
 /* ── View mode toggle ── */
 .trips-vm-btn { padding: 6px 12px; border: none; background: transparent; border-radius: 8px; font-size: 11px; font-weight: 700; color: var(--text-secondary); cursor: pointer; font-family: inherit; transition: all 0.15s; }
 .trips-vm-btn:hover { background: rgba(0,0,0,0.04); color: var(--text-primary); }
@@ -1242,7 +1269,12 @@ body.route-sort-active #rteTogglePay {
     .card-top-row { flex-wrap: wrap; gap: 3px; }
     .card-phone { min-width: auto; font-size: 12px; }
     .card-right-section { padding: 4px 6px; }
-    .trips-grid { grid-template-columns: 1fr; }
+    .trow-card { flex: 0 0 280px; max-width: 280px; }
+    .trow-scroll { padding: 12px; gap: 12px; }
+    .trow-header { padding: 8px 12px; gap: 6px; }
+    .trow-name { font-size: 14px; }
+    .trow-dir { font-size: 11px; }
+    .trow-nav-btn { width: 26px; height: 26px; }
     /* Mobile: кнопки дій більші для пальців */
     .btn-card-action { padding: 12px 8px; font-size: 12px; min-height: 44px; }
     .card-actions { gap: 6px; }
