@@ -4519,7 +4519,9 @@ function renderTripsCalCell(dayNum, key, dayTrips, otherMonth, isToday) {
         ? '<div class="tc-more" onclick="event.stopPropagation();showTripsCalDay(\'' + key + '\')">+' + hidden + ' ще</div>'
         : '';
 
+    const todayLabel = isToday ? '<div class="tc-today-label">Сьогодні</div>' : '';
     return '<div class="' + cls + '" data-key="' + key + '">' +
+        todayLabel +
         '<div class="tc-day-num">' + dayNum + '</div>' +
         '<div class="tc-events">' + eventsHtml + moreHtml + '</div>' +
     '</div>';
@@ -6526,8 +6528,10 @@ function renderTmCalDay(d, key, info, otherMonth, isToday, selectedKey) {
     var onclick = '';
     if (hasTrip && !isFull) onclick = ' onclick="selectTripDate(\'' + key + '\')"';
     else if (isFull) onclick = ' onclick="showTmDayInfo(\'' + key + '\', this)"';
+    var todayLabel = isToday ? '<span class="tcal-today-label">Сьогодні</span>' : '';
     return '<button class="' + cls + '" data-key="' + key + '"' + onclick + titleAttr + '>' +
         currentBadge +
+        todayLabel +
         nameHtml +
         '<span class="tcal-day-num">' + d + '</span>' +
         partialHtml +
