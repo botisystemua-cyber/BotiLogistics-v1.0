@@ -986,6 +986,19 @@ function renderDetailGrid(fields, pkgId, opts = {}) {
   return `<div class="details-grid">${fields.map(f => renderDetailBlock(f[0], f[1], pkgId, Object.assign({}, opts, f[2] || {}))).join('')}</div>`;
 }
 
+// Короткий формат дати для readonly-полів: 21.05.2026 10:32 (без секунд)
+function fmtShortDate(iso) {
+  if (!iso) return '';
+  try {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return String(iso);
+    return d.toLocaleString('uk-UA', {
+      day: '2-digit', month: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit'
+    });
+  } catch (_) { return String(iso); }
+}
+
 // ===== [SECT-CARD] RENDER SINGLE CARD =====
 function renderCard(p) {
   const pkgId = p['PKG_ID'] || '';
@@ -1179,7 +1192,7 @@ function renderCard(p) {
     ['ORDER_ID', p['ORDER_ID'] || '', {readonly: true}],
     ['Статус CRM', statusCrm],
     ['Контроль перевірки', controlCheck],
-    ['Дата перевірки', p['Дата перевірки'] || '', {readonly: true}],
+    ['Дата перевірки', fmtShortDate(p['Дата перевірки']), {readonly: true}],
     ['Примітка', note],
     ['Примітка СМС', p['Примітка СМС'] || ''],
   ], pkgId);
