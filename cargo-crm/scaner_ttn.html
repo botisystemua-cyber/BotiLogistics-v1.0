@@ -1993,7 +1993,10 @@
                 }
                 patchPromise.then(function() {
                     _sessionScans[ttn] = (_sessionScans[ttn] || 0) + 1;
-                    // Відразу відкриваємо редактор для цього нового ліда
+                    // Маркуємо лід як «pending-cancel»: якщо оператор
+                    // закриє редактор без збереження — перекидаємо у
+                    // Відхилені (щоб не висів Невідомим без даних).
+                    _inlPendingCancelPkg = newPkg;
                     openInlineEditor(newPkg, ttn);
                 });
             }).catch(function(err) {
@@ -2644,9 +2647,46 @@
             });
         }
 
+        // Прапорець: лід був щойно створений через «📝 Заповнити» для
+        // невідомого ТТН. Якщо оператор закриває редактор без збереження →
+        // маркуємо лід як «Відхилено» (він щойно передумав, не збираємо
+        // дані). Для редагування існуючого ліда прапорець не встановлюється.
+        var _inlPendingCancelPkg = null;
+
         function closeInlineEditor() {
+            var pendingPkg = _inlPendingCancelPkg;
+            _inlPendingCancelPkg = null;
+
             document.getElementById('inlOverlay').classList.remove('open');
             _inlSnapshot = {};
+
+            // Якщо лід щойно створювався «Заповнити»-шляхом, а зараз закриваємо
+            // без сейву — переводимо в «Відхилено», щоб він не висів як
+            // Невідомий у CRM без даних.
+            if (pendingPkg && TENANT_ID) {
+                fetch(SUPABASE_URL + '/rest/v1/packages' +
+                      '?tenant_id=eq.' + encodeURIComponent(TENANT_ID) +
+                      '&pkg_id=eq.' + encodeURIComponent(pendingPkg), {
+                    method: 'PATCH',
+                    headers: {
+                        apikey: SUPABASE_ANON_KEY,
+                        Authorization: 'Bearer ' + SUPABASE_ANON_KEY,
+                        'Content-Type': 'application/json',
+                        Prefer: 'return=minimal'
+                    },
+                    body: JSON.stringify({
+                        lead_status: 'rejected',
+                        scan_status: 'rejected'
+                    })
+                }).then(function() {
+                    showToast({ variant: 'warn', icon: '🚫',
+                                label: 'Скасовано',
+                                value: pendingPkg,
+                                status: 'Лід → Відхилені (частково заповнений)' });
+                    setTimeout(function(){ document.getElementById('resultToast').classList.remove('show'); }, 2000);
+                }).catch(function(){});
+            }
+
             closeCheckActionMenu();
             resumeAfterSheet();
         }
@@ -2740,6 +2780,8 @@
                 showToast({ variant: 'success', icon: '✅', label: 'Збережено',
                             value: pkg, status: 'Лід → В перевірці' });
                 setTimeout(function(){ document.getElementById('resultToast').classList.remove('show'); }, 1800);
+                // Save відбувся → прапорець автоматичного «→ Відхилено» знімаємо
+                _inlPendingCancelPkg = null;
                 closeInlineEditor();
             }).catch(function(err) {
                 btn.disabled = false;
