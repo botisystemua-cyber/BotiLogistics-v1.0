@@ -1015,6 +1015,46 @@
         .inl-msg-btn.msg-telegram.active { border-color: #2aabee; background: rgba(42,171,238,0.25); }
         .inl-msg-btn.msg-chat.active     { border-color: #f59e0b; background: rgba(245,158,11,0.25); }
 
+        /* 📞 Додаткові номери отримувача */
+        .inl-phones-box { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+        .inl-phone-row { display: flex; gap: 6px; align-items: stretch; }
+        .inl-phone-row input.inl-phone-extra {
+            flex: 1;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.12);
+            color: #fff;
+            border-radius: 8px;
+            padding: 8px 10px;
+            font-family: inherit;
+            font-size: 14px;
+        }
+        .inl-phone-row input.inl-phone-extra:focus {
+            outline: none;
+            border-color: rgba(59,130,246,0.6);
+            background: rgba(59,130,246,0.08);
+        }
+        .inl-phone-rm {
+            background: rgba(239,68,68,0.15);
+            color: #fca5a5;
+            border: 1px solid rgba(239,68,68,0.3);
+            border-radius: 8px;
+            width: 34px;
+            cursor: pointer;
+            font-size: 18px;
+        }
+        .inl-phones-add {
+            margin-top: 6px;
+            background: rgba(59,130,246,0.15);
+            color: #93c5fd;
+            border: 1px dashed rgba(59,130,246,0.5);
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-family: inherit;
+            font-size: 13px;
+            cursor: pointer;
+        }
+        .inl-phones-add:hover { background: rgba(59,130,246,0.25); }
+
         /* ==== FIELDS CHOOSER (C7/3) ==== */
         .fc-overlay {
             position: fixed; inset: 0;
@@ -2305,6 +2345,7 @@
             // Отримувач
             { col: 'recipient_name',     label: 'ПІБ отримувача',       type: 'text',     category: '👤 Отримувач', defaultOn: true },
             { col: 'recipient_phone',    label: 'Тел. отримувача',      type: 'phone',    category: '👤 Отримувач', required: true, defaultOn: true },
+            { col: 'extra_phones',       label: '📞 Ще номери (UA+EU)',  type: 'phones_multi', category: '👤 Отримувач', defaultOn: true },
             { col: 'messengers',         label: '💬 Месенджери клієнта',type: 'messengers', category: '👤 Отримувач', defaultOn: true },
             { col: 'recipient_address',  label: 'Адреса в Європі',      type: 'text',     category: '👤 Отримувач', defaultOn: true },
             { col: 'nova_poshta_city',   label: 'Місто Нова Пошта',     type: 'text',     category: '👤 Отримувач' },
@@ -2426,6 +2467,25 @@
                 sugBox.setAttribute('data-for', f.col);
                 row.appendChild(sugBox);
                 return row;
+            } else if (f.type === 'phones_multi') {
+                // Масив додаткових номерів: 0..3 input-полів + «+» кнопка
+                el = document.createElement('input');
+                el.type = 'hidden';
+                el.id = 'inl_col_' + f.col;
+                el.value = '[]';
+                row.appendChild(el);
+                var box = document.createElement('div');
+                box.className = 'inl-phones-box';
+                box.id = 'inl_phones_box_' + f.col;
+                box.setAttribute('data-for', f.col);
+                row.appendChild(box);
+                var addBtn = document.createElement('button');
+                addBtn.type = 'button';
+                addBtn.className = 'inl-phones-add';
+                addBtn.textContent = '+ ще номер';
+                addBtn.onclick = function() { _addExtraPhoneInput(f.col); };
+                row.appendChild(addBtn);
+                return row;
             } else if (f.type === 'messengers') {
                 // 4 toggle-кнопки — які месенджери в клієнта є
                 el = document.createElement('input');
@@ -2516,6 +2576,76 @@
             var i = cur.indexOf(key);
             if (i === -1) cur.push(key); else cur.splice(i, 1);
             _setMessengersForCol(col, cur);
+        }
+
+        // 📞 Додаткові номери отримувача (UA + EU тощо) — масив рядків
+        var _MAX_EXTRA_PHONES = 2; // без головного (разом з recipient_phone = 3)
+
+        function _getExtraPhones(col) {
+            var hidden = document.getElementById('inl_col_' + col);
+            if (!hidden) return [];
+            try { return JSON.parse(hidden.value || '[]'); } catch (_) { return []; }
+        }
+        function _syncExtraPhonesHidden(col) {
+            var box = document.getElementById('inl_phones_box_' + col);
+            var hidden = document.getElementById('inl_col_' + col);
+            if (!box || !hidden) return;
+            var arr = Array.prototype.slice.call(box.querySelectorAll('input.inl-phone-extra'))
+                .map(function(i){ return (i.value || '').trim(); })
+                .filter(function(v){ return !!v; });
+            hidden.value = JSON.stringify(arr);
+        }
+        function _setExtraPhones(col, arr) {
+            var box = document.getElementById('inl_phones_box_' + col);
+            var hidden = document.getElementById('inl_col_' + col);
+            if (!box || !hidden) return;
+            arr = Array.isArray(arr) ? arr : [];
+            box.innerHTML = '';
+            arr.slice(0, _MAX_EXTRA_PHONES).forEach(function(p){ _addExtraPhoneInput(col, p); });
+            hidden.value = JSON.stringify(arr);
+        }
+        function _addExtraPhoneInput(col, initial) {
+            var box = document.getElementById('inl_phones_box_' + col);
+            if (!box) return;
+            var count = box.querySelectorAll('input.inl-phone-extra').length;
+            if (count >= _MAX_EXTRA_PHONES) {
+                showToast({ variant: 'error', icon: 'ℹ️', label: 'Максимум 3 номери',
+                            value: '', status: 'Більше не можна додати' });
+                setTimeout(function(){ document.getElementById('resultToast').classList.remove('show'); }, 1500);
+                return;
+            }
+            var wrap = document.createElement('div');
+            wrap.className = 'inl-phone-row';
+            var inp = document.createElement('input');
+            inp.type = 'tel';
+            inp.className = 'inl-phone-extra';
+            inp.placeholder = '+380… або +48… +420…';
+            inp.value = (initial || '');
+            inp.addEventListener('focus', function() { if (!inp.value) inp.value = '+380'; });
+            inp.addEventListener('paste', function(e) {
+                e.preventDefault();
+                var pasted = (e.clipboardData || window.clipboardData).getData('text');
+                inp.value = _normalizePhoneIntl(pasted);
+                _syncExtraPhonesHidden(col);
+            });
+            inp.addEventListener('blur', function() {
+                if (inp.value && inp.value !== '+380') inp.value = _normalizePhoneIntl(inp.value);
+                _syncExtraPhonesHidden(col);
+            });
+            inp.addEventListener('input', function(){ _syncExtraPhonesHidden(col); });
+            var rm = document.createElement('button');
+            rm.type = 'button';
+            rm.className = 'inl-phone-rm';
+            rm.textContent = '×';
+            rm.title = 'Прибрати цей номер';
+            rm.onclick = function() {
+                wrap.remove();
+                _syncExtraPhonesHidden(col);
+            };
+            wrap.appendChild(inp);
+            wrap.appendChild(rm);
+            box.appendChild(wrap);
+            if (!initial) setTimeout(function(){ inp.focus(); }, 50);
         }
 
         // 📇 Пошук клієнта за телефоном + автопідказки на сканері (Phase A)
@@ -2731,6 +2861,15 @@
                         _setMessengersForCol('messengers', arr);
                         return;
                     }
+                    // extra_phones — jsonb[]; показуємо по input на кожен номер
+                    if (col === 'extra_phones') {
+                        var phArr = Array.isArray(v) ? v : [];
+                        _setExtraPhones('extra_phones', phArr);
+                        // Підсвічуємо «has-value» якщо є хоча б один
+                        var parent = el.closest('.inl-row');
+                        if (parent) parent.classList.toggle('has-value', phArr.length > 0);
+                        return;
+                    }
                     el.value = (v == null ? '' : String(v));
                     var parent = el.closest('.inl-row');
                     if (parent) {
@@ -2857,6 +2996,14 @@
                     var aSorted = newArr.slice().sort().join(',');
                     var bSorted = oldArr.slice().sort().join(',');
                     if (aSorted !== bSorted) diff[col] = newArr;
+                    return;
+                }
+                // extra_phones — jsonb[] рядків, порядок важливий
+                if (meta.type === 'phones_multi') {
+                    _syncExtraPhonesHidden(col);
+                    var newPh = _getExtraPhones(col);
+                    var oldPh = Array.isArray(_inlSnapshot[col]) ? _inlSnapshot[col] : [];
+                    if (newPh.join('|') !== oldPh.join('|')) diff[col] = newPh;
                     return;
                 }
                 var raw = (el.value == null ? '' : String(el.value)).trim();

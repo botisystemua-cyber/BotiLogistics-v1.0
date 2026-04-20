@@ -2022,10 +2022,12 @@ const _FILL_FIELDS = [
   ['fill_statusPkg',   'Статус посилки'],
   ['fill_photoUrl',    'Фото посилки'],
   ['fill_messengers',  'Месенджери'],
+  ['fill_extraPhones', 'Ще телефони'],
 ];
 
 // Поля, що зберігають JSON-масив у hidden → треба порівнювати як масиви
-const _FILL_JSONB_FIELDS = new Set(['fill_messengers']);
+const _FILL_JSONB_FIELDS = new Set(['fill_messengers', 'fill_extraPhones']);
+const _FILL_MAX_EXTRA_PHONES = 2; // разом з головним = 3 номери
 
 function openFillModal(pkgId) {
   if (!pkgId) return;
@@ -2037,11 +2039,12 @@ function openFillModal(pkgId) {
     const el = document.getElementById(inputId);
     if (!el) return;
     const cur = row[col];
-    // JSONB (messengers) — hidden input з JSON.stringify + підсвітити кнопки
+    // JSONB (messengers / extra phones) — hidden input з JSON.stringify
     if (_FILL_JSONB_FIELDS.has(inputId)) {
       const arr = Array.isArray(cur) ? cur : [];
       el.value = JSON.stringify(arr);
-      _applyFillMessengersUI(arr);
+      if (inputId === 'fill_messengers') _applyFillMessengersUI(arr);
+      else if (inputId === 'fill_extraPhones') _applyFillExtraPhonesUI(arr);
       return;
     }
     if (cur != null && cur !== '') {
@@ -2095,6 +2098,67 @@ function toggleFillMessenger(key /*, btn */) {
   const i = cur.indexOf(key);
   if (i === -1) cur.push(key); else cur.splice(i, 1);
   _applyFillMessengersUI(cur);
+}
+
+// 📞 Додаткові номери отримувача — динамічні inputs + «+»
+function _getFillExtraPhones() {
+  const hidden = document.getElementById('fill_extraPhones');
+  if (!hidden) return [];
+  try { return JSON.parse(hidden.value || '[]'); } catch (_) { return []; }
+}
+function _syncFillExtraPhones() {
+  const box = document.getElementById('fill_extraPhonesBox');
+  const hidden = document.getElementById('fill_extraPhones');
+  if (!box || !hidden) return;
+  const arr = Array.from(box.querySelectorAll('input.fill-phone-extra'))
+    .map(i => (i.value || '').trim())
+    .filter(v => !!v);
+  hidden.value = JSON.stringify(arr);
+}
+function _applyFillExtraPhonesUI(arr) {
+  const box = document.getElementById('fill_extraPhonesBox');
+  const hidden = document.getElementById('fill_extraPhones');
+  if (!box || !hidden) return;
+  arr = Array.isArray(arr) ? arr : [];
+  box.innerHTML = '';
+  arr.slice(0, _FILL_MAX_EXTRA_PHONES).forEach(p => _appendFillExtraPhoneInput(p));
+  hidden.value = JSON.stringify(arr);
+}
+function _appendFillExtraPhoneInput(initial) {
+  const box = document.getElementById('fill_extraPhonesBox');
+  if (!box) return;
+  const count = box.querySelectorAll('input.fill-phone-extra').length;
+  if (count >= _FILL_MAX_EXTRA_PHONES) return;
+  const wrap = document.createElement('div');
+  wrap.className = 'fill-phone-row';
+  const inp = document.createElement('input');
+  inp.type = 'tel';
+  inp.className = 'fill-phone-extra';
+  inp.placeholder = '+380… або +48… +420…';
+  inp.value = initial || '';
+  attachPhoneNormalization(inp, '+380');
+  inp.addEventListener('input', _syncFillExtraPhones);
+  inp.addEventListener('blur', _syncFillExtraPhones);
+  const rm = document.createElement('button');
+  rm.type = 'button';
+  rm.className = 'fill-phone-rm';
+  rm.textContent = '×';
+  rm.title = 'Прибрати цей номер';
+  rm.onclick = () => { wrap.remove(); _syncFillExtraPhones(); };
+  wrap.appendChild(inp);
+  wrap.appendChild(rm);
+  box.appendChild(wrap);
+  if (!initial) setTimeout(() => inp.focus(), 50);
+}
+function addFillExtraPhone() {
+  const box = document.getElementById('fill_extraPhonesBox');
+  if (!box) return;
+  const count = box.querySelectorAll('input.fill-phone-extra').length;
+  if (count >= _FILL_MAX_EXTRA_PHONES) {
+    showToast('Максимум 3 номери (1 основний + 2 додаткові)', 'info');
+    return;
+  }
+  _appendFillExtraPhoneInput('');
 }
 
 // ===== [SECT-PHONE-NORMALIZE] Нормалізація телефону =====
@@ -2316,19 +2380,25 @@ async function saveFillModal() {
   // Порівнюємо з поточним рядком і відправляємо лише ті колонки, що
   // справді змінилися — так ми не дзвонимо в updateField даремно, і не
   // створюємо фантомних записів change_logs/audit_logs.
+  // Перед read'ом hidden — синхронізуємо динамічні inputs
+  _syncFillExtraPhones();
+
   const row = (allData || []).find(p => p['PKG_ID'] === pkgId) || {};
   const toUpdate = [];
   for (const [inputId, col] of _FILL_FIELDS) {
     const el = document.getElementById(inputId);
     if (!el) continue;
-    // JSONB (messengers) — порівнюємо як масиви, а не рядки
+    // JSONB (messengers / extra_phones) — порівнюємо як масиви, а не рядки
     if (_FILL_JSONB_FIELDS.has(inputId)) {
       let newArr = [];
       try { newArr = JSON.parse(el.value || '[]'); } catch (_) { newArr = []; }
       if (!Array.isArray(newArr)) newArr = [];
       const oldArr = Array.isArray(row[col]) ? row[col] : [];
-      const aS = newArr.slice().sort().join(',');
-      const bS = oldArr.slice().sort().join(',');
+      // Для extra_phones порядок важливий (UA-первинний, EU-другий),
+      // для messengers — ні.
+      const ordered = (inputId === 'fill_extraPhones');
+      const aS = ordered ? newArr.join('|') : newArr.slice().sort().join(',');
+      const bS = ordered ? oldArr.join('|') : oldArr.slice().sort().join(',');
       if (aS !== bS) toUpdate.push([col, newArr]);
       continue;
     }
@@ -5010,16 +5080,22 @@ function openMessenger(phone, pkgId) {
     return phones.some(ph => ph.replace(/[^+\d]/g, '') === clean);
   });
   const chatId = item ? item['PKG_ID'] : null;
+  // Месенджери, відмічені при створенні/редагуванні ліда.
+  // Невідмічені показуємо приглушеними, але клікабельними — месенджер
+  // може й бути, просто не відмітили.
+  const markedArr = (item && Array.isArray(item['Месенджери'])) ? item['Месенджери'] : [];
+  const marked = new Set(markedArr);
+  const dim = (on) => on ? '' : 'opacity:0.35;filter:grayscale(70%);';
 
   const menu = document.createElement('div');
   menu.style.cssText = 'position:fixed;inset:0;z-index:700;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.5);';
   menu.innerHTML = `
     <div style="background:#fff;border-radius:16px;padding:20px;min-width:260px;text-align:center;">
       <div style="font-weight:700;margin-bottom:12px;">Написати ${phone}</div>
-      <a href="viber://chat?number=${clean}" style="display:block;padding:10px;margin:4px 0;background:#7360f2;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;">Viber</a>
-      <a href="https://t.me/${clean}" style="display:block;padding:10px;margin:4px 0;background:#0088cc;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;">Telegram</a>
-      <a href="https://wa.me/${clean.replace('+','')}" style="display:block;padding:10px;margin:4px 0;background:#25d366;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;">WhatsApp</a>
-      ${chatId ? `<button onclick="this.closest('div').parentElement.remove();openClientChat('${chatId}','${clean}')" style="display:block;width:100%;padding:10px;margin:4px 0;background:#8b5cf6;color:#fff;border-radius:8px;border:none;font-weight:600;cursor:pointer;font-family:inherit;font-size:14px;">💬 Чат CRM</button>` : ''}
+      <a href="viber://chat?number=${clean}" style="display:block;padding:10px;margin:4px 0;background:#7360f2;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;${dim(marked.has('viber'))}">💜 Viber${marked.has('viber') ? '' : ' <span style=\"font-size:10px;font-weight:400;\">(не відмічено)</span>'}</a>
+      <a href="https://t.me/${clean}" style="display:block;padding:10px;margin:4px 0;background:#0088cc;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;${dim(marked.has('telegram'))}">✈️ Telegram${marked.has('telegram') ? '' : ' <span style=\"font-size:10px;font-weight:400;\">(не відмічено)</span>'}</a>
+      <a href="https://wa.me/${clean.replace('+','')}" style="display:block;padding:10px;margin:4px 0;background:#25d366;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;${dim(marked.has('whatsapp'))}">💚 WhatsApp${marked.has('whatsapp') ? '' : ' <span style=\"font-size:10px;font-weight:400;\">(не відмічено)</span>'}</a>
+      ${chatId ? `<button onclick="this.closest('div').parentElement.remove();openClientChat('${chatId}','${clean}')" style="display:block;width:100%;padding:10px;margin:4px 0;background:#8b5cf6;color:#fff;border-radius:8px;border:none;font-weight:600;cursor:pointer;font-family:inherit;font-size:14px;${dim(marked.has('chat'))}">💬 Чат CRM${marked.has('chat') ? '' : ' <span style=\"font-size:10px;font-weight:400;\">(не відмічено)</span>'}</button>` : ''}
       <button onclick="this.closest('div').parentElement.remove()" style="margin-top:10px;padding:8px 20px;border:1px solid #e2e8f0;border-radius:8px;background:#fff;cursor:pointer;font-family:inherit;">Скасувати</button>
     </div>
   `;

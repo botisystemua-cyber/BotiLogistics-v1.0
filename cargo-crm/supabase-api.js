@@ -50,6 +50,7 @@ const SB_TO_GAS_PKG = {
     quality_checked_at: 'Дата перевірки',
     photo_url:          'Фото посилки',
     messengers:         'Месенджери',
+    extra_phones:       'Ще телефони',
     rating:             'Рейтинг',
     rating_comment:     'Коментар рейтингу',
     tag:                'Тег',
@@ -94,7 +95,7 @@ const NUMERIC_COLS_PKG = new Set([
 ]);
 
 // ── JSONB COLUMNS ── (масиви/обʼєкти; передаються без JSON.stringify)
-const JSONB_COLS_PKG = new Set(['messengers']);
+const JSONB_COLS_PKG = new Set(['messengers', 'extra_phones']);
 
 // ── STATUS VALUE MAPPING: Supabase English → Frontend Ukrainian ──
 const STATUS_SB_TO_UA = {

@@ -400,6 +400,13 @@
       </div>
 
       <div class="fill-row">
+        <label>📞 Ще номери отримувача (UA + EU)</label>
+        <input type="hidden" id="fill_extraPhones" value="[]">
+        <div class="fill-phones-box" id="fill_extraPhonesBox"></div>
+        <button type="button" class="fill-phones-add" onclick="addFillExtraPhone()">+ ще номер</button>
+      </div>
+
+      <div class="fill-row">
         <label>💬 Месенджери клієнта</label>
         <input type="hidden" id="fill_messengers" value="[]">
         <div class="fill-msg-grid" id="fill_messengersGrid">
