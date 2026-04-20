@@ -1872,6 +1872,64 @@ function getDirectionCode(dir) { var d = (dir || '').toLowerCase(); return (d.in
 function openMessengerPopup(phone, smartId) { var clean = (phone || '').replace(/[^+\d]/g, ''); var grid = document.getElementById('messengerGrid'); if (!grid) return; grid.innerHTML = '<a href="viber://chat?number=' + clean + '" style="display:block;padding:10px;margin:4px 0;background:#7360f2;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;text-align:center;">Viber</a><a href="https://t.me/' + clean + '" style="display:block;padding:10px;margin:4px 0;background:#0088cc;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;text-align:center;">Telegram</a><a href="https://wa.me/' + clean.replace('+','') + '" style="display:block;padding:10px;margin:4px 0;background:#25d366;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;text-align:center;">WhatsApp</a>'; document.getElementById('messengerOverlay').classList.add('show'); }
 function closeMessengerPopup() { var el = document.getElementById('messengerOverlay'); if (el) el.classList.remove('show'); }
 function promptDeleteLinkedSheets(baseName) { if (activeRouteIdx !== null) activeRouteIdx = null; loadRoutes(); }
+
+// ── ВИДАЛИТИ маршрут ─────────────────────────────────────────
+// За домовленістю з продакт-овнером: видалення маршруту = архівувати ВСІ
+// посилки в ньому + видалити сам route placeholder (як і в passenger-crm).
+async function confirmDeleteRoute(idx) {
+    if (idx === null || idx === undefined || idx < 0 || !routes[idx]) {
+        showToast('Оберіть маршрут');
+        return;
+    }
+    const sheet = routes[idx];
+    const name = sheet.sheetName || '';
+    const rawRows = sheet.rows || [];
+    const pkgRows = rawRows.filter(r => !(r['Тип запису'] || '').includes('Пасажир'));
+    const paxCount = rawRows.length - pkgRows.length;
+
+    const msg = 'Видалити маршрут «' + name + '»?\n\n' +
+        'Усі посилки (' + pkgRows.length + ') потраплять в архів.' +
+        (paxCount ? '\nПасажирів (' + paxCount + ') пропустимо — їх архівує passenger-crm.' : '');
+
+    showConfirm(msg, async function(yes) {
+        if (!yes) return;
+        showLoader('Архівуємо посилки маршруту...');
+        try {
+            const pkgIds = pkgRows.map(r => r['PKG_ID'] || r['PAX_ID']).filter(Boolean);
+            if (pkgIds.length) {
+                const arc = await apiPost('deleteParcel', {
+                    pkg_ids: pkgIds,
+                    reason: 'Видалення маршруту ' + name,
+                    archived_by: 'CRM'
+                });
+                if (!arc.ok) {
+                    hideLoader();
+                    showToast('❌ Архів: ' + (arc.error || 'помилка'));
+                    return;
+                }
+            }
+            const res = await apiPost('deleteRoute', { name: name });
+            hideLoader();
+            if (!res.ok) {
+                showToast('❌ ' + (res.error || 'Помилка видалення'));
+                return;
+            }
+            pkgIds.forEach(pid => {
+                const m = allData.find(p => p['PKG_ID'] === pid);
+                if (m) m['Статус CRM'] = 'Архів';
+            });
+            activeRouteIdx = null;
+            _showingExpenses = false;
+            updateRouteDashButtons();
+            showToast('✅ Маршрут «' + name + '» видалено, посилок в архіві: ' + pkgIds.length);
+            loadRoutes(true);
+            updateCounters();
+        } catch (e) {
+            hideLoader();
+            showToast('❌ Помилка: ' + e.message);
+        }
+    });
+}
 function setCount(id, val) { var el = document.getElementById(id); if (el) el.textContent = val; }
 function refreshRouteView() { if (activeRouteIdx !== null) openRoute(activeRouteIdx, true); }
 function openRouteView(idx) { openRoute(idx); }
@@ -1951,7 +2009,488 @@ async function routeBulkArchive() {
 }
 
 function routeBulkDeleteFull() { routeBulkDeleteFromRoute(); }
-function optimizeRouteOrder() { showToast('Оптимізація порядку — в розробці'); }
+
+// ── ОПТИМІЗАЦІЯ ─────────────────────────────────────────────
+// Greedy без обмежень: геокодуємо адресу отримувача, шукаємо найкоротший
+// nearest-neighbour маршрут від Ужгорода (або першої точки), зберігаємо
+// порядок у sheet.pickupOrder + НЕ архівує.
+window.mapsApiReady = false;
+function initMapsAPI() {
+    try {
+        window.mapsGeocoder = new google.maps.Geocoder();
+        window.mapsDirections = new google.maps.DirectionsService();
+        window.mapsApiReady = true;
+    } catch(e) { console.warn('Maps API init failed:', e); }
+}
+
+function _optGeocodeOne(address) {
+    return new Promise(function(resolve) {
+        if (!window.mapsGeocoder) return resolve(null);
+        var settled = false;
+        var t = setTimeout(function(){ if (!settled) { settled = true; resolve(null); } }, 10000);
+        try {
+            window.mapsGeocoder.geocode({ address: address }, function(results, status){
+                if (settled) return; settled = true; clearTimeout(t);
+                if (status === 'OK' && results && results[0]) {
+                    resolve({ lat: results[0].geometry.location.lat(), lng: results[0].geometry.location.lng() });
+                } else resolve(null);
+            });
+        } catch(e) { if (!settled) { settled = true; clearTimeout(t); resolve(null); } }
+    });
+}
+function _optHaversine(c1, c2) {
+    var R = 6371, dLat = (c2.lat - c1.lat) * Math.PI / 180;
+    var dLng = (c2.lng - c1.lng) * Math.PI / 180;
+    var a = Math.sin(dLat/2)*Math.sin(dLat/2) +
+            Math.cos(c1.lat*Math.PI/180) * Math.cos(c2.lat*Math.PI/180) *
+            Math.sin(dLng/2)*Math.sin(dLng/2);
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+function _optNearestNeighbour(points, startCoords) {
+    var n = points.length;
+    if (n <= 1) return points.map(function(_, i){ return i; });
+    var visited = new Array(n).fill(false);
+    var tour = [];
+    var cur = startCoords;
+    for (var step = 0; step < n; step++) {
+        var best = -1, bestDist = Infinity;
+        for (var j = 0; j < n; j++) {
+            if (visited[j]) continue;
+            var d = _optHaversine(cur, points[j].coords);
+            if (d < bestDist) { bestDist = d; best = j; }
+        }
+        if (best === -1) break;
+        tour.push(best); visited[best] = true; cur = points[best].coords;
+    }
+    return tour;
+}
+
+async function optimizeRouteOrder() {
+    if (activeRouteIdx === null || !routes[activeRouteIdx]) {
+        showToast('Оберіть маршрут'); return;
+    }
+    if (!window.mapsApiReady || !window.mapsGeocoder) {
+        showToast('Google Maps API ще не завантажено. Зачекайте 2-3 сек.');
+        return;
+    }
+    var sheet = routes[activeRouteIdx];
+    if (!sheet.rows) {
+        showLoader('Завантаження маршруту...');
+        try { await loadRouteSheetData(activeRouteIdx, true); }
+        catch (e) { hideLoader(); showToast('❌ ' + e.message); return; }
+        hideLoader();
+    }
+    var rows = sheet.rows || [];
+    if (rows.length < 2) { showToast('Менше 2 точок — нема що оптимізувати'); return; }
+
+    // Адреса для геокодування: для посилок — адреса отримувача,
+    // для пасажирів (якщо є в маршруті) — адреса прибуття.
+    var withAddr = rows.map(function(r) {
+        var addr = r['Адреса отримувача'] || r['Адреса прибуття'] || r['Адреса доставки'] || '';
+        var leadId = r['PKG_ID'] || r['PAX_ID'] || '';
+        return { leadId: leadId, address: String(addr).trim() };
+    }).filter(function(p) { return p.leadId && p.address; });
+
+    if (withAddr.length === 0) {
+        showToast('У жодного запису немає адреси для оптимізації');
+        return;
+    }
+
+    showLoader('📍 Геокодування ' + withAddr.length + ' адрес...');
+    var geocoded = [];
+    var failed = [];
+    for (var i = 0; i < withAddr.length; i++) {
+        var c = await _optGeocodeOne(withAddr[i].address);
+        if (c) { withAddr[i].coords = c; geocoded.push(withAddr[i]); }
+        else failed.push(withAddr[i]);
+        if (i < withAddr.length - 1) await new Promise(function(r){ setTimeout(r, 150); });
+    }
+    if (geocoded.length === 0) {
+        hideLoader();
+        showToast('❌ Жодну адресу не вдалось геокодувати');
+        return;
+    }
+
+    showLoader('🗺️ Розрахунок порядку...');
+    // Старт — Ужгород за замовчуванням (можна винести в settings пізніше).
+    var startCoords = { lat: 48.6209, lng: 22.2879 };
+    var tour = _optNearestNeighbour(geocoded, startCoords);
+    var orderedIds = tour.map(function(idx){ return geocoded[idx].leadId; });
+    // Додати ті, що не вдалось геокодувати — у кінець (щоб не зникали).
+    failed.forEach(function(p){ if (orderedIds.indexOf(p.leadId) === -1) orderedIds.push(p.leadId); });
+
+    showLoader('💾 Збереження порядку...');
+    try {
+        var res = await apiPost('setRouteOrder', { sheetName: sheet.sheetName, pickup_order: orderedIds });
+        hideLoader();
+        if (!res || !res.ok) { showToast('❌ ' + ((res && res.error) || 'Не вдалося зберегти')); return; }
+        sheet.pickupOrder = orderedIds;
+        renderRoutes();
+        var msg = '✅ Маршрут оптимізовано: ' + geocoded.length + ' точок';
+        if (failed.length) msg += ' (без адреси: ' + failed.length + ')';
+        showToast(msg);
+    } catch(e) {
+        hideLoader();
+        showToast('❌ ' + e.message);
+    }
+}
+
+// ── SORT MODE (drag-and-drop) ────────────────────────────────
+function _takeRouteSortSnapshot(sheet) {
+    return { order: (sheet.pickupOrder || []).slice() };
+}
+function _rollbackRouteSort(sheet, snap) {
+    if (!snap || !sheet) return;
+    sheet.pickupOrder = (snap.order || []).slice();
+}
+function _sortBeforeUnloadHandler(e) {
+    if (_sortDirty) {
+        e.preventDefault();
+        e.returnValue = 'У вас незбережені зміни порядку в маршруті. Закрити сторінку?';
+        return e.returnValue;
+    }
+}
+function updateSortBanner() {
+    var el = document.getElementById('routeSortBannerLabel');
+    if (!el) return;
+    el.textContent = '🔧 Режим сортування' + (_sortDirty ? ' ●' : '');
+}
+
+function initRouteSortable() {
+    var list = document.getElementById('routesList');
+    if (!list) return;
+    if (!routeSortModeActive) {
+        if (_routeSortableInstance && typeof _routeSortableInstance.destroy === 'function') {
+            try { _routeSortableInstance.destroy(); } catch(_){}
+            _routeSortableInstance = null;
+        }
+        list.classList.remove('sort-mode-on');
+        return;
+    }
+    if (typeof Sortable === 'undefined') {
+        console.warn('SortableJS not loaded — drag-and-drop disabled');
+        return;
+    }
+    if (_routeSortableInstance && typeof _routeSortableInstance.destroy === 'function') {
+        try { _routeSortableInstance.destroy(); } catch(_){}
+        _routeSortableInstance = null;
+    }
+    list.classList.add('sort-mode-on');
+    _routeSortableInstance = Sortable.create(list, {
+        animation: 150,
+        draggable: '.route-card',
+        ghostClass: 'route-card-ghost',
+        chosenClass: 'route-card-chosen',
+        dragClass: 'route-card-drag',
+        delay: 350,
+        delayOnTouchOnly: true,
+        touchStartThreshold: 8,
+        onEnd: handleRouteDrop
+    });
+}
+
+function handleRouteDrop() {
+    try {
+        if (!routeSortModeActive) return;
+        if (activeRouteIdx === null || !routes[activeRouteIdx]) return;
+        var sheet = routes[activeRouteIdx];
+        var rawRows = sheet.rows || [];
+        var oldFull = sortRouteRowsByStoredOrder(rawRows, sheet.pickupOrder || []);
+        var oldIds = oldFull.map(getRouteRowLeadId).filter(Boolean);
+
+        var list = document.getElementById('routesList');
+        if (!list) return;
+        var newVisibleIds = [];
+        list.querySelectorAll('.route-card[data-lead-id]').forEach(function(c){
+            var id = c.getAttribute('data-lead-id');
+            if (id) newVisibleIds.push(id);
+        });
+        if (!newVisibleIds.length) return;
+
+        var visibleSet = new Set(newVisibleIds);
+        var newFull = [];
+        var v = 0;
+        for (var i = 0; i < oldIds.length; i++) {
+            var oid = oldIds[i];
+            if (visibleSet.has(oid)) { newFull.push(newVisibleIds[v] || oid); v++; }
+            else newFull.push(oid);
+        }
+        if (newFull.length === oldIds.length && newFull.every(function(id, i){ return id === oldIds[i]; })) return;
+
+        sheet.pickupOrder = newFull;
+        _sortDirty = true;
+        updateSortBanner();
+    } catch (e) {
+        console.error('handleRouteDrop error:', e);
+        showToast('❌ Помилка drag-and-drop: ' + e.message);
+    }
+}
+
+async function enterRouteSortMode() {
+    if (routeSortModeActive) return;
+    if (activeRouteIdx === null || !routes[activeRouteIdx]) {
+        showToast('Оберіть маршрут');
+        return;
+    }
+    var sheet = routes[activeRouteIdx];
+    if (!sheet.rows) {
+        showLoader('Завантаження маршруту...');
+        try { await loadRouteSheetData(activeRouteIdx, true); }
+        catch (e) { hideLoader(); showToast('❌ ' + e.message); return; }
+        hideLoader();
+    }
+    if ((sheet.rows || []).length < 2) {
+        showToast('У маршруті менше 2 записів — нема що сортувати');
+        return;
+    }
+    _sortSnapshot = _takeRouteSortSnapshot(sheet);
+    _sortDirty = false;
+    routeSortModeActive = true;
+    document.body.classList.add('route-sort-active');
+    window.addEventListener('beforeunload', _sortBeforeUnloadHandler);
+    var banner = document.getElementById('routeSortBanner');
+    var actionBar = document.getElementById('routeSortActionBar');
+    if (banner) banner.style.display = 'flex';
+    if (actionBar) actionBar.style.display = 'flex';
+    updateSortBanner();
+    renderRoutes();
+    showToast('🔧 Режим сортування активний');
+}
+
+function _exitSortModeInternal() {
+    routeSortModeActive = false;
+    _sortSnapshot = null;
+    _sortDirty = false;
+    document.body.classList.remove('route-sort-active');
+    window.removeEventListener('beforeunload', _sortBeforeUnloadHandler);
+    var banner = document.getElementById('routeSortBanner');
+    var actionBar = document.getElementById('routeSortActionBar');
+    if (banner) banner.style.display = 'none';
+    if (actionBar) actionBar.style.display = 'none';
+    if (_routeSortableInstance && typeof _routeSortableInstance.destroy === 'function') {
+        try { _routeSortableInstance.destroy(); } catch(_){}
+        _routeSortableInstance = null;
+    }
+    var list = document.getElementById('routesList');
+    if (list) list.classList.remove('sort-mode-on');
+}
+
+async function saveRouteSortChanges() {
+    if (!routeSortModeActive) return;
+    if (activeRouteIdx === null || !routes[activeRouteIdx]) {
+        _exitSortModeInternal(); renderRoutes(); return;
+    }
+    var sheet = routes[activeRouteIdx];
+    if (!_sortDirty) {
+        _exitSortModeInternal(); renderRoutes();
+        showToast('Режим сортування вимкнено (без змін)');
+        return;
+    }
+    var orderToSave = sheet.pickupOrder || [];
+    showConfirm(
+        'Зберегти новий порядок у маршруті «' + sheet.sheetName + '»?\n\nПорядок побачать водії після синхронізації.',
+        async function(yes) {
+            if (!yes) return;
+            showLoader('Збереження порядку...');
+            try {
+                var res = await apiPost('setRouteOrder', { sheetName: sheet.sheetName, pickup_order: orderToSave });
+                hideLoader();
+                if (!res || !res.ok) {
+                    showToast('❌ ' + ((res && res.error) || 'Не вдалося зберегти'));
+                    return;
+                }
+                _exitSortModeInternal();
+                renderRoutes();
+                showToast('✅ Порядок збережено');
+            } catch (e) {
+                hideLoader();
+                showToast('❌ ' + e.message);
+            }
+        }
+    );
+}
+
+function cancelRouteSortChanges() {
+    if (!routeSortModeActive) return;
+    var sheet = routes[activeRouteIdx];
+    if (!_sortDirty) {
+        _exitSortModeInternal(); renderRoutes();
+        showToast('Режим сортування вимкнено');
+        return;
+    }
+    showConfirm(
+        'Скасувати всі зміни порядку?\n\nНезбережений порядок буде втрачено.',
+        function(yes) {
+            if (!yes) return;
+            if (sheet && _sortSnapshot) _rollbackRouteSort(sheet, _sortSnapshot);
+            _exitSortModeInternal();
+            renderRoutes();
+            showToast('↩️ Зміни порядку скасовано');
+        }
+    );
+}
+
+// ===========================================================
+// ROUTE DASHBOARD — ВИТРАТИ / СОРТУВАТИ / ОПТИМІЗУВАТИ / ВИДАЛИТИ
+// Портовано з passenger-crm (Passengers.js) для UX-консистентності.
+// Адаптовано: один режим сортування (без pickup/dropoff), бо посилка має
+// одну адресу отримувача.
+// ===========================================================
+
+var _showingExpenses = false;
+var routeSortModeActive = false;
+var _routeSortableInstance = null;
+var _sortDirty = false;
+var _sortSnapshot = null;
+var CATEGORY_LABELS = { fuel:'⛽ Бензин', food:'🍔 Їжа', parking:'🅿️ Паркування', toll:'🛣️ Толл', fine:'⚠️ Штраф', customs:'🏛️ Митниця', topUp:'📱 Поповнення', other:'📝 Інше', tips:'💵 Чайові' };
+var CATEGORY_COLORS = { fuel:'#f59e0b', food:'#f97316', parking:'#3b82f6', toll:'#8b5cf6', fine:'#ef4444', customs:'#10b981', topUp:'#06b6d4', other:'#6b7280', tips:'#ec4899' };
+
+function updateRouteDashButtons() {
+    var btnExp = document.getElementById('btnRouteExpenses');
+    var btnBack = document.getElementById('btnRouteBack');
+    if (btnExp) btnExp.style.display = _showingExpenses ? 'none' : '';
+    if (btnBack) btnBack.style.display = _showingExpenses ? '' : 'none';
+}
+
+// ── ВИТРАТИ ─────────────────────────────────────────────────
+function toggleRouteExpensesView() {
+    if (_showingExpenses) {
+        _showingExpenses = false;
+        updateRouteDashButtons();
+        renderRoutes();
+        return;
+    }
+    if (activeRouteIdx === null || !routes[activeRouteIdx]) {
+        showToast('Оберіть маршрут');
+        return;
+    }
+    _showingExpenses = true;
+    updateRouteDashButtons();
+    loadAndRenderExpenses(routes[activeRouteIdx].sheetName);
+}
+
+function _expCategoryFromGasRow(gasRow) {
+    // Витрати з driver-crm приходять як один рядок з кількома сумами в різних
+    // полях (Бензин/Їжа/Паркування/...). Розгортаємо у плоский масив записів.
+    var entries = [];
+    var cur = gasRow['Валюта витрат'] || 'CHF';
+    var date = gasRow['Дата рейсу'] || gasRow['Дата створення'] || '';
+    var driver = gasRow['Водій'] || '';
+    var note = gasRow['Примітка'] || '';
+    var map = {
+        fuel: 'Бензин', food: 'Їжа', parking: 'Паркування', toll: 'Толл на дорозі',
+        fine: 'Штраф', customs: 'Митниця', topUp: 'Топап рахунку', other: 'Інше'
+    };
+    for (var key in map) {
+        var v = parseFloat(gasRow[map[key]] || 0);
+        if (v > 0) entries.push({
+            category: key,
+            amount: v,
+            currency: cur,
+            description: key === 'other' ? (gasRow['Опис іншого'] || note) : '',
+            dateTrip: date,
+            driver: driver
+        });
+    }
+    var tips = parseFloat(gasRow['Чайові'] || 0);
+    if (tips > 0) entries.push({
+        category: 'tips', amount: tips,
+        currency: gasRow['Валюта чайових'] || cur,
+        description: '', dateTrip: date, driver: driver
+    });
+    return entries;
+}
+
+async function loadAndRenderExpenses(sheetName) {
+    var list = document.getElementById('routesList');
+    var filtersBar = document.getElementById('routeFiltersBar');
+    if (filtersBar) filtersBar.style.display = 'none';
+    if (!list) return;
+    list.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-secondary);"><div style="font-size:30px;margin-bottom:8px;">⏳</div><div style="font-size:13px;">Завантаження витрат...</div></div>';
+
+    try {
+        var res = await apiPost('getExpensesSheet', { sheetName: sheetName });
+        if (!res.ok) {
+            list.innerHTML = '<div style="text-align:center;padding:40px;color:#dc2626;">❌ ' + (res.error || 'Помилка') + '</div>';
+            return;
+        }
+        var gasRows = (res.data && res.data.rows) || res.rows || [];
+        var items = [];
+        var advance = { cash: 0, card: 0, cashCurrency: 'CHF', cardCurrency: 'CHF' };
+        gasRows.forEach(function(g) {
+            items.push.apply(items, _expCategoryFromGasRow(g));
+            var ac = parseFloat(g['Аванс готівка'] || 0);
+            var ak = parseFloat(g['Аванс картка'] || 0);
+            if (ac > 0) { advance.cash += ac; advance.cashCurrency = g['Валюта авансу готівка'] || advance.cashCurrency; }
+            if (ak > 0) { advance.card += ak; advance.cardCurrency = g['Валюта авансу картка'] || advance.cardCurrency; }
+        });
+
+        var byCurrency = {};
+        items.forEach(function(e) { byCurrency[e.currency || 'CHF'] = (byCurrency[e.currency || 'CHF'] || 0) + e.amount; });
+
+        var html = '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px;">';
+        if (advance.cash > 0 || advance.card > 0) {
+            html += '<div style="background:white;border:1px solid var(--border);border-radius:14px;padding:18px 22px;flex:1;min-width:140px;">';
+            html += '<div style="font-size:13px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;margin-bottom:6px;">💳 Аванс</div>';
+            if (advance.cash > 0) html += '<div style="font-size:22px;font-weight:800;">' + advance.cash + ' <span style="font-size:13px;color:var(--text-secondary);">' + advance.cashCurrency + '</span></div>';
+            if (advance.card > 0) html += '<div style="font-size:22px;font-weight:800;">' + advance.card + ' <span style="font-size:13px;color:var(--text-secondary);">' + advance.cardCurrency + '</span></div>';
+            html += '</div>';
+        }
+
+        var curEntries = Object.entries(byCurrency);
+        html += '<div style="background:white;border:1px solid var(--border);border-radius:14px;padding:18px 22px;flex:1;min-width:140px;">';
+        html += '<div style="font-size:13px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;margin-bottom:6px;">💰 Витрачено</div>';
+        if (curEntries.length === 0) html += '<div style="font-size:22px;font-weight:800;color:var(--text-secondary);">0</div>';
+        else curEntries.forEach(function(e) {
+            html += '<div style="font-size:22px;font-weight:800;">' + e[1].toFixed(2) + ' <span style="font-size:13px;color:var(--text-secondary);">' + e[0] + '</span></div>';
+        });
+        html += '</div>';
+
+        if (advance.cash > 0 || advance.card > 0) {
+            var advTotal = advance.cash + advance.card;
+            var advCur = advance.cashCurrency || advance.cardCurrency || 'CHF';
+            var spent = byCurrency[advCur] || 0;
+            var remaining = advTotal - spent;
+            var ok = remaining >= 0;
+            html += '<div style="background:' + (ok ? '#f0fdf4' : '#fef2f2') + ';border:1px solid ' + (ok ? '#bbf7d0' : '#fecaca') + ';border-radius:14px;padding:18px 22px;flex:1;min-width:140px;">';
+            html += '<div style="font-size:13px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;margin-bottom:6px;">📊 Залишок</div>';
+            html += '<div style="font-size:22px;font-weight:800;color:' + (ok ? '#16a34a' : '#dc2626') + ';">' + remaining.toFixed(2) + ' <span style="font-size:13px;color:var(--text-secondary);">' + advCur + '</span></div>';
+            html += '</div>';
+        }
+
+        html += '<div style="background:white;border:1px solid var(--border);border-radius:14px;padding:18px 22px;flex:1;min-width:100px;text-align:center;">';
+        html += '<div style="font-size:13px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;margin-bottom:6px;">📋 Записів</div>';
+        html += '<div style="font-size:22px;font-weight:800;">' + items.length + '</div>';
+        html += '</div></div>';
+
+        if (items.length === 0) {
+            html += '<div style="text-align:center;padding:30px;color:var(--text-secondary);font-size:14px;">Витрат ще немає</div>';
+        } else {
+            html += '<div style="font-size:13px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;margin-bottom:10px;">Записи витрат</div>';
+            items.forEach(function(e) {
+                var color = CATEGORY_COLORS[e.category] || '#6b7280';
+                var label = CATEGORY_LABELS[e.category] || e.category;
+                var icon = label.split(' ')[0];
+                var name = label.split(' ').slice(1).join(' ');
+                html += '<div style="background:white;border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:8px;display:flex;align-items:center;gap:12px;">';
+                html += '<div style="width:42px;height:42px;border-radius:10px;background:' + color + '20;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">' + icon + '</div>';
+                html += '<div style="flex:1;min-width:0;">';
+                html += '<div style="font-size:14px;font-weight:700;">' + name + '</div>';
+                if (e.description) html += '<div style="font-size:12px;color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + e.description + '</div>';
+                html += '<div style="font-size:11px;color:var(--text-secondary);margin-top:2px;">' + (e.dateTrip || '') + (e.driver ? ' · ' + e.driver : '') + '</div>';
+                html += '</div>';
+                html += '<div style="text-align:right;flex-shrink:0;">';
+                html += '<div style="font-size:18px;font-weight:800;">' + e.amount + '</div>';
+                html += '<div style="font-size:11px;font-weight:600;color:var(--text-secondary);">' + (e.currency || 'CHF') + '</div>';
+                html += '</div></div>';
+            });
+        }
+
+        list.innerHTML = html;
+    } catch (e) {
+        list.innerHTML = '<div style="text-align:center;padding:40px;color:#dc2626;">❌ Помилка: ' + e.message + '</div>';
+    }
+}
 
 function showRoutesView() {
     switchMainView('route');
@@ -2027,6 +2566,8 @@ async function loadRouteSheetData(idx, forceRefresh) {
             sheet.headers = res.data.headers || [];
             sheet.rows = res.data.rows || [];
             sheet.rowCount = res.data.rowCount || 0;
+            // Збережений порядок stops (з placeholder-рядка routes).
+            sheet.pickupOrder = Array.isArray(res.data.pickup_order) ? res.data.pickup_order : [];
             console.log('[loadRouteSheetData] Loaded', sheet.rows.length, 'rows for', sheet.sheetName);
             // Оновити також в allRouteSheets
             const allIdx = allRouteSheets.findIndex(s => s.sheetName === sheet.sheetName);
@@ -2157,6 +2698,32 @@ function getFilteredRouteRows(rows) {
     return filtered;
 }
 
+// ── Сортування рядків маршруту за збереженим порядком (масив PKG_ID) ──
+function getRouteRowLeadId(r) { return r && (r['PKG_ID'] || r['PAX_ID'] || ''); }
+function sortRouteRowsByStoredOrder(rows, orderIds) {
+    if (!Array.isArray(orderIds) || orderIds.length === 0) return rows.slice();
+    const idSet = new Set(orderIds);
+    const byId = new Map();
+    for (const r of rows) {
+        const id = getRouteRowLeadId(r);
+        if (id && !byId.has(id)) byId.set(id, r);
+    }
+    const ordered = [];
+    const used = new Set();
+    for (const id of orderIds) {
+        if (byId.has(id) && !used.has(id)) { ordered.push(byId.get(id)); used.add(id); }
+    }
+    for (const r of rows) {
+        const id = getRouteRowLeadId(r);
+        if (!id || !idSet.has(id) || !used.has(id)) {
+            if (id && used.has(id)) continue;
+            ordered.push(r);
+            if (id) used.add(id);
+        }
+    }
+    return ordered;
+}
+
 // ── Рендер вмісту обраного маршруту ──
 function renderRoutes() {
     const list = document.getElementById('routesList');
@@ -2166,6 +2733,14 @@ function renderRoutes() {
     const title = document.getElementById('routeViewTitle');
     const subtitle = document.getElementById('routeSubtitle');
     if (!list) return;
+
+    // Якщо зараз показуємо витрати — не перерендерювати картки маршруту
+    // (інакше експенс-блок зникне після першого оновлення).
+    if (_showingExpenses) {
+        if (headerBar) headerBar.style.display = 'block';
+        if (headerEmpty) headerEmpty.style.display = 'none';
+        return;
+    }
 
     if (routes.length === 0) {
         if (headerBar) headerBar.style.display = 'none';
@@ -2184,25 +2759,28 @@ function renderRoutes() {
     }
 
     const sheet = routes[activeRouteIdx];
-    const rows = sheet.rows || [];
+    const rawRows = sheet.rows || [];
     const name = (sheet.sheetName || 'Маршрут');
 
-    const paxCount = rows.filter(r => (r['Тип запису'] || '').includes('Пасажир')).length;
-    const parcelCount = rows.filter(r => (r['Тип запису'] || '').includes('Посилк')).length;
+    // Застосувати збережений порядок ДО фільтрації (фільтри лише ховають).
+    const rows = sortRouteRowsByStoredOrder(rawRows, sheet.pickupOrder || []);
+
+    const paxCount = rawRows.filter(r => (r['Тип запису'] || '').includes('Пасажир')).length;
+    const parcelCount = rawRows.filter(r => (r['Тип запису'] || '').includes('Посилк')).length;
 
     // Show route header bar + filters
     if (headerBar) headerBar.style.display = 'block';
     if (headerEmpty) headerEmpty.style.display = 'none';
     if (filtersBar) filtersBar.style.display = 'block';
     if (title) title.textContent = '🚐 ' + name;
-    if (subtitle) subtitle.textContent = '👤 ' + paxCount + ' пасажирів · 📦 ' + parcelCount + ' посилок · ' + rows.length + ' записів';
+    if (subtitle) subtitle.textContent = '👤 ' + paxCount + ' пасажирів · 📦 ' + parcelCount + ' посилок · ' + rawRows.length + ' записів';
 
     const filtered = getFilteredRouteRows(rows);
     let html = '';
 
     if (filtered.length === 0) {
         html += '<div style="padding:40px;text-align:center;color:var(--text-secondary);font-size:13px;">' +
-            (rows.length === 0 ? 'Маршрут порожній — перенесіть посилки з головного списку' : 'Немає записів за обраним фільтром') + '</div>';
+            (rawRows.length === 0 ? 'Маршрут порожній — перенесіть посилки з головного списку' : 'Немає записів за обраним фільтром') + '</div>';
     } else {
         html += filtered.map((r, idx) => renderRouteCard(r, idx, sheet.sheetName)).join('');
     }
@@ -2210,11 +2788,13 @@ function renderRoutes() {
     list.innerHTML = html;
     renderRouteSidebar();
     updateRouteBulkToolbar();
+    initRouteSortable();
 }
 
 // ── Рендер картки ліда маршруту (card-style як в CRM) ──
 function renderRouteCard(r, idx, sheetName) {
     const rteId = r['RTE_ID'] || '';
+    const leadId = r['PKG_ID'] || r['PAX_ID'] || '';
     const type = r['Тип запису'] || '';
     const name = r['Піб пасажира'] || '—';
     const phone = String(r['Телефон пасажира'] || '—');
@@ -2335,7 +2915,7 @@ function renderRouteCard(r, idx, sheetName) {
     const contactsIcon = isPax ? '👤' : '📦';
     const contactsLabel = isPax ? 'Контакти' : 'Посилка';
 
-    return `<div class="route-card ${statusClass} ${isSelected ? 'selected' : ''}" id="rte-card-${rteId}">
+    return `<div class="route-card ${statusClass} ${isSelected ? 'selected' : ''}" id="rte-card-${rteId}" data-rte-id="${rteId}" data-lead-id="${leadId}">
         <div class="route-card-header" onclick="toggleRouteDetails('${rteId}')">
             <div class="route-card-top">
                 <div class="card-checkbox-wrap" onclick="event.stopPropagation()">
@@ -2396,6 +2976,9 @@ function switchRouteTab(rteId, tabName) {
 
 // ── Деталі картки маршруту ──
 function toggleRouteDetails(rteId) {
+    // У режимі сортування не розкриваємо деталі — будь-який клік це підготовка
+    // до drag-and-drop (SortableJS перехопить на 350мс delay).
+    if (routeSortModeActive) return;
     if (routeOpenDetailsId === rteId) {
         routeOpenDetailsId = null;
     } else {

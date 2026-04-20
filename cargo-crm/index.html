@@ -267,16 +267,22 @@
           </div>
         </div>
         <div id="routeDashContent" style="display:none;margin-top:10px;">
-          <div style="display:flex;gap:6px;flex-wrap:wrap;">
-            <button class="bs-btn" style="background:rgba(255,255,255,0.2);color:white;font-size:11px;padding:8px 14px;border:1px solid rgba(255,255,255,0.3);border-radius:8px;cursor:pointer;" onclick="event.stopPropagation();openRouteAddForm()">+ Додати посилку</button>
-            <button class="bs-btn" style="background:rgba(255,255,255,0.2);color:white;font-size:11px;padding:8px 14px;border:1px solid rgba(255,255,255,0.3);border-radius:8px;cursor:pointer;" onclick="event.stopPropagation();refreshRouteView()">🔄 Оновити</button>
-            <button class="bs-btn" style="background:rgba(255,255,255,0.2);color:white;font-size:11px;padding:8px 14px;border:1px solid rgba(255,255,255,0.3);border-radius:8px;cursor:pointer;" onclick="event.stopPropagation();backToParcels()">← Назад</button>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;">
+            <button id="btnRouteBack" class="route-dash-btn" style="display:none;grid-column:1/-1;" onclick="event.stopPropagation();toggleRouteExpensesView()">← Назад</button>
+            <button id="btnRouteExpenses" class="route-dash-btn" onclick="event.stopPropagation();toggleRouteExpensesView()">💰 <span class="lbl-full">Витрати</span><span class="lbl-short">Витрати</span></button>
+            <button id="btnRouteOptimize" class="route-dash-btn" onclick="event.stopPropagation();optimizeRouteOrder()">⚡ <span class="lbl-full">Оптимізувати</span><span class="lbl-short">Оптим.</span></button>
+            <button id="btnRouteSort" class="route-dash-btn" onclick="event.stopPropagation();enterRouteSortMode()">🔧 <span class="lbl-full">Сортувати</span><span class="lbl-short">Сорт.</span></button>
+            <button id="btnRouteDelete" class="route-dash-btn danger" onclick="event.stopPropagation();confirmDeleteRoute(activeRouteIdx)">🗑️ <span class="lbl-full">Видалити</span><span class="lbl-short">Видал.</span></button>
           </div>
         </div>
       </div>
       <div id="routeHeaderEmpty" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px;">
         <h2 style="margin:0;font-size:18px;color:var(--text-primary);">🗺️ Маршрути</h2>
-        <button style="background:var(--primary);color:white;font-size:11px;padding:8px 14px;border:none;border-radius:8px;cursor:pointer;" onclick="backToParcels()">← Назад</button>
+        <button style="background:var(--primary);color:white;font-size:11px;padding:8px 14px;border:none;border-radius:8px;cursor:pointer;" onclick="loadRoutes(true)">🔄 Оновити</button>
+      </div>
+      <!-- Sort Mode: мінімальний банер (видно лише в режимі сортування) -->
+      <div id="routeSortBanner" class="route-sort-banner" style="display:none;">
+        <span id="routeSortBannerLabel">🔧 Режим сортування</span>
       </div>
       <!-- Route filters -->
       <div id="routeFiltersBar" style="display:none;margin-bottom:8px;">
@@ -318,6 +324,11 @@
       <div id="routesLoading" style="display:none;text-align:center;padding:40px;color:var(--text-secondary);font-size:13px;">⏳ Завантаження маршрутів...</div>
       <div id="routesError" style="display:none;text-align:center;padding:40px;color:#dc2626;font-size:13px;"></div>
       <div id="routesList"></div>
+      <!-- Sort Mode: фіксована панель внизу з кнопками Зберегти / Скасувати -->
+      <div id="routeSortActionBar" style="display:none;">
+        <button type="button" class="sort-cancel-btn" onclick="cancelRouteSortChanges()">❌ Скасувати</button>
+        <button type="button" class="sort-save-btn" onclick="saveRouteSortChanges()">💾 Зберегти порядок</button>
+      </div>
     </div>
   </main>
 </div>
@@ -639,6 +650,12 @@
 <script src="supabase-config.js"></script>
 <script src="supabase-api.js"></script>
 
+<!-- SortableJS — drag-and-drop for route stops ordering -->
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+
 <script src="Cargo.js"></script>
+
+<!-- Google Maps API — for route optimization (geocoding + Directions) -->
+<script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDbSS6XSCJ3MafbrSp-rIX1-x130bwzevo&callback=initMapsAPI"></script>
 </body>
 </html>
