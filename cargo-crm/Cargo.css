@@ -1777,3 +1777,136 @@ mark.search-hl {
   font-weight: 700;
   box-shadow: 0 0 0 1px #fbbf24 inset;
 }
+
+/* ===========================================================
+   ROUTE DASHBOARD (4-button card-style menu in route header)
+   Ported from passenger-crm для UX-консистентності.
+   =========================================================== */
+.route-dash-btn {
+  padding: 12px 16px;
+  min-height: 46px;
+  background: white;
+  color: #1f2937;
+  font-size: 14px;
+  line-height: 1.15;
+  font-weight: 700;
+  border: 1px solid #e5e7eb;
+  border-radius: 20px;
+  cursor: pointer;
+  font-family: inherit;
+  -webkit-tap-highlight-color: rgba(124,58,237,0.2);
+  transition: transform 0.1s ease, background 0.15s ease, box-shadow 0.15s ease;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.12);
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+.route-dash-btn .lbl-short { display: none; }
+.route-dash-btn:hover { background: #f9fafb; border-color: #d1d5db; }
+.route-dash-btn:active {
+  transform: scale(0.95);
+  background: #ede9fe !important;
+  box-shadow: inset 0 2px 6px rgba(124,58,237,0.2);
+}
+.route-dash-btn.danger {
+  background: #fef2f2;
+  color: #dc2626;
+  border-color: #fecaca;
+}
+.route-dash-btn.danger:hover { background: #fee2e2; border-color: #fca5a5; }
+.route-dash-btn.danger:active { background: #fecaca !important; }
+@media (max-width: 600px) {
+  .route-dash-btn {
+    font-size: 11px;
+    padding: 8px 6px;
+    min-height: 40px;
+    gap: 3px;
+  }
+  .route-dash-btn .lbl-full { display: none; }
+  .route-dash-btn .lbl-short { display: inline; }
+}
+
+/* Мінімальна плашка над списком — лише напис і «живий» маркер dirty */
+.route-sort-banner {
+  background: #f9fafb;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 10px;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+/* Фіксована панель знизу з кнопками Save / Cancel */
+#routeSortActionBar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  background: white;
+  border-top: 3px solid #f59e0b;
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px)) 16px;
+  display: flex;
+  gap: 10px;
+  box-shadow: 0 -6px 20px rgba(0,0,0,0.15);
+}
+#routeSortActionBar button {
+  flex: 1;
+  padding: 14px 10px;
+  font-size: 14px;
+  font-weight: 800;
+  border-radius: 10px;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  min-height: 50px;
+  transition: transform 0.1s, box-shadow 0.1s;
+}
+#routeSortActionBar button:active { transform: scale(0.97); }
+#routeSortActionBar .sort-cancel-btn {
+  background: #f3f4f6;
+  color: #374151;
+  border: 2px solid #d1d5db;
+  max-width: 40%;
+}
+#routeSortActionBar .sort-cancel-btn:hover { background: #e5e7eb; }
+#routeSortActionBar .sort-save-btn {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  box-shadow: 0 4px 12px rgba(16,185,129,0.35);
+}
+#routeSortActionBar .sort-save-btn:hover { box-shadow: 0 6px 18px rgba(16,185,129,0.5); }
+
+/* Коли режим активний — зсуваємо нижній край контенту щоб фікс-панель не накривала картки */
+body.route-sort-active .main-area,
+body.route-sort-active .main-content,
+body.route-sort-active main { padding-bottom: 110px !important; }
+
+/* Блокування інших дій у режимі сортування */
+body.route-sort-active #btnRouteExpenses,
+body.route-sort-active #btnRouteOptimize,
+body.route-sort-active #btnRouteDelete,
+body.route-sort-active #btnRouteSort,
+body.route-sort-active .bulk-toolbar,
+body.route-sort-active #routeFiltersBar {
+  opacity: 0.35 !important;
+  pointer-events: none !important;
+}
+
+/* Drag-and-drop visual feedback */
+#routesList.sort-mode-on .route-card { cursor: grab; touch-action: pan-y; }
+#routesList.sort-mode-on .route-card:active { cursor: grabbing; }
+.route-card-ghost {
+  opacity: 0.4;
+  background: #fef3c7 !important;
+  border: 2px dashed #f59e0b !important;
+}
+.route-card-chosen { box-shadow: 0 8px 22px rgba(245,158,11,0.35) !important; }
+.route-card-drag { transform: rotate(1deg); }

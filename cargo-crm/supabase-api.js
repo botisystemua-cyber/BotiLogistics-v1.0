@@ -671,9 +671,75 @@ async function sbPkgGetRouteSheet(params) {
         const rows = (data || []).map(routeRowToGasPkg);
         const headers = rows.length > 0 ? Object.keys(rows[0]) : [];
 
-        return { ok: true, data: { rows, headers, sheetName }, rows, headers, sheetName };
+        // Pull pickup_order from placeholder row (consistency with passenger-crm).
+        // Cargo має лише один порядок (немає окремих pickup/dropoff), тому
+        // використовуємо тільки pickup_order — простіше для UI.
+        let pickupOrder = [];
+        try {
+            const { data: phData } = await sb.from('routes')
+                .select('pickup_order')
+                .eq('tenant_id', TENANT_ID)
+                .eq('rte_id', sheetName)
+                .eq('is_placeholder', true)
+                .maybeSingle();
+            if (phData && Array.isArray(phData.pickup_order)) pickupOrder = phData.pickup_order;
+        } catch (_) { /* placeholder may be missing — нестрашно */ }
+
+        return {
+            ok: true,
+            data: { rows, headers, sheetName, pickup_order: pickupOrder },
+            rows, headers, sheetName,
+            pickup_order: pickupOrder
+        };
     } catch (e) {
         console.error('sbPkgGetRouteSheet error:', e);
+        return { ok: false, error: e.message };
+    }
+}
+
+// Write pickup_order array for a route to its placeholder row.
+// Якщо placeholder-рядка ще нема — створюємо.
+async function sbPkgSetRouteOrder(params) {
+    try {
+        const sheetName = params.sheetName || params.sheet;
+        if (!sheetName) return { ok: false, error: 'sheetName required' };
+
+        const updateObj = { updated_at: new Date().toISOString() };
+        if (params.pickup_order !== undefined) updateObj.pickup_order = params.pickup_order || [];
+
+        const { data: existing, error: selErr } = await sb
+            .from('routes')
+            .select('id')
+            .eq('tenant_id', TENANT_ID)
+            .eq('rte_id', sheetName)
+            .eq('is_placeholder', true)
+            .maybeSingle();
+        if (selErr) throw selErr;
+
+        if (existing && existing.id) {
+            const { error: upErr } = await sb
+                .from('routes')
+                .update(updateObj)
+                .eq('id', existing.id);
+            if (upErr) throw upErr;
+        } else {
+            const insertObj = {
+                tenant_id: TENANT_ID,
+                rte_id: sheetName,
+                is_placeholder: true,
+                record_type: 'Посилка',
+                status: 'Новий',
+                crm_status: 'active',
+                route_date: new Date().toISOString().split('T')[0],
+                ...updateObj
+            };
+            const { error: insErr } = await sb.from('routes').insert(insertObj);
+            if (insErr) throw insErr;
+        }
+
+        return { ok: true };
+    } catch (e) {
+        console.error('sbPkgSetRouteOrder error:', e);
         return { ok: false, error: e.message };
     }
 }
@@ -1732,6 +1798,7 @@ async function apiPostSupabase(action, params) {
         // Routes
         getRoutesList:      sbPkgGetRoutesList,
         getRouteSheet:      sbPkgGetRouteSheet,
+        setRouteOrder:      sbPkgSetRouteOrder,
         addToRoute:         sbPkgAddToRoute,
         removeFromRoute:    sbPkgRemoveFromRoute,
         updateRouteField:   sbPkgUpdateRouteField,
