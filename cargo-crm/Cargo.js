@@ -986,6 +986,19 @@ function renderDetailGrid(fields, pkgId, opts = {}) {
   return `<div class="details-grid">${fields.map(f => renderDetailBlock(f[0], f[1], pkgId, Object.assign({}, opts, f[2] || {}))).join('')}</div>`;
 }
 
+// Короткий формат дати для readonly-полів: 21.05.2026 10:32 (без секунд)
+function fmtShortDate(iso) {
+  if (!iso) return '';
+  try {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return String(iso);
+    return d.toLocaleString('uk-UA', {
+      day: '2-digit', month: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit'
+    });
+  } catch (_) { return String(iso); }
+}
+
 // ===== [SECT-CARD] RENDER SINGLE CARD =====
 function renderCard(p) {
   const pkgId = p['PKG_ID'] || '';
@@ -1001,6 +1014,7 @@ function renderCard(p) {
   const addressTo = p['Адреса в Європі'] || p['Місто Нова Пошта'] || '';
   const weight = p['Кг'] || '';
   const npPlaces = parseInt(p['Місця НП'], 10) || 0;
+  const itemCount = parseInt(p['Кількість позицій'], 10) || 0;
   const price = p['Сума'] || '';
   const currency = p['Валюта оплати'] || '';
   const deposit = parseFloat(p['Завдаток']) || 0;
@@ -1071,7 +1085,7 @@ function renderCard(p) {
     const descShort = (p['Опис']).substring(0, 25) + ((p['Опис']).length > 25 ? '…' : '');
     metaHtml += `<span class="meta-tag">📄 ${highlightMatch(descShort)}</span>`;
   }
-  if (visCols.includes('qty') && p['Кількість позицій']) metaHtml += `<span class="meta-tag">📊 ${escapeHtml(String(p['Кількість позицій']))} шт</span>`;
+  // itemCount уже показано як badge-item-count у верхньому ряді — meta-tag не дублюємо
   if (visCols.includes('estValue') && p['Оціночна вартість']) metaHtml += `<span class="meta-tag">💎 ${escapeHtml(String(p['Оціночна вартість']))}</span>`;
 
   // ===== TAB PANELS =====
@@ -1179,7 +1193,7 @@ function renderCard(p) {
     ['ORDER_ID', p['ORDER_ID'] || '', {readonly: true}],
     ['Статус CRM', statusCrm],
     ['Контроль перевірки', controlCheck],
-    ['Дата перевірки', p['Дата перевірки'] || '', {readonly: true}],
+    ['Дата перевірки', fmtShortDate(p['Дата перевірки']), {readonly: true}],
     ['Примітка', note],
     ['Примітка СМС', p['Примітка СМС'] || ''],
   ], pkgId);
@@ -1204,8 +1218,9 @@ function renderCard(p) {
           <span class="dir-badge ${dirBadgeClass}">${dirLabel}</span>
           ${isNew24h(p) ? '<span class="badge badge-new24">🆕 NEW</span>' : ''}
           ${visCols.includes('ttn') ? ttnHtml : ''}
-          ${npPlaces > 1 ? `<span class="badge-np-places" title="${npPlaces} фізичних коробок з тим самим ТТН">📥 ${npPlaces}</span>` : ''}
-          ${visCols.includes('weight') && weight ? `<span class="badge-weight">⚖️ ${weight} кг</span>` : ''}
+          ${npPlaces > 1 ? `<span class="badge-np-places" title="Місць НП: ${npPlaces} фізичних коробок з тим самим ТТН">📥 ${npPlaces}</span>` : ''}
+          ${itemCount > 1 ? `<span class="badge-item-count" title="Кількість позицій: ${itemCount} речей всередині">🧾 ${itemCount}</span>` : ''}
+          ${weight ? `<span class="badge-weight" title="Вага">⚖️ ${weight} кг</span>` : ''}
           <div class="card-finance">
             ${visCols.includes('sum') && price ? `<span class="card-price ${priceColorClass}">${price} ${currency}</span>` : ''}
             ${visCols.includes('deposit') && deposit > 0 ? `<span class="card-deposit">завд:${deposit}</span>` : ''}
