@@ -1855,6 +1855,23 @@ function bulkSetVerifyStatus(status) {
   afterBulkAction();
 }
 
+// Bulk menu segment collapse/expand — auto-expand the segment relevant to the
+// current context (verify filter, route view, …). "general" is always visible.
+function toggleBulkSegment(seg) {
+  const el = document.querySelector('.bulk-segment[data-seg="' + seg + '"]');
+  if (el) el.classList.toggle('collapsed');
+}
+
+function setBulkContext(ctx) {
+  // ctx: 'general' | 'verify' | 'route'
+  document.querySelectorAll('.bulk-segment').forEach(el => {
+    const seg = el.dataset.seg;
+    // Always keep 'general' expanded; others collapse unless they match ctx.
+    const expand = seg === 'general' || seg === ctx;
+    el.classList.toggle('collapsed', !expand);
+  });
+}
+
 // Масове видалення з перевірки — повертає Контроль перевірки в порожнє (scan_status='received')
 function bulkRemoveFromVerify() {
   const ids = getSelectedIds();
@@ -1939,6 +1956,8 @@ function setDirection(dir) {
   });
   // Moved out of Перевірка section → hide the verify search bar.
   hideVerifyPanel();
+  // Bulk-menu context back to general (user left Перевірка).
+  setBulkContext('general');
   // Switch back to parcels view if in route/other view
   if (currentView !== 'parcels') backToParcels();
   else renderCards();
@@ -2089,6 +2108,10 @@ function switchMainView(view) {
   // Перевірка before.
   const vsp = document.getElementById('verifySearchPanel');
   if (vsp) vsp.style.display = (view === 'parcels' && isVerifyActive) ? 'block' : 'none';
+  // Bulk-menu: route view → Маршрут category, parcels view → keep current
+  // (verify if user is in Перевірка, else general).
+  if (view !== 'parcels') setBulkContext('route');
+  else setBulkContext(isVerifyActive ? 'verify' : 'general');
   renderRouteSidebar();
 }
 
@@ -4173,6 +4196,8 @@ function setVerFilter(f) {
   });
   // Entering Перевірка → reveal the search panel at the top of the list.
   showVerifyPanel();
+  // Bulk-menu: auto-expand Перевірка category.
+  setBulkContext('verify');
   // Switch back to parcels view if in route/other view
   if (currentView !== 'parcels') backToParcels();
   else renderCards();

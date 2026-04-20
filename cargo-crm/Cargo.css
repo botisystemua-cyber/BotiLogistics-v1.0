@@ -1539,10 +1539,23 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
+  cursor: pointer;
+  user-select: none;
 }
+.bulk-segment-title:hover { opacity: 0.85; }
 .bulk-segment-title.seg-general { color: #94a3b8; }
 .bulk-segment-title.seg-verify  { color: #fbbf24; }
 .bulk-segment-title.seg-route   { color: #a78bfa; }
+
+.bulk-seg-chevron {
+  display: inline-block;
+  font-size: 10px;
+  transition: transform 0.15s;
+  width: 10px;
+  text-align: center;
+}
+.bulk-segment.collapsed .bulk-seg-chevron { transform: rotate(-90deg); }
+.bulk-segment.collapsed .bulk-segment-body { display: none; }
 
 .bulk-segment-title::after {
   content: '';

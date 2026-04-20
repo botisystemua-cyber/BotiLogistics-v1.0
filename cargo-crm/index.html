@@ -108,51 +108,63 @@
   </div>
 
   <!-- Segment 1: General -->
-  <div class="bulk-segment">
-    <div class="bulk-segment-title seg-general">Загальні дії</div>
-    <button class="bulk-btn" onclick="bulkSelectAll()">
-      <span class="bulk-icon">☑</span> Виділити всі
-    </button>
-    <button class="bulk-btn btn-danger-bulk" onclick="bulkDelete()">
-      <span class="bulk-icon">🗑</span> Видалити
-    </button>
-    <button class="bulk-btn btn-warn-bulk" onclick="bulkArchive()">
-      <span class="bulk-icon">📦</span> Архівувати
-    </button>
+  <div class="bulk-segment" data-seg="general">
+    <div class="bulk-segment-title seg-general" onclick="toggleBulkSegment('general')">
+      <span class="bulk-seg-chevron">▾</span> Загальні дії
+    </div>
+    <div class="bulk-segment-body">
+      <button class="bulk-btn" onclick="bulkSelectAll()">
+        <span class="bulk-icon">☑</span> Виділити всі
+      </button>
+      <button class="bulk-btn btn-danger-bulk" onclick="bulkDelete()">
+        <span class="bulk-icon">🗑</span> Видалити
+      </button>
+      <button class="bulk-btn btn-warn-bulk" onclick="bulkArchive()">
+        <span class="bulk-icon">📦</span> Архівувати
+      </button>
+    </div>
   </div>
 
   <!-- Segment 2: Verification -->
-  <div class="bulk-segment">
-    <div class="bulk-segment-title seg-verify">Перевірка</div>
-    <button class="bulk-btn" onclick="bulkSetVerifyStatus('В перевірці')">
-      <span class="bulk-icon">🔍</span> В перевірку
-    </button>
-    <button class="bulk-btn btn-success-bulk" onclick="bulkSetVerifyStatus('Готова до маршруту')">
-      <span class="bulk-icon">✅</span> В готові
-    </button>
-    <button class="bulk-btn btn-danger-bulk" onclick="bulkSetVerifyStatus('Невідомий')">
-      <span class="bulk-icon">❓</span> Невідомі
-    </button>
-    <button class="bulk-btn btn-danger-bulk" onclick="bulkSetVerifyStatus('Відхилено')">
-      <span class="bulk-icon">❌</span> Відхилити
-    </button>
-    <button class="bulk-btn btn-danger-bulk" onclick="bulkRemoveFromVerify()">
-      <span class="bulk-icon">🚫</span> Видалити з перевірки
-    </button>
+  <div class="bulk-segment collapsed" data-seg="verify">
+    <div class="bulk-segment-title seg-verify" onclick="toggleBulkSegment('verify')">
+      <span class="bulk-seg-chevron">▾</span> Перевірка
+    </div>
+    <div class="bulk-segment-body">
+      <button class="bulk-btn" onclick="bulkSetVerifyStatus('В перевірці')">
+        <span class="bulk-icon">🔍</span> В перевірку
+      </button>
+      <button class="bulk-btn btn-success-bulk" onclick="bulkSetVerifyStatus('Готова до маршруту')">
+        <span class="bulk-icon">✅</span> В готові
+      </button>
+      <button class="bulk-btn btn-danger-bulk" onclick="bulkSetVerifyStatus('Невідомий')">
+        <span class="bulk-icon">❓</span> Невідомі
+      </button>
+      <button class="bulk-btn btn-danger-bulk" onclick="bulkSetVerifyStatus('Відхилено')">
+        <span class="bulk-icon">❌</span> Відхилити
+      </button>
+      <button class="bulk-btn btn-danger-bulk" onclick="bulkRemoveFromVerify()">
+        <span class="bulk-icon">🚫</span> Видалити з перевірки
+      </button>
+    </div>
   </div>
 
   <!-- Segment 3: Route -->
-  <div class="bulk-segment">
-    <div class="bulk-segment-title seg-route">Маршрут</div>
-    <button class="bulk-btn btn-purple-bulk" onclick="bulkAddToRoute()">
-      <span class="bulk-icon">🚚</span> В маршрут
-    </button>
-    <button class="bulk-btn btn-danger-bulk" onclick="bulkRemoveFromRoute()">
-      <span class="bulk-icon">❌</span> Видалити з маршруту
-    </button>
-    <button class="bulk-btn btn-warn-bulk" onclick="bulkOptimizeRoute()">
-      <span class="bulk-icon">⚡</span> Оптимізація
-    </button>
+  <div class="bulk-segment collapsed" data-seg="route">
+    <div class="bulk-segment-title seg-route" onclick="toggleBulkSegment('route')">
+      <span class="bulk-seg-chevron">▾</span> Маршрут
+    </div>
+    <div class="bulk-segment-body">
+      <button class="bulk-btn btn-purple-bulk" onclick="bulkAddToRoute()">
+        <span class="bulk-icon">🚚</span> В маршрут
+      </button>
+      <button class="bulk-btn btn-danger-bulk" onclick="bulkRemoveFromRoute()">
+        <span class="bulk-icon">❌</span> Видалити з маршруту
+      </button>
+      <button class="bulk-btn btn-warn-bulk" onclick="bulkOptimizeRoute()">
+        <span class="bulk-icon">⚡</span> Оптимізація
+      </button>
+    </div>
   </div>
 </div>
 
