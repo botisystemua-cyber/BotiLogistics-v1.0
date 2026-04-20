@@ -1228,9 +1228,40 @@
             }
 
             if (action === 'save') {
-                // Лід уже в БД (scan_ttn) — просто виходимо зі sheet
-                closeUnknownSheet();
-                resumeAfterSheet();
+                // Якщо pkg вже існує (scan-режим → scan_ttn створив Невідомого)
+                // — нічого не треба, просто виходимо. У check-режимі (peek_ttn)
+                // у БД НІЧОГО не створено — треба явно зареєструвати Невідомого
+                // через scan_ttn, щоб він з'явився у CRM «Невідомі».
+                if (pkg) {
+                    closeUnknownSheet();
+                    resumeAfterSheet();
+                    return;
+                }
+                if (!TENANT_ID) { closeUnknownSheet(); resumeAfterSheet(); return; }
+                sb.rpc('scan_ttn', {
+                    p_tenant_id: TENANT_ID,
+                    p_ttn: ttn,
+                    p_direction: DEFAULT_DIRECTION,
+                    p_user: USER_LOGIN
+                }).then(function(result) {
+                    var r = (result && result.data) || {};
+                    if (r && r.pkg_id) {
+                        lastScannedPkgId = r.pkg_id;
+                        lastScannedTtn   = ttn;
+                        document.getElementById('editBtn').classList.add('show');
+                    }
+                    showToast({
+                        variant: 'created', icon: '💾',
+                        label: 'Збережено як Невідомий',
+                        value: ttn, status: 'Доступний у CRM → Невідомі'
+                    });
+                    setTimeout(function(){
+                        document.getElementById('resultToast').classList.remove('show');
+                    }, 1800);
+                }).catch(function(){}).finally(function() {
+                    closeUnknownSheet();
+                    resumeAfterSheet();
+                });
                 return;
             }
 
