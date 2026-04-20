@@ -1100,6 +1100,30 @@
             font-size: 12px;
             margin-top: 3px;
         }
+        .hd-np-badge {
+            background: #fef3c7;
+            color: #92400e;
+            padding: 2px 8px;
+            border-radius: 999px;
+            font-size: 10px;
+            font-weight: 700;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+        .hd-card-events {
+            margin-top: 6px;
+            padding-top: 6px;
+            border-top: 1px solid rgba(255,255,255,0.08);
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        .hd-event {
+            color: rgba(255,255,255,0.55);
+            font-size: 11px;
+        }
+        .hd-who-self { color: rgba(255,255,255,0.9); font-weight: 600; }
+        .hd-who-other { color: #fbbf24; font-weight: 700; background: rgba(251,191,36,0.15); padding: 1px 5px; border-radius: 6px; }
         .hd-empty {
             color: rgba(255,255,255,0.4);
             text-align: center;
@@ -2671,7 +2695,7 @@
 
                 if (uniquePkgIds.length === 0) {
                     // Усі скасовані, пакетів немає
-                    _finishHistoryRender(dedup, {});
+                    _finishHistoryRender(dedup, {}, {});
                     return;
                 }
 
@@ -2681,47 +2705,67 @@
                 var pkgUrl = SUPABASE_URL + '/rest/v1/packages' +
                              '?tenant_id=eq.' + encodeURIComponent(TENANT_ID) +
                              '&pkg_id=in.' + encodeURIComponent(inList) +
-                             '&select=pkg_id,ttn_number,recipient_phone,lead_status,quality_check_required,scan_status,is_archived';
-                fetch(pkgUrl, {
-                    headers: {
-                        apikey: SUPABASE_ANON_KEY,
-                        Authorization: 'Bearer ' + SUPABASE_ANON_KEY
-                    }
-                }).then(function(r) { return r.json(); })
-                  .then(function(pkgs) {
-                    if (!Array.isArray(pkgs)) pkgs = [];
+                             '&select=pkg_id,ttn_number,recipient_phone,lead_status,quality_check_required,scan_status,np_places,is_archived';
+                // Паралельно тягнемо ВСІ скан-події для цих pkg_id (будь-якого
+                // оператора), щоб показати таймлайн «коли і хто» розпаковував.
+                var evUrl = SUPABASE_URL + '/rest/v1/package_scan_log' +
+                            '?tenant_id=eq.' + encodeURIComponent(TENANT_ID) +
+                            '&pkg_id=in.' + encodeURIComponent(inList) +
+                            '&mode=in.(intake,unpack)' +
+                            '&order=scanned_at.asc&limit=500' +
+                            '&select=pkg_id,scanned_at,scanned_by,mode';
+                Promise.all([
+                    fetch(pkgUrl, {
+                        headers: {
+                            apikey: SUPABASE_ANON_KEY,
+                            Authorization: 'Bearer ' + SUPABASE_ANON_KEY
+                        }
+                    }).then(function(r) { return r.json(); }),
+                    fetch(evUrl, {
+                        headers: {
+                            apikey: SUPABASE_ANON_KEY,
+                            Authorization: 'Bearer ' + SUPABASE_ANON_KEY
+                        }
+                    }).then(function(r) { return r.json(); })
+                ]).then(function(results) {
+                    var pkgs = Array.isArray(results[0]) ? results[0] : [];
+                    var events = Array.isArray(results[1]) ? results[1] : [];
                     var byPkg = {};
                     pkgs.forEach(function(p) { byPkg[p.pkg_id] = p; });
-                    _finishHistoryRender(dedup, byPkg);
-                  }).catch(function() { _finishHistoryRender(dedup, {}); });
+                    var eventsByPkg = {};
+                    events.forEach(function(e) {
+                        if (!eventsByPkg[e.pkg_id]) eventsByPkg[e.pkg_id] = [];
+                        eventsByPkg[e.pkg_id].push(e);
+                    });
+                    _finishHistoryRender(dedup, byPkg, eventsByPkg);
+                }).catch(function() { _finishHistoryRender(dedup, {}, {}); });
               }).catch(function() {
                 _hdLoading = false;
                 body.innerHTML = '<div class="hd-empty">Помилка завантаження</div>';
               });
         }
 
-        function _finishHistoryRender(logs, byPkg) {
-            // Пропускаємо сирітки — log-записи, чий pkg видалено з БД або
-            // архівовано. Вони у CRM «Перевірка» уже не показуються, тож
-            // у сканерській історії їм теж нема чого висіти. «Актуалізувати»
-            // підтягне свіжий стан з CRM — старі сирітки одразу зникнуть.
+        function _finishHistoryRender(logs, byPkg, eventsByPkg) {
+            eventsByPkg = eventsByPkg || {};
             _hdItems = logs.reduce(function(acc, l) {
                 var pkg = l.pkg_id ? byPkg[l.pkg_id] : null;
                 if (pkg && pkg.is_archived) pkg = null;
-                // Якщо у лога є pkg_id, а пакет не знайдено (видалений або
-                // архівований) → ховаємо цей рядок у історії
                 if (l.pkg_id && !pkg) return acc;
-                // Якщо pkg_id нема (cancelled-сирітка) — ховаємо (вже
-                // фільтрується раніше, тут — додатковий захист)
                 if (!l.pkg_id) return acc;
 
                 var cls = _classifyForHistory(l, pkg);
+                // Всі скан-події для цього pkg (від будь-якого оператора)
+                var events = (eventsByPkg[pkg.pkg_id] || []).slice().sort(function(a, b) {
+                    return (a.scanned_at || '').localeCompare(b.scanned_at || '');
+                });
                 acc.push({
                     ttn: l.ttn_number,
                     pkg_id: pkg.pkg_id,
                     scanned_at: l.scanned_at,
                     mode: l.mode,
                     phone: pkg.recipient_phone || '',
+                    np_places: parseInt(pkg.np_places, 10) || 1,
+                    events: events,
                     filter: cls.filter,
                     badge: cls.badge
                 });
@@ -2755,23 +2799,42 @@
                 return;
             }
             var html = items.map(function(it) {
-                var time = '';
-                if (it.scanned_at) {
-                    var d = new Date(it.scanned_at);
-                    if (!isNaN(d.getTime())) {
-                        time = d.toLocaleString('uk-UA', { day: '2-digit', month: '2-digit',
-                            year: '2-digit', hour: '2-digit', minute: '2-digit' });
-                    }
-                }
                 var pkgAttr = it.pkg_id ? (' data-pkg="' + _escHtml(it.pkg_id) + '"') : '';
+                // Бейдж «📥 N» біля ТТН якщо np_places > 1
+                var npBadge = (it.np_places > 1)
+                    ? '<span class="hd-np-badge" title="Місць НП: ' + it.np_places + '">📥 ' + it.np_places + '</span>'
+                    : '';
+                // Таймлайн подій: кожен скан — час + оператор (виділяємо
+                // іншого оператора жовтим, свого — сірим)
+                var evts = it.events || [];
+                // Якщо подій 0 (peek теж не логується) — fallback до scanned_at
+                if (!evts.length && it.scanned_at) {
+                    evts = [{ scanned_at: it.scanned_at, scanned_by: USER_LOGIN, mode: 'intake' }];
+                }
+                var tlHtml = evts.map(function(e, idx) {
+                    var d = new Date(e.scanned_at || '');
+                    var t = isNaN(d.getTime()) ? (e.scanned_at || '')
+                          : d.toLocaleString('uk-UA', { day: '2-digit', month: '2-digit',
+                                hour: '2-digit', minute: '2-digit' });
+                    var who = (e.scanned_by || '?');
+                    var isSelf = (who === USER_LOGIN);
+                    var icon = (e.mode === 'unpack') ? '📥' : (e.mode === 'intake' ? '🆕' : '·');
+                    var whoCls = isSelf ? 'hd-who-self' : 'hd-who-other';
+                    return '<div class="hd-event">' +
+                             icon + ' ' + _escHtml(t) +
+                             ' <span class="' + whoCls + '">' + _escHtml(who) + '</span>' +
+                           '</div>';
+                }).join('');
+
                 return '<div class="hd-card"' + pkgAttr + ' data-ttn="' + _escHtml(it.ttn) + '" ' +
                        'onclick="hdCardClick(this)">' +
                        '<div class="hd-card-row">' +
                          '<div class="hd-card-ttn">' + _escHtml(it.ttn || '—') + '</div>' +
+                         npBadge +
                          '<div class="hd-card-badge ' + it.badge.cls + '">' + _escHtml(it.badge.text) + '</div>' +
                        '</div>' +
                        (it.phone ? '<div class="hd-card-phone">📞 ' + _escHtml(it.phone) + '</div>' : '') +
-                       '<div class="hd-card-meta">' + _escHtml(time) + (it.mode === 'cancelled' ? ' · скасовано на скані' : '') + '</div>' +
+                       '<div class="hd-card-events">' + tlHtml + '</div>' +
                        '</div>';
             }).join('');
             body.innerHTML = html;
