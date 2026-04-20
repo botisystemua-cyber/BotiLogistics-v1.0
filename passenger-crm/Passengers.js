@@ -5749,6 +5749,7 @@ let tmFormCallback = null; // Callback для форми
 let tmCalMonth = new Date().getMonth();
 let tmCalYear = new Date().getFullYear();
 let tmCurrentDate = ''; // DD.MM.YYYY поточного рейсу пасажира (якщо вже призначений)
+let tmCurrentBound = false; // true = прив'язаний (CAL_ID), false = тільки дата виїзду
 let tmCurrentBadgeText = ''; // Текст бейджа (перше ім'я або "N чол.")
 let tmCurrentFullName = '';  // Повний ПІБ для tooltip
 
@@ -5774,34 +5775,46 @@ function getCurrentBadgeInfo(paxIds) {
 // уже прив'язаний до рейсу. Використовується щоб відкрити календар на тому
 // місяці й підсвітити відповідну клітинку.
 function getCurrentTripDateForPax(paxIds) {
-    if (!paxIds || paxIds.length !== 1) return '';
+    if (!paxIds || paxIds.length !== 1) return { date: '', bound: false };
     var id = paxIds[0];
-    if (id === '__form__') return '';
+    if (id === '__form__') return { date: '', bound: false };
     var p = passengers.find(function(x) { return x['PAX_ID'] === id; });
-    if (!p) return '';
+    if (!p) return { date: '', bound: false };
     // Пріоритет — реально прив'язаний рейс (CAL_ID)
     if (p['CAL_ID']) {
         var trip = trips.find(function(t) { return t.cal_id === p['CAL_ID']; });
-        if (trip) return formatTripDate(trip.date);
+        if (trip) {
+            var td = formatTripDate(trip.date);
+            if (td && td !== '—') return { date: td, bound: true };
+        }
     }
-    // Fallback — дата виїзду (клієнт її вказує завжди)
+    // Fallback — дата виїзду (клієнт її вказує завжди, але прив'язки нема)
     if (p['Дата виїзду']) {
         var fd = formatTripDate(p['Дата виїзду']);
-        if (fd && fd !== '—') return fd;
+        if (fd && fd !== '—') return { date: fd, bound: false };
     }
-    return '';
+    return { date: '', bound: false };
 }
 
-// Форматування дати: ISO/будь-який → "dd.MM"
+// Форматування дати: ISO/будь-який → "dd.MM.YYYY"
+// Для ISO з часовим поясом (напр. "2026-03-04T23:00:00Z" → у Києві вже 05.03) —
+// використовуємо локальну дату через Date. Інакше гола YYYY-MM-DD → як є.
 function formatTripDate(raw) {
     if (!raw) return '—';
     var s = String(raw);
-    // ISO формат "2026-03-04T08:00:00.000Z" → "04.03.2026"
-    if (s.includes('T')) s = s.split('T')[0];
-    // "2026-03-04" → "04.03.2026"
+    // Гола дата без часу — парсити як локальну, щоб уникнути UTC-зсуву
     if (s.match(/^\d{4}-\d{2}-\d{2}$/)) {
         var p = s.split('-');
         return p[2] + '.' + p[1] + '.' + p[0];
+    }
+    // ISO з часом — використовуємо локальний timezone
+    if (s.includes('T')) {
+        var d = new Date(s);
+        if (!isNaN(d)) {
+            var dd = String(d.getDate()).padStart(2, '0');
+            var mm = String(d.getMonth() + 1).padStart(2, '0');
+            return dd + '.' + mm + '.' + d.getFullYear();
+        }
     }
     return s;
 }
@@ -5904,11 +5917,13 @@ function openTripModal(paxIds, mode, callback) {
 
     // Показуємо крок 1 — дати
     renderTripModalStep1();
+    bindTmCalendarTouch();
     overlay.classList.add('show');
 }
 
 function closeTripModal() {
     document.getElementById('tripAssignOverlay').classList.remove('show');
+    hideTmDayPopup();
     // Видаляємо фейкового пасажира __form__ (якщо був створений з форми додавання)
     passengers = passengers.filter(p => p['PAX_ID'] !== '__form__');
     tmPaxIds = [];
@@ -5935,7 +5950,9 @@ function renderTripModalStep1() {
     // Стартовий місяць:
     //   1) Якщо у пасажира вже є рейс — відкриваємо календар на місяці того рейсу.
     //   2) Інакше — місяць найближчого майбутнього рейсу серед доступних.
-    tmCurrentDate = getCurrentTripDateForPax(tmPaxIds);
+    var curInfo = getCurrentTripDateForPax(tmPaxIds);
+    tmCurrentDate = curInfo.date;
+    tmCurrentBound = curInfo.bound;
     var badgeInfo = getCurrentBadgeInfo(tmPaxIds);
     tmCurrentBadgeText = badgeInfo.badge;
     tmCurrentFullName = badgeInfo.full;
@@ -6041,12 +6058,92 @@ function renderTripModalCalendar() {
         '<div id="tmVehiclesWrap"></div>';
 }
 
+// Показ попапа з деталями дня (мобільний long-press, або клік по "повній" клітинці)
+function showTmDayInfo(key, anchorEl) {
+    var btn = anchorEl || document.querySelector('.tm-cal-wrap .tcal-day[data-key="' + key + '"]');
+    if (!btn) return;
+    var text = btn.getAttribute('title') || '';
+    if (!text) return;
+    var pop = document.getElementById('tmDayPopup');
+    if (!pop) {
+        pop = document.createElement('div');
+        pop.id = 'tmDayPopup';
+        pop.className = 'tm-day-popup';
+        document.body.appendChild(pop);
+    }
+    pop.textContent = text;
+    pop.style.display = 'block';
+    var r = btn.getBoundingClientRect();
+    // Попередньо вимірюємо розмір і позиціонуємо під клітинкою, не виходячи за край вʼюпорта
+    var pw = pop.offsetWidth;
+    var ph = pop.offsetHeight;
+    var top = r.bottom + 6;
+    if (top + ph > window.innerHeight - 8) top = Math.max(8, r.top - ph - 6);
+    var left = Math.max(8, Math.min(window.innerWidth - pw - 8, r.left + r.width / 2 - pw / 2));
+    pop.style.top = top + 'px';
+    pop.style.left = left + 'px';
+}
+
+function hideTmDayPopup() {
+    var pop = document.getElementById('tmDayPopup');
+    if (pop) pop.style.display = 'none';
+}
+
+// Глобальні слухачі — вішаються один раз
+var _tmTouchBound = false;
+function bindTmCalendarTouch() {
+    if (_tmTouchBound) return;
+    _tmTouchBound = true;
+    var tmLpTimer = null;
+    var tmLpFired = false;
+    document.addEventListener('touchstart', function(e) {
+        var btn = e.target.closest && e.target.closest('.tm-cal-wrap .tcal-day[title]');
+        if (!btn) return;
+        tmLpFired = false;
+        tmLpTimer = setTimeout(function() {
+            tmLpFired = true;
+            showTmDayInfo(btn.getAttribute('data-key'), btn);
+            tmLpTimer = null;
+        }, 450);
+    }, { passive: true });
+    document.addEventListener('touchend', function(e) {
+        if (tmLpTimer) { clearTimeout(tmLpTimer); tmLpTimer = null; }
+        if (tmLpFired) {
+            // Підавляємо "фантомний" клік після long-press
+            e.preventDefault && e.preventDefault();
+            tmLpFired = false;
+        }
+    });
+    document.addEventListener('touchmove', function() {
+        if (tmLpTimer) { clearTimeout(tmLpTimer); tmLpTimer = null; }
+    }, { passive: true });
+    // Клік поза попапом — закриваємо
+    document.addEventListener('click', function(e) {
+        var pop = document.getElementById('tmDayPopup');
+        if (!pop || pop.style.display === 'none') return;
+        if (e.target === pop || (e.target.closest && e.target.closest('.tm-cal-wrap .tcal-day'))) return;
+        hideTmDayPopup();
+    });
+}
+
 function renderTmCalDay(d, key, info, otherMonth, isToday, selectedKey) {
     var hasTrip = !!info;
     var isSelected = key === selectedKey;
     var isCurrent = !!tmCurrentDate && key === tmCurrentDate;
     var free = info ? (info.maxSeats - info.pax) : 0;
-    var isFull = !!(info && !info.overbooked && info.maxSeats > 0 && free <= 0);
+
+    // Підрахунок повністю заповнених рейсів (не перебір) серед усіх рейсів дати
+    var fullCount = 0;
+    if (info && info.trips) {
+        info.trips.forEach(function(t) {
+            var occ = parseInt(t.occupied) || 0;
+            var max = parseInt(t.max_seats) || 0;
+            if (max > 0 && occ >= max && occ <= max) fullCount++;
+        });
+    }
+    var totalCount = info ? info.count : 0;
+    var isFull = !!(info && !info.overbooked && totalCount > 0 && fullCount === totalCount);
+    var isPartial = !!(info && !info.overbooked && !isFull && fullCount > 0 && fullCount < totalCount);
 
     var cls = 'tcal-day';
     if (otherMonth) cls += ' other-month';
@@ -6054,8 +6151,11 @@ function renderTmCalDay(d, key, info, otherMonth, isToday, selectedKey) {
     if (hasTrip) cls += ' has-trip';
     if (isSelected) cls += ' selected';
     if (isCurrent) cls += ' tm-current';
+    if (isCurrent && tmCurrentBound) cls += ' tm-bound';
+    else if (isCurrent) cls += ' tm-soft';
     if (info && info.overbooked) cls += ' overbooked';
     if (isFull) cls += ' full';
+    if (isPartial) cls += ' partial';
     if (info) {
         if (info.uaeu > 0 && info.euua > 0) cls += ' dir-both';
         else if (info.uaeu > 0) cls += ' dir-ua-eu';
@@ -6073,30 +6173,41 @@ function renderTmCalDay(d, key, info, otherMonth, isToday, selectedKey) {
         seatsHtml = '<div class="' + seatCls + '">' + seatTxt + '</div>';
     }
 
+    // Частково повні — маркер у лівому нижньому куті
+    var partialHtml = isPartial ? '<div class="tcal-partial" title="Частина рейсів заповнена">' + fullCount + '/' + totalCount + '</div>' : '';
+
     // Tooltip
     var titleLines = [];
-    if (isCurrent && tmCurrentFullName) titleLines.push('👤 ' + tmCurrentFullName);
+    if (isCurrent && tmCurrentFullName) {
+        titleLines.push('👤 ' + tmCurrentFullName + (tmCurrentBound ? ' · прив\'язаний' : ' · лише дата виїзду'));
+    }
     if (info && info.trips && info.trips.length) {
         info.trips.forEach(function(t) {
             var dir = getTripDirection(t) === 'ua-eu' ? 'UA→EU' : 'EU→UA';
             var freeT = parseInt(t.free_seats) || 0;
             var maxT = parseInt(t.max_seats) || 0;
             var occT = parseInt(t.occupied) || 0;
-            var seat = (occT > maxT && maxT > 0) ? ('перебір +' + (occT - maxT)) : (freeT + '/' + maxT);
+            var seat = (occT > maxT && maxT > 0) ? ('перебір +' + (occT - maxT))
+                     : (occT >= maxT && maxT > 0) ? 'повний'
+                     : (freeT + '/' + maxT);
             titleLines.push(dir + ' · ' + (t.auto_name || 'Авто') + ' · ' + (t.city || '—') + ' · ' + seat);
         });
     } else if (isCurrent) {
-        titleLines.push('Поточна дата виїзду');
+        titleLines.push('Поточна дата виїзду (рейсів на цей день немає)');
     }
     var titleAttr = titleLines.length ? ' title="' + tmEsc(titleLines.join('\n')) + '"' : '';
 
     var currentBadge = isCurrent && tmCurrentBadgeText
-        ? '<span class="tm-current-badge">' + tmEsc(tmCurrentBadgeText) + '</span>'
+        ? '<span class="tm-current-badge">' + (tmCurrentBound ? '✓' : '') + tmEsc(tmCurrentBadgeText) + '</span>'
         : '';
-    var onclick = hasTrip ? ' onclick="selectTripDate(\'' + key + '\')"' : '';
+    // Повний день → клік показує деталі (а не selectTripDate, який призведе до "немає вільних")
+    var onclick = '';
+    if (hasTrip && !isFull) onclick = ' onclick="selectTripDate(\'' + key + '\')"';
+    else if (isFull) onclick = ' onclick="showTmDayInfo(\'' + key + '\', this)"';
     return '<button class="' + cls + '" data-key="' + key + '"' + onclick + titleAttr + '>' +
         currentBadge +
         '<span class="tcal-day-num">' + d + '</span>' +
+        partialHtml +
         seatsHtml +
     '</button>';
 }
@@ -6132,10 +6243,7 @@ function selectTripDate(dateFormatted) {
         return formatTripDate(t.date) === dateFormatted;
     });
 
-    // Оновлюємо вибір дати (календар + legacy pills)
-    document.querySelectorAll('#tmBody .tm-date-pill').forEach(function(el) { el.classList.remove('active'); });
-    var activeEl = document.getElementById('tm-date-' + dateFormatted.replace(/\./g,'-'));
-    if (activeEl) activeEl.classList.add('active');
+    // Оновлюємо вибір дати (перемикаємо .selected на клітинці календаря)
     document.querySelectorAll('#tmBody .tcal-day.selected').forEach(function(el) { el.classList.remove('selected'); });
     var calEl = document.querySelector('#tmBody .tcal-day[data-key="' + dateFormatted + '"]');
     if (calEl) calEl.classList.add('selected');
