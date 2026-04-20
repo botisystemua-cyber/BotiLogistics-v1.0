@@ -2,6 +2,23 @@
 
 Universal logistics CRM system for passenger and cargo transportation (UA <-> EU).
 
+## Glossary (НЕ плутати! Це чотири окремі сутності та чотири окремих меню)
+
+Ліве меню passenger-crm містить **чотири РІЗНІ розділи**:
+
+1. **👥 Пасажири** — ліди/бронювання. БД: `passengers` (PAX_ID). Код: `passengersView`.
+2. **📅 Календар** — віджет з датами рейсів (візуалізація дат). Код: лівий віджет `tcal-*`.
+3. **🚐 Рейси** — конкретні виїзди (авто + дата + водій + пасажири). БД: `calendar`
+   (CAL_ID). Масив у коді: `trips[]`. View: `tripsView`, функція: `showTripsView()`.
+   **Мають дати.** Модалка «Призначити рейс» працює саме з цим.
+4. **🗺️ Маршрути** — шаблони напрямків (напр. «UA-EU листопад»). БД: `routes`
+   (RTE_ID) + Google Sheets (legacy). Масив: `routes[]`. View: `routesView`.
+   **НЕ мають дат, це шаблони.**
+
+**Типова помилка**: у коді `routes[]` означає маршрути, а `trips[]` — рейси.
+Не перепутай за назвами функцій: `showRoutesView` ≠ `showTripsView`,
+`loadRoutes` ≠ `loadTrips`, `pcRoutesList` ≠ `pcCountTrips`.
+
 ## Architecture
 
 ```

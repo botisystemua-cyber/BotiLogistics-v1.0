@@ -704,6 +704,22 @@ body.route-sort-active #rteTogglePay {
 .tcal-legend-dot { width: 8px; height: 8px; border-radius: 50%; }
 
 .trips-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 14px; }
+.trips-dashboard { margin-bottom: 18px; border: 1px solid var(--border); border-radius: 12px; background: linear-gradient(180deg, #fefce8 0%, #ffffff 60%); }
+.trips-dashboard:empty { display: none; }
+.trips-dash-header { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; cursor: pointer; user-select: none; border-bottom: 1px solid var(--border); }
+.trips-dash-header:hover { background: rgba(0,0,0,0.02); }
+.trips-dash-title { font-size: 13px; font-weight: 800; color: var(--text-primary); letter-spacing: 0.3px; }
+.trips-dash-count { display: inline-block; margin-left: 6px; padding: 1px 7px; background: #d97706; color: white; border-radius: 10px; font-size: 10px; font-weight: 800; }
+.trips-dash-toggle { font-size: 12px; color: var(--text-secondary); }
+.trips-dash-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 14px; padding: 14px; transition: max-height 0.2s ease; }
+.trips-dashboard.collapsed .trips-dash-grid { display: none; }
+.trips-dashboard.collapsed { background: #fefce8; }
+.trips-dash-slot { display: flex; flex-direction: column; gap: 4px; }
+.trips-dash-slot-label { font-size: 10px; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; padding: 2px 8px; border-radius: 6px; align-self: flex-start; }
+.trips-dash-slot-label.slot-past { color: #6b7280; background: #f3f4f6; }
+.trips-dash-slot-label.slot-today { color: white; background: #dc2626; animation: pulse-today 2s ease-in-out infinite; }
+.trips-dash-slot-label.slot-upcoming { color: #065f46; background: #d1fae5; }
+@keyframes pulse-today { 0%, 100% { opacity: 1; } 50% { opacity: 0.75; } }
 .trip-card { background: white; border-radius: 14px; box-shadow: var(--shadow); overflow: hidden; border-left: 5px solid var(--orange); transition: all 0.2s; }
 .trip-card.trip-dir-ua-eu { border-left-color: #2563eb; }
 .trip-card.trip-dir-eu-ua { border-left-color: #059669; }
