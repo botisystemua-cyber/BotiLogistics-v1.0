@@ -1827,6 +1827,7 @@
                     }
                     var newPkg = r.pkg_id || null;
                     var pendingCount = count > 1 ? count : null;
+                    console.log('[scan_ttn] OK, pkg_id=', newPkg, 'type=', r.type, 'ttn=', ttn, 'tenant=', TENANT_ID);
 
                     // Якщо треба задати кількість — PATCH item_count
                     var countPromise = Promise.resolve(true);
@@ -1842,27 +1843,34 @@
                                 Prefer: 'return=minimal'
                             },
                             body: JSON.stringify({ item_count: pendingCount })
-                        }).then(function(pr) { return pr.ok; });
+                        }).then(function(pr) {
+                            console.log('[PATCH item_count]', pendingCount, 'ok=', pr.ok, 'status=', pr.status);
+                            return pr.ok;
+                        });
                     }
 
                     countPromise.then(function() {
-                        // ── Верифікація: перевіряємо що лід дійсно створився ──
+                        // ── Верифікація: читаємо рядок за pkg_id (а не ttn) ──
+                        // Так ми оминаємо можливі розбіжності через btrim/пробіли
+                        // у ttn, або зміну ttn з боку тригерів.
+                        if (!newPkg) return [];
                         return fetch(SUPABASE_URL + '/rest/v1/packages' +
                                   '?tenant_id=eq.' + encodeURIComponent(TENANT_ID) +
-                                  '&ttn_number=eq.' + encodeURIComponent(ttn) +
-                                  '&is_archived=eq.false&select=pkg_id,lead_status,item_count', {
+                                  '&pkg_id=eq.' + encodeURIComponent(newPkg) +
+                                  '&select=pkg_id,ttn_number,lead_status,item_count,is_archived', {
                             headers: {
                                 apikey: SUPABASE_ANON_KEY,
                                 Authorization: 'Bearer ' + SUPABASE_ANON_KEY
                             }
                         }).then(function(r) { return r.json(); });
                     }).then(function(rows) {
+                        console.log('[verify] rows=', rows);
                         var row = Array.isArray(rows) && rows[0];
                         if (!row || !row.pkg_id) {
                             showToast({ variant: 'error', icon: '⚠️',
                                         label: 'Лід не знайдено після збереження',
-                                        value: ttn, status: 'Перевір консоль або спробуй ще раз' });
-                            setTimeout(function(){ document.getElementById('resultToast').classList.remove('show'); }, 3500);
+                                        value: ttn, status: 'pkg=' + (newPkg || '?') + ' · tenant=' + (TENANT_ID || '?') });
+                            setTimeout(function(){ document.getElementById('resultToast').classList.remove('show'); }, 4500);
                         } else {
                             lastScannedPkgId = row.pkg_id;
                             lastScannedTtn   = ttn;
