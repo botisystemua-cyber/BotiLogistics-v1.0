@@ -907,6 +907,33 @@
         .inl-btn-cancel { background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.18); }
         .inl-btn-save { background: linear-gradient(180deg,#10b981,#059669); color: #fff; box-shadow: 0 4px 10px rgba(16,185,129,0.35); }
 
+        /* Timeline розпаковок (коли np_places > 1) */
+        .inl-timeline {
+            background: rgba(251,191,36,0.08);
+            border: 1px solid rgba(251,191,36,0.2);
+            border-radius: 10px;
+            padding: 10px 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .inl-timeline-title {
+            color: #fbbf24;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .inl-timeline-item {
+            color: rgba(255,255,255,0.85);
+            font-size: 13px;
+        }
+        .inl-timeline-time {
+            color: rgba(255,255,255,0.55);
+            font-size: 11px;
+            margin-left: 6px;
+        }
+
         /* ==== FIELDS CHOOSER (C7/3) ==== */
         .fc-overlay {
             position: fixed; inset: 0;
@@ -1150,7 +1177,7 @@
                 <button type="button" class="cam-stepper-btn" onclick="stepperChange(-1)">−</button>
                 <div class="cam-stepper-val" id="camStepperVal">1</div>
                 <button type="button" class="cam-stepper-btn" onclick="stepperChange(1)">+</button>
-                <span class="cam-stepper-label">📦 коробок</span>
+                <span class="cam-stepper-label">📥 Місць НП</span>
             </div>
             <div class="cam-actions">
                 <button type="button" class="cam-btn cam-btn-cancel" onclick="checkActionCancel()">❌ Скасувати</button>
@@ -1512,6 +1539,7 @@
                     mode: 'check',
                     pkg_id: r.pkg_id,
                     item_count: r.item_count,
+                    np_places: r.np_places,
                     payment_status: r.payment_status,
                     payment_currency: r.payment_currency,
                     total_amount: r.total_amount,
@@ -1585,10 +1613,11 @@
             // Редірект у CRM не відбувається ні в якому випадку.
             if (res && res.ok && res.pkg_id) {
                 // C7/5: дубль у сесії = друга коробка тієї ж накладної →
-                // лог 'unpack' + авто +1 до item_count, без action-menu.
+                // лог 'unpack' + авто +1 до np_places (кількість фізичних
+                // коробок з тим же ТТН), без action-menu.
                 var prev = _sessionScans[ttn] || 0;
                 if (prev >= 1) {
-                    handleDuplicateUnpack(ttn, res.pkg_id, res.item_count);
+                    handleDuplicateUnpack(ttn, res.pkg_id, res.np_places);
                     _sessionScans[ttn] = prev + 1;
                     return;
                 }
@@ -1597,7 +1626,7 @@
                     showCheckActionMenu({
                         ttn: ttn,
                         pkg_id: res.pkg_id,
-                        count: Math.max(1, parseInt(res.item_count, 10) || 1),
+                        count: Math.max(1, parseInt(res.np_places, 10) || 1),
                         isUnknown: false
                     });
                 }, 600);
@@ -1621,11 +1650,11 @@
         //   • PATCH packages.item_count = item_count + 1 (оптимістично)
         //   • Toast «Другий знайшовся (коробка #N)»
         //   • НЕ показуємо action-menu — одразу resume, щоб не гальмувати
-        function handleDuplicateUnpack(ttn, pkgId, prevItemCount) {
+        function handleDuplicateUnpack(ttn, pkgId, prevNpPlaces) {
             if (!TENANT_ID || !pkgId) return;
             var currentBox = (_sessionScans[ttn] || 0) + 1;
 
-            // 1) лог (fire-and-forget)
+            // 1) лог (fire-and-forget) — окрема мітка часу кожної розпаковки
             fetch(SUPABASE_URL + '/rest/v1/package_scan_log', {
                 method: 'POST',
                 headers: {
@@ -1647,9 +1676,8 @@
                 })
             }).catch(function(){});
 
-            // 2) item_count += 1 (оптимістично; якщо item_count в БД було null,
-            //    рахуємо від сесійної позиції)
-            var nextCount = Math.max(currentBox, (parseInt(prevItemCount, 10) || 0) + 1);
+            // 2) np_places += 1 (кількість фізичних коробок з цим ТТН)
+            var nextCount = Math.max(currentBox, (parseInt(prevNpPlaces, 10) || 0) + 1);
             fetch(SUPABASE_URL + '/rest/v1/packages' +
                   '?tenant_id=eq.' + encodeURIComponent(TENANT_ID) +
                   '&pkg_id=eq.' + encodeURIComponent(pkgId), {
@@ -1660,7 +1688,7 @@
                     'Content-Type': 'application/json',
                     Prefer: 'return=minimal'
                 },
-                body: JSON.stringify({ item_count: nextCount })
+                body: JSON.stringify({ np_places: nextCount })
             }).catch(function(){});
 
             // 3) toast + авто-resume
@@ -1669,7 +1697,7 @@
                 icon: '🎯',
                 label: 'Другий знайшовся!',
                 value: ttn,
-                status: 'Коробка #' + currentBox + ' · item_count=' + nextCount
+                status: 'Коробка #' + currentBox + ' · Місць НП: ' + nextCount
             });
             setTimeout(function() {
                 document.getElementById('resultToast').classList.remove('show');
@@ -1724,8 +1752,9 @@
             _camState.count = next;
             document.getElementById('camStepperVal').textContent = next;
 
-            // Для відомого pkg — миттєво пишемо в БД. Для невідомого (pkg=null)
-            // тримаємо локально, збережеться коли оператор натисне «Зберегти».
+            // Stepper керує np_places — кількістю фізичних коробок з тим же ТТН
+            // (item_count = скільки речей всередині, цим керує оператор у
+            // редакторі; змішувати ці два поля не треба).
             if (_camState.pkg_id && TENANT_ID) {
                 var url = SUPABASE_URL + '/rest/v1/packages' +
                           '?tenant_id=eq.' + encodeURIComponent(TENANT_ID) +
@@ -1738,7 +1767,7 @@
                         'Content-Type': 'application/json',
                         Prefer: 'return=minimal'
                     },
-                    body: JSON.stringify({ item_count: next })
+                    body: JSON.stringify({ np_places: next })
                 }).catch(function(){});
             }
         }
@@ -1829,7 +1858,7 @@
                     var pendingCount = count > 1 ? count : null;
                     console.log('[scan_ttn] OK, pkg_id=', newPkg, 'type=', r.type, 'ttn=', ttn, 'tenant=', TENANT_ID);
 
-                    // Якщо треба задати кількість — PATCH item_count
+                    // Якщо треба задати кількість місць НП — PATCH np_places
                     var countPromise = Promise.resolve(true);
                     if (newPkg && pendingCount) {
                         countPromise = fetch(SUPABASE_URL + '/rest/v1/packages' +
@@ -1842,9 +1871,9 @@
                                 'Content-Type': 'application/json',
                                 Prefer: 'return=minimal'
                             },
-                            body: JSON.stringify({ item_count: pendingCount })
+                            body: JSON.stringify({ np_places: pendingCount })
                         }).then(function(pr) {
-                            console.log('[PATCH item_count]', pendingCount, 'ok=', pr.ok, 'status=', pr.status);
+                            console.log('[PATCH np_places]', pendingCount, 'ok=', pr.ok, 'status=', pr.status);
                             return pr.ok;
                         });
                     }
@@ -1857,7 +1886,7 @@
                         return fetch(SUPABASE_URL + '/rest/v1/packages' +
                                   '?tenant_id=eq.' + encodeURIComponent(TENANT_ID) +
                                   '&pkg_id=eq.' + encodeURIComponent(newPkg) +
-                                  '&select=pkg_id,ttn_number,lead_status,item_count,is_archived', {
+                                  '&select=pkg_id,ttn_number,lead_status,np_places,is_archived', {
                             headers: {
                                 apikey: SUPABASE_ANON_KEY,
                                 Authorization: 'Bearer ' + SUPABASE_ANON_KEY
@@ -1879,7 +1908,7 @@
                             _sessionScans[ttn] = (_sessionScans[ttn] || 0) + 1;
                             showToast({ variant: 'success', icon: '✅',
                                         label: 'Збережено як Невідомий',
-                                        value: ttn, status: row.pkg_id + ' · к-сть: ' + (row.item_count || 1) });
+                                        value: ttn, status: row.pkg_id + ' · Місць НП: ' + (row.np_places || 1) });
                             setTimeout(function(){ document.getElementById('resultToast').classList.remove('show'); }, 2200);
                             // Якщо історія відкрита — перезавантажуємо список
                             if (document.getElementById('hdOverlay').classList.contains('open')) {
@@ -1973,7 +2002,8 @@
             { col: 'internal_number',    label: 'Внутрішній №',         type: 'text',     category: '📦 Посилка', defaultOn: true },
             { col: 'description',        label: 'Опис',                 type: 'textarea', category: '📦 Посилка', defaultOn: true },
             { col: 'details',            label: 'Деталі',               type: 'textarea', category: '📦 Посилка' },
-            { col: 'item_count',         label: 'Кількість',            type: 'int',      category: '📦 Посилка', defaultOn: true },
+            { col: 'item_count',         label: 'Кількість позицій',    type: 'int',      category: '📦 Посилка', defaultOn: true },
+            { col: 'np_places',          label: 'Місць НП',             type: 'int',      category: '📦 Посилка', defaultOn: true },
             { col: 'weight_kg',          label: 'Вага, кг',             type: 'float',    category: '📦 Посилка', defaultOn: true },
             { col: 'estimated_value',    label: 'Оціночна вартість',    type: 'float',    category: '📦 Посилка' },
             { col: 'ttn_date',           label: 'Дата створення ТТН',   type: 'date',     category: '📦 Посилка' },
@@ -2078,8 +2108,8 @@
 
         function renderInlineFields() {
             var body = document.getElementById('inlBody');
-            // Видаляємо всі попередні .inl-row (hidden pkgId input лишається)
-            Array.prototype.slice.call(body.querySelectorAll('.inl-row, .inl-grid2'))
+            // Видаляємо всі попередні .inl-row/.inl-timeline (hidden pkgId input лишається)
+            Array.prototype.slice.call(body.querySelectorAll('.inl-row, .inl-grid2, .inl-timeline'))
                  .forEach(function(n) { n.remove(); });
 
             var activeCols = getActiveFieldCols();
@@ -2088,6 +2118,55 @@
                 if (activeCols.indexOf(f.col) === -1) return;
                 body.appendChild(_buildFieldElement(f));
             });
+        }
+
+        function _renderInlineTimeline(pkgId, npPlaces) {
+            // Показує історію скан-подій цього pkg (intake + unpack події)
+            // коли np_places > 1. Тягне з package_scan_log по pkg_id.
+            var body = document.getElementById('inlBody');
+            // Прибираємо попередній timeline якщо був
+            var old = body.querySelector('.inl-timeline');
+            if (old) old.remove();
+
+            if (!pkgId || !TENANT_ID || !(parseInt(npPlaces, 10) > 1)) return;
+
+            var url = SUPABASE_URL + '/rest/v1/package_scan_log' +
+                      '?tenant_id=eq.' + encodeURIComponent(TENANT_ID) +
+                      '&pkg_id=eq.' + encodeURIComponent(pkgId) +
+                      '&mode=in.(intake,unpack)' +
+                      '&order=scanned_at.asc&limit=50' +
+                      '&select=scanned_at,scanned_by,mode,outcome';
+            fetch(url, {
+                headers: {
+                    apikey: SUPABASE_ANON_KEY,
+                    Authorization: 'Bearer ' + SUPABASE_ANON_KEY
+                }
+            }).then(function(r) { return r.json(); })
+              .then(function(rows) {
+                if (!Array.isArray(rows) || !rows.length) return;
+                var block = document.createElement('div');
+                block.className = 'inl-timeline';
+                var title = document.createElement('div');
+                title.className = 'inl-timeline-title';
+                title.textContent = '📥 Розпаковки (' + rows.length + ')';
+                block.appendChild(title);
+                rows.forEach(function(r, i) {
+                    var d = new Date(r.scanned_at);
+                    var time = isNaN(d.getTime()) ? r.scanned_at :
+                        d.toLocaleString('uk-UA', { day: '2-digit', month: '2-digit',
+                            hour: '2-digit', minute: '2-digit' });
+                    var item = document.createElement('div');
+                    item.className = 'inl-timeline-item';
+                    var label = (i === 0 ? '1-а (перша)' : (i+1) + '-а');
+                    item.innerHTML = '• ' + label + ' ' + _escHtml(r.scanned_by || '?') +
+                                     '<span class="inl-timeline-time">' + _escHtml(time) + '</span>';
+                    block.appendChild(item);
+                });
+                // Вставляємо timeline на самий верх (перед першим .inl-row)
+                var firstRow = body.querySelector('.inl-row');
+                if (firstRow) body.insertBefore(block, firstRow);
+                else body.appendChild(block);
+              }).catch(function(){});
         }
 
         function openInlineEditor(pkgId, ttn) {
@@ -2126,6 +2205,9 @@
                         parent.classList.toggle('has-value', hasVal);
                     }
                 });
+
+                // Timeline розпаковок (якщо np_places > 1)
+                _renderInlineTimeline(pkgId, row.np_places);
 
                 document.getElementById('checkActionMenu').classList.remove('show');
                 document.getElementById('inlOverlay').classList.add('open');
