@@ -2178,11 +2178,16 @@
             renderInlineFields();
             var activeCols = getActiveFieldCols();
 
-            // Підтягуємо свіжий рядок з БД — лише активні колонки
+            // Підтягуємо свіжий рядок з БД — активні колонки + завжди
+            // lead_status і np_places (для авто-переходу при збереженні і
+            // для timeline розпаковок).
+            var selCols = activeCols.slice();
+            if (selCols.indexOf('lead_status') === -1) selCols.push('lead_status');
+            if (selCols.indexOf('np_places')   === -1) selCols.push('np_places');
             var url = SUPABASE_URL + '/rest/v1/packages' +
                       '?tenant_id=eq.' + encodeURIComponent(TENANT_ID) +
                       '&pkg_id=eq.' + encodeURIComponent(pkgId) +
-                      '&select=' + encodeURIComponent(activeCols.join(','));
+                      '&select=' + encodeURIComponent(selCols.join(','));
             fetch(url, {
                 headers: {
                     apikey: SUPABASE_ANON_KEY,
@@ -2278,6 +2283,16 @@
             });
 
             diff.scan_status = 'checked';
+
+            // Якщо був «Невідомий» — знімаємо цей прапорець автоматично,
+            // щоб лід не висів у «Невідомі» ТА «В перевірці» одночасно.
+            // Зберігач ТТН зі сканера вже пройшов хоча б мінімальне
+            // заповнення → переводимо в «Готова» (lead_status) + «В перевірці»
+            // (через scan_status='checked').
+            var wasUnknown = (_inlSnapshot && (_inlSnapshot.lead_status || '').toString()) === 'unknown';
+            if (wasUnknown) {
+                diff.lead_status = 'ready';
+            }
 
             var btn = document.getElementById('inlSaveBtn');
             btn.disabled = true;
