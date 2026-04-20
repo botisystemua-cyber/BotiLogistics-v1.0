@@ -1085,30 +1085,13 @@
 </head>
 <body>
 
-    <!-- START SCREEN: mode + direction setup, then camera -->
+    <!-- START SCREEN: лише «Перевіряти» (scan-режим прибрано) -->
     <div class="start-screen" id="startScreen">
         <div class="start-logo">📷</div>
         <div class="start-title">Сканер ТТН</div>
-        <div class="start-subtitle">Оберіть режим і напрям, потім запустіть камеру</div>
+        <div class="start-subtitle">Режим «Перевіряти» · напрям Україна → Європа</div>
 
-        <!-- MODE picker -->
-        <div style="width:100%;max-width:360px;margin-bottom:18px;">
-            <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.55);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;text-align:left;">Режим</div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-                <button class="mode-btn" data-mode="scan" onclick="setMode('scan')">
-                    <div style="font-size:22px;">🔍</div>
-                    <div style="font-size:12px;font-weight:700;margin-top:2px;">Сканувати</div>
-                </button>
-                <button class="mode-btn" data-mode="check" onclick="setMode('check')">
-                    <div style="font-size:22px;">✓</div>
-                    <div style="font-size:12px;font-weight:700;margin-top:2px;">Перевіряти</div>
-                </button>
-            </div>
-        </div>
-
-        <!-- Напрям видалено — нові пакети завжди UA_EU (Україна-ЄВ). -->
-
-        <button class="start-btn" id="startCameraBtn" onclick="startScan()" disabled>▶ Увімкнути камеру</button>
+        <button class="start-btn" id="startCameraBtn" onclick="startScan()">▶ Увімкнути камеру</button>
         <button onclick="goBack()" style="margin-top:16px;padding:12px 32px;background:rgba(255,255,255,0.1);color:rgba(255,255,255,0.7);border:1px solid rgba(255,255,255,0.2);border-radius:12px;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;">← Назад до CRM</button>
     </div>
 
@@ -1343,52 +1326,27 @@
         var lastScannedPkgId = null;
         var lastScannedTtn   = null;
 
-        // Pre-scan setup state.
-        //   'scan'  → mutates DB via scan_ttn RPC (new packages default to UA→EU)
-        //   'check' → read-only peek_ttn
-        var SCAN_MODE = null;
+        // Режим зафіксовано — тільки «Перевіряти» (peek_ttn + action-меню).
+        // Скан-режим (scan_ttn state-machine) прибрано з UX; RPC лишається
+        // у коді бо викликається внутрішньо для «Зберегти» невідомого ТТН.
+        var SCAN_MODE = 'check';
 
-        // New packages always land as UA→EU; product decision (EU→UA parcels
-        // aren't handled at the scan-in stage). Kept as a constant so if we
-        // ever reintroduce the picker, it's one line to wire back.
+        // Новий напрям завжди UA → EU (product decision).
         var DEFAULT_DIRECTION = 'UA_EU';
 
-        // Restore last-used mode from localStorage (user preference, not
-        // session data) so returning users don't re-pick every session.
-        (function restoreSetup() {
-            try {
-                var lastMode = localStorage.getItem('scanner_last_mode');
-                if (lastMode === 'scan' || lastMode === 'check') SCAN_MODE = lastMode;
-            } catch(_) {}
-        })();
-
-        function setMode(m) {
-            if (m !== 'scan' && m !== 'check') return;
-            SCAN_MODE = m;
-            try { localStorage.setItem('scanner_last_mode', m); } catch(_) {}
-            refreshSetupUI();
-        }
         function refreshSetupUI() {
-            document.querySelectorAll('.mode-btn').forEach(function(b) {
-                b.classList.toggle('active', b.getAttribute('data-mode') === SCAN_MODE);
-            });
-
-            document.getElementById('startCameraBtn').disabled = !SCAN_MODE;
-
-            // Pill shown over camera
+            document.getElementById('startCameraBtn').disabled = false;
+            // Pill поверх камери
             var pill = document.getElementById('modePill');
-            pill.textContent = SCAN_MODE === 'scan'  ? '🔍 Сканую'
-                             : SCAN_MODE === 'check' ? '✓ Перевірка' : '—';
+            if (pill) pill.textContent = '✓ Перевірка';
         }
         document.addEventListener('DOMContentLoaded', function() {
             refreshSetupUI();
             // Автопродовження: CRM повертає сюди з ?resume=1 після дії над
-            // сканом. Якщо користувач раніше вже обирав режим (є в localStorage),
-            // пропускаємо стартовий екран і одразу запускаємо камеру — щоб
-            // не треба було знову обирати режим і тиснути «Запустити».
+            // сканом — одразу стартуємо камеру без стартового екрану.
             try {
                 var resume = new URLSearchParams(location.search).get('resume') === '1';
-                if (resume && SCAN_MODE) {
+                if (resume) {
                     setTimeout(function() {
                         try { startScan(); } catch(_) {}
                     }, 120);
@@ -1534,73 +1492,28 @@
                 handleScanResult(ttn, { ok: false, error: 'Сесія не знайдена. Увійдіть в CRM.' });
                 return;
             }
-            if (!SCAN_MODE) {
-                handleScanResult(ttn, { ok: false, error: 'Оберіть режим перед скануванням' });
-                return;
-            }
-
-            if (SCAN_MODE === 'check') {
-                // Read-only peek: no state change, no audit log. Per product
-                // decision, Check mode does not touch package_scan_log.
-                sb.rpc('peek_ttn', {
-                    p_tenant_id: TENANT_ID,
-                    p_ttn: ttn
-                }).then(function(result) {
-                    if (result.error) {
-                        handleScanResult(ttn, { ok: false, mode: 'check', error: result.error.message });
-                        return;
-                    }
-                    var r = result.data || {};
-                    if (!r.ok) {
-                        handleScanResult(ttn, { ok: false, mode: 'check', error: r.error || 'Невідома помилка' });
-                        return;
-                    }
-                    handleScanResult(ttn, {
-                        ok: true,
-                        mode: 'check',
-                        pkg_id: r.pkg_id,
-                        item_count: r.item_count,
-                        payment_status: r.payment_status,
-                        payment_currency: r.payment_currency,
-                        total_amount: r.total_amount,
-                        deposit: r.deposit,
-                        debt: r.debt
-                    });
-                });
-                return;
-            }
-
-            // Scan mode → auto state-machine RPC. Direction is hard-coded to
-            // UA→EU; the picker was removed by product decision (all new
-            // scans on intake belong to the Ukraine→Europe leg).
-            sb.rpc('scan_ttn', {
+            // Єдиний шлях: peek_ttn (read-only). Всі подальші дії —
+            // через action-menu і inline-редактор на сканері.
+            sb.rpc('peek_ttn', {
                 p_tenant_id: TENANT_ID,
-                p_ttn: ttn,
-                p_direction: DEFAULT_DIRECTION,
-                p_user: USER_LOGIN
+                p_ttn: ttn
             }).then(function(result) {
                 if (result.error) {
-                    handleScanResult(ttn, { ok: false, mode: 'scan', error: result.error.message });
+                    handleScanResult(ttn, { ok: false, mode: 'check', error: result.error.message });
                     return;
                 }
                 var r = result.data || {};
                 if (!r.ok) {
-                    handleScanResult(ttn, {
-                        ok: false,
-                        mode: 'scan',
-                        error: (r.error || 'Невідома помилка') +
-                               (r.status ? ' (поточний: ' + (STATUS_LABEL[r.status] || r.status) + ')' : '')
-                    });
+                    handleScanResult(ttn, { ok: false, mode: 'check', error: r.error || 'Невідома помилка' });
                     return;
                 }
                 handleScanResult(ttn, {
                     ok: true,
-                    mode: 'scan',
-                    type: r.type,
+                    mode: 'check',
                     pkg_id: r.pkg_id,
-                    status: r.status,
-                    prev_status: r.prev_status,
+                    item_count: r.item_count,
                     payment_status: r.payment_status,
+                    payment_currency: r.payment_currency,
                     total_amount: r.total_amount,
                     deposit: r.deposit,
                     debt: r.debt
@@ -1647,9 +1560,8 @@
             }
 
             addToHistory(ttn, variant, statusTxt);
-            // В check-режимі mainBtn ховається — замість нього показуємо
-            // checkActionMenu (див. нижче). У scan-режимі — як було.
-            document.getElementById('mainBtn').style.display = (SCAN_MODE === 'check') ? 'none' : 'block';
+            // mainBtn ховаємо — замість нього checkActionMenu (нижче)
+            document.getElementById('mainBtn').style.display = 'none';
             // C7/4: після першого успішного скану — кнопка історії
             document.getElementById('historyDbBtn').style.display = '';
             sessionCounter += 1;
@@ -1669,70 +1581,36 @@
                 document.getElementById('resultToast').classList.remove('show');
             }, 2500);
 
-            // C7/1: У режимі «Перевіряти» НЕ виходимо у CRM — показуємо
-            // action-menu прямо в bottombar (Редагувати/Скасувати/stepper
-            // для знайдених; Зберегти/Скасувати/stepper для невідомих).
-            // Scan-режим лишається як був (C5/C6): редірект для знайдених,
-            // unknown-sheet для нових.
-            if (SCAN_MODE === 'check') {
-                if (res && res.ok && res.pkg_id) {
-                    // C7/5: дубль в одній сесії = друга коробка тієї ж
-                    // накладної → лог 'unpack' + авто +1 до item_count,
-                    // без action-menu, одразу resume.
-                    var prev = _sessionScans[ttn] || 0;
-                    if (prev >= 1) {
-                        handleDuplicateUnpack(ttn, res.pkg_id, res.item_count);
-                        _sessionScans[ttn] = prev + 1;
-                        return;
-                    }
+            // Перевіряти-only: показуємо action-menu прямо в bottombar.
+            // Редірект у CRM не відбувається ні в якому випадку.
+            if (res && res.ok && res.pkg_id) {
+                // C7/5: дубль у сесії = друга коробка тієї ж накладної →
+                // лог 'unpack' + авто +1 до item_count, без action-menu.
+                var prev = _sessionScans[ttn] || 0;
+                if (prev >= 1) {
+                    handleDuplicateUnpack(ttn, res.pkg_id, res.item_count);
                     _sessionScans[ttn] = prev + 1;
-                    setTimeout(function() {
-                        showCheckActionMenu({
-                            ttn: ttn,
-                            pkg_id: res.pkg_id,
-                            count: Math.max(1, parseInt(res.item_count, 10) || 1),
-                            isUnknown: false
-                        });
-                    }, 600);
-                } else if (res && !res.ok && typeof res.error === 'string' && /не знайдено/i.test(res.error)) {
-                    // Невідомий у перевірці — меню Зберегти
-                    setTimeout(function() {
-                        showCheckActionMenu({
-                            ttn: ttn,
-                            pkg_id: null,
-                            count: 1,
-                            isUnknown: true
-                        });
-                    }, 600);
+                    return;
                 }
-                return;
-            }
-
-            // Scan-mode (не чіпаємо): знайдений → CRM, новий → unknown-sheet.
-            var shouldRedirect = false;
-            var asUnknown = false;
-            var pkgForUnknown = null;
-            if (res && res.ok) {
-                if (res.type === 'new') {
-                    asUnknown = true;
-                    pkgForUnknown = res.pkg_id || null;
-                } else {
-                    shouldRedirect = (res.type === 'found' || res.type === 'already');
-                }
+                _sessionScans[ttn] = prev + 1;
+                setTimeout(function() {
+                    showCheckActionMenu({
+                        ttn: ttn,
+                        pkg_id: res.pkg_id,
+                        count: Math.max(1, parseInt(res.item_count, 10) || 1),
+                        isUnknown: false
+                    });
+                }, 600);
             } else if (res && !res.ok && typeof res.error === 'string' && /не знайдено/i.test(res.error)) {
-                asUnknown = true;
-                pkgForUnknown = null;
-            }
-            if (shouldRedirect) {
+                // Невідомий ТТН — меню Зберегти/Скасувати
                 setTimeout(function() {
-                    var url = 'index.html?scan=' + encodeURIComponent(ttn);
-                    if (res && res.pkg_id) url += '&pkg=' + encodeURIComponent(res.pkg_id);
-                    window.location.href = url;
-                }, 1200);
-            } else if (asUnknown) {
-                setTimeout(function() {
-                    showUnknownSheet(ttn, pkgForUnknown);
-                }, 900);
+                    showCheckActionMenu({
+                        ttn: ttn,
+                        pkg_id: null,
+                        count: 1,
+                        isUnknown: true
+                    });
+                }, 600);
             }
         }
 
