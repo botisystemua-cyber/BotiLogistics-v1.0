@@ -965,6 +965,122 @@
             font-weight: 700;
             text-transform: uppercase;
         }
+
+        /* ==== HISTORY OVERLAY (C7/4): cross-session історія сканів оператора ==== */
+        .history-db-btn { background: rgba(16,185,129,0.2); color: #6ee7b7; }
+        .hd-overlay {
+            position: fixed; inset: 0;
+            background: rgba(15, 23, 42, 0.97);
+            z-index: 85;
+            display: none;
+            flex-direction: column;
+        }
+        .hd-overlay.open { display: flex; animation: us-fade 0.15s ease-out; }
+        .hd-tabs {
+            display: flex;
+            gap: 6px;
+            padding: 10px 12px;
+            background: #0f172a;
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+            overflow-x: auto;
+            white-space: nowrap;
+            -webkit-overflow-scrolling: touch;
+        }
+        .hd-tab {
+            background: rgba(255,255,255,0.05);
+            color: rgba(255,255,255,0.7);
+            border: 1px solid rgba(255,255,255,0.1);
+            padding: 7px 10px;
+            border-radius: 20px;
+            font-family: inherit;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+        .hd-tab.active {
+            background: #3b82f6;
+            color: #fff;
+            border-color: #3b82f6;
+        }
+        .hd-tab-count {
+            display: inline-block;
+            background: rgba(0,0,0,0.3);
+            border-radius: 10px;
+            padding: 0 6px;
+            font-size: 10px;
+            margin-left: 4px;
+        }
+        .hd-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px;
+        }
+        .hd-actions {
+            padding: 10px 12px calc(env(safe-area-inset-bottom) + 10px);
+            background: #0f172a;
+            border-top: 1px solid rgba(255,255,255,0.08);
+        }
+        .hd-card {
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 10px;
+            padding: 10px 12px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: transform 0.1s, border-color 0.15s;
+        }
+        .hd-card:hover { border-color: rgba(255,255,255,0.2); }
+        .hd-card:active { transform: scale(0.98); }
+        .hd-card-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .hd-card-ttn {
+            flex: 1;
+            color: #fff;
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            font-size: 13px;
+            font-weight: 700;
+            word-break: break-all;
+        }
+        .hd-card-badge {
+            font-size: 10px;
+            padding: 3px 7px;
+            border-radius: 999px;
+            font-weight: 700;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+        .hd-card-badge.unknown { background: #f59e0b; color: #fff; }
+        .hd-card-badge.checking { background: #3b82f6; color: #fff; }
+        .hd-card-badge.ready { background: #10b981; color: #fff; }
+        .hd-card-badge.rejected { background: #ef4444; color: #fff; }
+        .hd-card-badge.other { background: rgba(255,255,255,0.15); color: #fff; }
+        .hd-card-meta {
+            color: rgba(255,255,255,0.5);
+            font-size: 11px;
+            margin-top: 4px;
+        }
+        .hd-card-phone {
+            color: rgba(255,255,255,0.8);
+            font-size: 12px;
+            margin-top: 3px;
+        }
+        .hd-empty {
+            color: rgba(255,255,255,0.4);
+            text-align: center;
+            padding: 40px 16px;
+            font-size: 14px;
+        }
+        .hd-loading {
+            color: rgba(255,255,255,0.5);
+            text-align: center;
+            padding: 20px;
+            font-size: 13px;
+        }
     </style>
 </head>
 <body>
@@ -1014,8 +1130,12 @@
         <div class="topbar-counter">
             <button class="topbar-btn" onclick="goBack()" title="Назад">←</button>
             <div class="counter-pill" id="counterScanned">📊 0</div>
+            <!-- C7/4: «Історія» з БД (cross-session), з'являється коли є скани -->
+            <button class="topbar-btn history-db-btn" id="historyDbBtn"
+                    onclick="openHistoryOverlay()" title="Історія сканувань"
+                    style="display:none;">📋</button>
         </div>
-        <button class="topbar-btn" onclick="openHistory()">≡</button>
+        <button class="topbar-btn" onclick="openHistory()" title="Історія сесії">≡</button>
     </div>
 
     <!-- RESULT TOAST -->
@@ -1133,6 +1253,30 @@
         <div class="inl-footer">
             <button type="button" class="inl-btn inl-btn-cancel" onclick="closeInlineEditor()">❌ Скасувати</button>
             <button type="button" class="inl-btn inl-btn-save" id="inlSaveBtn" onclick="saveInlineEditor()">💾 Зберегти</button>
+        </div>
+    </div>
+
+    <!-- HISTORY OVERLAY (C7/4): усі скани оператора з package_scan_log + поточний стан -->
+    <div class="hd-overlay" id="hdOverlay">
+        <div class="inl-header">
+            <button type="button" class="inl-back-btn" onclick="closeHistoryOverlay()" title="Назад">←</button>
+            <div class="inl-title">
+                <div class="inl-title-label">Історія</div>
+                <div class="inl-title-ttn">Мої скани</div>
+            </div>
+        </div>
+        <div class="hd-tabs" id="hdTabs">
+            <button type="button" class="hd-tab active" data-filter="all" onclick="setHdFilter('all')">Всі <span class="hd-tab-count" id="hdCountAll">0</span></button>
+            <button type="button" class="hd-tab" data-filter="unknown" onclick="setHdFilter('unknown')">🟡 Невідомі <span class="hd-tab-count" id="hdCountUnknown">0</span></button>
+            <button type="button" class="hd-tab" data-filter="checking" onclick="setHdFilter('checking')">🔵 В перевірці <span class="hd-tab-count" id="hdCountChecking">0</span></button>
+            <button type="button" class="hd-tab" data-filter="ready" onclick="setHdFilter('ready')">🟢 Готові <span class="hd-tab-count" id="hdCountReady">0</span></button>
+            <button type="button" class="hd-tab" data-filter="rejected" onclick="setHdFilter('rejected')">🔴 Відхилені <span class="hd-tab-count" id="hdCountRejected">0</span></button>
+        </div>
+        <div class="hd-body" id="hdBody">
+            <div class="hd-empty">Поки порожньо</div>
+        </div>
+        <div class="hd-actions">
+            <button type="button" class="inl-btn inl-btn-save" onclick="refreshHistory()">🔄 Актуалізувати</button>
         </div>
     </div>
 
@@ -1301,6 +1445,8 @@
                 document.getElementById('topbar').style.display = 'flex';
                 document.getElementById('bottombar').style.display = 'flex';
                 document.getElementById('mainBtn').style.display = 'none';
+                // C7/4: якщо в оператора вже є скани — показуємо кнопку «📋»
+                showHistoryButtonIfAny();
                 document.getElementById('modePill').classList.add('show');
             }).catch(function(err) {
                 scanner.start(
@@ -1500,6 +1646,8 @@
             // В check-режимі mainBtn ховається — замість нього показуємо
             // checkActionMenu (див. нижче). У scan-режимі — як було.
             document.getElementById('mainBtn').style.display = (SCAN_MODE === 'check') ? 'none' : 'block';
+            // C7/4: після першого успішного скану — кнопка історії
+            document.getElementById('historyDbBtn').style.display = '';
             sessionCounter += 1;
             document.getElementById('counterScanned').textContent = '📊 ' + sessionCounter;
 
@@ -2124,6 +2272,229 @@
             });
         }
 
+        // ==== HISTORY OVERLAY (C7/4) ==========================================
+        // Cross-session історія сканів поточного оператора з package_scan_log,
+        // з'єднана з актуальним станом пакетів. Показує бейдж-статус (з якого
+        // розділу CRM зараз доступний лід), фільтри-таби і кнопку актуалізації.
+        var _hdFilter = 'all';
+        var _hdItems  = [];     // [{ttn, pkg_id, scanned_at, filter, phone, badge}]
+        var _hdLoading = false;
+
+        function showHistoryButtonIfAny() {
+            // Викликається періодично: показує кнопку 📋 якщо в БД є скани цього
+            // оператора. Одноразовий COUNT-запит щоб не смикати дарма.
+            if (!TENANT_ID || !USER_LOGIN) return;
+            var url = SUPABASE_URL + '/rest/v1/package_scan_log' +
+                      '?tenant_id=eq.' + encodeURIComponent(TENANT_ID) +
+                      '&scanned_by=eq.' + encodeURIComponent(USER_LOGIN) +
+                      '&select=id&limit=1';
+            fetch(url, {
+                headers: {
+                    apikey: SUPABASE_ANON_KEY,
+                    Authorization: 'Bearer ' + SUPABASE_ANON_KEY
+                }
+            }).then(function(r) { return r.json(); })
+              .then(function(rows) {
+                if (rows && rows.length > 0) {
+                    document.getElementById('historyDbBtn').style.display = '';
+                }
+              }).catch(function(){});
+        }
+
+        function openHistoryOverlay() {
+            document.getElementById('hdOverlay').classList.add('open');
+            refreshHistory();
+        }
+
+        function closeHistoryOverlay() {
+            document.getElementById('hdOverlay').classList.remove('open');
+        }
+
+        function setHdFilter(f) {
+            _hdFilter = f;
+            Array.prototype.slice.call(document.querySelectorAll('.hd-tab'))
+                 .forEach(function(t) {
+                    t.classList.toggle('active', t.getAttribute('data-filter') === f);
+                 });
+            renderHistoryList();
+        }
+
+        function _classifyForHistory(log, pkg) {
+            // Повертає { filter, badge }
+            // Якщо pkg відсутній (cancelled лог) — «Відхилено на скані»
+            if (!pkg) {
+                return { filter: 'rejected', badge: { cls: 'rejected', text: 'Скасовано' } };
+            }
+            var lead = (pkg.lead_status || '').toString();
+            var quality = (pkg.quality_check_required || '').toString();
+            if (lead === 'unknown') return { filter: 'unknown', badge: { cls: 'unknown', text: 'Невідомий' } };
+            if (lead === 'rejected' || quality === 'Відхилено') return { filter: 'rejected', badge: { cls: 'rejected', text: 'Відхилено' } };
+            if (quality === 'Готова до маршруту') return { filter: 'ready', badge: { cls: 'ready', text: 'Готова' } };
+            if (quality === 'В перевірці') return { filter: 'checking', badge: { cls: 'checking', text: 'В перевірці' } };
+            return { filter: 'other', badge: { cls: 'other', text: quality || 'Інше' } };
+        }
+
+        function refreshHistory() {
+            if (!TENANT_ID || !USER_LOGIN) return;
+            if (_hdLoading) return;
+            _hdLoading = true;
+            var body = document.getElementById('hdBody');
+            body.innerHTML = '<div class="hd-loading">⏳ Завантаження…</div>';
+
+            // Крок 1: останні 200 записів логу цього оператора
+            var logUrl = SUPABASE_URL + '/rest/v1/package_scan_log' +
+                         '?tenant_id=eq.' + encodeURIComponent(TENANT_ID) +
+                         '&scanned_by=eq.' + encodeURIComponent(USER_LOGIN) +
+                         '&order=scanned_at.desc&limit=200' +
+                         '&select=id,pkg_id,ttn_number,scanned_at,mode,outcome,reject_reason';
+            fetch(logUrl, {
+                headers: {
+                    apikey: SUPABASE_ANON_KEY,
+                    Authorization: 'Bearer ' + SUPABASE_ANON_KEY
+                }
+            }).then(function(r) { return r.json(); })
+              .then(function(logs) {
+                if (!Array.isArray(logs)) logs = [];
+
+                // Дедуп по ТТН: беремо найновіший запис
+                var byTtn = {};
+                logs.forEach(function(l) {
+                    var ttn = l.ttn_number;
+                    if (!ttn) return;
+                    if (!byTtn[ttn] || l.scanned_at > byTtn[ttn].scanned_at) {
+                        byTtn[ttn] = l;
+                    }
+                });
+                var dedup = Object.keys(byTtn).map(function(t) { return byTtn[t]; });
+                // Сортуємо по scanned_at desc
+                dedup.sort(function(a, b) {
+                    return (b.scanned_at || '').localeCompare(a.scanned_at || '');
+                });
+
+                // Крок 2: тягнемо поточний стан пакетів одним батчем
+                var pkgIds = dedup.map(function(l) { return l.pkg_id; })
+                                  .filter(function(p) { return !!p; });
+                var uniquePkgIds = [];
+                var seen = {};
+                pkgIds.forEach(function(p) { if (!seen[p]) { seen[p] = true; uniquePkgIds.push(p); } });
+
+                if (uniquePkgIds.length === 0) {
+                    // Усі скасовані, пакетів немає
+                    _finishHistoryRender(dedup, {});
+                    return;
+                }
+
+                var inList = '(' + uniquePkgIds.map(function(p) {
+                    return '"' + String(p).replace(/"/g, '\\"') + '"';
+                }).join(',') + ')';
+                var pkgUrl = SUPABASE_URL + '/rest/v1/packages' +
+                             '?tenant_id=eq.' + encodeURIComponent(TENANT_ID) +
+                             '&pkg_id=in.' + encodeURIComponent(inList) +
+                             '&select=pkg_id,ttn_number,recipient_phone,lead_status,quality_check_required,scan_status,is_archived';
+                fetch(pkgUrl, {
+                    headers: {
+                        apikey: SUPABASE_ANON_KEY,
+                        Authorization: 'Bearer ' + SUPABASE_ANON_KEY
+                    }
+                }).then(function(r) { return r.json(); })
+                  .then(function(pkgs) {
+                    if (!Array.isArray(pkgs)) pkgs = [];
+                    var byPkg = {};
+                    pkgs.forEach(function(p) { byPkg[p.pkg_id] = p; });
+                    _finishHistoryRender(dedup, byPkg);
+                  }).catch(function() { _finishHistoryRender(dedup, {}); });
+              }).catch(function() {
+                _hdLoading = false;
+                body.innerHTML = '<div class="hd-empty">Помилка завантаження</div>';
+              });
+        }
+
+        function _finishHistoryRender(logs, byPkg) {
+            _hdItems = logs.map(function(l) {
+                var pkg = l.pkg_id ? byPkg[l.pkg_id] : null;
+                // Якщо pkg архівовано — трактуємо як відсутній
+                if (pkg && pkg.is_archived) pkg = null;
+                var cls = _classifyForHistory(l, pkg);
+                return {
+                    ttn: l.ttn_number,
+                    pkg_id: pkg ? pkg.pkg_id : null,
+                    scanned_at: l.scanned_at,
+                    mode: l.mode,
+                    phone: pkg ? (pkg.recipient_phone || '') : '',
+                    filter: cls.filter,
+                    badge: cls.badge
+                };
+            });
+            _hdLoading = false;
+            _updateHistoryCounts();
+            renderHistoryList();
+        }
+
+        function _updateHistoryCounts() {
+            var counts = { all: _hdItems.length, unknown: 0, checking: 0, ready: 0, rejected: 0 };
+            _hdItems.forEach(function(it) {
+                if (counts[it.filter] != null) counts[it.filter]++;
+            });
+            document.getElementById('hdCountAll').textContent = counts.all;
+            document.getElementById('hdCountUnknown').textContent = counts.unknown;
+            document.getElementById('hdCountChecking').textContent = counts.checking;
+            document.getElementById('hdCountReady').textContent = counts.ready;
+            document.getElementById('hdCountRejected').textContent = counts.rejected;
+        }
+
+        function renderHistoryList() {
+            var body = document.getElementById('hdBody');
+            var items = _hdItems;
+            if (_hdFilter !== 'all') {
+                items = items.filter(function(it) { return it.filter === _hdFilter; });
+            }
+            if (items.length === 0) {
+                body.innerHTML = '<div class="hd-empty">Поки порожньо у цій категорії</div>';
+                return;
+            }
+            var html = items.map(function(it) {
+                var time = '';
+                if (it.scanned_at) {
+                    var d = new Date(it.scanned_at);
+                    if (!isNaN(d.getTime())) {
+                        time = d.toLocaleString('uk-UA', { day: '2-digit', month: '2-digit',
+                            year: '2-digit', hour: '2-digit', minute: '2-digit' });
+                    }
+                }
+                var pkgAttr = it.pkg_id ? (' data-pkg="' + _escHtml(it.pkg_id) + '"') : '';
+                return '<div class="hd-card"' + pkgAttr + ' data-ttn="' + _escHtml(it.ttn) + '" ' +
+                       'onclick="hdCardClick(this)">' +
+                       '<div class="hd-card-row">' +
+                         '<div class="hd-card-ttn">' + _escHtml(it.ttn || '—') + '</div>' +
+                         '<div class="hd-card-badge ' + it.badge.cls + '">' + _escHtml(it.badge.text) + '</div>' +
+                       '</div>' +
+                       (it.phone ? '<div class="hd-card-phone">📞 ' + _escHtml(it.phone) + '</div>' : '') +
+                       '<div class="hd-card-meta">' + _escHtml(time) + (it.mode === 'cancelled' ? ' · скасовано на скані' : '') + '</div>' +
+                       '</div>';
+            }).join('');
+            body.innerHTML = html;
+        }
+
+        function _escHtml(s) {
+            return String(s == null ? '' : s)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        function hdCardClick(el) {
+            var pkg = el.getAttribute('data-pkg');
+            var ttn = el.getAttribute('data-ttn');
+            if (!pkg) {
+                // Скасований без pkg — редагувати нічого, просто показуємо тост
+                showToast({ variant: 'warn', icon: '⚠️', label: 'Скасовано на скані',
+                            value: ttn || '', status: 'Ліда немає — CRM → Перевірка → Відхилені' });
+                setTimeout(function(){ document.getElementById('resultToast').classList.remove('show'); }, 2500);
+                return;
+            }
+            closeHistoryOverlay();
+            openInlineEditor(pkg, ttn);
+        }
+
         function saveFieldsChooser() {
             var picks = [];
             Array.prototype.slice.call(document.querySelectorAll('#fcBody input[type=checkbox]'))
@@ -2435,6 +2806,8 @@
                 closeCheckActionMenu();
                 document.getElementById('inlOverlay').classList.remove('open');
                 document.getElementById('fcOverlay').classList.remove('open');
+                document.getElementById('hdOverlay').classList.remove('open');
+                document.getElementById('historyDbBtn').style.display = 'none';
                 document.getElementById('startScreen').classList.remove('hidden');
             }).catch(function() {});
         }
