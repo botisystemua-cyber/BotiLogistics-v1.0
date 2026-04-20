@@ -953,6 +953,12 @@ body {
   font-size: 10px; font-weight: 700;
   cursor: help;
 }
+.badge-item-count {
+  background: #ede9fe; color: #5b21b6;
+  padding: 2px 8px; border-radius: 12px;
+  font-size: 10px; font-weight: 700;
+  cursor: help;
+}
 .card-finance {
   margin-left: auto;
   display: flex; align-items: center; gap: 8px;
