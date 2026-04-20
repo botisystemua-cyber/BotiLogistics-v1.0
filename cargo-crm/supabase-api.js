@@ -843,15 +843,28 @@ async function sbPkgAddToRoute(params) {
 
 async function sbPkgRemoveFromRoute(params) {
     try {
-        // Frontend may pass row uuid (from RTE_ID column)
-        const rowId = params.rte_id || params.id || params.pkg_id;
-        if (!rowId) return { ok: false, error: 'Не вказано id рядка' };
-        const { error } = await sb.from('routes').delete()
+        const pkgId = params.pkg_id || params.PKG_ID;
+        const rteIdOrRowId = params.rte_id || params.id;
+
+        let q = sb.from('routes').delete()
             .eq('tenant_id', TENANT_ID)
-            .eq('id', rowId)
             .eq('is_placeholder', false);
+
+        // Cargo.js bulkRemoveFromRoute надсилає pkg_id + rte_id (назва аркуша).
+        // Видаляємо саме рядок для цього пакунка у цьому маршруті.
+        if (pkgId) {
+            q = q.eq('pax_id_or_pkg_id', pkgId);
+            if (rteIdOrRowId) q = q.eq('rte_id', rteIdOrRowId);
+        } else if (rteIdOrRowId) {
+            // Легасі-шлях: передали uuid рядка як rte_id/id.
+            q = q.eq('id', rteIdOrRowId);
+        } else {
+            return { ok: false, error: 'Не вказано ні pkg_id, ні id рядка' };
+        }
+
+        const { error, count } = await q.select('id', { count: 'exact' });
         if (error) throw error;
-        return { ok: true };
+        return { ok: true, removed: count || 0 };
     } catch (e) {
         console.error('sbPkgRemoveFromRoute error:', e);
         return { ok: false, error: e.message };
