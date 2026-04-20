@@ -495,6 +495,117 @@
             font-weight: 700;
             cursor: pointer;
         }
+
+        /* ==== NP-PAYMENT MODAL (bottom-centered sheet) ==== */
+        .np-modal {
+            position: absolute;
+            left: 50%;
+            bottom: calc(env(safe-area-inset-bottom) + 20px);
+            transform: translateX(-50%);
+            z-index: 45;
+            width: min(92vw, 360px);
+            background: rgba(15, 23, 42, 0.98);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(99, 102, 241, 0.55);
+            border-radius: 16px;
+            padding: 16px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.7);
+            display: none;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .np-modal.show { display: flex; }
+        .np-modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .np-modal-title {
+            font-size: 13px;
+            font-weight: 800;
+            color: #a5b4fc;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .np-modal-close {
+            width: 28px; height: 28px;
+            background: rgba(255,255,255,0.1);
+            border: none;
+            border-radius: 50%;
+            color: #fff;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        .np-modal-ttn {
+            font-family: "SF Mono", Monaco, monospace;
+            font-size: 11px;
+            color: rgba(255,255,255,0.55);
+            word-break: break-all;
+        }
+        .np-payer-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+        .np-payer-btn {
+            padding: 12px 8px;
+            background: rgba(255,255,255,0.06);
+            border: 2px solid rgba(255,255,255,0.15);
+            border-radius: 10px;
+            color: #fff;
+            font-family: inherit;
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .np-payer-btn:active { transform: scale(0.96); }
+        .np-payer-btn.active {
+            background: rgba(99, 102, 241, 0.28);
+            border-color: #6366f1;
+            box-shadow: 0 4px 12px rgba(99,102,241,0.35);
+        }
+        .np-amount-row {
+            display: none;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .np-amount-row.show { display: flex; }
+        .np-amount-row label {
+            font-size: 11px;
+            color: rgba(255,255,255,0.55);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .np-amount-row input {
+            padding: 12px 14px;
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 10px;
+            color: #fff;
+            font-family: inherit;
+            font-size: 16px;
+            font-weight: 700;
+        }
+        .np-amount-row input::placeholder { color: rgba(255,255,255,0.35); }
+        .np-save-btn {
+            padding: 14px;
+            background: #10b981;
+            border: none;
+            border-radius: 10px;
+            color: #fff;
+            font-family: inherit;
+            font-size: 15px;
+            font-weight: 800;
+            cursor: pointer;
+        }
+        .np-save-btn:active { transform: scale(0.97); }
+        .np-save-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* Edit button in bottombar — purple to match edit-style accents */
+        .main-btn.btn-edit { background: #6366f1; color: #fff; display: none; }
+        .main-btn.btn-edit.show { display: block; }
     </style>
 </head>
 <body>
@@ -566,6 +677,7 @@
             </div>
         </div>
         <button class="main-btn btn-next" id="mainBtn" onclick="mainBtnClick()">🔄 Сканувати далі</button>
+        <button class="main-btn btn-edit" id="editBtn" onclick="openNpModal()">✏️ НП-оплата</button>
         <button class="main-btn btn-stop" onclick="stopScan()">✕ Завершити</button>
     </div>
 
@@ -580,6 +692,24 @@
             <div class="history-empty">Поки порожньо</div>
         </div>
         <button class="history-clear-btn" onclick="clearHistory()">🗑 Очистити історію</button>
+    </div>
+
+    <!-- NP-PAYMENT MODAL (bottom-centered, opened via ✏️ button) -->
+    <div class="np-modal" id="npModal">
+        <div class="np-modal-header">
+            <div class="np-modal-title">🚚 Оплата Нової Пошти</div>
+            <button class="np-modal-close" onclick="closeNpModal()" title="Закрити">×</button>
+        </div>
+        <div class="np-modal-ttn" id="npModalTtn">—</div>
+        <div class="np-payer-grid">
+            <button type="button" class="np-payer-btn" data-payer="client" onclick="setNpPayer('client')">👤 Клієнт сам</button>
+            <button type="button" class="np-payer-btn" data-payer="us" onclick="setNpPayer('us')">🏢 Платимо ми</button>
+        </div>
+        <div class="np-amount-row" id="npAmountRow">
+            <label>Сума, UAH (додасться у борг)</label>
+            <input type="number" id="npAmount" min="1" max="999999" step="1" inputmode="numeric" placeholder="Напр. 180">
+        </div>
+        <button type="button" class="np-save-btn" id="npSaveBtn" onclick="saveNpPayment()" disabled>💾 Зберегти</button>
     </div>
 
     <!-- BOX-COUNT MODAL (bottom-right, only for newly created packages) -->
@@ -631,6 +761,11 @@
         var isPaused = false;
         // Per-session tally; in-memory only (resets on reload by design).
         var sessionCounter = 0;
+
+        // Last successfully-scanned/peeked package; gates the ✏️ НП-оплата
+        // button. Reset when scanner stops.
+        var lastScannedPkgId = null;
+        var lastScannedTtn   = null;
 
         // Pre-scan setup state.
         //   'scan'  → mutates DB via scan_ttn RPC (new packages default to UA→EU)
@@ -921,6 +1056,14 @@
             sessionCounter += 1;
             document.getElementById('counterScanned').textContent = '📊 ' + sessionCounter;
 
+            // Track last lead so ✏️ НП-оплата knows which pkg to edit.
+            // Only for successful results with a pkg_id (skip rejected/errors).
+            if (res && res.ok && res.pkg_id) {
+                lastScannedPkgId = res.pkg_id;
+                lastScannedTtn   = ttn;
+                document.getElementById('editBtn').classList.add('show');
+            }
+
             showToast({ variant: variant, icon: icon, label: label, value: ttn, status: statusTxt });
 
             setTimeout(function() {
@@ -969,6 +1112,105 @@
             });
         }
 
+        // ==== NP-PAYMENT MODAL ====
+        // Opened via ✏️ НП-оплата button after any successful scan.
+        // Calls register_np_payment RPC which atomically updates np_status,
+        // np_amount, debt and logs to package_scan_log (mode='np_edit').
+        var npPayer = null;   // 'client' | 'us'
+
+        function openNpModal() {
+            if (!lastScannedPkgId) return;
+            document.getElementById('npModalTtn').textContent = lastScannedTtn || lastScannedPkgId;
+            document.getElementById('npAmount').value = '';
+            npPayer = null;
+            refreshNpUI();
+            document.getElementById('npModal').classList.add('show');
+        }
+
+        function closeNpModal() {
+            document.getElementById('npModal').classList.remove('show');
+            npPayer = null;
+        }
+
+        function setNpPayer(p) {
+            if (p !== 'client' && p !== 'us') return;
+            npPayer = p;
+            refreshNpUI();
+        }
+
+        function refreshNpUI() {
+            document.querySelectorAll('.np-payer-btn').forEach(function(b) {
+                b.classList.toggle('active', b.getAttribute('data-payer') === npPayer);
+            });
+            document.getElementById('npAmountRow').classList.toggle('show', npPayer === 'us');
+            var saveBtn = document.getElementById('npSaveBtn');
+            // Client path is valid immediately; 'us' requires a positive amount.
+            if (npPayer === 'client') {
+                saveBtn.disabled = false;
+            } else if (npPayer === 'us') {
+                var v = parseFloat(document.getElementById('npAmount').value);
+                saveBtn.disabled = !(v > 0);
+            } else {
+                saveBtn.disabled = true;
+            }
+        }
+
+        // Amount input: enable/disable Save live.
+        document.addEventListener('DOMContentLoaded', function() {
+            var amt = document.getElementById('npAmount');
+            if (amt) amt.addEventListener('input', refreshNpUI);
+        });
+
+        function saveNpPayment() {
+            if (!lastScannedPkgId || !TENANT_ID || !npPayer) return;
+            var amount = npPayer === 'us'
+                ? parseFloat(document.getElementById('npAmount').value) : null;
+            if (npPayer === 'us' && !(amount > 0)) return;
+
+            var btn = document.getElementById('npSaveBtn');
+            btn.disabled = true;
+            btn.textContent = '⏳ Збереження…';
+
+            sb.rpc('register_np_payment', {
+                p_tenant_id: TENANT_ID,
+                p_pkg_id:    lastScannedPkgId,
+                p_payer:     npPayer,
+                p_amount:    amount,
+                p_user:      USER_LOGIN
+            }).then(function(result) {
+                btn.textContent = '💾 Зберегти';
+                if (result.error) {
+                    showToast({ variant: 'error', icon: '❌', label: 'Помилка НП',
+                                value: lastScannedTtn || '', status: result.error.message });
+                    setTimeout(function(){ document.getElementById('resultToast').classList.remove('show'); }, 2500);
+                    refreshNpUI();
+                    return;
+                }
+                var r = result.data || {};
+                if (!r.ok) {
+                    showToast({ variant: 'error', icon: '❌', label: 'Помилка НП',
+                                value: lastScannedTtn || '', status: r.error || 'Невідома помилка' });
+                    setTimeout(function(){ document.getElementById('resultToast').classList.remove('show'); }, 2500);
+                    refreshNpUI();
+                    return;
+                }
+                var label = npPayer === 'client' ? '👤 НП: клієнт сам' : '🏢 НП: платимо ми';
+                var status = npPayer === 'us'
+                    ? ('+' + (r.np_amount || amount) + ' UAH → борг: ' + (r.debt || 0) + ' UAH')
+                    : ('Борг не змінено: ' + (r.debt || 0) + ' UAH');
+                showToast({ variant: 'success', icon: '✅', label: label,
+                            value: lastScannedTtn || '', status: status });
+                setTimeout(function(){ document.getElementById('resultToast').classList.remove('show'); }, 2800);
+                closeNpModal();
+            }).catch(function(err) {
+                btn.textContent = '💾 Зберегти';
+                showToast({ variant: 'error', icon: '❌', label: 'Мережа',
+                            value: lastScannedTtn || '', status: String(err && err.message || err) });
+                setTimeout(function(){ document.getElementById('resultToast').classList.remove('show'); }, 2500);
+                refreshNpUI();
+            });
+        }
+
         function showToast(opts) {
             var t = document.getElementById('resultToast');
             t.className = 'result-toast';
@@ -998,6 +1240,10 @@
                 document.getElementById('bottombar').style.display = 'none';
                 document.getElementById('modePill').classList.remove('show');
                 document.getElementById('resultToast').classList.remove('show');
+                document.getElementById('editBtn').classList.remove('show');
+                lastScannedPkgId = null;
+                lastScannedTtn   = null;
+                closeNpModal();
                 document.getElementById('startScreen').classList.remove('hidden');
             }).catch(function() {});
         }
