@@ -2075,12 +2075,20 @@ async function lookupClientByPhone(phone) {
   if (ph.length < 5) return [];
   const tenantId = (getBotiSession() && getBotiSession().tenant_id) || '';
   if (!tenantId) return [];
+  // Порівнюємо по ОСТАННІХ 9 цифрах, щоб працювало незалежно від формату:
+  //  +380639763485  → 639763485
+  //  380639763485   → 639763485
+  //  0639763485     → 639763485  (перша 0 відсікається)
+  //  063 976-34-85  → 639763485
+  const digits = ph.replace(/\D/g, '');
+  if (digits.length < 5) return [];
+  const tail = digits.length >= 9 ? digits.slice(-9) : digits;
   try {
     const url = SUPABASE_URL + '/rest/v1/packages' +
       '?tenant_id=eq.' + encodeURIComponent(tenantId) +
-      '&recipient_phone=eq.' + encodeURIComponent(ph) +
+      '&recipient_phone=ilike.*' + encodeURIComponent(tail) + '*' +
       '&is_archived=eq.false' +
-      '&select=pkg_id,recipient_name,recipient_address,nova_poshta_city,created_at' +
+      '&select=pkg_id,recipient_name,recipient_address,nova_poshta_city,created_at,recipient_phone' +
       '&order=created_at.desc&limit=20';
     const res = await fetch(url, {
       headers: {

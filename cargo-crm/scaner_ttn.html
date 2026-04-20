@@ -2447,11 +2447,17 @@
         function _lookupClientInline(phone) {
             phone = (phone || '').trim();
             if (phone.length < 5 || !TENANT_ID) return Promise.resolve([]);
+            // По останніх 9 цифрах — щоб формат не заважав:
+            //   +380639763485 / 380639763485 / 0639763485 / «063 976-34-85»
+            //   → всі дають tail '639763485' → одна підказка з усіма адресами
+            var digits = phone.replace(/\D/g, '');
+            if (digits.length < 5) return Promise.resolve([]);
+            var tail = digits.length >= 9 ? digits.slice(-9) : digits;
             var url = SUPABASE_URL + '/rest/v1/packages' +
                       '?tenant_id=eq.' + encodeURIComponent(TENANT_ID) +
-                      '&recipient_phone=eq.' + encodeURIComponent(phone) +
+                      '&recipient_phone=ilike.*' + encodeURIComponent(tail) + '*' +
                       '&is_archived=eq.false' +
-                      '&select=pkg_id,recipient_name,recipient_address,nova_poshta_city,created_at' +
+                      '&select=pkg_id,recipient_name,recipient_address,nova_poshta_city,created_at,recipient_phone' +
                       '&order=created_at.desc&limit=20';
             return fetch(url, {
                 headers: {
