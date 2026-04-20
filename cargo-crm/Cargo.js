@@ -1223,7 +1223,6 @@ function renderCard(p) {
         </div>
       </div>
       ${visCols.includes('route') ? routeStrip : ''}
-      ${(controlCheck === 'В перевірці' || leadStatus === 'Невідомий') ? `<div class="fill-cta-wrap"><button class="fill-cta" onclick="event.stopPropagation(); openFillModal('${pkgId}')">📝 Заповнити</button></div>` : ''}
       <div class="card-actions" id="actions-${pkgId}">
         <button onclick="event.stopPropagation(); window.open('tel:${phone}')">📞 Дзвінок</button>
         <button onclick="event.stopPropagation(); openMessenger('${phone}','${pkgId}')">💬 Писати</button>
