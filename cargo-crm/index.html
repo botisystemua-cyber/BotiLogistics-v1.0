@@ -249,6 +249,20 @@
 
   <!-- MAIN CONTENT -->
   <main class="main-content">
+    <!-- Verify search panel — shown only when a Перевірка filter is active -->
+    <div class="verify-search-panel" id="verifySearchPanel" style="display:none;">
+      <div class="verify-search-box">
+        <span class="verify-search-icon">🔍</span>
+        <input type="text" id="verifySearchInput"
+               placeholder="ТТН / Ід_смарт / Адреса / Відправник / Отримувач"
+               oninput="onVerifySearchInput(this.value)"
+               autocomplete="off">
+        <button class="verify-search-clear" id="verifySearchClear"
+                onclick="clearVerifySearch()" style="display:none;" title="Очистити">×</button>
+      </div>
+      <div class="verify-search-results" id="verifySearchResults" style="display:none;"></div>
+    </div>
+
     <!-- Cards List (parcels view) -->
     <div class="cards-list" id="cardsList">
       <!-- Filled by JS -->
