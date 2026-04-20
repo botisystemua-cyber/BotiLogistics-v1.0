@@ -971,6 +971,25 @@
             font-size: 11px;
         }
 
+        /* 📇 Підказки клієнта по телефону (Phase A) */
+        .inl-client-suggestions { display: none; flex-direction: column; gap: 4px; margin-top: 6px; }
+        .inl-client-suggestions.show { display: flex; }
+        .inl-client-sug {
+            background: rgba(59,130,246,0.15);
+            border: 1px solid rgba(59,130,246,0.35);
+            border-radius: 8px;
+            padding: 8px 10px;
+            font-size: 12px;
+            color: #fff;
+            cursor: pointer;
+            display: flex; justify-content: space-between; align-items: center; gap: 8px;
+        }
+        .inl-client-sug:active { transform: scale(0.98); }
+        .inl-client-sug-main { flex: 1; min-width: 0; }
+        .inl-client-sug-name { font-weight: 700; }
+        .inl-client-sug-addr { color: rgba(255,255,255,0.8); font-size: 11px; margin-top: 2px; }
+        .inl-client-sug-count { font-size: 10px; color: rgba(255,255,255,0.6); white-space: nowrap; }
+
         /* ==== FIELDS CHOOSER (C7/3) ==== */
         .fc-overlay {
             position: fixed; inset: 0;
@@ -2256,8 +2275,8 @@
 
         var FIELD_CATALOG = [
             // Отримувач
-            { col: 'recipient_name',     label: 'ПІБ отримувача',       type: 'text',     category: '👤 Отримувач' },
-            { col: 'recipient_phone',    label: 'Тел. отримувача',      type: 'text',     category: '👤 Отримувач', required: true, defaultOn: true },
+            { col: 'recipient_name',     label: 'ПІБ отримувача',       type: 'text',     category: '👤 Отримувач', defaultOn: true },
+            { col: 'recipient_phone',    label: 'Тел. отримувача',      type: 'phone',    category: '👤 Отримувач', required: true, defaultOn: true },
             { col: 'recipient_address',  label: 'Адреса в Європі',      type: 'text',     category: '👤 Отримувач', defaultOn: true },
             { col: 'nova_poshta_city',   label: 'Місто Нова Пошта',     type: 'text',     category: '👤 Отримувач' },
             // Відправник
@@ -2366,6 +2385,18 @@
             } else if (f.type === 'date') {
                 el = document.createElement('input');
                 el.type = 'date';
+            } else if (f.type === 'phone') {
+                // phone: text input + контейнер підказок нижче
+                el = document.createElement('input');
+                el.type = 'tel';
+                el.inputMode = 'tel';
+                el.id = 'inl_col_' + f.col;
+                row.appendChild(el);
+                var sugBox = document.createElement('div');
+                sugBox.className = 'inl-client-suggestions';
+                sugBox.setAttribute('data-for', f.col);
+                row.appendChild(sugBox);
+                return row;
             } else if (f.type === 'photo') {
                 // photo: spiсhial composite — hidden input з URL + превʼю + file picker
                 el = document.createElement('input');
@@ -2406,6 +2437,84 @@
             FIELD_CATALOG.forEach(function(f) {
                 if (activeCols.indexOf(f.col) === -1) return;
                 body.appendChild(_buildFieldElement(f));
+            });
+        }
+
+        // 📇 Пошук клієнта за телефоном + автопідказки на сканері (Phase A)
+        function _lookupClientInline(phone) {
+            phone = (phone || '').trim();
+            if (phone.length < 5 || !TENANT_ID) return Promise.resolve([]);
+            var url = SUPABASE_URL + '/rest/v1/packages' +
+                      '?tenant_id=eq.' + encodeURIComponent(TENANT_ID) +
+                      '&recipient_phone=eq.' + encodeURIComponent(phone) +
+                      '&is_archived=eq.false' +
+                      '&select=pkg_id,recipient_name,recipient_address,nova_poshta_city,created_at' +
+                      '&order=created_at.desc&limit=20';
+            return fetch(url, {
+                headers: {
+                    apikey: SUPABASE_ANON_KEY,
+                    Authorization: 'Bearer ' + SUPABASE_ANON_KEY
+                }
+            }).then(function(r) { return r.json(); }).then(function(rows) {
+                if (!Array.isArray(rows)) return [];
+                var byKey = {};
+                rows.forEach(function(r) {
+                    var name = (r.recipient_name || '').trim();
+                    var addr = (r.recipient_address || r.nova_poshta_city || '').trim();
+                    if (!name && !addr) return;
+                    var key = name + '|' + addr;
+                    if (!byKey[key]) byKey[key] = { name: name, address: addr, count: 0, last: r.created_at };
+                    byKey[key].count++;
+                    if (r.created_at > byKey[key].last) byKey[key].last = r.created_at;
+                });
+                return Object.keys(byKey).map(function(k){ return byKey[k]; })
+                    .sort(function(a, b){ return (b.last || '').localeCompare(a.last || ''); });
+            }).catch(function(){ return []; });
+        }
+
+        function _renderInlineClientSuggestions(col, items) {
+            var box = document.querySelector('.inl-client-suggestions[data-for="' + col + '"]');
+            if (!box) return;
+            box.innerHTML = '';
+            if (!items.length) { box.classList.remove('show'); return; }
+            items.forEach(function(it) {
+                var row = document.createElement('div');
+                row.className = 'inl-client-sug';
+                row.innerHTML =
+                    '<div class="inl-client-sug-main">' +
+                        '<div class="inl-client-sug-name">👤 ' + _escHtml(it.name || '(без імені)') + '</div>' +
+                        '<div class="inl-client-sug-addr">📍 ' + _escHtml(it.address || '—') + '</div>' +
+                    '</div>' +
+                    '<span class="inl-client-sug-count">×' + it.count + '</span>';
+                row.addEventListener('click', function() {
+                    // Застосовуємо: заповнюємо recipient_name та recipient_address
+                    var nameEl = document.getElementById('inl_col_recipient_name');
+                    var addrEl = document.getElementById('inl_col_recipient_address');
+                    if (nameEl && it.name) nameEl.value = it.name;
+                    if (addrEl && it.address) addrEl.value = it.address;
+                    [nameEl, addrEl].forEach(function(el) {
+                        if (el) el.closest('.inl-row').classList.add('has-value');
+                    });
+                    box.classList.remove('show');
+                });
+                box.appendChild(row);
+            });
+            box.classList.add('show');
+        }
+
+        function _attachPhoneListener(col) {
+            var el = document.getElementById('inl_col_' + col);
+            if (!el) return;
+            var tmr = null;
+            var fire = function() {
+                _lookupClientInline(el.value).then(function(items) {
+                    _renderInlineClientSuggestions(col, items);
+                });
+            };
+            el.addEventListener('change', fire);
+            el.addEventListener('blur', function(){ setTimeout(fire, 150); });
+            el.addEventListener('input', function() {
+                clearTimeout(tmr); tmr = setTimeout(fire, 400);
             });
         }
 
@@ -2509,6 +2618,18 @@
 
                 // Timeline розпаковок (якщо np_places > 1)
                 _renderInlineTimeline(pkgId, row.np_places);
+
+                // Прив'язуємо слухачі на phone-поля (Phase A: автопідказки адрес)
+                FIELD_CATALOG.forEach(function(f) {
+                    if (f.type === 'phone') _attachPhoneListener(f.col);
+                });
+                // Якщо телефон уже є — одразу шукаємо підказки
+                var initialPhone = row.recipient_phone;
+                if (initialPhone) {
+                    _lookupClientInline(initialPhone).then(function(items) {
+                        _renderInlineClientSuggestions('recipient_phone', items);
+                    });
+                }
 
                 document.getElementById('checkActionMenu').classList.remove('show');
                 document.getElementById('inlOverlay').classList.add('open');
