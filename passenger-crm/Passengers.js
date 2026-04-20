@@ -4431,13 +4431,20 @@ function renderTripsCalCell(dayNum, key, dayTrips, otherMonth, isToday) {
         const occ = parseInt(t.occupied) || 0;
         const pct = maxS > 0 ? Math.min(100, Math.round(occ/maxS*100)) : 0;
         const over = occ > maxS && maxS > 0;
-        const auto = cleanAutoName(t.auto_name) || '—';
+        const auto = cleanAutoName(t.auto_name) || '';
+        const city = t.city || '—';
         const safeCalId = String(t.cal_id || '').replace(/'/g, "\\'");
-        return '<div class="tc-event ' + dirCls + (over ? ' over' : '') + '" onclick="event.stopPropagation();openTripFromCalendar(\'' + safeCalId + '\')" title="' + tmEsc(auto + ' · ' + (t.city || '—') + ' · ' + occ + '/' + maxS) + '">' +
-            '<span class="tc-event-dir">' + dirIcon + '</span>' +
-            '<span class="tc-event-name">' + tmEsc(auto) + '</span>' +
-            '<span class="tc-event-bar"><span class="tc-event-bar-fill' + (over ? ' over' : pct >= 100 ? ' full' : '') + '" style="width:' + pct + '%"></span></span>' +
-            '<span class="tc-event-seats">' + occ + '/' + maxS + '</span>' +
+        const autoHtml = auto ? '<span class="tc-event-auto">' + tmEsc(auto) + '</span>' : '';
+        return '<div class="tc-event ' + dirCls + (over ? ' over' : '') + '" onclick="event.stopPropagation();openTripFromCalendar(\'' + safeCalId + '\')" title="' + tmEsc(city + (auto ? ' · ' + auto : '') + ' · ' + occ + '/' + maxS) + '">' +
+            '<div class="tc-event-row1">' +
+                '<span class="tc-event-dir">' + dirIcon + '</span>' +
+                '<span class="tc-event-name">' + tmEsc(city) + '</span>' +
+                '<span class="tc-event-seats">' + occ + '/' + maxS + '</span>' +
+            '</div>' +
+            '<div class="tc-event-row2">' +
+                autoHtml +
+                '<span class="tc-event-bar"><span class="tc-event-bar-fill' + (over ? ' over' : pct >= 100 ? ' full' : '') + '" style="width:' + pct + '%"></span></span>' +
+            '</div>' +
         '</div>';
     }).join('');
 
@@ -4460,7 +4467,10 @@ function openTripFromCalendar(calId) {
         overlay = document.createElement('div');
         overlay.id = 'tripDetailOverlay';
         overlay.className = 'tc-detail-overlay';
-        overlay.onclick = function(e) { if (e.target === overlay) closeTripDetail(); };
+        overlay.onclick = function(e) {
+            if (e.target === overlay) { closeTripDetail(); return; }
+            if (e.target.closest('.trip-action-btn, .trip-progress-text, .trip-card-city')) closeTripDetail();
+        };
         document.body.appendChild(overlay);
     }
     overlay.innerHTML =
@@ -4490,7 +4500,10 @@ function showTripsCalDay(key) {
         overlay = document.createElement('div');
         overlay.id = 'tripDetailOverlay';
         overlay.className = 'tc-detail-overlay';
-        overlay.onclick = function(e) { if (e.target === overlay) closeTripDetail(); };
+        overlay.onclick = function(e) {
+            if (e.target === overlay) { closeTripDetail(); return; }
+            if (e.target.closest('.trip-action-btn, .trip-progress-text, .trip-card-city')) closeTripDetail();
+        };
         document.body.appendChild(overlay);
     }
     overlay.innerHTML =
