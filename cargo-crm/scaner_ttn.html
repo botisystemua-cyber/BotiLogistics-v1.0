@@ -2511,9 +2511,32 @@
             box.classList.add('show');
         }
 
+        // Нормалізація номера телефону: з 0XXXXXXXXX → +380XXXXXXXXX,
+        // з 9 цифр → +380XXXXXXXXX, решта просто з «+».
+        function _normalizePhoneIntl(raw) {
+            var s = String(raw || '').trim();
+            if (!s) return '';
+            var digits = s.replace(/\D/g, '');
+            if (!digits) return '';
+            if (digits.length === 10 && digits.charAt(0) === '0') return '+380' + digits.slice(1);
+            if (digits.length === 9) return '+380' + digits;
+            return '+' + digits;
+        }
+
         function _attachPhoneListener(col) {
             var el = document.getElementById('inl_col_' + col);
             if (!el) return;
+            // Автопрефікс при фокусі на пустому полі
+            el.addEventListener('focus', function() {
+                if (!el.value) el.value = '+380';
+            });
+            // На вставці — нормалізуємо одразу
+            el.addEventListener('paste', function(e) {
+                e.preventDefault();
+                var pasted = (e.clipboardData || window.clipboardData).getData('text');
+                el.value = _normalizePhoneIntl(pasted);
+                el.dispatchEvent(new Event('change'));
+            });
             var tmr = null;
             var fire = function() {
                 _lookupClientInline(el.value).then(function(items) {
@@ -2521,7 +2544,13 @@
                 });
             };
             el.addEventListener('change', fire);
-            el.addEventListener('blur', function(){ setTimeout(fire, 150); });
+            el.addEventListener('blur', function() {
+                // Нормалізуємо якщо щось ввели вручну
+                if (el.value && el.value !== '+380') {
+                    el.value = _normalizePhoneIntl(el.value);
+                }
+                setTimeout(fire, 150);
+            });
             el.addEventListener('input', function() {
                 clearTimeout(tmr); tmr = setTimeout(fire, 400);
             });

@@ -2064,6 +2064,49 @@ function closeFillModal() {
   document.getElementById('fillOverlay').classList.remove('open');
 }
 
+// ===== [SECT-PHONE-NORMALIZE] Нормалізація телефону =====
+// «0639763485»        → «+380639763485»  (українська звичка писати без коду)
+// «639763485»         → «+380639763485»  (9 цифр — припускаємо UA)
+// «380639763485»      → «+380639763485»  (без плюса)
+// «+380 63 976-34-85» → «+380639763485»  (прибрати форматування)
+// «+48 607 123 456»   → «+48607123456»    (польський номер лишається як є)
+// «+420 123 456 789»  → «+420123456789»   (чеський номер лишається)
+function normalizePhoneIntl(raw) {
+  const s = String(raw || '').trim();
+  if (!s) return '';
+  // Витягуємо тільки цифри
+  const digits = s.replace(/\D/g, '');
+  if (!digits) return '';
+  // Якщо вводять 0XXXXXXXXX (10 цифр) — українське ведуче 0 замінюємо на 380
+  if (digits.length === 10 && digits.startsWith('0')) return '+380' + digits.slice(1);
+  // Якщо рівно 9 цифр — UA без коду і без нуля
+  if (digits.length === 9) return '+380' + digits;
+  // Все інше (380... / 48... / 420... / 49...) — вже має код, просто +
+  return '+' + digits;
+}
+
+// Приєднує нормалізацію до inputEl: paste + blur переводить у канонічний вигляд,
+// focus на пустому полі одразу ставить +380 як стартовий префікс.
+function attachPhoneNormalization(inputEl, defaultPrefix = '+380') {
+  if (!inputEl || inputEl._phoneNormAttached) return;
+  inputEl._phoneNormAttached = true;
+
+  inputEl.addEventListener('focus', () => {
+    if (!inputEl.value) inputEl.value = defaultPrefix;
+  });
+  inputEl.addEventListener('paste', (e) => {
+    e.preventDefault();
+    const pasted = (e.clipboardData || window.clipboardData).getData('text');
+    inputEl.value = normalizePhoneIntl(pasted);
+    inputEl.dispatchEvent(new Event('change'));
+  });
+  inputEl.addEventListener('blur', () => {
+    if (inputEl.value && inputEl.value !== defaultPrefix) {
+      inputEl.value = normalizePhoneIntl(inputEl.value);
+    }
+  });
+}
+
 // ===== [SECT-CLIENT-LOOKUP] Пошук клієнта за телефоном (Phase A) =====
 // Підтягує попередні адреси та імена отримувачів із таблиці packages
 // по номеру телефону. Якщо є декілька варіантів — показує список,
@@ -2135,8 +2178,14 @@ function _renderClientSuggestions(container, items, onPick) {
   container.classList.add('show');
 }
 
-// CRM fill-modal: слухач на телефоні отримувача
+// CRM fill-modal: слухач на телефоні отримувача + нормалізація формату
 document.addEventListener('DOMContentLoaded', () => {
+  // Нормалізація для всіх tel-полів у fill-модалці (recv + sender)
+  ['fill_phoneRecv', 'fill_phoneSender'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) attachPhoneNormalization(el);
+  });
+
   const ph = document.getElementById('fill_phoneRecv');
   const sugBox = document.getElementById('fill_clientSuggestions');
   if (!ph || !sugBox) return;
