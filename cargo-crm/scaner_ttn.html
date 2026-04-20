@@ -880,7 +880,21 @@
             pill.textContent = SCAN_MODE === 'scan'  ? '🔍 Сканую'
                              : SCAN_MODE === 'check' ? '✓ Перевірка' : '—';
         }
-        document.addEventListener('DOMContentLoaded', refreshSetupUI);
+        document.addEventListener('DOMContentLoaded', function() {
+            refreshSetupUI();
+            // Автопродовження: CRM повертає сюди з ?resume=1 після дії над
+            // сканом. Якщо користувач раніше вже обирав режим (є в localStorage),
+            // пропускаємо стартовий екран і одразу запускаємо камеру — щоб
+            // не треба було знову обирати режим і тиснути «Запустити».
+            try {
+                var resume = new URLSearchParams(location.search).get('resume') === '1';
+                if (resume && SCAN_MODE) {
+                    setTimeout(function() {
+                        try { startScan(); } catch(_) {}
+                    }, 120);
+                }
+            } catch(_) {}
+        });
 
         function goBack() {
             if (isScanning) {
