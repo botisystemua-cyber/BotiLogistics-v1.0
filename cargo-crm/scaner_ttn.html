@@ -1071,14 +1071,25 @@
                 document.getElementById('resultToast').classList.remove('show');
             }, 2500);
 
-            // Сканер — «порт» до CRM. Після успішного scan_ttn (не check-mode)
-            // ведемо оператора в розділ «Перевірка» з цим ТТН, щоб він обрав дію
-            // (+В перевірку / Редагувати / Видалити) або заповнив новий Невідомий.
-            if (res && res.ok && SCAN_MODE !== 'check' && (res.type === 'found' || res.type === 'already' || res.type === 'new')) {
+            // Сканер — «порт» до CRM. Будь-який успішний скан (і «Сканувати»,
+            // і «Перевірка»/check) веде у розділ «Перевірка» з цим ТТН, щоб
+            // оператор обрав дію. Якщо ТТН не знайдено — ведемо у «Невідомі»
+            // (користувач вирішує: заповнити / видалити / сканувати далі).
+            var shouldRedirect = false;
+            var asUnknown = false;
+            if (res && res.ok) {
+                shouldRedirect = (res.type === 'found' || res.type === 'already' || res.type === 'new' || res.mode === 'check');
+                if (res.type === 'new') asUnknown = true;
+            } else if (res && !res.ok && typeof res.error === 'string' && /не знайдено/i.test(res.error)) {
+                // peek_ttn повертає «ТТН не знайдено» — це теж Невідомий
+                shouldRedirect = true;
+                asUnknown = true;
+            }
+            if (shouldRedirect) {
                 setTimeout(function() {
                     var url = 'index.html?scan=' + encodeURIComponent(ttn);
-                    if (res.pkg_id) url += '&pkg=' + encodeURIComponent(res.pkg_id);
-                    if (res.type === 'new') url += '&unknown=1';
+                    if (res && res.pkg_id) url += '&pkg=' + encodeURIComponent(res.pkg_id);
+                    if (asUnknown) url += '&unknown=1';
                     window.location.href = url;
                 }, 1200);
             }
