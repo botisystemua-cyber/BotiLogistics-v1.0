@@ -668,6 +668,9 @@ body.route-sort-active #rteTogglePay {
 .tcal-dots .dot-overbooked { background: #dc2626; animation: pulse-overbook 1.5s ease-in-out infinite; width: 8px; height: 8px; }
 .tcal-day.overbooked { color: #dc2626 !important; }
 .tcal-day.overbooked:not(.selected) { outline: 2px solid #dc2626; outline-offset: -2px; }
+.tcal-day.tm-current:not(.selected) { background: rgba(124,58,237,0.12); outline: 2px solid #7c3aed; outline-offset: -2px; color: #7c3aed; }
+.tcal-day.tm-current::after { content: '●'; position: absolute; top: 2px; right: 4px; font-size: 8px; color: #7c3aed; line-height: 1; }
+.tcal-day.tm-current.selected::after { color: white; }
 .tcal-pax { cursor: pointer; }
 .tcal-pax:hover { text-decoration: underline; }
 .tcal-pax { font-size: 8px; font-weight: 800; color: var(--text-secondary); line-height: 1; margin-top: 1px; }
