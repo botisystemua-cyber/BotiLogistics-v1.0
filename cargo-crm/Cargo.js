@@ -1000,6 +1000,7 @@ function renderCard(p) {
   const addressFrom = p['Адреса відправки'] || '';
   const addressTo = p['Адреса в Європі'] || p['Місто Нова Пошта'] || '';
   const weight = p['Кг'] || '';
+  const npPlaces = parseInt(p['Місця НП'], 10) || 0;
   const price = p['Сума'] || '';
   const currency = p['Валюта оплати'] || '';
   const deposit = parseFloat(p['Завдаток']) || 0;
@@ -1203,6 +1204,7 @@ function renderCard(p) {
           <span class="dir-badge ${dirBadgeClass}">${dirLabel}</span>
           ${isNew24h(p) ? '<span class="badge badge-new24">🆕 NEW</span>' : ''}
           ${visCols.includes('ttn') ? ttnHtml : ''}
+          ${npPlaces > 1 ? `<span class="badge-np-places" title="${npPlaces} фізичних коробок з тим самим ТТН">📥 ${npPlaces}</span>` : ''}
           ${visCols.includes('weight') && weight ? `<span class="badge-weight">⚖️ ${weight} кг</span>` : ''}
           <div class="card-finance">
             ${visCols.includes('sum') && price ? `<span class="card-price ${priceColorClass}">${price} ${currency}</span>` : ''}
@@ -2000,6 +2002,9 @@ const _FILL_FIELDS = [
   ['fill_sum',         'Сума'],
   ['fill_currency',    'Валюта оплати'],
   ['fill_payStatus',   'Статус оплати'],
+  ['fill_npAmount',    'Сума НП'],
+  ['fill_npCurrency',  'Валюта НП'],
+  ['fill_npStatus',    'Статус НП'],
   ['fill_statusPkg',   'Статус посилки'],
 ];
 

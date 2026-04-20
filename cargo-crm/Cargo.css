@@ -947,6 +947,12 @@ body {
   padding: 2px 8px; border-radius: 12px;
   font-size: 10px; font-weight: 700;
 }
+.badge-np-places {
+  background: #fef3c7; color: #92400e;
+  padding: 2px 8px; border-radius: 12px;
+  font-size: 10px; font-weight: 700;
+  cursor: help;
+}
 .card-finance {
   margin-left: auto;
   display: flex; align-items: center; gap: 8px;
