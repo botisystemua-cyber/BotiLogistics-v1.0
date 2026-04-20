@@ -758,6 +758,7 @@
             gap: 8px;
         }
         .cam-actions.with-fill { grid-template-columns: 1fr 1fr 1fr; }
+        .cam-actions.cam-actions-4 { grid-template-columns: 1fr 1fr; gap: 6px; }
         .cam-btn {
             padding: 14px 10px;
             border-radius: 10px;
@@ -773,6 +774,7 @@
         .cam-btn-primary { background: linear-gradient(180deg,#3b82f6,#2563eb); color: #fff; box-shadow: 0 4px 10px rgba(37,99,235,0.35); }
         .cam-btn-primary.save { background: linear-gradient(180deg,#10b981,#059669); box-shadow: 0 4px 10px rgba(16,185,129,0.35); }
         .cam-btn-fill { background: linear-gradient(180deg,#ef4444,#dc2626); color: #fff; box-shadow: 0 4px 10px rgba(220,38,38,0.35), 0 0 0 3px rgba(59,130,246,0.18); }
+        .cam-btn-np { background: linear-gradient(180deg,#f59e0b,#d97706); color: #fff; box-shadow: 0 4px 10px rgba(217,119,6,0.35); }
 
         /* ==== INLINE EDITOR (C7/2): full-screen модалка прямо на сканері ==== */
         .inl-overlay {
@@ -1168,7 +1170,7 @@
             </div>
         </div>
 
-        <!-- C7/1: check-mode action menu (found → Редагувати, unknown → Зберегти) -->
+        <!-- Action menu для check-режиму: 4 кнопки 2×2 + stepper Місць НП -->
         <div class="check-action-menu" id="checkActionMenu">
             <div class="cam-ttn-row">
                 <div class="cam-ttn-label">ТТН:</div>
@@ -1181,17 +1183,15 @@
                 <button type="button" class="cam-stepper-btn" onclick="stepperChange(1)">+</button>
                 <span class="cam-stepper-label">📥 Місць НП</span>
             </div>
-            <div class="cam-actions" id="camActions">
+            <div class="cam-actions cam-actions-4" id="camActions">
+                <button type="button" class="cam-btn cam-btn-fill" onclick="checkActionFill()">📝 Заповнити</button>
+                <button type="button" class="cam-btn cam-btn-primary" id="camBtnPrimary" onclick="checkActionPrimary()">💾 Зберегти</button>
+                <button type="button" class="cam-btn cam-btn-np" onclick="openNpModal()">💰 НП-оплата</button>
                 <button type="button" class="cam-btn cam-btn-cancel" onclick="checkActionCancel()">❌ Скасувати</button>
-                <button type="button" class="cam-btn cam-btn-primary" id="camBtnPrimary" onclick="checkActionPrimary()">✏️ Редагувати</button>
-                <!-- Третя кнопка, лише для невідомого ТТН: Зберегти + одразу відкрити редактор -->
-                <button type="button" class="cam-btn cam-btn-fill" id="camBtnFill" onclick="checkActionFill()" style="display:none;">📝 Заповнити</button>
             </div>
         </div>
 
         <button class="main-btn btn-next" id="mainBtn" onclick="mainBtnClick()">🔄 Сканувати далі</button>
-        <button class="main-btn btn-edit" id="editBtn" onclick="openNpModal()">✏️ НП-оплата</button>
-        <button class="main-btn btn-stop" onclick="stopScan()">✕ Завершити</button>
     </div>
 
     <!-- HISTORY DRAWER -->
@@ -1544,6 +1544,7 @@
                     pkg_id: r.pkg_id,
                     item_count: r.item_count,
                     np_places: r.np_places,
+                    scan_status: r.scan_status,
                     payment_status: r.payment_status,
                     payment_currency: r.payment_currency,
                     total_amount: r.total_amount,
@@ -1604,7 +1605,7 @@
             if (res && res.ok && res.pkg_id) {
                 lastScannedPkgId = res.pkg_id;
                 lastScannedTtn   = ttn;
-                document.getElementById('editBtn').classList.add('show');
+                // editBtn видалено; НП-оплата тепер у cam-actions
             }
 
             showToast({ variant: variant, icon: icon, label: label, value: ttn, status: statusTxt });
@@ -1631,7 +1632,8 @@
                         ttn: ttn,
                         pkg_id: res.pkg_id,
                         count: Math.max(1, parseInt(res.np_places, 10) || 1),
-                        isUnknown: false
+                        isUnknown: false,
+                        scanStatus: res.scan_status
                     });
                 }, 600);
             } else if (res && !res.ok && typeof res.error === 'string' && /не знайдено/i.test(res.error)) {
@@ -1715,38 +1717,51 @@
         var _camState = { ttn: '', pkg_id: null, count: 1, isUnknown: false };
 
         function showCheckActionMenu(cfg) {
-            _camState.ttn       = cfg.ttn || '';
-            _camState.pkg_id    = cfg.pkg_id || null;
-            _camState.count     = Math.max(1, parseInt(cfg.count, 10) || 1);
-            _camState.isUnknown = !!cfg.isUnknown;
+            _camState.ttn        = cfg.ttn || '';
+            _camState.pkg_id     = cfg.pkg_id || null;
+            _camState.count      = Math.max(1, parseInt(cfg.count, 10) || 1);
+            _camState.isUnknown  = !!cfg.isUnknown;
+            // scanStatus з peek_ttn: 'received' (щойно створений, не в перевірці),
+            // 'checked' (вже в перевірці), 'awaiting_route', 'delivered' тощо
+            _camState.scanStatus = cfg.scanStatus || null;
 
             document.getElementById('camTtnCode').textContent = _camState.ttn || '—';
             var badge = document.getElementById('camTtnBadge');
             if (_camState.isUnknown) {
                 badge.textContent = '📡 Невідомий';
                 badge.className = 'cam-ttn-badge unknown';
+            } else if (_camState.scanStatus === 'checked') {
+                badge.textContent = '🔍 В перевірці';
+                badge.className = 'cam-ttn-badge found';
             } else {
                 badge.textContent = '✓ Знайдено';
                 badge.className = 'cam-ttn-badge found';
             }
             document.getElementById('camStepperVal').textContent = _camState.count;
 
+            // Primary button міняємо залежно від стану:
+            //   unknown            → «💾 Зберегти» (створює як Невідомого)
+            //   known, not-checked → «🔍 В перевірку» (pkg іде у В перевірці)
+            //   known, checked     → «✏️ Редагувати»
             var primary = document.getElementById('camBtnPrimary');
-            var fillBtn = document.getElementById('camBtnFill');
-            var actions = document.getElementById('camActions');
+            primary.classList.remove('save');
             if (_camState.isUnknown) {
                 primary.textContent = '💾 Зберегти';
                 primary.classList.add('save');
-                fillBtn.style.display = '';
-                actions.classList.add('with-fill');
-            } else {
+            } else if (_camState.scanStatus === 'checked') {
                 primary.textContent = '✏️ Редагувати';
-                primary.classList.remove('save');
-                fillBtn.style.display = 'none';
-                actions.classList.remove('with-fill');
+            } else {
+                primary.textContent = '🔍 В перевірку';
+                primary.classList.add('save');
             }
 
-            // Ховаємо mainBtn / editBtn — діюче меню саме вирішує, що далі
+            // Щоб НП-оплата з cam-actions мала куди писати
+            if (_camState.pkg_id) {
+                lastScannedPkgId = _camState.pkg_id;
+                lastScannedTtn   = _camState.ttn;
+            }
+
+            // Ховаємо mainBtn — меню саме вирішує, що далі
             document.getElementById('mainBtn').style.display = 'none';
             document.getElementById('checkActionMenu').classList.add('show');
         }
@@ -1821,9 +1836,11 @@
             }
         }
 
-        // «📝 Заповнити» для невідомого ТТН: створюємо лід через scan_ttn,
-        // потім одразу відкриваємо inline-редактор — оператор заповнює поля
-        // і зберігає; авто-перехід знімає «Невідомий» → лід у «В перевірці».
+        // «📝 Заповнити»:
+        //   • невідомий ТТН → scan_ttn створює лід, потім inline-редактор
+        //   • знайдений ТТН → одразу inline-редактор (лід уже є)
+        // У обох випадках save в редакторі поставить scan_status='checked'
+        // і lead_status='ready' (якщо був unknown) → лід у «В перевірці».
         function checkActionFill() {
             var ttn = _camState.ttn;
             var count = _camState.count;
@@ -1835,6 +1852,12 @@
                 resumeAfterSheet();
                 return;
             }
+            // Знайдений — просто відкриваємо редактор, БЕЗ scan_ttn
+            if (!_camState.isUnknown && _camState.pkg_id) {
+                openInlineEditor(_camState.pkg_id, ttn);
+                return;
+            }
+            // Невідомий — створюємо лід і далі редактор
             sb.rpc('scan_ttn', {
                 p_tenant_id: TENANT_ID, p_ttn: ttn,
                 p_direction: DEFAULT_DIRECTION, p_user: USER_LOGIN
@@ -1980,7 +2003,7 @@
                         } else {
                             lastScannedPkgId = row.pkg_id;
                             lastScannedTtn   = ttn;
-                            document.getElementById('editBtn').classList.add('show');
+                            // editBtn видалено; НП-оплата тепер у cam-actions
                             // Додаємо в сесійний набір, щоб повторний скан розпізнав дубль
                             _sessionScans[ttn] = (_sessionScans[ttn] || 0) + 1;
                             showToast({ variant: 'success', icon: '✅',
@@ -2012,9 +2035,43 @@
                     resumeAfterSheet();
                 });
             } else {
-                // Редагувати знайдений → інлайн-модалка прямо на сканері (C7/2)
+                // Знайдений ТТН — два варіанти:
+                //   • scan_status !== 'checked' → primary = «В перевірку»
+                //     (PATCH scan_status='checked', камера далі)
+                //   • scan_status === 'checked' → primary = «Редагувати»
+                //     (inline-редактор як раніше)
                 if (!pkg) { closeCheckActionMenu(); resumeAfterSheet(); return; }
-                openInlineEditor(pkg, ttn);
+                if (_camState.scanStatus === 'checked') {
+                    openInlineEditor(pkg, ttn);
+                } else {
+                    // «🔍 В перевірку»: один PATCH, тост, resume
+                    fetch(SUPABASE_URL + '/rest/v1/packages' +
+                          '?tenant_id=eq.' + encodeURIComponent(TENANT_ID) +
+                          '&pkg_id=eq.' + encodeURIComponent(pkg), {
+                        method: 'PATCH',
+                        headers: {
+                            apikey: SUPABASE_ANON_KEY,
+                            Authorization: 'Bearer ' + SUPABASE_ANON_KEY,
+                            'Content-Type': 'application/json',
+                            Prefer: 'return=minimal'
+                        },
+                        body: JSON.stringify({ scan_status: 'checked' })
+                    }).then(function(r) {
+                        if (!r.ok) {
+                            showToast({ variant: 'error', icon: '❌', label: 'Не переведено',
+                                        value: ttn, status: 'HTTP ' + r.status });
+                            setTimeout(function(){ document.getElementById('resultToast').classList.remove('show'); }, 2500);
+                        } else {
+                            showToast({ variant: 'success', icon: '🔍',
+                                        label: 'У «В перевірці»', value: ttn,
+                                        status: 'scan_status = checked' });
+                            setTimeout(function(){ document.getElementById('resultToast').classList.remove('show'); }, 1800);
+                        }
+                    }).catch(function(){}).finally(function() {
+                        closeCheckActionMenu();
+                        resumeAfterSheet();
+                    });
+                }
             }
         }
 
@@ -2789,7 +2846,7 @@
                     if (r && r.pkg_id) {
                         lastScannedPkgId = r.pkg_id;
                         lastScannedTtn   = ttn;
-                        document.getElementById('editBtn').classList.add('show');
+                        // editBtn видалено; НП-оплата тепер у cam-actions
                     }
                     showToast({
                         variant: 'created', icon: '💾',
@@ -3001,7 +3058,7 @@
                 document.getElementById('bottombar').style.display = 'none';
                 document.getElementById('modePill').classList.remove('show');
                 document.getElementById('resultToast').classList.remove('show');
-                document.getElementById('editBtn').classList.remove('show');
+                // editBtn видалено
                 lastScannedPkgId = null;
                 lastScannedTtn   = null;
                 closeNpModal();
