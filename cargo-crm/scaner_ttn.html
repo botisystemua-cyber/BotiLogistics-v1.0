@@ -1802,30 +1802,48 @@
             var isUnknown = _camState.isUnknown;
 
             if (isUnknown && TENANT_ID) {
-                // Невідомий + Скасувати: фіксуємо в package_scan_log як 'cancelled'
-                // (без створення pkg). Потрапляє в CRM «Перевірка → Відхилені».
-                var logUrl = SUPABASE_URL + '/rest/v1/package_scan_log';
-                fetch(logUrl, {
-                    method: 'POST',
-                    headers: {
-                        apikey: SUPABASE_ANON_KEY,
-                        Authorization: 'Bearer ' + SUPABASE_ANON_KEY,
-                        'Content-Type': 'application/json',
-                        Prefer: 'return=minimal'
-                    },
-                    body: JSON.stringify({
-                        tenant_id: TENANT_ID,
-                        pkg_id: null,
-                        ttn_number: ttn,
-                        scanned_by: USER_LOGIN,
-                        mode: 'cancelled',
-                        direction: DEFAULT_DIRECTION,
-                        from_status: null,
-                        to_status: 'rejected',
-                        outcome: 'rejected',
-                        reject_reason: 'cancelled_by_user'
-                    })
-                }).catch(function(){}).finally(function() {
+                // Невідомий + Скасувати: створюємо лід одразу як «Відхилено»,
+                // щоб він з'являвся і в CRM «Перевірка → Відхилені», і у
+                // сканерській історії (там була плутанина — лог-записи без
+                // pkg_id висіли у сканері, а в CRM їх не було).
+                sb.rpc('scan_ttn', {
+                    p_tenant_id: TENANT_ID, p_ttn: ttn,
+                    p_direction: DEFAULT_DIRECTION, p_user: USER_LOGIN
+                }).then(function(result) {
+                    var r = (result && result.data) || {};
+                    if (!r.ok || !r.pkg_id) {
+                        closeCheckActionMenu();
+                        resumeAfterSheet();
+                        return;
+                    }
+                    // Ставимо статус «Відхилено» і знімаємо «Невідомий»
+                    fetch(SUPABASE_URL + '/rest/v1/packages' +
+                          '?tenant_id=eq.' + encodeURIComponent(TENANT_ID) +
+                          '&pkg_id=eq.' + encodeURIComponent(r.pkg_id), {
+                        method: 'PATCH',
+                        headers: {
+                            apikey: SUPABASE_ANON_KEY,
+                            Authorization: 'Bearer ' + SUPABASE_ANON_KEY,
+                            'Content-Type': 'application/json',
+                            Prefer: 'return=minimal'
+                        },
+                        body: JSON.stringify({
+                            lead_status: 'rejected',
+                            scan_status: 'rejected'
+                        })
+                    }).catch(function(){}).finally(function() {
+                        showToast({
+                            variant: 'warn', icon: '🚫',
+                            label: 'Скасовано',
+                            value: ttn,
+                            status: 'Лід у «Відхилені» (' + r.pkg_id + ')'
+                        });
+                        setTimeout(function(){ document.getElementById('resultToast').classList.remove('show'); }, 1800);
+                        document.getElementById('historyDbBtn').style.display = '';
+                        closeCheckActionMenu();
+                        resumeAfterSheet();
+                    });
+                }).catch(function() {
                     closeCheckActionMenu();
                     resumeAfterSheet();
                 });
@@ -2601,10 +2619,14 @@
             var body = document.getElementById('hdBody');
             body.innerHTML = '<div class="hd-loading">⏳ Завантаження…</div>';
 
-            // Крок 1: останні 200 записів логу цього оператора
+            // Крок 1: останні 200 записів логу цього оператора.
+            // Виключаємо mode='cancelled' — у них немає pkg_id, тож у CRM
+            // вони не видно, і у сканерській історії теж нема сенсу
+            // показувати (клік не веде ні до чого, лише плутає).
             var logUrl = SUPABASE_URL + '/rest/v1/package_scan_log' +
                          '?tenant_id=eq.' + encodeURIComponent(TENANT_ID) +
                          '&scanned_by=eq.' + encodeURIComponent(USER_LOGIN) +
+                         '&mode=neq.cancelled' +
                          '&order=scanned_at.desc&limit=200' +
                          '&select=id,pkg_id,ttn_number,scanned_at,mode,outcome,reject_reason';
             fetch(logUrl, {
@@ -2615,6 +2637,15 @@
             }).then(function(r) { return r.json(); })
               .then(function(logs) {
                 if (!Array.isArray(logs)) logs = [];
+
+                // Ховаємо сирітки — старі 'cancelled' логи без pkg_id. Вони
+                // лишились від попередньої поведінки (Скасувати писала тільки
+                // в лог). Зараз Скасувати створює справжній «Відхилений» лід,
+                // тож нові будуть коректно з'являтись і в CRM теж.
+                logs = logs.filter(function(l) {
+                    if (l.mode === 'cancelled' && !l.pkg_id) return false;
+                    return true;
+                });
 
                 // Дедуп по ТТН: беремо найновіший запис
                 var byTtn = {};
