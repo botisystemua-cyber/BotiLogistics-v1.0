@@ -1790,21 +1790,50 @@
 
             if (isUnknown) {
                 // Зберегти невідомого: scan_ttn створює pkg, далі PATCH item_count
-                if (!TENANT_ID) { closeCheckActionMenu(); resumeAfterSheet(); return; }
+                if (!TENANT_ID) {
+                    showToast({ variant: 'error', icon: '❌', label: 'Немає сесії',
+                                value: ttn, status: 'Увійдіть у CRM заново' });
+                    setTimeout(function(){ document.getElementById('resultToast').classList.remove('show'); }, 2500);
+                    closeCheckActionMenu();
+                    resumeAfterSheet();
+                    return;
+                }
                 sb.rpc('scan_ttn', {
                     p_tenant_id: TENANT_ID,
                     p_ttn: ttn,
                     p_direction: DEFAULT_DIRECTION,
                     p_user: USER_LOGIN
                 }).then(function(result) {
+                    // ── Помилка на рівні транспорту (PostgREST) ──
+                    if (result.error) {
+                        console.error('[scan_ttn] RPC error:', result.error);
+                        showToast({ variant: 'error', icon: '❌', label: 'Помилка scan_ttn',
+                                    value: ttn, status: String(result.error.message || result.error) });
+                        setTimeout(function(){ document.getElementById('resultToast').classList.remove('show'); }, 3500);
+                        closeCheckActionMenu();
+                        resumeAfterSheet();
+                        return;
+                    }
                     var r = (result && result.data) || {};
-                    var newPkg = r && r.pkg_id ? r.pkg_id : null;
-                    if (newPkg && count > 1) {
-                        // Застосовуємо обрану кількість
-                        var url = SUPABASE_URL + '/rest/v1/packages' +
+                    // ── Помилка всередині RPC (tenant validation, direction, тощо) ──
+                    if (!r.ok) {
+                        console.error('[scan_ttn] !ok:', r);
+                        showToast({ variant: 'error', icon: '❌', label: 'Не збережено',
+                                    value: ttn, status: String(r.error || 'невідома причина') });
+                        setTimeout(function(){ document.getElementById('resultToast').classList.remove('show'); }, 3500);
+                        closeCheckActionMenu();
+                        resumeAfterSheet();
+                        return;
+                    }
+                    var newPkg = r.pkg_id || null;
+                    var pendingCount = count > 1 ? count : null;
+
+                    // Якщо треба задати кількість — PATCH item_count
+                    var countPromise = Promise.resolve(true);
+                    if (newPkg && pendingCount) {
+                        countPromise = fetch(SUPABASE_URL + '/rest/v1/packages' +
                                   '?tenant_id=eq.' + encodeURIComponent(TENANT_ID) +
-                                  '&pkg_id=eq.' + encodeURIComponent(newPkg);
-                        fetch(url, {
+                                  '&pkg_id=eq.' + encodeURIComponent(newPkg), {
                             method: 'PATCH',
                             headers: {
                                 apikey: SUPABASE_ANON_KEY,
@@ -1812,23 +1841,59 @@
                                 'Content-Type': 'application/json',
                                 Prefer: 'return=minimal'
                             },
-                            body: JSON.stringify({ item_count: count })
-                        }).catch(function(){});
+                            body: JSON.stringify({ item_count: pendingCount })
+                        }).then(function(pr) { return pr.ok; });
                     }
-                    if (newPkg) {
-                        lastScannedPkgId = newPkg;
-                        lastScannedTtn   = ttn;
-                        document.getElementById('editBtn').classList.add('show');
-                    }
-                    showToast({
-                        variant: 'created', icon: '💾',
-                        label: 'Збережено як Невідомий',
-                        value: ttn, status: 'У CRM → Невідомі'
+
+                    countPromise.then(function() {
+                        // ── Верифікація: перевіряємо що лід дійсно створився ──
+                        return fetch(SUPABASE_URL + '/rest/v1/packages' +
+                                  '?tenant_id=eq.' + encodeURIComponent(TENANT_ID) +
+                                  '&ttn_number=eq.' + encodeURIComponent(ttn) +
+                                  '&is_archived=eq.false&select=pkg_id,lead_status,item_count', {
+                            headers: {
+                                apikey: SUPABASE_ANON_KEY,
+                                Authorization: 'Bearer ' + SUPABASE_ANON_KEY
+                            }
+                        }).then(function(r) { return r.json(); });
+                    }).then(function(rows) {
+                        var row = Array.isArray(rows) && rows[0];
+                        if (!row || !row.pkg_id) {
+                            showToast({ variant: 'error', icon: '⚠️',
+                                        label: 'Лід не знайдено після збереження',
+                                        value: ttn, status: 'Перевір консоль або спробуй ще раз' });
+                            setTimeout(function(){ document.getElementById('resultToast').classList.remove('show'); }, 3500);
+                        } else {
+                            lastScannedPkgId = row.pkg_id;
+                            lastScannedTtn   = ttn;
+                            document.getElementById('editBtn').classList.add('show');
+                            // Додаємо в сесійний набір, щоб повторний скан розпізнав дубль
+                            _sessionScans[ttn] = (_sessionScans[ttn] || 0) + 1;
+                            showToast({ variant: 'success', icon: '✅',
+                                        label: 'Збережено як Невідомий',
+                                        value: ttn, status: row.pkg_id + ' · к-сть: ' + (row.item_count || 1) });
+                            setTimeout(function(){ document.getElementById('resultToast').classList.remove('show'); }, 2200);
+                            // Якщо історія відкрита — перезавантажуємо список
+                            if (document.getElementById('hdOverlay').classList.contains('open')) {
+                                refreshHistory();
+                            }
+                            // Показуємо кнопку історії
+                            document.getElementById('historyDbBtn').style.display = '';
+                        }
+                    }).catch(function(err) {
+                        console.error('[verify after save] failed:', err);
+                        showToast({ variant: 'error', icon: '❌', label: 'Помилка верифікації',
+                                    value: ttn, status: String(err && err.message || err) });
+                        setTimeout(function(){ document.getElementById('resultToast').classList.remove('show'); }, 3000);
+                    }).finally(function() {
+                        closeCheckActionMenu();
+                        resumeAfterSheet();
                     });
-                    setTimeout(function(){
-                        document.getElementById('resultToast').classList.remove('show');
-                    }, 1800);
-                }).catch(function(){}).finally(function() {
+                }).catch(function(err) {
+                    console.error('[scan_ttn] network/promise error:', err);
+                    showToast({ variant: 'error', icon: '❌', label: 'Мережа',
+                                value: ttn, status: String(err && err.message || err) });
+                    setTimeout(function(){ document.getElementById('resultToast').classList.remove('show'); }, 3000);
                     closeCheckActionMenu();
                     resumeAfterSheet();
                 });
