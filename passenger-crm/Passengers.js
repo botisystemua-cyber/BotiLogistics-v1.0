@@ -6522,7 +6522,7 @@ function renderTmCalDay(d, key, info, otherMonth, isToday, selectedKey) {
     var titleAttr = titleLines.length ? ' title="' + tmEsc(titleLines.join('\n')) + '"' : '';
 
     var currentBadge = isCurrent && tmCurrentBadgeText
-        ? '<span class="tm-current-badge">' + (tmCurrentBound ? '✓' : '') + tmEsc(tmCurrentBadgeText) + '</span>'
+        ? '<span class="tm-current-badge"><span class="tm-current-badge-ico">👤</span>' + (tmCurrentBound ? '✓' : '') + tmEsc(tmCurrentBadgeText) + '</span>'
         : '';
     // Повний день → клік показує деталі (а не selectTripDate, який призведе до "немає вільних")
     var onclick = '';
