@@ -6490,6 +6490,14 @@ function renderTmCalDay(d, key, info, otherMonth, isToday, selectedKey) {
     // Частково повні — маркер у лівому нижньому куті
     var partialHtml = isPartial ? '<div class="tcal-partial" title="Частина рейсів заповнена">' + fullCount + '/' + totalCount + '</div>' : '';
 
+    // Назва рейсу всередині клітинки (перший + «+N» якщо кілька)
+    var nameHtml = '';
+    if (info && info.trips && info.trips.length) {
+        var firstCity = String(info.trips[0].city || '').trim() || '—';
+        var extra = info.trips.length > 1 ? ' +' + (info.trips.length - 1) : '';
+        nameHtml = '<span class="tcal-tripname" title="' + tmEsc(firstCity + extra) + '">' + tmEsc(firstCity) + extra + '</span>';
+    }
+
     // Tooltip
     var titleLines = [];
     if (isCurrent && tmCurrentFullName) {
@@ -6521,6 +6529,7 @@ function renderTmCalDay(d, key, info, otherMonth, isToday, selectedKey) {
     return '<button class="' + cls + '" data-key="' + key + '"' + onclick + titleAttr + '>' +
         currentBadge +
         '<span class="tcal-day-num">' + d + '</span>' +
+        nameHtml +
         partialHtml +
         seatsHtml +
     '</button>';
