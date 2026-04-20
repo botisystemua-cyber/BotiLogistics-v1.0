@@ -671,6 +671,106 @@
         .unknown-sheet-btn.fill { background: linear-gradient(180deg,#ef4444,#dc2626); color: #fff; box-shadow: 0 4px 10px rgba(220,38,38,0.35), 0 0 0 3px rgba(59,130,246,0.2); }
         .unknown-sheet-btn.save { background: #10b981; color: #fff; }
         .unknown-sheet-btn.next { background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.18); }
+
+        /* ==== CHECK ACTION MENU (C7/1): показується в режимі «Перевіряти» після скану ==== */
+        .check-action-menu {
+            display: none;
+            flex-direction: column;
+            gap: 10px;
+            width: 100%;
+            max-width: 380px;
+            margin-left: auto;    /* right-hand thumb reach */
+            background: #1e293b;
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 14px;
+            padding: 12px;
+            animation: us-slide 0.2s ease-out;
+        }
+        .check-action-menu.show { display: flex; }
+        .cam-ttn-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .cam-ttn-label {
+            font-size: 10px;
+            font-weight: 700;
+            color: rgba(255,255,255,0.5);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .cam-ttn-code {
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            color: #fff;
+            font-size: 14px;
+            font-weight: 700;
+            word-break: break-all;
+            flex: 1;
+        }
+        .cam-ttn-badge {
+            font-size: 11px;
+            padding: 3px 8px;
+            border-radius: 999px;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+        .cam-ttn-badge.found { background: #10b981; color: #fff; }
+        .cam-ttn-badge.unknown { background: #f59e0b; color: #fff; }
+        .cam-stepper {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 10px;
+            padding: 6px;
+        }
+        .cam-stepper-btn {
+            width: 44px;
+            height: 44px;
+            border-radius: 10px;
+            border: none;
+            background: rgba(255,255,255,0.1);
+            color: #fff;
+            font-size: 22px;
+            font-weight: 800;
+            font-family: inherit;
+            cursor: pointer;
+        }
+        .cam-stepper-btn:active { transform: scale(0.94); }
+        .cam-stepper-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+        .cam-stepper-val {
+            flex: 1;
+            text-align: center;
+            color: #fff;
+            font-size: 22px;
+            font-weight: 800;
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        }
+        .cam-stepper-label {
+            color: rgba(255,255,255,0.6);
+            font-size: 12px;
+            font-weight: 600;
+            padding-right: 8px;
+        }
+        .cam-actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+        .cam-btn {
+            padding: 14px 10px;
+            border-radius: 10px;
+            border: none;
+            font-size: 14px;
+            font-weight: 700;
+            font-family: inherit;
+            cursor: pointer;
+            transition: transform 0.1s;
+        }
+        .cam-btn:active { transform: scale(0.97); }
+        .cam-btn-cancel { background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.18); }
+        .cam-btn-primary { background: linear-gradient(180deg,#3b82f6,#2563eb); color: #fff; box-shadow: 0 4px 10px rgba(37,99,235,0.35); }
+        .cam-btn-primary.save { background: linear-gradient(180deg,#10b981,#059669); box-shadow: 0 4px 10px rgba(16,185,129,0.35); }
     </style>
 </head>
 <body>
@@ -741,6 +841,26 @@
                 <div class="last-scan-code" id="lastScanCode">—</div>
             </div>
         </div>
+
+        <!-- C7/1: check-mode action menu (found → Редагувати, unknown → Зберегти) -->
+        <div class="check-action-menu" id="checkActionMenu">
+            <div class="cam-ttn-row">
+                <div class="cam-ttn-label">ТТН:</div>
+                <div class="cam-ttn-code" id="camTtnCode">—</div>
+                <div class="cam-ttn-badge" id="camTtnBadge">—</div>
+            </div>
+            <div class="cam-stepper">
+                <button type="button" class="cam-stepper-btn" onclick="stepperChange(-1)">−</button>
+                <div class="cam-stepper-val" id="camStepperVal">1</div>
+                <button type="button" class="cam-stepper-btn" onclick="stepperChange(1)">+</button>
+                <span class="cam-stepper-label">📦 коробок</span>
+            </div>
+            <div class="cam-actions">
+                <button type="button" class="cam-btn cam-btn-cancel" onclick="checkActionCancel()">❌ Скасувати</button>
+                <button type="button" class="cam-btn cam-btn-primary" id="camBtnPrimary" onclick="checkActionPrimary()">✏️ Редагувати</button>
+            </div>
+        </div>
+
         <button class="main-btn btn-next" id="mainBtn" onclick="mainBtnClick()">🔄 Сканувати далі</button>
         <button class="main-btn btn-edit" id="editBtn" onclick="openNpModal()">✏️ НП-оплата</button>
         <button class="main-btn btn-stop" onclick="stopScan()">✕ Завершити</button>
@@ -1056,6 +1176,8 @@
                     handleScanResult(ttn, {
                         ok: true,
                         mode: 'check',
+                        pkg_id: r.pkg_id,
+                        item_count: r.item_count,
                         payment_status: r.payment_status,
                         payment_currency: r.payment_currency,
                         total_amount: r.total_amount,
@@ -1143,7 +1265,9 @@
             }
 
             addToHistory(ttn, variant, statusTxt);
-            document.getElementById('mainBtn').style.display = 'block';
+            // В check-режимі mainBtn ховається — замість нього показуємо
+            // checkActionMenu (див. нижче). У scan-режимі — як було.
+            document.getElementById('mainBtn').style.display = (SCAN_MODE === 'check') ? 'none' : 'block';
             sessionCounter += 1;
             document.getElementById('counterScanned').textContent = '📊 ' + sessionCounter;
 
@@ -1161,11 +1285,37 @@
                 document.getElementById('resultToast').classList.remove('show');
             }, 2500);
 
-            // Сканер — «порт» до CRM ДЛЯ ВІДОМИХ лідів. Знайдений/уже-готовий/
-            // check-режим з успіхом → ведемо у розділ «Перевірка» з цим ТТН.
-            // Для НЕВІДОМИХ (нова посилка від scan_ttn або «не знайдено» від
-            // peek_ttn) НЕ виходимо зі сканера — показуємо sheet-меню прямо
-            // на камері: Заповнити / Зберегти / Сканувати далі.
+            // C7/1: У режимі «Перевіряти» НЕ виходимо у CRM — показуємо
+            // action-menu прямо в bottombar (Редагувати/Скасувати/stepper
+            // для знайдених; Зберегти/Скасувати/stepper для невідомих).
+            // Scan-режим лишається як був (C5/C6): редірект для знайдених,
+            // unknown-sheet для нових.
+            if (SCAN_MODE === 'check') {
+                if (res && res.ok && res.pkg_id) {
+                    // Знайдено в перевірці — меню Редагувати
+                    setTimeout(function() {
+                        showCheckActionMenu({
+                            ttn: ttn,
+                            pkg_id: res.pkg_id,
+                            count: Math.max(1, parseInt(res.item_count, 10) || 1),
+                            isUnknown: false
+                        });
+                    }, 600);
+                } else if (res && !res.ok && typeof res.error === 'string' && /не знайдено/i.test(res.error)) {
+                    // Невідомий у перевірці — меню Зберегти
+                    setTimeout(function() {
+                        showCheckActionMenu({
+                            ttn: ttn,
+                            pkg_id: null,
+                            count: 1,
+                            isUnknown: true
+                        });
+                    }, 600);
+                }
+                return;
+            }
+
+            // Scan-mode (не чіпаємо): знайдений → CRM, новий → unknown-sheet.
             var shouldRedirect = false;
             var asUnknown = false;
             var pkgForUnknown = null;
@@ -1174,10 +1324,9 @@
                     asUnknown = true;
                     pkgForUnknown = res.pkg_id || null;
                 } else {
-                    shouldRedirect = (res.type === 'found' || res.type === 'already' || res.mode === 'check');
+                    shouldRedirect = (res.type === 'found' || res.type === 'already');
                 }
             } else if (res && !res.ok && typeof res.error === 'string' && /не знайдено/i.test(res.error)) {
-                // peek_ttn → ТТН відсутній: треба запропонувати дії на сканері
                 asUnknown = true;
                 pkgForUnknown = null;
             }
@@ -1191,6 +1340,170 @@
                 setTimeout(function() {
                     showUnknownSheet(ttn, pkgForUnknown);
                 }, 900);
+            }
+        }
+
+        // ==== CHECK ACTION MENU (C7/1) =========================================
+        // Показується в режимі «Перевіряти» після успішного скану (знайдений
+        // або невідомий ТТН). Містить stepper кількості + 2 кнопки дії.
+        var _camState = { ttn: '', pkg_id: null, count: 1, isUnknown: false };
+
+        function showCheckActionMenu(cfg) {
+            _camState.ttn       = cfg.ttn || '';
+            _camState.pkg_id    = cfg.pkg_id || null;
+            _camState.count     = Math.max(1, parseInt(cfg.count, 10) || 1);
+            _camState.isUnknown = !!cfg.isUnknown;
+
+            document.getElementById('camTtnCode').textContent = _camState.ttn || '—';
+            var badge = document.getElementById('camTtnBadge');
+            if (_camState.isUnknown) {
+                badge.textContent = '📡 Невідомий';
+                badge.className = 'cam-ttn-badge unknown';
+            } else {
+                badge.textContent = '✓ Знайдено';
+                badge.className = 'cam-ttn-badge found';
+            }
+            document.getElementById('camStepperVal').textContent = _camState.count;
+
+            var primary = document.getElementById('camBtnPrimary');
+            if (_camState.isUnknown) {
+                primary.textContent = '💾 Зберегти';
+                primary.classList.add('save');
+            } else {
+                primary.textContent = '✏️ Редагувати';
+                primary.classList.remove('save');
+            }
+
+            // Ховаємо mainBtn / editBtn — діюче меню саме вирішує, що далі
+            document.getElementById('mainBtn').style.display = 'none';
+            document.getElementById('checkActionMenu').classList.add('show');
+        }
+
+        function closeCheckActionMenu() {
+            document.getElementById('checkActionMenu').classList.remove('show');
+            _camState = { ttn: '', pkg_id: null, count: 1, isUnknown: false };
+        }
+
+        function stepperChange(delta) {
+            var next = Math.max(1, Math.min(999, _camState.count + (delta | 0)));
+            if (next === _camState.count) return;
+            _camState.count = next;
+            document.getElementById('camStepperVal').textContent = next;
+
+            // Для відомого pkg — миттєво пишемо в БД. Для невідомого (pkg=null)
+            // тримаємо локально, збережеться коли оператор натисне «Зберегти».
+            if (_camState.pkg_id && TENANT_ID) {
+                var url = SUPABASE_URL + '/rest/v1/packages' +
+                          '?tenant_id=eq.' + encodeURIComponent(TENANT_ID) +
+                          '&pkg_id=eq.' + encodeURIComponent(_camState.pkg_id);
+                fetch(url, {
+                    method: 'PATCH',
+                    headers: {
+                        apikey: SUPABASE_ANON_KEY,
+                        Authorization: 'Bearer ' + SUPABASE_ANON_KEY,
+                        'Content-Type': 'application/json',
+                        Prefer: 'return=minimal'
+                    },
+                    body: JSON.stringify({ item_count: next })
+                }).catch(function(){});
+            }
+        }
+
+        function checkActionCancel() {
+            var ttn = _camState.ttn;
+            var isUnknown = _camState.isUnknown;
+
+            if (isUnknown && TENANT_ID) {
+                // Невідомий + Скасувати: фіксуємо в package_scan_log як 'cancelled'
+                // (без створення pkg). Потрапляє в CRM «Перевірка → Відхилені».
+                var logUrl = SUPABASE_URL + '/rest/v1/package_scan_log';
+                fetch(logUrl, {
+                    method: 'POST',
+                    headers: {
+                        apikey: SUPABASE_ANON_KEY,
+                        Authorization: 'Bearer ' + SUPABASE_ANON_KEY,
+                        'Content-Type': 'application/json',
+                        Prefer: 'return=minimal'
+                    },
+                    body: JSON.stringify({
+                        tenant_id: TENANT_ID,
+                        pkg_id: null,
+                        ttn_number: ttn,
+                        scanned_by: USER_LOGIN,
+                        mode: 'cancelled',
+                        direction: DEFAULT_DIRECTION,
+                        from_status: null,
+                        to_status: 'rejected',
+                        outcome: 'rejected',
+                        reject_reason: 'cancelled_by_user'
+                    })
+                }).catch(function(){}).finally(function() {
+                    closeCheckActionMenu();
+                    resumeAfterSheet();
+                });
+            } else {
+                // Знайдений + Скасувати: просто закриваємо, нічого не пишемо
+                closeCheckActionMenu();
+                resumeAfterSheet();
+            }
+        }
+
+        function checkActionPrimary() {
+            var ttn = _camState.ttn;
+            var pkg = _camState.pkg_id;
+            var count = _camState.count;
+            var isUnknown = _camState.isUnknown;
+
+            if (isUnknown) {
+                // Зберегти невідомого: scan_ttn створює pkg, далі PATCH item_count
+                if (!TENANT_ID) { closeCheckActionMenu(); resumeAfterSheet(); return; }
+                sb.rpc('scan_ttn', {
+                    p_tenant_id: TENANT_ID,
+                    p_ttn: ttn,
+                    p_direction: DEFAULT_DIRECTION,
+                    p_user: USER_LOGIN
+                }).then(function(result) {
+                    var r = (result && result.data) || {};
+                    var newPkg = r && r.pkg_id ? r.pkg_id : null;
+                    if (newPkg && count > 1) {
+                        // Застосовуємо обрану кількість
+                        var url = SUPABASE_URL + '/rest/v1/packages' +
+                                  '?tenant_id=eq.' + encodeURIComponent(TENANT_ID) +
+                                  '&pkg_id=eq.' + encodeURIComponent(newPkg);
+                        fetch(url, {
+                            method: 'PATCH',
+                            headers: {
+                                apikey: SUPABASE_ANON_KEY,
+                                Authorization: 'Bearer ' + SUPABASE_ANON_KEY,
+                                'Content-Type': 'application/json',
+                                Prefer: 'return=minimal'
+                            },
+                            body: JSON.stringify({ item_count: count })
+                        }).catch(function(){});
+                    }
+                    if (newPkg) {
+                        lastScannedPkgId = newPkg;
+                        lastScannedTtn   = ttn;
+                        document.getElementById('editBtn').classList.add('show');
+                    }
+                    showToast({
+                        variant: 'created', icon: '💾',
+                        label: 'Збережено як Невідомий',
+                        value: ttn, status: 'У CRM → Невідомі'
+                    });
+                    setTimeout(function(){
+                        document.getElementById('resultToast').classList.remove('show');
+                    }, 1800);
+                }).catch(function(){}).finally(function() {
+                    closeCheckActionMenu();
+                    resumeAfterSheet();
+                });
+            } else {
+                // Редагувати знайдений → поки редіректимо у CRM fill-модалку.
+                // (C7/2 замінить на inline-редактор на самому сканері.)
+                if (!pkg) { closeCheckActionMenu(); resumeAfterSheet(); return; }
+                window.location.href = 'index.html?scan=' + encodeURIComponent(ttn) +
+                                       '&pkg=' + encodeURIComponent(pkg);
             }
         }
 
@@ -1461,6 +1774,7 @@
             isPaused = false;
             document.getElementById('resultToast').classList.remove('show');
             document.getElementById('mainBtn').style.display = 'none';
+            document.getElementById('checkActionMenu').classList.remove('show');
         }
 
         function stopScan() {
@@ -1478,6 +1792,7 @@
                 lastScannedTtn   = null;
                 closeNpModal();
                 closeUnknownSheet();
+                closeCheckActionMenu();
                 document.getElementById('startScreen').classList.remove('hidden');
             }).catch(function() {});
         }
