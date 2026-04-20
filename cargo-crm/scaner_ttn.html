@@ -2701,21 +2701,32 @@
         }
 
         function _finishHistoryRender(logs, byPkg) {
-            _hdItems = logs.map(function(l) {
+            // Пропускаємо сирітки — log-записи, чий pkg видалено з БД або
+            // архівовано. Вони у CRM «Перевірка» уже не показуються, тож
+            // у сканерській історії їм теж нема чого висіти. «Актуалізувати»
+            // підтягне свіжий стан з CRM — старі сирітки одразу зникнуть.
+            _hdItems = logs.reduce(function(acc, l) {
                 var pkg = l.pkg_id ? byPkg[l.pkg_id] : null;
-                // Якщо pkg архівовано — трактуємо як відсутній
                 if (pkg && pkg.is_archived) pkg = null;
+                // Якщо у лога є pkg_id, а пакет не знайдено (видалений або
+                // архівований) → ховаємо цей рядок у історії
+                if (l.pkg_id && !pkg) return acc;
+                // Якщо pkg_id нема (cancelled-сирітка) — ховаємо (вже
+                // фільтрується раніше, тут — додатковий захист)
+                if (!l.pkg_id) return acc;
+
                 var cls = _classifyForHistory(l, pkg);
-                return {
+                acc.push({
                     ttn: l.ttn_number,
-                    pkg_id: pkg ? pkg.pkg_id : null,
+                    pkg_id: pkg.pkg_id,
                     scanned_at: l.scanned_at,
                     mode: l.mode,
-                    phone: pkg ? (pkg.recipient_phone || '') : '',
+                    phone: pkg.recipient_phone || '',
                     filter: cls.filter,
                     badge: cls.badge
-                };
-            });
+                });
+                return acc;
+            }, []);
             _hdLoading = false;
             _updateHistoryCounts();
             renderHistoryList();
