@@ -5746,6 +5746,8 @@ let tmSelectedCalId = ''; // Обраний рейс
 let tmSelectedDate = '';  // Обрана дата
 let tmMode = 'assign';    // 'assign' | 'form' (з форми додавання)
 let tmFormCallback = null; // Callback для форми
+let tmCalMonth = new Date().getMonth();
+let tmCalYear = new Date().getFullYear();
 
 // Форматування дати: ISO/будь-який → "dd.MM"
 function formatTripDate(raw) {
@@ -5792,8 +5794,10 @@ function getPaxDirection(paxIds) {
 // Фільтруємо рейси по напряму
 function getMatchingTrips(paxIds) {
     var dirs = getPaxDirection(paxIds);
+    var noDir = !dirs.ue && !dirs.eu; // напрям пасажира не заданий → показуємо всі
     return trips.filter(function(t) {
         if (t.status === 'Архів' || t.status === 'Виконано' || t.status === 'Видалено') return false;
+        if (noDir) return true;
         var tDir = String(t.direction || '').toLowerCase().trim();
         var tIsUE = tDir.startsWith('ук') || tDir.startsWith('ua') || tDir.startsWith('україна');
         var tIsEU = tDir.startsWith('єв') || tDir.startsWith('eu') || tDir.startsWith('європа');
@@ -5869,7 +5873,7 @@ function closeTripModal() {
     tmSelectedDate = '';
 }
 
-// КРОК 1 — вибір дати
+// КРОК 1 — вибір дати (місячна сітка календаря)
 function renderTripModalStep1() {
     document.getElementById('tmStep').textContent = 'Крок 1 — оберіть дату';
     var saveBtn = document.getElementById('tmSaveBtn');
@@ -5881,25 +5885,150 @@ function renderTripModalStep1() {
 
     if (matchTrips.length === 0) {
         document.getElementById('tmBody').innerHTML =
-            '<div class="tm-no-vehicles">Немає доступних рейсів для цього напряму</div>';
+            '<div class="tm-no-vehicles">Немає доступних рейсів</div>';
         return;
     }
 
-    var dates = getUniqueDates(matchTrips);
+    // Стартуємо з місяця найближчого майбутнього рейсу, щоб календар відразу показав щось корисне
+    var today = new Date(); today.setHours(0,0,0,0);
+    var upcoming = matchTrips
+        .map(function(t) { return new Date(t.date); })
+        .filter(function(d) { return !isNaN(d) && d >= today; })
+        .sort(function(a, b) { return a - b; })[0];
+    if (upcoming) {
+        tmCalMonth = upcoming.getMonth();
+        tmCalYear = upcoming.getFullYear();
+    }
 
-    var html = '<div class="tm-section-label">Доступні дати</div><div class="tm-dates-grid">';
-    dates.forEach(function(d) {
-        var pill = formatDatePill(d.raw);
-        html += '<div class="tm-date-pill" onclick="selectTripDate(\'' + d.formatted + '\')" id="tm-date-' + d.formatted.replace(/\./g,'-') + '">' +
-            '<div class="tm-date-day">' + pill.day + '</div>' +
-            '<div class="tm-date-num">' + pill.num + '</div>' +
-            '<div class="tm-date-month">' + pill.month + '</div>' +
-            '<div class="tm-date-trips">' + d.count + ' рейс' + (d.count > 1 ? 'ів' : '') + '</div>' +
-        '</div>';
+    renderTripModalCalendar();
+}
+
+// Рендер календаря-сітки на tmCalYear/tmCalMonth
+function renderTripModalCalendar() {
+    var matchTrips = getMatchingTrips(tmPaxIds);
+
+    // Зведення по датах — скільки рейсів кожного напряму, чи є перебір
+    var tripMap = {};
+    matchTrips.forEach(function(t) {
+        var fd = formatTripDate(t.date);
+        if (!fd || fd === '—') return;
+        if (!tripMap[fd]) tripMap[fd] = { uaeu: 0, euua: 0, pax: 0, maxSeats: 0, overbooked: false, count: 0 };
+        var dir = getTripDirection(t);
+        if (dir === 'ua-eu') tripMap[fd].uaeu++;
+        else if (dir === 'eu-ua') tripMap[fd].euua++;
+        tripMap[fd].count++;
+        var occ = parseInt(t.occupied) || 0;
+        var maxS = parseInt(t.max_seats) || 0;
+        tripMap[fd].pax += occ;
+        tripMap[fd].maxSeats += maxS;
+        if (occ > maxS && maxS > 0) tripMap[fd].overbooked = true;
     });
-    html += '</div>';
 
-    document.getElementById('tmBody').innerHTML = html;
+    var monthNames = ['Січень','Лютий','Березень','Квітень','Травень','Червень','Липень','Серпень','Вересень','Жовтень','Листопад','Грудень'];
+    var dayNames = ['Пн','Вт','Ср','Чт','Пт','Сб','Нд'];
+
+    var firstDay = new Date(tmCalYear, tmCalMonth, 1);
+    var startDow = firstDay.getDay() - 1;
+    if (startDow < 0) startDow = 6;
+    var daysInMonth = new Date(tmCalYear, tmCalMonth + 1, 0).getDate();
+    var prevMonthDays = new Date(tmCalYear, tmCalMonth, 0).getDate();
+
+    var today = new Date(); today.setHours(0,0,0,0);
+    var selectedKey = tmSelectedDate || '';
+
+    var daysHtml = '';
+    // Previous month tail
+    for (var i = startDow - 1; i >= 0; i--) {
+        var pd = prevMonthDays - i;
+        var pm = tmCalMonth === 0 ? 12 : tmCalMonth;
+        var py = tmCalMonth === 0 ? tmCalYear - 1 : tmCalYear;
+        var pkey = String(pd).padStart(2,'0') + '.' + String(pm).padStart(2,'0') + '.' + py;
+        daysHtml += renderTmCalDay(pd, pkey, tripMap[pkey], true, false, selectedKey);
+    }
+    // Current month
+    for (var d = 1; d <= daysInMonth; d++) {
+        var key = String(d).padStart(2,'0') + '.' + String(tmCalMonth+1).padStart(2,'0') + '.' + tmCalYear;
+        var isToday = d === today.getDate() && tmCalMonth === today.getMonth() && tmCalYear === today.getFullYear();
+        daysHtml += renderTmCalDay(d, key, tripMap[key], false, isToday, selectedKey);
+    }
+    // Next month head
+    var totalCells = startDow + daysInMonth;
+    var remaining = (7 - totalCells % 7) % 7;
+    for (var nd = 1; nd <= remaining; nd++) {
+        var nm = tmCalMonth === 11 ? 1 : tmCalMonth + 2;
+        var ny = tmCalMonth === 11 ? tmCalYear + 1 : tmCalYear;
+        var nkey = String(nd).padStart(2,'0') + '.' + String(nm).padStart(2,'0') + '.' + ny;
+        daysHtml += renderTmCalDay(nd, nkey, tripMap[nkey], true, false, selectedKey);
+    }
+
+    document.getElementById('tmBody').innerHTML =
+        '<div class="tm-cal-wrap">' +
+            '<div class="tcal-header">' +
+                '<span class="tcal-month-label">' + monthNames[tmCalMonth] + ' ' + tmCalYear + '</span>' +
+                '<div class="tcal-nav">' +
+                    '<button class="tcal-nav-btn" onclick="tmCalPrev()">&larr;</button>' +
+                    '<button class="tcal-nav-btn" onclick="tmCalToday()">Сьогодні</button>' +
+                    '<button class="tcal-nav-btn" onclick="tmCalNext()">&rarr;</button>' +
+                '</div>' +
+            '</div>' +
+            '<div class="tcal-weekdays">' + dayNames.map(function(n){ return '<span class="tcal-wd">'+n+'</span>'; }).join('') + '</div>' +
+            '<div class="tcal-days">' + daysHtml + '</div>' +
+            '<div class="tcal-footer">' +
+                '<div class="tcal-legend">' +
+                    '<span class="tcal-legend-item"><span class="tcal-legend-dot" style="background:#2563eb;"></span> UA→EU</span>' +
+                    '<span class="tcal-legend-item"><span class="tcal-legend-dot" style="background:#059669;"></span> EU→UA</span>' +
+                    '<span class="tcal-legend-item"><span class="tcal-legend-dot" style="background:#dc2626;"></span> Перебір</span>' +
+                '</div>' +
+            '</div>' +
+        '</div>' +
+        '<div id="tmVehiclesWrap"></div>';
+}
+
+function renderTmCalDay(d, key, info, otherMonth, isToday, selectedKey) {
+    var hasTrip = !!info;
+    var isSelected = key === selectedKey;
+    var cls = 'tcal-day';
+    if (otherMonth) cls += ' other-month';
+    if (isToday) cls += ' today';
+    if (hasTrip) cls += ' has-trip';
+    if (isSelected) cls += ' selected';
+    if (info && info.overbooked) cls += ' overbooked';
+
+    var dotsHtml = '';
+    if (info) {
+        if (info.overbooked) {
+            dotsHtml = '<span class="dot-overbooked"></span>';
+        } else if (info.uaeu > 0 && info.euua > 0) {
+            dotsHtml = '<span class="dot-ua-eu"></span><span class="dot-eu-ua"></span>';
+        } else if (info.uaeu > 0) {
+            dotsHtml = '<span class="dot-ua-eu"></span>';
+        } else if (info.euua > 0) {
+            dotsHtml = '<span class="dot-eu-ua"></span>';
+        }
+    }
+
+    var onclick = hasTrip ? ' onclick="selectTripDate(\'' + key + '\')"' : '';
+    return '<button class="' + cls + '" data-key="' + key + '"' + onclick + '>' +
+        '<span>' + d + '</span>' +
+        (dotsHtml ? '<div class="tcal-dots">' + dotsHtml + '</div>' : '') +
+    '</button>';
+}
+
+function tmCalPrev() {
+    tmCalMonth--;
+    if (tmCalMonth < 0) { tmCalMonth = 11; tmCalYear--; }
+    renderTripModalCalendar();
+}
+function tmCalNext() {
+    tmCalMonth++;
+    if (tmCalMonth > 11) { tmCalMonth = 0; tmCalYear++; }
+    renderTripModalCalendar();
+}
+function tmCalToday() {
+    var now = new Date();
+    tmCalMonth = now.getMonth();
+    tmCalYear = now.getFullYear();
+    renderTripModalCalendar();
 }
 
 // Вибрано дату → показуємо авто (крок 2)
@@ -5916,21 +6045,25 @@ function selectTripDate(dateFormatted) {
         return formatTripDate(t.date) === dateFormatted;
     });
 
-    // Оновлюємо вибір дати
-    document.querySelectorAll('.tm-date-pill').forEach(function(el) { el.classList.remove('active'); });
+    // Оновлюємо вибір дати (календар + legacy pills)
+    document.querySelectorAll('#tmBody .tm-date-pill').forEach(function(el) { el.classList.remove('active'); });
     var activeEl = document.getElementById('tm-date-' + dateFormatted.replace(/\./g,'-'));
     if (activeEl) activeEl.classList.add('active');
+    document.querySelectorAll('#tmBody .tcal-day.selected').forEach(function(el) { el.classList.remove('selected'); });
+    var calEl = document.querySelector('#tmBody .tcal-day[data-key="' + dateFormatted + '"]');
+    if (calEl) calEl.classList.add('selected');
 
-    // Рендеримо авто під датами
+    // Рендеримо авто у контейнер під календарем (якщо є), інакше під pills
     var vehiclesDiv = document.getElementById('tmVehicles');
+    var wrap = document.getElementById('tmVehiclesWrap');
     if (!vehiclesDiv) {
-        var body = document.getElementById('tmBody');
-        body.innerHTML += '<div class="tm-section-label">Авто на ' + dateFormatted + '</div><div id="tmVehicles"></div>';
+        var html = '<div class="tm-section-label">Авто на ' + dateFormatted + '</div><div id="tmVehicles"></div>';
+        if (wrap) { wrap.innerHTML = html; }
+        else { document.getElementById('tmBody').innerHTML += html; }
         vehiclesDiv = document.getElementById('tmVehicles');
     } else {
-        // Оновлюємо заголовок
-        var labels = document.querySelectorAll('.tm-section-label');
-        if (labels.length > 1) labels[1].textContent = 'Авто на ' + dateFormatted;
+        var labels = document.querySelectorAll('#tmBody .tm-section-label');
+        if (labels.length > 0) labels[labels.length - 1].textContent = 'Авто на ' + dateFormatted;
     }
 
     if (forDate.length === 0) {
