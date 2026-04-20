@@ -729,7 +729,11 @@ function handleScanReturn() {
   if (!ttn) return;
   const pkgId = params.get('pkg') || '';
   const isUnknown = params.get('unknown') === '1';
-  try { sessionStorage.setItem('_scanReturnTTN', ttn); } catch(_) {}
+  try {
+    sessionStorage.setItem('_scanReturnTTN', ttn);
+    if (pkgId)    sessionStorage.setItem('_scanReturnPkg', pkgId);
+    if (isUnknown) sessionStorage.setItem('_scanReturnUnknown', '1');
+  } catch(_) {}
 
   // Прибираємо параметри з URL, щоб F5 не повторював сценарій
   try { history.replaceState({}, '', 'index.html'); } catch(_) {}
@@ -742,19 +746,117 @@ function handleScanReturn() {
       onVerifySearchInput(ttn);
       inp.focus();
     }
+    renderScanReturnBanner();
+    // Для нового Невідомого ліда одразу відкриваємо Заповнити —
+    // оператор щойно сканував, ми знаємо яку посилку він хоче заповнити.
+    if (isUnknown && pkgId) {
+      setTimeout(() => openFillModal(pkgId), 350);
+    }
     showToast('🔍 ТТН зі сканера: ' + ttn, 'info');
   }, 50);
 }
 
 function clearScanReturn() {
-  try { sessionStorage.removeItem('_scanReturnTTN'); } catch(_) {}
+  try {
+    sessionStorage.removeItem('_scanReturnTTN');
+    sessionStorage.removeItem('_scanReturnPkg');
+    sessionStorage.removeItem('_scanReturnUnknown');
+  } catch(_) {}
+  const b = document.getElementById('scanReturnBanner');
+  if (b) b.remove();
 }
 function hasScanReturn() {
   try { return !!sessionStorage.getItem('_scanReturnTTN'); } catch(_) { return false; }
 }
+function getScanReturnPkg() {
+  try { return sessionStorage.getItem('_scanReturnPkg') || ''; } catch(_) { return ''; }
+}
+function getScanReturnTTN() {
+  try { return sessionStorage.getItem('_scanReturnTTN') || ''; } catch(_) { return ''; }
+}
+function isScanReturnUnknown() {
+  try { return sessionStorage.getItem('_scanReturnUnknown') === '1'; } catch(_) { return false; }
+}
 function backToScanner() {
   clearScanReturn();
   window.location.href = 'scaner_ttn.html';
+}
+
+// Банер «зі сканера» на верху списку з 4 діями для Невідомих (C5):
+// Заповнити / Сканувати далі / Видалити / Зберегти. Для відомих лідів
+// достатньо verify-пошуку (C3), банер не показуємо.
+function renderScanReturnBanner() {
+  const existing = document.getElementById('scanReturnBanner');
+  if (existing) existing.remove();
+  if (!hasScanReturn() || !isScanReturnUnknown()) return;
+
+  const ttn = getScanReturnTTN();
+  const pkg = getScanReturnPkg();
+
+  const banner = document.createElement('div');
+  banner.id = 'scanReturnBanner';
+  banner.className = 'scan-return-banner';
+  banner.innerHTML =
+    '<div class="scan-return-info">' +
+      '<span class="scan-return-icon">📡</span>' +
+      '<div>' +
+        '<div class="scan-return-title">Нова ТТН зі сканера</div>' +
+        '<div class="scan-return-ttn">' + escapeHtmlVerify(ttn) + '</div>' +
+      '</div>' +
+    '</div>' +
+    '<div class="scan-return-actions">' +
+      '<button class="scan-return-btn fill" onclick="scanReturnAction(\'fill\')">📝 Заповнити</button>' +
+      '<button class="scan-return-btn next" onclick="scanReturnAction(\'next\')">🔙 Сканувати далі</button>' +
+      '<button class="scan-return-btn save" onclick="scanReturnAction(\'save\')">💾 Зберегти</button>' +
+      '<button class="scan-return-btn del" onclick="scanReturnAction(\'del\')">🗑️ Видалити</button>' +
+    '</div>';
+
+  // Вставляємо над картками
+  const mainSect = document.querySelector('.main-content') || document.body;
+  const firstChild = mainSect.firstChild;
+  mainSect.insertBefore(banner, firstChild);
+
+  banner.dataset.pkg = pkg;
+}
+
+async function scanReturnAction(action) {
+  const pkg = getScanReturnPkg();
+
+  if (action === 'fill') {
+    if (pkg) openFillModal(pkg);
+    else showToast('PKG_ID не знайдено', 'error');
+    return;
+  }
+
+  if (action === 'next') {
+    backToScanner();
+    return;
+  }
+
+  if (action === 'save') {
+    // «Зберегти» — ТТН уже збережена RPC scan_ttn'ом; просто закриваємо
+    // банер і лишаємо оператора в CRM, щоб далі редагувати вручну.
+    clearScanReturn();
+    showToast('💾 ТТН збережено в «Невідомі»', 'success');
+    return;
+  }
+
+  if (action === 'del') {
+    if (!pkg) { showToast('PKG_ID не знайдено', 'error'); return; }
+    if (!confirm('Видалити (архівувати) новий невідомий ТТН зі сканера?')) return;
+    const res = await apiPost('deleteParcel', {
+      pkg_id: pkg, reason: 'scan unknown — discarded', archived_by: 'scanner'
+    });
+    if (!res || !res.ok) {
+      showToast((res && res.error) || 'Не вдалося видалити', 'error');
+      return;
+    }
+    // Прибираємо з локального кешу
+    const idx = (allData || []).findIndex(p => p['PKG_ID'] === pkg);
+    if (idx >= 0) allData.splice(idx, 1);
+    showToast('Видалено', 'success');
+    backToScanner();
+  }
 }
 
 // ===== [SECT-FILTER] FILTERING =====

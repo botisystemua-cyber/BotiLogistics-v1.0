@@ -503,6 +503,60 @@ body {
 .fill-btn-cancel { background: #e2e8f0; color: #1e293b; }
 .fill-btn-save   { background: #10b981; color: #fff; }
 .fill-btn-save:disabled { background: #94a3b8; cursor: not-allowed; }
+
+/* ============ SCAN-RETURN BANNER — «зі сканера, Невідомий ТТН» ============ */
+.scan-return-banner {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 12px;
+  margin: 10px 10px 14px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  border: 1px solid #f59e0b;
+  box-shadow: 0 4px 10px rgba(245, 158, 11, 0.15);
+  animation: scan-banner-in 0.25s ease-out;
+}
+@keyframes scan-banner-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.scan-return-info {
+  display: flex; align-items: center; gap: 10px;
+  flex: 1 1 auto;
+  min-width: 180px;
+}
+.scan-return-icon {
+  font-size: 24px;
+  animation: scan-ping 1.5s ease-in-out infinite;
+}
+@keyframes scan-ping {
+  0%,100% { transform: scale(1); }
+  50%     { transform: scale(1.15); }
+}
+.scan-return-title {
+  font-size: 11px; font-weight: 700; color: #92400e;
+  text-transform: uppercase; letter-spacing: 0.4px;
+}
+.scan-return-ttn {
+  font-size: 14px; font-weight: 800; color: #7c2d12;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.scan-return-actions {
+  display: flex; gap: 6px; flex-wrap: wrap;
+}
+.scan-return-btn {
+  border: none;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 12px; font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.scan-return-btn.fill { background: #ef4444; color: #fff; }
+.scan-return-btn.next { background: #3b82f6; color: #fff; }
+.scan-return-btn.save { background: #10b981; color: #fff; }
+.scan-return-btn.del  { background: #6b7280; color: #fff; }
+.scan-return-btn:hover { transform: translateY(-1px); transition: transform 0.1s; }
 .verify-add-btn {
   background: var(--primary, #2563eb);
   color: #fff;
