@@ -714,6 +714,25 @@ document.addEventListener('DOMContentLoaded', async function() {
   // Якщо сторінка відкрита через сканер (index.html?scan=<ТТН>[&pkg=…][&unknown=1])
   // — одразу переходимо в розділ «Перевірка» і показуємо меню дій для ТТН.
   handleScanReturn();
+
+  // Автооновлення при поверненні в CRM зі сканера / іншої вкладки.
+  // Скан «Зберегти» пише прямо в БД (scan_ttn RPC), а клієнт про це не
+  // знає — без цього слухача новий «Невідомий» з'являється тільки після
+  // F5. Троттлимо, щоб не штормити loadData при кожному фокусі.
+  var _lastAutoReload = 0;
+  function _maybeAutoReload() {
+    var now = Date.now();
+    if (now - _lastAutoReload < 1500) return;
+    _lastAutoReload = now;
+    loadData().then(function() { renderCards(); updateCounters(); }).catch(function(){});
+  }
+  document.addEventListener('visibilitychange', function() {
+    if (document.visibilityState === 'visible') _maybeAutoReload();
+  });
+  window.addEventListener('pageshow', function(e) {
+    // bfcache-restored сторінки теж треба оновити
+    if (e.persisted) _maybeAutoReload();
+  });
 });
 
 // ===== [SECT-SCANRETURN] SCANNER → CRM HAND-OFF =====
@@ -2051,6 +2070,21 @@ async function saveFillModal() {
         failed++;
       }
     } catch (_) { failed++; }
+  }
+
+  // Авто-перехід «Невідомий» → «В перевірці» після заповнення:
+  // оператор щойно оформив ТТН — логічно, що далі йде перевірка
+  // (а не лишати лід у Невідомих).
+  const wasUnknown = (row && (row['Статус ліда'] || '').trim()) === 'Невідомий';
+  if (wasUnknown) {
+    try {
+      const r1 = await apiPost('updateField', { pkg_id: pkgId, col: 'Статус ліда', value: 'Готова' });
+      if (r1 && r1.ok && row) row['Статус ліда'] = 'Готова';
+    } catch (_) {}
+    try {
+      const r2 = await apiPost('updateField', { pkg_id: pkgId, col: 'Контроль перевірки', value: 'В перевірці' });
+      if (r2 && r2.ok && row) row['Контроль перевірки'] = 'В перевірці';
+    } catch (_) {}
   }
 
   if (btn) { btn.disabled = false; btn.textContent = '💾 Зберегти'; }
