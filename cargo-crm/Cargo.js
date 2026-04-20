@@ -710,7 +710,52 @@ document.addEventListener('DOMContentLoaded', async function() {
 
   await loadData();
   loadUnreadCounts().then(() => renderCards());
+
+  // Якщо сторінка відкрита через сканер (index.html?scan=<ТТН>[&pkg=…][&unknown=1])
+  // — одразу переходимо в розділ «Перевірка» і показуємо меню дій для ТТН.
+  handleScanReturn();
 });
+
+// ===== [SECT-SCANRETURN] SCANNER → CRM HAND-OFF =====
+// Сканер (scaner_ttn.html) після успішного скану редіректить сюди з
+// ?scan=<ТТН>&pkg=<PKG_ID>[&unknown=1]. CRM відкриває «Перевірка»:
+//   — знайдений лід → пошуковий бар + меню «➕ В перевірку / ✏️ Редагувати / 🗑️ Видалити»
+//   — unknown=1 (type=new у scan_ttn) → розділ «Невідомі» з тим самим ТТН
+// `sessionStorage._scanReturnTTN` тримаємо, щоб дії меню повертали оператора
+// на сторінку сканера (коротке коло «скан → дія → скан»).
+function handleScanReturn() {
+  const params = new URLSearchParams(window.location.search);
+  const ttn = params.get('scan');
+  if (!ttn) return;
+  const pkgId = params.get('pkg') || '';
+  const isUnknown = params.get('unknown') === '1';
+  try { sessionStorage.setItem('_scanReturnTTN', ttn); } catch(_) {}
+
+  // Прибираємо параметри з URL, щоб F5 не повторював сценарій
+  try { history.replaceState({}, '', 'index.html'); } catch(_) {}
+
+  setTimeout(() => {
+    setVerFilter(isUnknown ? 'unknown' : 'ready');
+    const inp = document.getElementById('verifySearchInput');
+    if (inp) {
+      inp.value = ttn;
+      onVerifySearchInput(ttn);
+      inp.focus();
+    }
+    showToast('🔍 ТТН зі сканера: ' + ttn, 'info');
+  }, 50);
+}
+
+function clearScanReturn() {
+  try { sessionStorage.removeItem('_scanReturnTTN'); } catch(_) {}
+}
+function hasScanReturn() {
+  try { return !!sessionStorage.getItem('_scanReturnTTN'); } catch(_) { return false; }
+}
+function backToScanner() {
+  clearScanReturn();
+  window.location.href = 'scaner_ttn.html';
+}
 
 // ===== [SECT-FILTER] FILTERING =====
 // Нові (24 год): посилка вважається новою, якщо з моменту її створення
