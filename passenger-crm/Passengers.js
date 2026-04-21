@@ -5111,22 +5111,33 @@ function updateSeatPreview(idx) {
     const layoutEl = vb.querySelector('.vb-layouts .layout-option.active');
     const layout = layoutEl ? layoutEl.dataset.layout : '1-3-3';
     const seats = parseInt(document.getElementById('vbSeats-' + idx).textContent) || 7;
-    const hasReserve = vb.querySelector('.vb-reserve')?.checked;
+    const hasReserve = !!vb.querySelector('.vb-reserve')?.checked;
 
-    let seatNames = [];
-    if (layout === 'bus') {
-        for (let i = 1; i <= seats; i++) seatNames.push(String(i));
-    } else {
-        seatNames = (LAYOUTS[layout] || []).slice(0, seats);
-    }
-    if (hasReserve) seatNames.push('8');
+    const rows = getSeatRows(layout, seats, hasReserve);
+    let seatsHtml = '';
+    rows.forEach(row => {
+        seatsHtml += '<div class="sp-car-row">';
+        row.forEach(s => {
+            if (s.type === 'aisle') { seatsHtml += '<div class="sp-car-aisle"></div>'; return; }
+            if (s.type === 'empty') { seatsHtml += '<div class="sp-seat sp-empty"></div>'; return; }
+            if (s.type === 'driver') {
+                seatsHtml += `<div class="sp-seat sp-driver"><div class="sp-seat-num">${s.name}</div></div>`;
+                return;
+            }
+            const isReserve = s.name === '8' && hasReserve;
+            const cls = isReserve ? 'sp-reserve' : 'sp-free';
+            seatsHtml += `<div class="sp-seat ${cls}"><div class="sp-seat-num">${s.name}</div></div>`;
+        });
+        seatsHtml += '</div>';
+    });
 
-    const cols = layout === '1-3-3' ? 4 : layout === '2-2-3' ? 5 : layout === '2-2-2' ? 5 : Math.min(seats, 5);
-    container.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
-    container.innerHTML = seatNames.map(s => {
-        const cls = s === 'D' ? 'driver' : '';
-        return `<div class="seat-preview-item ${cls}">${s}</div>`;
-    }).join('');
+    container.style.gridTemplateColumns = '';
+    container.innerHTML = `<div class="sp-car-wrap vb-car-wrap">
+        <div class="sp-car-shape">
+            <div class="sp-car-front"></div>
+            <div class="sp-car-seats">${seatsHtml}</div>
+        </div>
+    </div>`;
 }
 
 // ================================================================

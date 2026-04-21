@@ -868,10 +868,15 @@ body.route-sort-active #rteTogglePay {
 .vehicle-builder-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
 .vehicle-builder-title { font-size: 12px; font-weight: 700; color: var(--primary); }
 .vehicle-remove-btn { width: 24px; height: 24px; border: none; background: #fee2e2; color: #dc2626; border-radius: 6px; cursor: pointer; font-size: 12px; }
-.seat-preview { display: grid; gap: 4px; margin-top: 8px; }
-.seat-preview-item { padding: 4px 8px; background: white; border: 1px solid var(--border); border-radius: 4px; font-size: 10px; font-weight: 600; text-align: center; }
-.seat-preview-item.driver { background: #fef3c7; color: #d97706; }
-.seat-preview-item.reserve { background: #e0e7ff; color: #4338ca; }
+.seat-preview { display: block; margin-top: 8px; }
+.seat-preview .sp-car-wrap { padding: 10px 8px; }
+.seat-preview .sp-car-shape { min-height: 130px; }
+.seat-preview .sp-seat { width: 46px; height: 36px; }
+.seat-preview .sp-seat .sp-seat-num { font-size: 11px; }
+.seat-preview .sp-car-front { width: 34px; }
+.seat-preview .sp-car-seats { padding: 8px 12px 8px 8px; gap: 8px; }
+.seat-preview .sp-car-row { gap: 6px; }
+.seat-preview .sp-car-aisle { width: 32px; height: 10px; }
 .seat-counter { display: flex; align-items: center; gap: 8px; }
 .seat-counter button { width: 28px; height: 28px; border: 1px solid var(--border); border-radius: 6px; background: white; cursor: pointer; font-size: 14px; font-weight: 700; }
 .seat-counter button:hover { background: var(--primary); color: white; border-color: var(--primary); }
@@ -881,7 +886,7 @@ body.route-sort-active #rteTogglePay {
 .seat-picker-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.45); z-index: 9999; display: flex; align-items: flex-end; justify-content: center; animation: fadeIn 0.2s; }
 @media (min-width: 500px) { .seat-picker-overlay { align-items: center; } }
 .seat-picker-modal { background: white; border-radius: 20px 20px 0 0; padding: 0; width: 100%; max-height: 92vh; overflow-y: auto; box-shadow: 0 -4px 30px rgba(0,0,0,0.15); }
-@media (min-width: 500px) { .seat-picker-modal { border-radius: 20px; max-width: 400px; width: 94%; } }
+@media (min-width: 500px) { .seat-picker-modal { border-radius: 20px; max-width: 500px; width: 94%; } }
 .seat-picker-header { padding: 18px 20px 14px; display: flex; justify-content: space-between; align-items: center; }
 .seat-picker-header h3 { margin: 0; font-size: 17px; font-weight: 800; color: #1e293b; }
 .seat-picker-close { background: #f1f5f9; border: none; font-size: 18px; cursor: pointer; color: #64748b; width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
@@ -896,136 +901,151 @@ body.route-sort-active #rteTogglePay {
 .seat-picker-no-trip .sp-nt-msg { font-size: 13px; color: #64748b; line-height: 1.5; }
 
 /* Car shape */
-/* ── Seat picker: стилізований контур авто (top-down view) ── */
-.sp-car-wrap { position: relative; padding: 0 8px; }
+/* ── Seat picker: стилізований контур авто/буса (top-down, бус їде вліво) ── */
+.sp-car-wrap { position: relative; padding: 12px 10px; }
 .sp-car-shape {
     position: relative;
     border: 3px solid #94a3b8;
-    border-radius: 38px 38px 26px 26px;
-    background: linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%);
+    border-radius: 26px 38px 38px 26px;
+    background: linear-gradient(90deg, #e2e8f0 0%, #f8fafc 15%, #ffffff 100%);
     box-shadow: inset 0 0 0 2px rgba(255,255,255,0.8), 0 4px 14px rgba(0,0,0,0.08);
     padding: 0;
-    max-width: 280px;
+    max-width: 100%;
     margin: 0 auto;
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    min-height: 160px;
+    overflow: visible;
 }
-/* Капот + лобовое скло */
+/* Капот + лобовое скло — вертикальна полоса ЗЛІВА (ніс буса) */
 .sp-car-front {
-    height: 46px;
-    background: linear-gradient(180deg, #475569 0%, #64748b 45%, #cbd5e1 50%, #e2e8f0 100%);
-    border-radius: 34px 34px 0 0;
-    border-bottom: 2px solid #94a3b8;
+    width: 42px;
+    flex-shrink: 0;
+    background: linear-gradient(90deg, #475569 0%, #64748b 45%, #cbd5e1 82%, #e2e8f0 100%);
+    border-radius: 22px 0 0 22px;
+    border-right: 2px solid #94a3b8;
     position: relative;
     overflow: hidden;
 }
-/* Лобове скло — темна прозора трапеція */
+/* Лобове скло — темна прозора полоса з правого боку капоту (де починається салон) */
 .sp-car-front::before {
     content: '';
     position: absolute;
-    left: 12%;
-    right: 12%;
-    bottom: 0;
-    height: 22px;
-    background: linear-gradient(180deg, rgba(15,23,42,0.75), rgba(15,23,42,0.35));
-    border-radius: 14px 14px 0 0;
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.2);
+    top: 14%;
+    bottom: 14%;
+    right: 0;
+    width: 18px;
+    background: linear-gradient(90deg, rgba(15,23,42,0.35), rgba(15,23,42,0.75));
+    border-radius: 12px 0 0 12px;
+    box-shadow: inset 1px 0 0 rgba(255,255,255,0.2);
 }
-/* Руль — кружок зверху зліва */
+/* Руль — кружок в кабіні, біля лобового скла зверху */
 .sp-car-front::after {
     content: '◉';
     position: absolute;
-    left: 18%;
-    bottom: 1px;
-    font-size: 12px;
+    right: 3px;
+    top: 20%;
+    font-size: 11px;
     color: rgba(255,255,255,0.85);
     line-height: 1;
     z-index: 1;
     text-shadow: 0 0 3px rgba(0,0,0,0.4);
 }
-/* Дзеркала — два вуха з боків біля лобового */
+/* Дзеркала — зверху й знизу біля капоту (боки буса) */
 .sp-car-shape > .sp-car-front + .sp-car-seats { position: relative; }
 .sp-car-shape::before {
     content: '';
     position: absolute;
-    top: 36px;
-    left: -7px;
-    width: 10px;
-    height: 12px;
+    left: 34px;
+    top: -7px;
+    width: 12px;
+    height: 10px;
     background: #94a3b8;
-    border-radius: 3px 0 0 3px;
+    border-radius: 3px 3px 0 0;
     box-shadow: 0 1px 2px rgba(0,0,0,0.15);
 }
 .sp-car-shape::after {
     content: '';
     position: absolute;
-    top: 36px;
-    right: -7px;
-    width: 10px;
-    height: 12px;
+    left: 34px;
+    bottom: -7px;
+    width: 12px;
+    height: 10px;
     background: #94a3b8;
-    border-radius: 0 3px 3px 0;
+    border-radius: 0 0 3px 3px;
     box-shadow: 0 1px 2px rgba(0,0,0,0.15);
 }
 
 .sp-car-seats {
-    padding: 18px 12px 20px;
+    padding: 10px 16px 10px 10px;
     position: relative;
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: row;
+    justify-content: flex-start;
+    align-items: center;
+    gap: 10px;
+    overflow-x: auto;
     background:
-        linear-gradient(90deg, rgba(148,163,184,0.12) 0%, transparent 6%, transparent 94%, rgba(148,163,184,0.12) 100%),
-        repeating-linear-gradient(0deg, rgba(148,163,184,0.04), rgba(148,163,184,0.04) 2px, transparent 2px, transparent 4px);
+        linear-gradient(0deg, rgba(148,163,184,0.12) 0%, transparent 6%, transparent 94%, rgba(148,163,184,0.12) 100%),
+        repeating-linear-gradient(90deg, rgba(148,163,184,0.04), rgba(148,163,184,0.04) 2px, transparent 2px, transparent 4px);
 }
-/* Задні двері — темна полоса знизу */
+/* Задні двері — вертикальна полоса праворуч (задня частина буса) */
 .sp-car-seats::after {
     content: '';
     position: absolute;
-    left: 18%;
-    right: 18%;
-    bottom: 4px;
-    height: 4px;
-    background: linear-gradient(180deg, #94a3b8, #64748b);
+    top: 18%;
+    bottom: 18%;
+    right: 3px;
+    width: 4px;
+    background: linear-gradient(90deg, #64748b, #94a3b8);
     border-radius: 2px;
 }
 
-.sp-car-row { display: flex; justify-content: center; align-items: center; gap: 8px; margin-bottom: 12px; }
-.sp-car-row:last-child { margin-bottom: 6px; }
-.sp-car-aisle { width: 14px; flex-shrink: 0; position: relative; }
-.sp-car-aisle::after { content: ''; position: absolute; top: -6px; bottom: -6px; left: 50%; width: 1px; border-left: 1.5px dashed #cbd5e1; }
+/* Ряд = колонка (після ротації буса на 90°): сидіння стоять один під одним */
+.sp-car-row { display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 8px; margin-bottom: 0; flex-shrink: 0; }
+/* Прохід — горизонтальна полоска між парами сидінь (по ширині буса) */
+.sp-car-aisle { height: 12px; width: 40px; flex-shrink: 0; position: relative; }
+.sp-car-aisle::after { content: ''; position: absolute; left: -4px; right: -4px; top: 50%; height: 0; border-top: 1.5px dashed #cbd5e1; }
 
-/* ── Крісло як у top-down view: спинка + сидушка + підлокітники ── */
+/* ── Крісло як у top-down view: спинка + сидушка, дивиться ВЛІВО (напрям руху) ── */
 .sp-seat {
-    width: 52px; height: 54px;
-    border-radius: 6px 6px 14px 14px;
+    width: 54px; height: 42px;
+    border-radius: 14px 6px 6px 14px;
     border: 2px solid #cbd5e1;
     background: white;
     cursor: pointer;
-    display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
-    padding-bottom: 4px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 0 8px 0 4px;
     transition: all 0.15s;
     position: relative;
     -webkit-tap-highlight-color: transparent; user-select: none;
 }
 .sp-seat:active:not(.sp-occupied):not(.sp-driver) { transform: scale(0.94); }
 .sp-seat:hover:not(.sp-occupied):not(.sp-driver) { border-color: #3b82f6; background: #eff6ff; }
-/* Спинка зверху + сидушка — мʼяка градієнтна сидушка */
+/* Спинка — праворуч (за спиною пасажира, який дивиться вліво) */
 .sp-seat::before {
     content: '';
     position: absolute;
-    top: 3px; left: 4px; right: 4px;
-    height: 16px;
+    right: 3px; top: 4px; bottom: 4px;
+    width: 12px;
     background: currentColor;
     opacity: 0.28;
-    border-radius: 3px 3px 10px 10px;
+    border-radius: 3px 10px 10px 3px;
 }
-/* Нижня «подушка» сидіння */
+/* Ноги / подушка — зліва (у напрямку руху) */
 .sp-seat::after {
     content: '';
     position: absolute;
-    bottom: 2px; left: 3px; right: 3px;
-    height: 14px;
+    left: 2px; top: 5px; bottom: 5px;
+    width: 10px;
     background: currentColor;
     opacity: 0.12;
-    border-radius: 4px 4px 10px 10px;
+    border-radius: 10px 3px 3px 10px;
 }
-.sp-seat .sp-seat-num { font-size: 13px; font-weight: 800; color: #475569; position: relative; z-index: 1; }
+.sp-seat .sp-seat-num { font-size: 12px; font-weight: 800; color: #475569; position: relative; z-index: 1; }
 .sp-seat .sp-seat-ico { display: none; }
 
 .sp-seat.sp-free { color: #10b981; background: #ecfdf5; border-color: #6ee7b7; }
