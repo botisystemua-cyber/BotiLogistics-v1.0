@@ -5076,7 +5076,7 @@ function addVehicleBuilder() {
                 </div>
             </div>
             <div class="bs-field"><label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
-                <input type="checkbox" class="vb-reserve" style="width:16px;height:16px;">
+                <input type="checkbox" class="vb-reserve" onchange="updateSeatPreview(${idx})" style="width:16px;height:16px;">
                 <span class="bs-label" style="margin:0;">+ Резервне R1</span>
             </label></div>
         </div>
@@ -5144,43 +5144,43 @@ function getSeatLayout(layout, maxSeats, hasReserve) {
     const seats = [];
 
     if (layout === '1-3-3') {
-        // 1 front (D + "1" co-driver) + 3 mid + 3 rear. Reserve optional, placed in front zone.
+        // Front: D + "1" (co-driver). Mid row: 2/3/4. Rear row: 5/6/7. R is added as extra pop-out seat at front.
         seats.push({ name: 'D', x: 14, y: 30, type: 'driver' });
-        seats.push({ name: '1', x: 14, y: 72, type: 'seat' });
-        seats.push({ name: '2', x: 42, y: 22, type: 'seat' });
+        seats.push({ name: '1', x: 14, y: 68, type: 'seat' });
+        seats.push({ name: '2', x: 42, y: 30, type: 'seat' });
         seats.push({ name: '3', x: 42, y: 50, type: 'seat' });
-        seats.push({ name: '4', x: 42, y: 78, type: 'seat' });
-        seats.push({ name: '5', x: 72, y: 22, type: 'seat' });
+        seats.push({ name: '4', x: 42, y: 70, type: 'seat' });
+        seats.push({ name: '5', x: 72, y: 30, type: 'seat' });
         seats.push({ name: '6', x: 72, y: 50, type: 'seat' });
-        seats.push({ name: '7', x: 72, y: 78, type: 'seat' });
-        if (hasReserve) seats.push({ name: 'R', x: 26, y: 50, type: 'reserve' });
+        seats.push({ name: '7', x: 72, y: 70, type: 'seat' });
+        if (hasReserve) seats.push({ name: 'R', x: 26, y: 68, type: 'reserve' });
         return seats;
     }
 
     if (layout === '2-2-3') {
-        // D + reserve in front; then 2+2 middle rows; then bench of 3 at the rear.
-        seats.push({ name: 'D', x: 12, y: 30, type: 'driver' });
-        if (hasReserve) seats.push({ name: 'R', x: 12, y: 72, type: 'reserve' });
-        seats.push({ name: '1', x: 36, y: 28, type: 'seat' });
-        seats.push({ name: '2', x: 36, y: 72, type: 'seat' });
-        seats.push({ name: '3', x: 56, y: 28, type: 'seat' });
-        seats.push({ name: '4', x: 56, y: 72, type: 'seat' });
-        seats.push({ name: '5', x: 80, y: 18, type: 'seat' });
-        seats.push({ name: '6', x: 80, y: 50, type: 'seat' });
-        seats.push({ name: '7', x: 80, y: 82, type: 'seat' });
+        // D alone in front. R optional as co-driver. 2+2 middle rows. Rear bench of 3.
+        seats.push({ name: 'D', x: 14, y: 30, type: 'driver' });
+        if (hasReserve) seats.push({ name: 'R', x: 14, y: 68, type: 'reserve' });
+        seats.push({ name: '1', x: 38, y: 30, type: 'seat' });
+        seats.push({ name: '2', x: 38, y: 68, type: 'seat' });
+        seats.push({ name: '3', x: 58, y: 30, type: 'seat' });
+        seats.push({ name: '4', x: 58, y: 68, type: 'seat' });
+        seats.push({ name: '5', x: 80, y: 25, type: 'seat' });
+        seats.push({ name: '6', x: 80, y: 49, type: 'seat' });
+        seats.push({ name: '7', x: 80, y: 73, type: 'seat' });
         return seats;
     }
 
     if (layout === '2-2-2') {
-        // D + reserve in front; 3 rows of 2 with a wide central aisle.
-        seats.push({ name: 'D', x: 12, y: 22, type: 'driver' });
-        if (hasReserve) seats.push({ name: 'R', x: 12, y: 78, type: 'reserve' });
-        seats.push({ name: '1', x: 38, y: 18, type: 'seat' });
-        seats.push({ name: '2', x: 38, y: 82, type: 'seat' });
-        seats.push({ name: '3', x: 58, y: 18, type: 'seat' });
-        seats.push({ name: '4', x: 58, y: 82, type: 'seat' });
-        seats.push({ name: '5', x: 80, y: 18, type: 'seat' });
-        seats.push({ name: '6', x: 80, y: 82, type: 'seat' });
+        // D alone in front. R optional as co-driver. 3 rows of 2 behind.
+        seats.push({ name: 'D', x: 14, y: 30, type: 'driver' });
+        if (hasReserve) seats.push({ name: 'R', x: 14, y: 68, type: 'reserve' });
+        seats.push({ name: '1', x: 38, y: 30, type: 'seat' });
+        seats.push({ name: '2', x: 38, y: 68, type: 'seat' });
+        seats.push({ name: '3', x: 57, y: 30, type: 'seat' });
+        seats.push({ name: '4', x: 57, y: 68, type: 'seat' });
+        seats.push({ name: '5', x: 78, y: 30, type: 'seat' });
+        seats.push({ name: '6', x: 78, y: 68, type: 'seat' });
         return seats;
     }
 
@@ -5264,11 +5264,12 @@ function renderVan(opts) {
     const seatsHtml = positions.map(s => {
         const style = `left:${s.x}%;top:${s.y}%`;
         if (s.type === 'driver') {
-            return `<div class="seat seat-driver" style="${style}" title="Водій"><div class="seat-wheel"></div></div>`;
+            return `<div class="seat seat-driver" style="${style}" title="Водій"><div class="seat-arms"></div><div class="seat-wheel"></div></div>`;
         }
         const occName = occupiedMap[s.name];
         if (occName) {
             return `<div class="seat seat-occupied" style="${style}" title="Зайнято: ${occName}">
+                <div class="seat-arms"></div>
                 <div class="seat-num">${s.name}</div>
                 <div class="seat-occ-name">${occName}</div>
             </div>`;
@@ -5276,6 +5277,7 @@ function renderVan(opts) {
         if (selected && selected === s.name) {
             const handler = interactive ? `onclick="seatPickerSelect('${s.name}')"` : '';
             return `<div class="seat seat-selected" style="${style}" ${handler}>
+                <div class="seat-arms"></div>
                 <div class="seat-check">✓</div>
                 <div class="seat-num">${s.name}</div>
             </div>`;
@@ -5283,6 +5285,7 @@ function renderVan(opts) {
         const stateCls = s.type === 'reserve' ? 'seat-reserve' : 'seat-free';
         const handler = interactive ? `onclick="seatPickerSelect('${s.name}')"` : '';
         return `<div class="seat ${stateCls}" style="${style}" ${handler}>
+            <div class="seat-arms"></div>
             <div class="seat-num">${s.name}</div>
         </div>`;
     }).join('');
