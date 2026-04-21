@@ -1585,33 +1585,40 @@
         var IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
                      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
-        // Після старту (з невеликим delay — трек ще не завжди готовий
-        // одразу після resolve) підкручуємо потік: просимо HD і continuous
-        // focus/exposure. Все через `applyVideoConstraints`, а НЕ через
+        // Після старту підкручуємо потік: просимо HD і continuous
+        // focus/exposure. Через `applyVideoConstraints` (а НЕ через
         // start-config — в html5-qrcode@2.3.8 HD у start() часом блокує
-        // getUserMedia на мобілках і дає чорний екран. Apply після старту
-        // безпечний: якщо щось не підтримується, просто ігнорується.
+        // getUserMedia і дає чорний екран).
+        //
+        // Важливо: html5-qrcode кидає sync «Cannot transition to a new state,
+        // already under transition», якщо викликати apply поки внутрішній
+        // state ще не стабілізувався. Тому — tryApply з retry, і
+        // ОДИН комбінований виклик замість двох (щоб не було race між ними).
         function applyCameraOptimizations() {
-            setTimeout(function() {
+            var attempts = 0;
+            function tryApply() {
+                attempts += 1;
+                if (!scanner || !scanner.applyVideoConstraints) return;
+                var constraints = {
+                    width:  { ideal: 1920 },
+                    height: { ideal: 1080 },
+                    advanced: [
+                        { focusMode: 'continuous' },
+                        { exposureMode: 'continuous' },
+                        { whiteBalanceMode: 'continuous' }
+                    ]
+                };
                 try {
-                    if (!scanner || !scanner.applyVideoConstraints) return;
-                    // HD окремим apply — якщо пристрій не тягне, старий
-                    // потік лишається активним, браузер м'яко відхилить.
-                    scanner.applyVideoConstraints({
-                        width:  { ideal: 1920 },
-                        height: { ideal: 1080 }
-                    }).catch(function(){});
-                    // Focus/exposure: кожен окремим елементом advanced —
-                    // якщо один не підтримується, браузер проігнорує лише його.
-                    scanner.applyVideoConstraints({
-                        advanced: [
-                            { focusMode: 'continuous' },
-                            { exposureMode: 'continuous' },
-                            { whiteBalanceMode: 'continuous' }
-                        ]
-                    }).catch(function(){});
-                } catch (e) { /* noop */ }
-            }, 400);
+                    var p = scanner.applyVideoConstraints(constraints);
+                    if (p && typeof p.catch === 'function') {
+                        p.catch(function(){ /* device не тягне — гуд */ });
+                    }
+                } catch (e) {
+                    // «already under transition» — дамо ще шанс.
+                    if (attempts < 3) setTimeout(tryApply, 600);
+                }
+            }
+            setTimeout(tryApply, 800);
         }
 
         function startScan() {
