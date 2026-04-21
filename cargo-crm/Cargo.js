@@ -2054,6 +2054,8 @@ function openFillModal(pkgId) {
     } else {
       el.value = '';
     }
+    // Якщо на полі висить country-selector — синхронізуємо прапор
+    if (el._cpApi) el._cpApi.syncFromValue();
   });
 
   // Фото посилки: ставимо превʼю якщо URL уже є
@@ -2136,18 +2138,31 @@ function _appendFillExtraPhoneInput(initial) {
   inp.className = 'fill-phone-extra';
   inp.placeholder = '+380… або +48… +420…';
   inp.value = initial || '';
-  attachPhoneNormalization(inp, '+380');
-  inp.addEventListener('input', _syncFillExtraPhones);
-  inp.addEventListener('blur', _syncFillExtraPhones);
+  // Спочатку додаємо input у DOM — тільки потім attach, бо він переміщає
+  // input усередину wrapper зі селектом.
+  wrap.appendChild(inp);
   const rm = document.createElement('button');
   rm.type = 'button';
   rm.className = 'fill-phone-rm';
   rm.textContent = '×';
   rm.title = 'Прибрати цей номер';
   rm.onclick = () => { wrap.remove(); _syncFillExtraPhones(); };
-  wrap.appendChild(inp);
   wrap.appendChild(rm);
   box.appendChild(wrap);
+  if (window.CountryPhone) {
+    // Для додаткового номера дефолт — Польща (типово «другий номер — EU»).
+    // Якщо клієнт з іншої країни, оператор обере зі списку.
+    const cpDefault = initial ? 'UA' : 'PL';
+    window.CountryPhone.attach(inp, {
+      theme: 'light',
+      defaultCountry: cpDefault,
+      onChange: _syncFillExtraPhones,
+    });
+  } else {
+    attachPhoneNormalization(inp, '+380');
+    inp.addEventListener('input', _syncFillExtraPhones);
+    inp.addEventListener('blur', _syncFillExtraPhones);
+  }
   if (!initial) setTimeout(() => inp.focus(), 50);
 }
 function addFillExtraPhone() {
@@ -2284,10 +2299,11 @@ function _renderClientSuggestions(container, items, onPick) {
 
 // CRM fill-modal: слухач на телефоні отримувача + нормалізація формату
 document.addEventListener('DOMContentLoaded', () => {
-  // Нормалізація для всіх tel-полів у fill-модалці (recv + sender)
+  // Селектор країни + нормалізація для всіх tel-полів у fill-модалці
   ['fill_phoneRecv', 'fill_phoneSender'].forEach(id => {
     const el = document.getElementById(id);
-    if (el) attachPhoneNormalization(el);
+    if (el && window.CountryPhone) window.CountryPhone.attach(el, { theme: 'light', defaultCountry: 'UA' });
+    else if (el) attachPhoneNormalization(el); // fallback якщо скрипт не завантажився
   });
 
   const ph = document.getElementById('fill_phoneRecv');
