@@ -2049,6 +2049,9 @@ function openFillModal(pkgId) {
     }
     if (cur != null && cur !== '') {
       el.value = cur;
+    } else if (inputId === 'fill_currency') {
+      // Валюта за замовчуванням — EUR (основний напрямок UA↔EU).
+      el.value = 'EUR';
     } else if (el.tagName === 'SELECT') {
       // select: лишаємо <option selected>, що стоїть у HTML
     } else {
