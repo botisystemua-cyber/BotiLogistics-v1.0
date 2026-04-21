@@ -2156,13 +2156,19 @@ function _appendFillExtraPhoneInput(initial) {
     window.CountryPhone.attach(inp, {
       theme: 'light',
       defaultCountry: cpDefault,
-      onChange: _syncFillExtraPhones,
+      onChange: () => {
+        _syncFillExtraPhones();
+        _scheduleClientSuggestions(0);
+      },
     });
   } else {
     attachPhoneNormalization(inp, '+380');
     inp.addEventListener('input', _syncFillExtraPhones);
     inp.addEventListener('blur', _syncFillExtraPhones);
   }
+  // Лукап клієнта і по додаткових номерах — з debounce, щоб не спамити API.
+  inp.addEventListener('input', () => _scheduleClientSuggestions(400));
+  inp.addEventListener('blur',  () => setTimeout(_refreshClientSuggestions, 150));
   if (!initial) setTimeout(() => inp.focus(), 50);
 }
 function addFillExtraPhone() {
@@ -2225,7 +2231,7 @@ function attachPhoneNormalization(inputEl, defaultPrefix = '+380') {
 // оператор обирає потрібну. Phase B (окрема таблиця clients_directory
 // з тригером + бекфіл) — готується окремо.
 
-async function lookupClientByPhone(phone) {
+async function lookupClientByPhone(phone, column) {
   const ph = (phone || '').trim();
   if (ph.length < 5) return [];
   const tenantId = (getBotiSession() && getBotiSession().tenant_id) || '';
@@ -2238,12 +2244,15 @@ async function lookupClientByPhone(phone) {
   const digits = ph.replace(/\D/g, '');
   if (digits.length < 5) return [];
   const tail = digits.length >= 9 ? digits.slice(-9) : digits;
+  // Колонка пошуку: recipient_phone (default) або sender_phone — щоб лукап
+  // по номеру відправника витягав його попередні посилки і адреси куди він шле.
+  const col = (column === 'sender_phone') ? 'sender_phone' : 'recipient_phone';
   try {
     const url = SUPABASE_URL + '/rest/v1/packages' +
       '?tenant_id=eq.' + encodeURIComponent(tenantId) +
-      '&recipient_phone=ilike.*' + encodeURIComponent(tail) + '*' +
+      '&' + col + '=ilike.*' + encodeURIComponent(tail) + '*' +
       '&is_archived=eq.false' +
-      '&select=pkg_id,recipient_name,recipient_address,nova_poshta_city,created_at,recipient_phone,messengers' +
+      '&select=pkg_id,recipient_name,recipient_address,nova_poshta_city,created_at,recipient_phone,sender_phone,messengers' +
       '&order=created_at.desc&limit=20';
     const res = await fetch(url, {
       headers: {
@@ -2278,6 +2287,40 @@ async function lookupClientByPhone(phone) {
   }
 }
 
+// Мульти-пошук: прокидаємо масив { phone, column } — кожен телефон іде
+// у свою колонку (recipient_phone для отримувача+extra, sender_phone для
+// відправника). Результати мержимо по (name,address), месенджери юньонимо,
+// count складаємо, last беремо найсвіжіший. Одна картка навіть якщо клієнт
+// знайшовся по 2+ номерах — так оператор бачить єдиний запис з усіма
+// відмітками мес-в.
+async function lookupClientsMulti(queries) {
+  const valid = (queries || []).filter(q => {
+    const d = (q.phone || '').replace(/\D/g, '');
+    return d.length >= 5;
+  });
+  if (!valid.length) return [];
+  const results = await Promise.all(
+    valid.map(q => lookupClientByPhone(q.phone, q.column))
+  );
+  const byKey = {};
+  results.forEach(arr => {
+    (arr || []).forEach(it => {
+      const key = (it.name || '') + '|' + (it.address || '');
+      if (!byKey[key]) {
+        byKey[key] = { name: it.name, address: it.address, count: 0,
+                       last: it.last || '', messengers: {} };
+      }
+      byKey[key].count += (it.count || 1);
+      if (it.last && it.last > byKey[key].last) byKey[key].last = it.last;
+      (it.messengers || []).forEach(m => { byKey[key].messengers[m] = true; });
+    });
+  });
+  return Object.values(byKey).map(it => ({
+    name: it.name, address: it.address, count: it.count, last: it.last,
+    messengers: Object.keys(it.messengers),
+  })).sort((a, b) => (b.last || '').localeCompare(a.last || ''));
+}
+
 function _renderClientSuggestions(container, items, onPick) {
   container.innerHTML = '';
   if (!items || !items.length) { container.classList.remove('show'); return; }
@@ -2297,7 +2340,51 @@ function _renderClientSuggestions(container, items, onPick) {
   container.classList.add('show');
 }
 
-// CRM fill-modal: слухач на телефоні отримувача + нормалізація формату
+// Shared debounced refresh — запускається з будь-якого телефону у fill-модалці
+// (основний отримувач, відправник, або динамічні «ще телефони»).
+let _fillSugTimer = null;
+function _scheduleClientSuggestions(delay) {
+  if (typeof delay !== 'number') delay = 400;
+  clearTimeout(_fillSugTimer);
+  _fillSugTimer = setTimeout(_refreshClientSuggestions, delay);
+}
+
+async function _refreshClientSuggestions() {
+  const sugBox = document.getElementById('fill_clientSuggestions');
+  if (!sugBox) return;
+  const recv   = (document.getElementById('fill_phoneRecv')   || {}).value || '';
+  const sender = (document.getElementById('fill_phoneSender') || {}).value || '';
+  const extras = Array.from(
+    document.querySelectorAll('#fill_extraPhonesBox input.fill-phone-extra')
+  ).map(i => (i.value || '').trim()).filter(Boolean);
+
+  const queries = [];
+  if (recv.trim())   queries.push({ phone: recv,   column: 'recipient_phone' });
+  if (sender.trim()) queries.push({ phone: sender, column: 'sender_phone'    });
+  extras.forEach(p => queries.push({ phone: p, column: 'recipient_phone' }));
+
+  const items = await lookupClientsMulti(queries);
+  _renderClientSuggestions(sugBox, items, (picked) => {
+    const addrEl = document.getElementById('fill_addressTo');
+    if (addrEl) addrEl.value = picked.address || addrEl.value;
+    if (Array.isArray(picked.messengers) && picked.messengers.length) {
+      _applyFillMessengersUI(picked.messengers);
+    }
+    sugBox.classList.remove('show');
+  });
+}
+
+// Прив'язуємо listener'и до статичних телефонів (recv + sender). Extra-поля
+// підв'язуються при створенні у _appendFillExtraPhoneInput.
+function _bindPhoneInputForLookup(el) {
+  if (!el || el._lookupBound) return;
+  el._lookupBound = true;
+  el.addEventListener('change', () => _scheduleClientSuggestions(0));
+  el.addEventListener('blur',   () => setTimeout(_refreshClientSuggestions, 150));
+  el.addEventListener('input',  () => _scheduleClientSuggestions(400));
+}
+
+// CRM fill-modal: слухач на телефонах (recv + sender) + нормалізація формату
 document.addEventListener('DOMContentLoaded', () => {
   // Селектор країни + нормалізація для всіх tel-полів у fill-модалці
   ['fill_phoneRecv', 'fill_phoneSender'].forEach(id => {
@@ -2306,28 +2393,9 @@ document.addEventListener('DOMContentLoaded', () => {
     else if (el) attachPhoneNormalization(el); // fallback якщо скрипт не завантажився
   });
 
-  const ph = document.getElementById('fill_phoneRecv');
-  const sugBox = document.getElementById('fill_clientSuggestions');
-  if (!ph || !sugBox) return;
-  let t = null;
-  const doSearch = async () => {
-    const items = await lookupClientByPhone(ph.value);
-    _renderClientSuggestions(sugBox, items, (picked) => {
-      const addrEl = document.getElementById('fill_addressTo');
-      // Ім'я в fill-модалці наразі нема окремого поля, заповнюємо тільки адресу
-      if (addrEl) addrEl.value = picked.address || addrEl.value;
-      // 💬 Підтягуємо месенджери з попередніх лідів (union)
-      if (Array.isArray(picked.messengers) && picked.messengers.length) {
-        _applyFillMessengersUI(picked.messengers);
-      }
-      sugBox.classList.remove('show');
-    });
-  };
-  ph.addEventListener('change', doSearch);
-  ph.addEventListener('blur', () => setTimeout(doSearch, 150));
-  ph.addEventListener('input', () => {
-    clearTimeout(t); t = setTimeout(doSearch, 400);
-  });
+  if (!document.getElementById('fill_clientSuggestions')) return;
+  _bindPhoneInputForLookup(document.getElementById('fill_phoneRecv'));
+  _bindPhoneInputForLookup(document.getElementById('fill_phoneSender'));
 });
 
 // Фото-аплоад для CRM fill-модалки — використовує той самий бакет
