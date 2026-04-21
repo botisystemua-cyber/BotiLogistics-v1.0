@@ -2950,12 +2950,17 @@
                         if (parent) parent.classList.toggle('has-value', phArr.length > 0);
                         return;
                     }
-                    el.value = (v == null ? '' : String(v));
+                    var rawVal = (v == null ? '' : String(v));
+                    // Валюта за замовчуванням — EUR (основний напрямок UA↔EU).
+                    // Ставимо тільки коли в БД порожньо, щоб не перетирати
+                    // існуюче значення (UAH/PLN/тощо).
+                    if (col === 'payment_currency' && !rawVal) rawVal = 'EUR';
+                    el.value = rawVal;
                     // Якщо поле — phone з селектором країни, синхронізуємо flag
                     if (el._cpApi) el._cpApi.syncFromValue();
                     var parent = el.closest('.inl-row');
                     if (parent) {
-                        var hasVal = (v != null && String(v).trim() !== '');
+                        var hasVal = (rawVal !== '');
                         parent.classList.toggle('has-value', hasVal);
                     }
                     // photo-поля: якщо URL уже є → показуємо превʼю + кнопку Очистити
