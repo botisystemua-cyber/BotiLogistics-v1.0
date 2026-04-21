@@ -5076,7 +5076,7 @@ function addVehicleBuilder() {
                 </div>
             </div>
             <div class="bs-field"><label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
-                <input type="checkbox" class="vb-reserve" style="width:16px;height:16px;">
+                <input type="checkbox" class="vb-reserve" onchange="updateSeatPreview(${idx})" style="width:16px;height:16px;">
                 <span class="bs-label" style="margin:0;">+ Резервне R1</span>
             </label></div>
         </div>
@@ -5143,54 +5143,51 @@ function updateSeatPreview(idx) {
 function getSeatLayout(layout, maxSeats, hasReserve) {
     const seats = [];
 
+    // Layout grid: x=front→rear, y=driver-side→passenger-side. Seat is 9.5% wide × 22% tall.
     if (layout === '1-3-3') {
-        // 1 front (D + "1" co-driver) + 3 mid + 3 rear. Reserve optional, placed in front zone.
-        seats.push({ name: 'D', x: 14, y: 30, type: 'driver' });
-        seats.push({ name: '1', x: 14, y: 72, type: 'seat' });
-        seats.push({ name: '2', x: 42, y: 22, type: 'seat' });
-        seats.push({ name: '3', x: 42, y: 50, type: 'seat' });
-        seats.push({ name: '4', x: 42, y: 78, type: 'seat' });
-        seats.push({ name: '5', x: 72, y: 22, type: 'seat' });
-        seats.push({ name: '6', x: 72, y: 50, type: 'seat' });
-        seats.push({ name: '7', x: 72, y: 78, type: 'seat' });
-        if (hasReserve) seats.push({ name: 'R', x: 26, y: 50, type: 'reserve' });
+        seats.push({ name: 'D', x: 22, y: 28, type: 'driver' });
+        seats.push({ name: '1', x: 22, y: 72, type: 'seat' });
+        seats.push({ name: '2', x: 48, y: 18, type: 'seat' });
+        seats.push({ name: '3', x: 48, y: 50, type: 'seat' });
+        seats.push({ name: '4', x: 48, y: 82, type: 'seat' });
+        seats.push({ name: '5', x: 74, y: 18, type: 'seat' });
+        seats.push({ name: '6', x: 74, y: 50, type: 'seat' });
+        seats.push({ name: '7', x: 74, y: 82, type: 'seat' });
+        if (hasReserve) seats.push({ name: 'R', x: 35, y: 50, type: 'reserve' });
         return seats;
     }
 
     if (layout === '2-2-3') {
-        // D + reserve in front; then 2+2 middle rows; then bench of 3 at the rear.
-        seats.push({ name: 'D', x: 12, y: 30, type: 'driver' });
-        if (hasReserve) seats.push({ name: 'R', x: 12, y: 72, type: 'reserve' });
-        seats.push({ name: '1', x: 36, y: 28, type: 'seat' });
-        seats.push({ name: '2', x: 36, y: 72, type: 'seat' });
-        seats.push({ name: '3', x: 56, y: 28, type: 'seat' });
-        seats.push({ name: '4', x: 56, y: 72, type: 'seat' });
-        seats.push({ name: '5', x: 80, y: 18, type: 'seat' });
-        seats.push({ name: '6', x: 80, y: 50, type: 'seat' });
-        seats.push({ name: '7', x: 80, y: 82, type: 'seat' });
+        seats.push({ name: 'D', x: 22, y: 28, type: 'driver' });
+        if (hasReserve) seats.push({ name: 'R', x: 22, y: 72, type: 'reserve' });
+        seats.push({ name: '1', x: 44, y: 28, type: 'seat' });
+        seats.push({ name: '2', x: 44, y: 72, type: 'seat' });
+        seats.push({ name: '3', x: 60, y: 28, type: 'seat' });
+        seats.push({ name: '4', x: 60, y: 72, type: 'seat' });
+        seats.push({ name: '5', x: 82, y: 18, type: 'seat' });
+        seats.push({ name: '6', x: 82, y: 50, type: 'seat' });
+        seats.push({ name: '7', x: 82, y: 82, type: 'seat' });
         return seats;
     }
 
     if (layout === '2-2-2') {
-        // D + reserve in front; 3 rows of 2 with a wide central aisle.
-        seats.push({ name: 'D', x: 12, y: 22, type: 'driver' });
-        if (hasReserve) seats.push({ name: 'R', x: 12, y: 78, type: 'reserve' });
-        seats.push({ name: '1', x: 38, y: 18, type: 'seat' });
-        seats.push({ name: '2', x: 38, y: 82, type: 'seat' });
-        seats.push({ name: '3', x: 58, y: 18, type: 'seat' });
-        seats.push({ name: '4', x: 58, y: 82, type: 'seat' });
-        seats.push({ name: '5', x: 80, y: 18, type: 'seat' });
-        seats.push({ name: '6', x: 80, y: 82, type: 'seat' });
+        seats.push({ name: 'D', x: 22, y: 28, type: 'driver' });
+        if (hasReserve) seats.push({ name: 'R', x: 22, y: 72, type: 'reserve' });
+        seats.push({ name: '1', x: 44, y: 28, type: 'seat' });
+        seats.push({ name: '2', x: 44, y: 72, type: 'seat' });
+        seats.push({ name: '3', x: 60, y: 28, type: 'seat' });
+        seats.push({ name: '4', x: 60, y: 72, type: 'seat' });
+        seats.push({ name: '5', x: 76, y: 28, type: 'seat' });
+        seats.push({ name: '6', x: 76, y: 72, type: 'seat' });
         return seats;
     }
 
     if (layout === 'bus') {
-        // Driver up front-left; rows of 2 + aisle + 2 along the length.
-        seats.push({ name: 'D', x: 4, y: 30, type: 'driver' });
-        if (hasReserve) seats.push({ name: 'R', x: 4, y: 72, type: 'reserve' });
+        seats.push({ name: 'D', x: 5, y: 28, type: 'driver' });
+        if (hasReserve) seats.push({ name: 'R', x: 5, y: 72, type: 'reserve' });
         const n = Math.max(8, parseInt(maxSeats) || 20);
         const rowsNeeded = Math.ceil(n / 4);
-        const xStart = 13, xEnd = 95;
+        const xStart = 15, xEnd = 95;
         const step = rowsNeeded === 1 ? 0 : (xEnd - xStart) / (rowsNeeded - 1);
         const ys = [14, 38, 62, 86];
         let placed = 0;
@@ -5209,44 +5206,23 @@ function getSeatLayout(layout, maxSeats, hasReserve) {
 
 function renderVanBody(layout) {
     if (layout === 'bus') {
+        // Flat modern bus — simple rounded rectangle, thin stroke, minimal details.
         return `<svg class="van-svg" viewBox="0 0 360 90" preserveAspectRatio="none" aria-hidden="true">
-            <defs>
-                <linearGradient id="vanBodyGradBus" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0" stop-color="#ffffff"/>
-                    <stop offset="1" stop-color="#e2e8f0"/>
-                </linearGradient>
-            </defs>
-            <rect x="4" y="4" width="352" height="82" rx="10" ry="18" fill="url(#vanBodyGradBus)" stroke="#94a3b8" stroke-width="1.5"/>
-            <path d="M 8 22 Q 4 45 8 68 L 26 64 L 26 26 Z" fill="#1e293b" opacity="0.8"/>
-            <line x1="28" y1="6" x2="28" y2="84" stroke="#94a3b8" stroke-width="1" stroke-dasharray="2,3"/>
-            <line x1="350" y1="18" x2="350" y2="72" stroke="#64748b" stroke-width="1.5"/>
-            <ellipse cx="36" cy="6" rx="8" ry="3.5" fill="#1e293b"/>
-            <ellipse cx="36" cy="84" rx="8" ry="3.5" fill="#1e293b"/>
-            <ellipse cx="320" cy="6" rx="10" ry="3.5" fill="#1e293b"/>
-            <ellipse cx="320" cy="84" rx="10" ry="3.5" fill="#1e293b"/>
-            <rect x="18" y="1" width="7" height="4" fill="#94a3b8" rx="1"/>
-            <rect x="18" y="85" width="7" height="4" fill="#94a3b8" rx="1"/>
+            <rect x="4" y="5" width="352" height="80" rx="14" ry="14" fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+            <rect x="8" y="28" width="18" height="34" rx="3" fill="#1e293b"/>
+            <line x1="30" y1="8" x2="30" y2="82" stroke="#cbd5e1" stroke-width="1"/>
+            <line x1="352" y1="20" x2="352" y2="70" stroke="#cbd5e1" stroke-width="1"/>
         </svg>`;
     }
+    // Flat modern minivan — rounded rect with slightly rounded nose (bigger radius on left).
     return `<svg class="van-svg" viewBox="0 0 220 90" preserveAspectRatio="none" aria-hidden="true">
-        <defs>
-            <linearGradient id="vanBodyGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0" stop-color="#ffffff"/>
-                <stop offset="1" stop-color="#e2e8f0"/>
-            </linearGradient>
-        </defs>
-        <path d="M 18 8 Q 2 45 18 82 L 210 82 Q 216 45 210 8 Z" fill="url(#vanBodyGrad)" stroke="#94a3b8" stroke-width="1.5"/>
-        <path d="M 20 22 Q 10 45 20 68 L 38 64 L 38 26 Z" fill="#1e293b" opacity="0.85"/>
-        <line x1="40" y1="12" x2="40" y2="78" stroke="#94a3b8" stroke-width="1" stroke-dasharray="2,3"/>
-        <line x1="108" y1="8" x2="108" y2="28" stroke="#94a3b8" stroke-width="2"/>
-        <line x1="108" y1="62" x2="108" y2="82" stroke="#94a3b8" stroke-width="2"/>
-        <line x1="205" y1="22" x2="205" y2="68" stroke="#64748b" stroke-width="1.5"/>
-        <ellipse cx="46" cy="9" rx="9" ry="4" fill="#1e293b"/>
-        <ellipse cx="46" cy="81" rx="9" ry="4" fill="#1e293b"/>
-        <ellipse cx="175" cy="9" rx="10" ry="4" fill="#1e293b"/>
-        <ellipse cx="175" cy="81" rx="10" ry="4" fill="#1e293b"/>
-        <rect x="26" y="4" width="8" height="4" fill="#94a3b8" rx="1"/>
-        <rect x="26" y="82" width="8" height="4" fill="#94a3b8" rx="1"/>
+        <path d="M 22 6 L 202 6 Q 214 6 214 18 L 214 72 Q 214 84 202 84 L 22 84 Q 4 84 4 66 L 4 24 Q 4 6 22 6 Z"
+              fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+        <rect x="10" y="30" width="18" height="30" rx="4" fill="#1e293b"/>
+        <line x1="32" y1="10" x2="32" y2="80" stroke="#cbd5e1" stroke-width="1"/>
+        <line x1="110" y1="6"  x2="110" y2="14" stroke="#cbd5e1" stroke-width="1"/>
+        <line x1="110" y1="76" x2="110" y2="84" stroke="#cbd5e1" stroke-width="1"/>
+        <line x1="208" y1="22" x2="208" y2="68" stroke="#cbd5e1" stroke-width="1"/>
     </svg>`;
 }
 
@@ -5264,11 +5240,12 @@ function renderVan(opts) {
     const seatsHtml = positions.map(s => {
         const style = `left:${s.x}%;top:${s.y}%`;
         if (s.type === 'driver') {
-            return `<div class="seat seat-driver" style="${style}" title="Водій"><div class="seat-wheel"></div></div>`;
+            return `<div class="seat seat-driver" style="${style}" title="Водій"><div class="seat-arms"></div><div class="seat-wheel"></div></div>`;
         }
         const occName = occupiedMap[s.name];
         if (occName) {
             return `<div class="seat seat-occupied" style="${style}" title="Зайнято: ${occName}">
+                <div class="seat-arms"></div>
                 <div class="seat-num">${s.name}</div>
                 <div class="seat-occ-name">${occName}</div>
             </div>`;
@@ -5276,6 +5253,7 @@ function renderVan(opts) {
         if (selected && selected === s.name) {
             const handler = interactive ? `onclick="seatPickerSelect('${s.name}')"` : '';
             return `<div class="seat seat-selected" style="${style}" ${handler}>
+                <div class="seat-arms"></div>
                 <div class="seat-check">✓</div>
                 <div class="seat-num">${s.name}</div>
             </div>`;
@@ -5283,6 +5261,7 @@ function renderVan(opts) {
         const stateCls = s.type === 'reserve' ? 'seat-reserve' : 'seat-free';
         const handler = interactive ? `onclick="seatPickerSelect('${s.name}')"` : '';
         return `<div class="seat ${stateCls}" style="${style}" ${handler}>
+            <div class="seat-arms"></div>
             <div class="seat-num">${s.name}</div>
         </div>`;
     }).join('');
