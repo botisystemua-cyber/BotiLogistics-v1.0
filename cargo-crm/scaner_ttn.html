@@ -1585,33 +1585,40 @@
         var IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
                      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
-        // Налаштування камери: просимо 1920×1080 (ideal, не exact — щоб
-        // старіші пристрої не падали з OverconstrainedError).
-        function buildVideoConstraints(exactEnv) {
-            var c = {
-                facingMode: exactEnv ? { exact: 'environment' } : { ideal: 'environment' },
-                width:  { ideal: 1920 },
-                height: { ideal: 1080 }
-            };
-            // iPhone любить зайвий framerate, але ZXing не встигає — тримаємо 15.
-            c.frameRate = { ideal: 15, max: 30 };
-            return c;
-        }
-
-        // Після старту тягнемось до MediaStreamTrack і вмикаємо continuous
-        // фокус + експозицію. Це opt-in фіча WebRTC, підтримується iOS 15.4+
-        // і більшістю Android. Помилки глушимо — не всі пристрої підтримують.
+        // Після старту підкручуємо потік: просимо HD і continuous
+        // focus/exposure. Через `applyVideoConstraints` (а НЕ через
+        // start-config — в html5-qrcode@2.3.8 HD у start() часом блокує
+        // getUserMedia і дає чорний екран).
+        //
+        // Важливо: html5-qrcode кидає sync «Cannot transition to a new state,
+        // already under transition», якщо викликати apply поки внутрішній
+        // state ще не стабілізувався. Тому — tryApply з retry, і
+        // ОДИН комбінований виклик замість двох (щоб не було race між ними).
         function applyCameraOptimizations() {
-            try {
+            var attempts = 0;
+            function tryApply() {
+                attempts += 1;
                 if (!scanner || !scanner.applyVideoConstraints) return;
-                var advanced = [];
-                // Кожен constraint додаємо окремо — якщо один не підтримується,
-                // браузер проігнорує лише його, а не весь блок.
-                advanced.push({ focusMode: 'continuous' });
-                advanced.push({ exposureMode: 'continuous' });
-                advanced.push({ whiteBalanceMode: 'continuous' });
-                scanner.applyVideoConstraints({ advanced: advanced }).catch(function(){});
-            } catch (e) { /* noop */ }
+                var constraints = {
+                    width:  { ideal: 1920 },
+                    height: { ideal: 1080 },
+                    advanced: [
+                        { focusMode: 'continuous' },
+                        { exposureMode: 'continuous' },
+                        { whiteBalanceMode: 'continuous' }
+                    ]
+                };
+                try {
+                    var p = scanner.applyVideoConstraints(constraints);
+                    if (p && typeof p.catch === 'function') {
+                        p.catch(function(){ /* device не тягне — гуд */ });
+                    }
+                } catch (e) {
+                    // «already under transition» — дамо ще шанс.
+                    if (attempts < 3) setTimeout(tryApply, 600);
+                }
+            }
+            setTimeout(tryApply, 800);
         }
 
         function startScan() {
@@ -1623,7 +1630,7 @@
             var config = {
                 // iOS: нижчий fps = більше часу ZXing на декод одного кадру.
                 fps: IS_IOS ? 10 : 15,
-                // Широкий qrbox (90% ширини, ~28% висоти) — критично для
+                // Широкий qrbox (92% ширини, ~32% висоти) — критично для
                 // тонких 1D штрих-кодів: чим більше горизонтальних пікселів
                 // проходить крізь штрихи, тим стабільніший декод.
                 qrbox: function(w, h) {
@@ -1645,7 +1652,7 @@
             };
 
             scanner.start(
-                buildVideoConstraints(true),
+                { facingMode: { exact: 'environment' } },
                 config,
                 onScanSuccess,
                 function() {}
@@ -1662,7 +1669,7 @@
                 applyCameraOptimizations();
             }).catch(function(err) {
                 scanner.start(
-                    buildVideoConstraints(false),
+                    { facingMode: 'environment' },
                     config,
                     onScanSuccess,
                     function() {}
