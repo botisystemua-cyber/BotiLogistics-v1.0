@@ -915,7 +915,7 @@ body.route-sort-active #rteTogglePay {
     display: flex;
     flex-direction: row;
     align-items: stretch;
-    min-height: 160px;
+    min-height: 130px;
     overflow: visible;
 }
 /* Капот + лобовое скло — вертикальна полоса ЗЛІВА (ніс буса) */

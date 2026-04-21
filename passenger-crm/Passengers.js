@@ -5114,7 +5114,7 @@ function updateSeatPreview(idx) {
     const hasReserve = !!vb.querySelector('.vb-reserve')?.checked;
 
     const rows = getSeatRows(layout, seats, hasReserve);
-    const hasBench = layout !== 'bus';
+    const hasBench = false;
     let seatsHtml = '';
     rows.forEach(row => {
         seatsHtml += '<div class="sp-car-row">';
@@ -5210,40 +5210,43 @@ function getSeatRows(layout, maxSeats, hasReserve) {
         return rows;
     }
 
-    // 2-2-3: 4 columns, 3 rows
-    // Front: D  2  |  4  7
-    // Mid:   _  _  |  _  6
-    // Back:  8  1  |  3  5
-    if (layout === '2-2-3') {
-        const rows = [
-            [{ name: 'D', type: 'driver' }, { name: '2', type: 'seat' }, { type: 'aisle' }, { name: '4', type: 'seat' }, { name: '7', type: 'seat' }],
-            [{ type: 'empty' }, { type: 'empty' }, { type: 'aisle' }, { type: 'empty' }, { name: '6', type: 'seat' }],
-            [hasReserve ? { name: '8', type: 'seat' } : { type: 'empty' }, { name: '1', type: 'seat' }, { type: 'aisle' }, { name: '3', type: 'seat' }, { name: '5', type: 'seat' }]
-        ];
-        return rows;
-    }
+    // Sprinter-style (horizontal, 2 rows top+bottom, driver bottom-left)
+    // Кожен "row" тут = ОДНА КОЛОНКА у візуалізації (зверху→вниз).
+    // Верх = пасажирська сторона, низ = водійська.
 
-    // 1-3-3: 3 columns, 3 rows
-    // Front: D  |  3  6
-    // Mid:   7  |  2  5
-    // Back:  8  |  1  4
+    // 1-3-3 — 7 пас.: верх 1-2-3-4, низ D-5-6-7
     if (layout === '1-3-3') {
         const rows = [
-            [{ name: 'D', type: 'driver' }, { type: 'aisle' }, { name: '3', type: 'seat' }, { name: '6', type: 'seat' }],
-            [{ name: '7', type: 'seat' }, { type: 'aisle' }, { name: '2', type: 'seat' }, { name: '5', type: 'seat' }],
-            [hasReserve ? { name: '8', type: 'seat' } : { type: 'empty' }, { type: 'aisle' }, { name: '1', type: 'seat' }, { name: '4', type: 'seat' }]
+            [{ name: '1', type: 'seat' }, { name: 'D', type: 'driver' }],
+            [{ name: '2', type: 'seat' }, { name: '5', type: 'seat' }],
+            [{ name: '3', type: 'seat' }, { name: '6', type: 'seat' }],
+            [{ name: '4', type: 'seat' }, { name: '7', type: 'seat' }],
         ];
+        if (hasReserve) rows.push([{ name: '8', type: 'seat' }, { type: 'empty' }]);
         return rows;
     }
 
-    // 2-2-2: 4 columns, 2 rows
-    // Front: D  2  |  4  6
-    // Back:  8  1  |  3  5
+    // 2-2-3 — 7 пас.: так само (верх 4, низ водій+3) — 7-місний мінівен
+    if (layout === '2-2-3') {
+        const rows = [
+            [{ name: '1', type: 'seat' }, { name: 'D', type: 'driver' }],
+            [{ name: '2', type: 'seat' }, { name: '5', type: 'seat' }],
+            [{ name: '3', type: 'seat' }, { name: '6', type: 'seat' }],
+            [{ name: '4', type: 'seat' }, { name: '7', type: 'seat' }],
+        ];
+        if (hasReserve) rows.push([{ name: '8', type: 'seat' }, { type: 'empty' }]);
+        return rows;
+    }
+
+    // 2-2-2 — 6 пас.: водій сам спереду, далі 3 колонки по 2 (верх 1-2-3, низ 4-5-6)
     if (layout === '2-2-2') {
         const rows = [
-            [{ name: 'D', type: 'driver' }, { name: '2', type: 'seat' }, { type: 'aisle' }, { name: '4', type: 'seat' }, { name: '6', type: 'seat' }],
-            [hasReserve ? { name: '8', type: 'seat' } : { type: 'empty' }, { name: '1', type: 'seat' }, { type: 'aisle' }, { name: '3', type: 'seat' }, { name: '5', type: 'seat' }]
+            [{ type: 'empty' }, { name: 'D', type: 'driver' }],
+            [{ name: '1', type: 'seat' }, { name: '4', type: 'seat' }],
+            [{ name: '2', type: 'seat' }, { name: '5', type: 'seat' }],
+            [{ name: '3', type: 'seat' }, { name: '6', type: 'seat' }],
         ];
+        if (hasReserve) rows.push([{ name: '8', type: 'seat' }, { type: 'empty' }]);
         return rows;
     }
 
@@ -5318,7 +5321,7 @@ function renderSeatPickerModal(trip, occupiedMap) {
     const maxSeats = parseInt(trip.max_seats) || 7;
     const autoName = cleanAutoName(trip.auto_name) || 'Авто';
     const hasReserve = trip.reserve === true || trip.reserve === 'true';
-    const hasBench = layout !== 'bus';
+    const hasBench = false;
     const rows = getSeatRows(layout, maxSeats, hasReserve);
     const seatsHtml = renderSeatsGrid(rows, occupiedMap, hasBench);
     const tripDate = formatTripDate(trip.date);
@@ -5377,7 +5380,7 @@ function seatPickerSelect(seatName) {
     const occupiedMap = getOccupiedSeats(calId, seatPickerPaxId);
     const layout = detectLayout(trip);
     const hasReserve = trip.reserve === true || trip.reserve === 'true';
-    const hasBench = layout !== 'bus';
+    const hasBench = false;
     const rows = getSeatRows(layout, parseInt(trip.max_seats) || 7, hasReserve);
     const grid = document.getElementById('seatPickerGrid');
     if (grid) grid.innerHTML = renderSeatsGrid(rows, occupiedMap, hasBench);
