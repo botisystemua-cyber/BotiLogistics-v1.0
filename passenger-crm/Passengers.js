@@ -5114,6 +5114,7 @@ function updateSeatPreview(idx) {
     const hasReserve = !!vb.querySelector('.vb-reserve')?.checked;
 
     const rows = getSeatRows(layout, seats, hasReserve);
+    const hasBench = layout !== 'bus';
     let seatsHtml = '';
     rows.forEach(row => {
         seatsHtml += '<div class="sp-car-row">';
@@ -5121,7 +5122,7 @@ function updateSeatPreview(idx) {
             if (s.type === 'aisle') { seatsHtml += '<div class="sp-car-aisle"></div>'; return; }
             if (s.type === 'empty') { seatsHtml += '<div class="sp-seat sp-empty"></div>'; return; }
             if (s.type === 'driver') {
-                seatsHtml += `<div class="sp-seat sp-driver"><div class="sp-seat-num">${s.name}</div></div>`;
+                seatsHtml += `<div class="sp-seat sp-driver" title="Водій"><div class="sp-wheel"></div><div class="sp-seat-num">${s.name}</div></div>`;
                 return;
             }
             const isReserve = s.name === '8' && hasReserve;
@@ -5130,6 +5131,7 @@ function updateSeatPreview(idx) {
         });
         seatsHtml += '</div>';
     });
+    if (hasBench) seatsHtml += renderBenchHtml();
 
     container.style.gridTemplateColumns = '';
     container.innerHTML = `<div class="sp-car-wrap vb-car-wrap">
@@ -5259,7 +5261,7 @@ function buildSeatHtml(seatObj, occupiedMap) {
     if (s.type === 'aisle') return '<div class="sp-car-aisle"></div>';
     if (s.type === 'empty') return '<div class="sp-seat sp-empty"></div>';
     if (s.type === 'driver') {
-        return `<div class="sp-seat sp-driver"><div class="sp-seat-num">${s.name}</div><div style="font-size:10px;color:#a16207;">Водій</div></div>`;
+        return `<div class="sp-seat sp-driver" title="Водій"><div class="sp-wheel"></div><div class="sp-seat-num">${s.name}</div></div>`;
     }
     const isOcc = occupiedMap[s.name];
     const isSel = seatPickerSelected === s.name;
@@ -5272,13 +5274,22 @@ function buildSeatHtml(seatObj, occupiedMap) {
     return `<div class="sp-seat sp-free" onclick="seatPickerSelect('${s.name}')"><div class="sp-seat-ico"></div><div class="sp-seat-num">${s.name}</div></div>`;
 }
 
-function renderSeatsGrid(rows, occupiedMap) {
+function renderBenchHtml() {
+    return '<div class="sp-bench" aria-label="Задній ряд (3 фіксовані сидіння)">'
+        + '<div class="sp-bench-seat"></div>'
+        + '<div class="sp-bench-seat"></div>'
+        + '<div class="sp-bench-seat"></div>'
+        + '</div>';
+}
+
+function renderSeatsGrid(rows, occupiedMap, hasBench) {
     let html = '';
     rows.forEach(row => {
         html += '<div class="sp-car-row">';
         row.forEach(s => { html += buildSeatHtml(s, occupiedMap); });
         html += '</div>';
     });
+    if (hasBench) html += renderBenchHtml();
     return html;
 }
 
@@ -5307,8 +5318,9 @@ function renderSeatPickerModal(trip, occupiedMap) {
     const maxSeats = parseInt(trip.max_seats) || 7;
     const autoName = cleanAutoName(trip.auto_name) || 'Авто';
     const hasReserve = trip.reserve === true || trip.reserve === 'true';
+    const hasBench = layout !== 'bus';
     const rows = getSeatRows(layout, maxSeats, hasReserve);
-    const seatsHtml = renderSeatsGrid(rows, occupiedMap);
+    const seatsHtml = renderSeatsGrid(rows, occupiedMap, hasBench);
     const tripDate = formatTripDate(trip.date);
     const tripCity = trip.city || '';
     const occ = Object.keys(occupiedMap).length;
@@ -5341,6 +5353,7 @@ function renderSeatPickerModal(trip, occupiedMap) {
                     <div class="sp-legend-item"><div class="sp-legend-dot l-sel"></div>Обрано</div>
                     <div class="sp-legend-item"><div class="sp-legend-dot l-occ"></div>Зайняте</div>
                     <div class="sp-legend-item"><div class="sp-legend-dot l-drv"></div>Водій</div>
+                    ${hasBench ? '<div class="sp-legend-item"><div class="sp-legend-dot l-bench"></div>Задній ряд</div>' : ''}
                 </div>
             </div>
             <div class="seat-picker-footer">
@@ -5364,9 +5377,10 @@ function seatPickerSelect(seatName) {
     const occupiedMap = getOccupiedSeats(calId, seatPickerPaxId);
     const layout = detectLayout(trip);
     const hasReserve = trip.reserve === true || trip.reserve === 'true';
+    const hasBench = layout !== 'bus';
     const rows = getSeatRows(layout, parseInt(trip.max_seats) || 7, hasReserve);
     const grid = document.getElementById('seatPickerGrid');
-    if (grid) grid.innerHTML = renderSeatsGrid(rows, occupiedMap);
+    if (grid) grid.innerHTML = renderSeatsGrid(rows, occupiedMap, hasBench);
 }
 
 async function saveSeatPicker() {
