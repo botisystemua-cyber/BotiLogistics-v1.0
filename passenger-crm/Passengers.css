@@ -1163,98 +1163,84 @@ body.route-sort-active #rteTogglePay {
 .van-svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; display: block; }
 .van.van-bus { aspect-ratio: 36 / 9; max-width: 640px; }
 
+/* Flat modern seats — solid fills, thin borders, no gradients or shadows. */
 .seat {
     position: absolute;
-    width: 13%;
-    aspect-ratio: 1 / 1;
+    width: 9.5%;
+    height: 22%;
     transform: translate(-50%, -50%);
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
     user-select: none;
-    transition: transform 0.15s;
-    --seat-cushion: #bbf7d0;
-    --seat-back:    #16a34a;
-    --seat-arm:     #4ade80;
+    transition: transform 0.12s;
+    --seat-cushion: #86efac;
+    --seat-back:    #15803d;
     --seat-text:    #052e16;
-    filter: drop-shadow(0 1px 2px rgba(15, 23, 42, 0.15));
 }
-.van-bus .seat { width: 7.5%; }
-.seat:active:not(.seat-occupied):not(.seat-driver):not(.seat-disabled) { transform: translate(-50%, -50%) scale(0.93); }
+.van-bus .seat { width: 5.5%; height: 22%; }
+.seat:active:not(.seat-occupied):not(.seat-driver):not(.seat-disabled) { transform: translate(-50%, -50%) scale(0.92); }
 .seat:hover:not(.seat-occupied):not(.seat-driver):not(.seat-disabled)  { transform: translate(-50%, calc(-50% - 1px)); }
-/* Cushion — the seat body (person sits here). Faces LEFT → backrest is a separate element on the right. */
+/* Cushion — flat fill, left-rounded (person faces left). */
 .seat::before {
     content: '';
     position: absolute;
-    inset: 14% 32% 14% 4%;
-    background:
-        radial-gradient(ellipse 80% 55% at 25% 50%, rgba(255,255,255,0.55), transparent 70%),
-        var(--seat-cushion);
+    inset: 12% 32% 12% 6%;
+    background: var(--seat-cushion);
     border: 1.5px solid var(--seat-back);
-    border-right: none;
-    border-radius: 14px 4px 4px 14px;
+    border-radius: 10px 3px 3px 10px;
 }
-/* Explicit backrest + headrest — distinct shape on the RIGHT side of the seat. */
+/* Backrest — solid strip on the right, rounded on its right edge. */
 .seat::after {
     content: '';
     position: absolute;
-    top: 8%; bottom: 8%; right: 4%;
-    width: 34%;
+    top: 10%; bottom: 10%; right: 6%;
+    width: 26%;
     background: var(--seat-back);
-    border: 1.5px solid var(--seat-back);
-    border-radius: 10px 20px 20px 10px;
-    box-shadow: inset -4px 0 0 rgba(0,0,0,0.18), inset 1px 0 0 rgba(255,255,255,0.25);
+    border-radius: 3px 8px 8px 3px;
 }
-/* Armrests — top and bottom strips between cushion and backrest */
-.seat-arms {
-    position: absolute;
-    left: 12%; right: 34%;
-    top: 6%;
-    height: 10%;
-    background: var(--seat-arm);
-    border-radius: 4px 4px 2px 2px;
-    box-shadow: 0 calc(80% - 2px) 0 var(--seat-arm);
-    pointer-events: none;
-    z-index: 1;
-}
+/* Armrests — optional, hidden by default for flat style */
+.seat-arms { display: none; }
+
 .seat-num {
     position: absolute;
     inset: 0;
     display: flex; align-items: center; justify-content: center;
-    font-size: clamp(10px, 1.4vw, 13px);
-    font-weight: 800;
+    font-size: clamp(10px, 1.3vw, 12px);
+    font-weight: 700;
     color: var(--seat-text);
-    padding-right: 30%;
+    padding-right: 28%;
+    font-family: -apple-system, 'Inter', 'Segoe UI', system-ui, sans-serif;
+    letter-spacing: -0.2px;
     z-index: 2;
     pointer-events: none;
 }
-.van-bus .seat-num { font-size: 9px; padding-right: 26%; }
+.van-bus .seat-num { font-size: 9px; padding-right: 22%; }
 
-/* States */
-.seat-free      { --seat-cushion: #bbf7d0; --seat-back: #16a34a; --seat-arm: #4ade80; --seat-text: #052e16; }
-.seat-free:hover{ --seat-cushion: #86efac; }
-.seat-selected  { --seat-cushion: #3b82f6; --seat-back: #1d4ed8; --seat-arm: #60a5fa; --seat-text: #ffffff; }
-.seat-occupied  { --seat-cushion: #fecaca; --seat-back: #dc2626; --seat-arm: #f87171; --seat-text: #7f1d1d; cursor: not-allowed; }
-.seat-reserve   { --seat-cushion: #ede9fe; --seat-back: #7c3aed; --seat-arm: #a78bfa; --seat-text: #4c1d95; }
+/* States — flat solid colors */
+.seat-free      { --seat-cushion: #86efac; --seat-back: #15803d; --seat-text: #052e16; }
+.seat-free:hover{ --seat-cushion: #4ade80; }
+.seat-selected  { --seat-cushion: #60a5fa; --seat-back: #1d4ed8; --seat-text: #ffffff; }
+.seat-occupied  { --seat-cushion: #fca5a5; --seat-back: #b91c1c; --seat-text: #7f1d1d; cursor: not-allowed; }
+.seat-reserve   { --seat-cushion: #c4b5fd; --seat-back: #6d28d9; --seat-text: #3730a3; }
 .seat-reserve::before { border-style: dashed; }
 
-/* Driver — darker chair, clearly visible against the van body, with wheel */
-.seat-driver    { --seat-cushion: #64748b; --seat-back: #1e293b; --seat-arm: #475569; --seat-text: transparent; cursor: default; filter: drop-shadow(0 2px 3px rgba(15,23,42,0.3)); }
+/* Driver — solid slate, clearly visible on light van body, with wheel overlay */
+.seat-driver    { --seat-cushion: #475569; --seat-back: #0f172a; --seat-text: transparent; cursor: default; }
 .seat-driver .seat-num { display: none; }
 
-/* Steering wheel for the driver seat — drawn on top of the cushion */
+/* Steering wheel — flat: white ring with spokes on the dark driver cushion */
 .seat-wheel {
     position: absolute;
-    top: 50%; left: 26%;
+    top: 50%; left: 28%;
     transform: translate(-50%, -50%);
-    width: 42%; height: 42%;
-    border: 2.5px solid #f8fafc;
+    width: 44%; height: 44%;
+    border: 2px solid #ffffff;
     border-radius: 50%;
     background:
-        radial-gradient(circle at center, #f8fafc 0 14%, transparent 16%),
-        linear-gradient(0deg,  transparent 45%, #f8fafc 45% 55%, transparent 55%),
-        linear-gradient(90deg, transparent 45%, #f8fafc 45% 55%, transparent 55%),
-        #1e293b;
-    box-shadow: 0 0 0 1px rgba(15,23,42,0.4);
+        radial-gradient(circle at center, #ffffff 0 14%, transparent 16%),
+        linear-gradient(0deg,  transparent 44%, #ffffff 44% 56%, transparent 56%),
+        linear-gradient(90deg, transparent 44%, #ffffff 44% 56%, transparent 56%),
+        transparent;
     z-index: 3;
     pointer-events: none;
 }
