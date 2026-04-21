@@ -5069,7 +5069,7 @@ function addVehicleBuilder() {
         </div>
         <div class="bs-row" style="align-items:center;">
             <div class="bs-field"><label class="bs-label">Кількість місць</label>
-                <div class="seat-counter">
+                <div class="seat-counter locked">
                     <button onclick="changeSeatCount(${idx},-1)">−</button>
                     <span class="vb-seats-num" id="vbSeats-${idx}">7</span>
                     <button onclick="changeSeatCount(${idx},1)">+</button>
@@ -5086,17 +5086,33 @@ function addVehicleBuilder() {
     updateSeatPreview(idx);
 }
 
+// Layouts with a fixed physical seat count (can't be changed via +/−)
+const FIXED_COUNT_LAYOUTS = { '1-3-3': 7, '2-2-3': 7, '2-2-2': 6 };
+
 function selectLayout(el, idx) {
     el.parentElement.querySelectorAll('.layout-option').forEach(o => o.classList.remove('active'));
     el.classList.add('active');
     const layout = el.dataset.layout;
-    const all = LAYOUTS[layout] || [];
-    const seats = layout === 'bus' ? 20 : all.filter(s => s !== 'D').length;
-    document.getElementById('vbSeats-' + idx).textContent = seats;
+    const seatsEl = document.getElementById('vbSeats-' + idx);
+    const vb = document.getElementById('vb-' + idx);
+    const counter = vb?.querySelector('.seat-counter');
+
+    if (FIXED_COUNT_LAYOUTS[layout]) {
+        seatsEl.textContent = FIXED_COUNT_LAYOUTS[layout];
+        counter?.classList.add('locked');
+    } else {
+        // bus — allow custom seat count
+        const cur = parseInt(seatsEl.textContent) || 20;
+        if (cur < 8) seatsEl.textContent = 20;
+        counter?.classList.remove('locked');
+    }
     updateSeatPreview(idx);
 }
 
 function changeSeatCount(idx, delta) {
+    const vb = document.getElementById('vb-' + idx);
+    const counter = vb?.querySelector('.seat-counter');
+    if (counter?.classList.contains('locked')) return;  // layout dictates count
     const el = document.getElementById('vbSeats-' + idx);
     const cur = parseInt(el.textContent) || 0;
     const nv = Math.max(1, cur + delta);
@@ -5110,36 +5126,168 @@ function updateSeatPreview(idx) {
     const vb = document.getElementById('vb-' + idx);
     const layoutEl = vb.querySelector('.vb-layouts .layout-option.active');
     const layout = layoutEl ? layoutEl.dataset.layout : '1-3-3';
-    const seats = parseInt(document.getElementById('vbSeats-' + idx).textContent) || 7;
+    const maxSeats = parseInt(document.getElementById('vbSeats-' + idx).textContent) || 7;
     const hasReserve = !!vb.querySelector('.vb-reserve')?.checked;
 
-    const rows = getSeatRows(layout, seats, hasReserve);
-    const hasBench = false;
-    let seatsHtml = '';
-    rows.forEach(row => {
-        seatsHtml += '<div class="sp-car-row">';
-        row.forEach(s => {
-            if (s.type === 'aisle') { seatsHtml += '<div class="sp-car-aisle"></div>'; return; }
-            if (s.type === 'empty') { seatsHtml += '<div class="sp-seat sp-empty"></div>'; return; }
-            if (s.type === 'driver') {
-                seatsHtml += `<div class="sp-seat sp-driver" title="Водій"><div class="sp-wheel"></div><div class="sp-seat-num">${s.name}</div></div>`;
-                return;
-            }
-            const isReserve = s.name === '8' && hasReserve;
-            const cls = isReserve ? 'sp-reserve' : 'sp-free';
-            seatsHtml += `<div class="sp-seat ${cls}"><div class="sp-seat-num">${s.name}</div></div>`;
-        });
-        seatsHtml += '</div>';
+    container.innerHTML = renderVan({
+        layout, maxSeats, hasReserve,
+        occupiedMap: {}, selected: '',
+        interactive: false,
     });
-    if (hasBench) seatsHtml += renderBenchHtml();
+}
 
-    container.style.gridTemplateColumns = '';
-    container.innerHTML = `<div class="sp-car-wrap vb-car-wrap">
-        <div class="sp-car-shape">
-            <div class="sp-car-front"></div>
-            <div class="sp-car-seats">${seatsHtml}</div>
-        </div>
-    </div>`;
+// ================================================================
+// VAN V2 — SVG body + absolutely-positioned seats. Nose on LEFT.
+// Coordinates in % inside .van (0,0 = top-left; x grows → rear).
+// ================================================================
+function getSeatLayout(layout, maxSeats, hasReserve) {
+    const seats = [];
+
+    if (layout === '1-3-3') {
+        // 1 front (D + "1" co-driver) + 3 mid + 3 rear. Reserve optional, placed in front zone.
+        seats.push({ name: 'D', x: 14, y: 30, type: 'driver' });
+        seats.push({ name: '1', x: 14, y: 72, type: 'seat' });
+        seats.push({ name: '2', x: 42, y: 22, type: 'seat' });
+        seats.push({ name: '3', x: 42, y: 50, type: 'seat' });
+        seats.push({ name: '4', x: 42, y: 78, type: 'seat' });
+        seats.push({ name: '5', x: 72, y: 22, type: 'seat' });
+        seats.push({ name: '6', x: 72, y: 50, type: 'seat' });
+        seats.push({ name: '7', x: 72, y: 78, type: 'seat' });
+        if (hasReserve) seats.push({ name: 'R', x: 26, y: 50, type: 'reserve' });
+        return seats;
+    }
+
+    if (layout === '2-2-3') {
+        // D + reserve in front; then 2+2 middle rows; then bench of 3 at the rear.
+        seats.push({ name: 'D', x: 12, y: 30, type: 'driver' });
+        if (hasReserve) seats.push({ name: 'R', x: 12, y: 72, type: 'reserve' });
+        seats.push({ name: '1', x: 36, y: 28, type: 'seat' });
+        seats.push({ name: '2', x: 36, y: 72, type: 'seat' });
+        seats.push({ name: '3', x: 56, y: 28, type: 'seat' });
+        seats.push({ name: '4', x: 56, y: 72, type: 'seat' });
+        seats.push({ name: '5', x: 80, y: 18, type: 'seat' });
+        seats.push({ name: '6', x: 80, y: 50, type: 'seat' });
+        seats.push({ name: '7', x: 80, y: 82, type: 'seat' });
+        return seats;
+    }
+
+    if (layout === '2-2-2') {
+        // D + reserve in front; 3 rows of 2 with a wide central aisle.
+        seats.push({ name: 'D', x: 12, y: 22, type: 'driver' });
+        if (hasReserve) seats.push({ name: 'R', x: 12, y: 78, type: 'reserve' });
+        seats.push({ name: '1', x: 38, y: 18, type: 'seat' });
+        seats.push({ name: '2', x: 38, y: 82, type: 'seat' });
+        seats.push({ name: '3', x: 58, y: 18, type: 'seat' });
+        seats.push({ name: '4', x: 58, y: 82, type: 'seat' });
+        seats.push({ name: '5', x: 80, y: 18, type: 'seat' });
+        seats.push({ name: '6', x: 80, y: 82, type: 'seat' });
+        return seats;
+    }
+
+    if (layout === 'bus') {
+        // Driver up front-left; rows of 2 + aisle + 2 along the length.
+        seats.push({ name: 'D', x: 4, y: 30, type: 'driver' });
+        if (hasReserve) seats.push({ name: 'R', x: 4, y: 72, type: 'reserve' });
+        const n = Math.max(8, parseInt(maxSeats) || 20);
+        const rowsNeeded = Math.ceil(n / 4);
+        const xStart = 13, xEnd = 95;
+        const step = rowsNeeded === 1 ? 0 : (xEnd - xStart) / (rowsNeeded - 1);
+        const ys = [14, 38, 62, 86];
+        let placed = 0;
+        for (let r = 0; r < rowsNeeded && placed < n; r++) {
+            const x = xStart + step * r;
+            for (let c = 0; c < 4 && placed < n; c++) {
+                placed++;
+                seats.push({ name: String(placed), x, y: ys[c], type: 'seat' });
+            }
+        }
+        return seats;
+    }
+
+    return [];
+}
+
+function renderVanBody(layout) {
+    if (layout === 'bus') {
+        return `<svg class="van-svg" viewBox="0 0 360 90" preserveAspectRatio="none" aria-hidden="true">
+            <defs>
+                <linearGradient id="vanBodyGradBus" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0" stop-color="#ffffff"/>
+                    <stop offset="1" stop-color="#e2e8f0"/>
+                </linearGradient>
+            </defs>
+            <rect x="4" y="4" width="352" height="82" rx="10" ry="18" fill="url(#vanBodyGradBus)" stroke="#94a3b8" stroke-width="1.5"/>
+            <path d="M 8 22 Q 4 45 8 68 L 26 64 L 26 26 Z" fill="#1e293b" opacity="0.8"/>
+            <line x1="28" y1="6" x2="28" y2="84" stroke="#94a3b8" stroke-width="1" stroke-dasharray="2,3"/>
+            <line x1="350" y1="18" x2="350" y2="72" stroke="#64748b" stroke-width="1.5"/>
+            <ellipse cx="36" cy="6" rx="8" ry="3.5" fill="#1e293b"/>
+            <ellipse cx="36" cy="84" rx="8" ry="3.5" fill="#1e293b"/>
+            <ellipse cx="320" cy="6" rx="10" ry="3.5" fill="#1e293b"/>
+            <ellipse cx="320" cy="84" rx="10" ry="3.5" fill="#1e293b"/>
+            <rect x="18" y="1" width="7" height="4" fill="#94a3b8" rx="1"/>
+            <rect x="18" y="85" width="7" height="4" fill="#94a3b8" rx="1"/>
+        </svg>`;
+    }
+    return `<svg class="van-svg" viewBox="0 0 220 90" preserveAspectRatio="none" aria-hidden="true">
+        <defs>
+            <linearGradient id="vanBodyGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#ffffff"/>
+                <stop offset="1" stop-color="#e2e8f0"/>
+            </linearGradient>
+        </defs>
+        <path d="M 18 8 Q 2 45 18 82 L 210 82 Q 216 45 210 8 Z" fill="url(#vanBodyGrad)" stroke="#94a3b8" stroke-width="1.5"/>
+        <path d="M 20 22 Q 10 45 20 68 L 38 64 L 38 26 Z" fill="#1e293b" opacity="0.85"/>
+        <line x1="40" y1="12" x2="40" y2="78" stroke="#94a3b8" stroke-width="1" stroke-dasharray="2,3"/>
+        <line x1="108" y1="8" x2="108" y2="28" stroke="#94a3b8" stroke-width="2"/>
+        <line x1="108" y1="62" x2="108" y2="82" stroke="#94a3b8" stroke-width="2"/>
+        <line x1="205" y1="22" x2="205" y2="68" stroke="#64748b" stroke-width="1.5"/>
+        <ellipse cx="46" cy="9" rx="9" ry="4" fill="#1e293b"/>
+        <ellipse cx="46" cy="81" rx="9" ry="4" fill="#1e293b"/>
+        <ellipse cx="175" cy="9" rx="10" ry="4" fill="#1e293b"/>
+        <ellipse cx="175" cy="81" rx="10" ry="4" fill="#1e293b"/>
+        <rect x="26" y="4" width="8" height="4" fill="#94a3b8" rx="1"/>
+        <rect x="26" y="82" width="8" height="4" fill="#94a3b8" rx="1"/>
+    </svg>`;
+}
+
+function renderVan(opts) {
+    const layout = opts.layout || '1-3-3';
+    const maxSeats = parseInt(opts.maxSeats) || 7;
+    const hasReserve = !!opts.hasReserve;
+    const occupiedMap = opts.occupiedMap || {};
+    const selected = opts.selected || '';
+    const interactive = opts.interactive !== false;
+
+    const positions = getSeatLayout(layout, maxSeats, hasReserve);
+    const vanCls = layout === 'bus' ? 'van van-bus' : 'van';
+
+    const seatsHtml = positions.map(s => {
+        const style = `left:${s.x}%;top:${s.y}%`;
+        if (s.type === 'driver') {
+            return `<div class="seat seat-driver" style="${style}" title="Водій"><div class="seat-wheel"></div></div>`;
+        }
+        const occName = occupiedMap[s.name];
+        if (occName) {
+            return `<div class="seat seat-occupied" style="${style}" title="Зайнято: ${occName}">
+                <div class="seat-num">${s.name}</div>
+                <div class="seat-occ-name">${occName}</div>
+            </div>`;
+        }
+        if (selected && selected === s.name) {
+            const handler = interactive ? `onclick="seatPickerSelect('${s.name}')"` : '';
+            return `<div class="seat seat-selected" style="${style}" ${handler}>
+                <div class="seat-check">✓</div>
+                <div class="seat-num">${s.name}</div>
+            </div>`;
+        }
+        const stateCls = s.type === 'reserve' ? 'seat-reserve' : 'seat-free';
+        const handler = interactive ? `onclick="seatPickerSelect('${s.name}')"` : '';
+        return `<div class="seat ${stateCls}" style="${style}" ${handler}>
+            <div class="seat-num">${s.name}</div>
+        </div>`;
+    }).join('');
+
+    return `<div class="van-wrap"><div class="${vanCls}">${renderVanBody(layout)}${seatsHtml}</div></div>`;
 }
 
 // ================================================================
@@ -5321,9 +5469,7 @@ function renderSeatPickerModal(trip, occupiedMap) {
     const maxSeats = parseInt(trip.max_seats) || 7;
     const autoName = cleanAutoName(trip.auto_name) || 'Авто';
     const hasReserve = trip.reserve === true || trip.reserve === 'true';
-    const hasBench = false;
-    const rows = getSeatRows(layout, maxSeats, hasReserve);
-    const seatsHtml = renderSeatsGrid(rows, occupiedMap, hasBench);
+    const vanHtml = renderVan({ layout, maxSeats, hasReserve, occupiedMap, selected: seatPickerSelected, interactive: true });
     const tripDate = formatTripDate(trip.date);
     const tripCity = trip.city || '';
     const occ = Object.keys(occupiedMap).length;
@@ -5343,20 +5489,12 @@ function renderSeatPickerModal(trip, occupiedMap) {
                         <div>${tripDate} · ${tripCity} · <span style="color:#16a34a;font-weight:700;">${free} вільн.</span> / ${maxSeats} місць</div>
                     </div>
                 </div>
-                <div class="sp-car-wrap">
-                    <div class="sp-car-shape">
-                        <div class="sp-car-front"></div>
-                        <div class="sp-car-seats" id="seatPickerGrid">
-                            ${seatsHtml}
-                        </div>
-                    </div>
-                </div>
+                <div id="seatPickerGrid">${vanHtml}</div>
                 <div class="sp-legend">
                     <div class="sp-legend-item"><div class="sp-legend-dot l-free"></div>Вільне</div>
                     <div class="sp-legend-item"><div class="sp-legend-dot l-sel"></div>Обрано</div>
                     <div class="sp-legend-item"><div class="sp-legend-dot l-occ"></div>Зайняте</div>
                     <div class="sp-legend-item"><div class="sp-legend-dot l-drv"></div>Водій</div>
-                    ${hasBench ? '<div class="sp-legend-item"><div class="sp-legend-dot l-bench"></div>Задній ряд</div>' : ''}
                 </div>
             </div>
             <div class="seat-picker-footer">
@@ -5371,7 +5509,6 @@ function renderSeatPickerModal(trip, occupiedMap) {
 
 function seatPickerSelect(seatName) {
     seatPickerSelected = (seatPickerSelected === seatName) ? '' : seatName;
-    // Re-render grid
     const p = passengers.find(x => x['PAX_ID'] === seatPickerPaxId);
     if (!p) return;
     const calId = p['CAL_ID'] || '';
@@ -5380,10 +5517,9 @@ function seatPickerSelect(seatName) {
     const occupiedMap = getOccupiedSeats(calId, seatPickerPaxId);
     const layout = detectLayout(trip);
     const hasReserve = trip.reserve === true || trip.reserve === 'true';
-    const hasBench = false;
-    const rows = getSeatRows(layout, parseInt(trip.max_seats) || 7, hasReserve);
+    const maxSeats = parseInt(trip.max_seats) || 7;
     const grid = document.getElementById('seatPickerGrid');
-    if (grid) grid.innerHTML = renderSeatsGrid(rows, occupiedMap, hasBench);
+    if (grid) grid.innerHTML = renderVan({ layout, maxSeats, hasReserve, occupiedMap, selected: seatPickerSelected, interactive: true });
 }
 
 async function saveSeatPicker() {
@@ -5572,9 +5708,12 @@ function editTrip(calId) {
         const nameInput = vb.querySelector('.vb-name');
         if (nameInput) nameInput.value = t.auto_name || '';
         const layoutBtns = vb.querySelectorAll('.vb-layouts .layout-option');
-        layoutBtns.forEach(b => b.classList.toggle('active', b.dataset.layout === t.layout));
+        const activeLayout = ['1-3-3','2-2-3','2-2-2','bus'].includes(t.layout) ? t.layout : '1-3-3';
+        layoutBtns.forEach(b => b.classList.toggle('active', b.dataset.layout === activeLayout));
         const seatsEl = vb.querySelector('.vb-seats-num');
-        if (seatsEl) seatsEl.textContent = t.max_seats || 7;
+        if (seatsEl) seatsEl.textContent = FIXED_COUNT_LAYOUTS[activeLayout] || (t.max_seats || 20);
+        const counter = vb.querySelector('.seat-counter');
+        if (counter) counter.classList.toggle('locked', !!FIXED_COUNT_LAYOUTS[activeLayout]);
     }
 
     // Calendar renders dateStr as DD.MM.YYYY, so normalise the trip's
