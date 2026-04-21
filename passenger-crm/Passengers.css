@@ -870,13 +870,13 @@ body.route-sort-active #rteTogglePay {
 .vehicle-remove-btn { width: 24px; height: 24px; border: none; background: #fee2e2; color: #dc2626; border-radius: 6px; cursor: pointer; font-size: 12px; }
 .seat-preview { display: block; margin-top: 8px; }
 .seat-preview .sp-car-wrap { padding: 10px 8px; }
-.seat-preview .sp-car-shape { min-height: 130px; }
-.seat-preview .sp-seat { width: 46px; height: 36px; }
-.seat-preview .sp-seat .sp-seat-num { font-size: 11px; }
+.seat-preview .sp-car-shape { min-height: 150px; }
 .seat-preview .sp-car-front { width: 34px; }
 .seat-preview .sp-car-seats { padding: 8px 12px 8px 8px; gap: 8px; }
 .seat-preview .sp-car-row { gap: 6px; }
 .seat-preview .sp-car-aisle { width: 32px; height: 10px; }
+.seat-preview .sp-seat { cursor: default; }
+.seat-preview .sp-seat:hover:not(.sp-driver) { transform: none; }
 .seat-counter { display: flex; align-items: center; gap: 8px; }
 .seat-counter button { width: 28px; height: 28px; border: 1px solid var(--border); border-radius: 6px; background: white; cursor: pointer; font-size: 14px; font-weight: 700; }
 .seat-counter button:hover { background: var(--primary); color: white; border-color: var(--primary); }
@@ -1010,75 +1010,152 @@ body.route-sort-active #rteTogglePay {
 .sp-car-aisle { height: 12px; width: 40px; flex-shrink: 0; position: relative; }
 .sp-car-aisle::after { content: ''; position: absolute; left: -4px; right: -4px; top: 50%; height: 0; border-top: 1.5px dashed #cbd5e1; }
 
-/* ── Крісло як у top-down view: спинка + сидушка, дивиться ВЛІВО (напрям руху) ── */
+/* ── Крісло top-down: подушка+спинка+підлокітники, дивиться ВЛІВО (носом буса) ── */
 .sp-seat {
-    width: 54px; height: 42px;
-    border-radius: 14px 6px 6px 14px;
-    border: 2px solid #cbd5e1;
-    background: white;
+    --seat-cushion: #f8fafc;
+    --seat-back:    #cbd5e1;
+    --seat-arm:     #cbd5e1;
+    --seat-text:    #475569;
+    width: 48px; height: 46px;
+    background: transparent;
+    border: none;
+    padding: 0;
     cursor: pointer;
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
-    padding: 0 8px 0 4px;
-    transition: all 0.15s;
     position: relative;
-    -webkit-tap-highlight-color: transparent; user-select: none;
+    transition: transform 0.15s;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
 }
-.sp-seat:active:not(.sp-occupied):not(.sp-driver) { transform: scale(0.94); }
-.sp-seat:hover:not(.sp-occupied):not(.sp-driver) { border-color: #3b82f6; background: #eff6ff; }
-/* Спинка — праворуч (за спиною пасажира, який дивиться вліво) */
+.sp-seat:active:not(.sp-occupied):not(.sp-driver) { transform: scale(0.93); }
+.sp-seat:hover:not(.sp-occupied):not(.sp-driver) { transform: translateY(-1px); }
+/* Тіло крісла = подушка + спинка (праворуч, бо пасажир дивиться вліво) */
 .sp-seat::before {
     content: '';
     position: absolute;
-    right: 3px; top: 4px; bottom: 4px;
-    width: 12px;
-    background: currentColor;
-    opacity: 0.28;
-    border-radius: 3px 10px 10px 3px;
+    left: 2px; right: 1px; top: 6px; bottom: 6px;
+    background: var(--seat-cushion);
+    border: 1.5px solid var(--seat-back);
+    border-radius: 10px 18px 18px 10px;
+    box-shadow: inset -11px 0 0 var(--seat-back);
 }
-/* Ноги / подушка — зліва (у напрямку руху) */
+/* Підлокітники — зверху й знизу одним псевдо через box-shadow */
 .sp-seat::after {
     content: '';
     position: absolute;
-    left: 2px; top: 5px; bottom: 5px;
-    width: 10px;
-    background: currentColor;
-    opacity: 0.12;
-    border-radius: 10px 3px 3px 10px;
+    left: 5px; right: 16px; top: 1px;
+    height: 4px;
+    background: var(--seat-arm);
+    border-radius: 3px 3px 1px 1px;
+    box-shadow: 0 40px 0 var(--seat-arm);
+    z-index: 1;
 }
-.sp-seat .sp-seat-num { font-size: 12px; font-weight: 800; color: #475569; position: relative; z-index: 1; }
+.sp-seat .sp-seat-num {
+    position: relative;
+    z-index: 2;
+    font-size: 12px;
+    font-weight: 800;
+    color: var(--seat-text);
+    margin-right: 11px;
+}
 .sp-seat .sp-seat-ico { display: none; }
 
-.sp-seat.sp-free { color: #10b981; background: #ecfdf5; border-color: #6ee7b7; }
-.sp-seat.sp-free:hover { background: #d1fae5; border-color: #10b981; }
-.sp-seat.sp-free .sp-seat-num { color: #065f46; }
+/* Стани */
+.sp-seat.sp-free      { --seat-cushion: #bbf7d0; --seat-back: #16a34a; --seat-arm: #4ade80; --seat-text: #052e16; }
+.sp-seat.sp-free:hover{ --seat-cushion: #86efac; }
 
-.sp-seat.sp-selected { color: #2563eb; background: #2563eb; border-color: #1d4ed8; box-shadow: 0 4px 12px rgba(37,99,235,0.35); }
-.sp-seat.sp-selected::before { opacity: 0.55; background: rgba(255,255,255,0.8); }
-.sp-seat.sp-selected::after { opacity: 0.55; background: rgba(255,255,255,0.8); }
-.sp-seat.sp-selected .sp-seat-num { color: white; }
+.sp-seat.sp-selected  { --seat-cushion: #3b82f6; --seat-back: #1d4ed8; --seat-arm: #60a5fa; --seat-text: #ffffff; }
 .sp-seat.sp-selected .sp-seat-check { display: block; }
-.sp-seat .sp-seat-check { display: none; position: absolute; top: -6px; right: -6px; width: 20px; height: 20px; background: #16a34a; border-radius: 50%; color: white; font-size: 11px; font-weight: 900; line-height: 20px; text-align: center; border: 2px solid white; z-index: 2; }
+.sp-seat .sp-seat-check {
+    display: none;
+    position: absolute;
+    top: -4px; right: -2px;
+    width: 18px; height: 18px;
+    background: #16a34a;
+    border-radius: 50%;
+    color: white;
+    font-size: 11px; font-weight: 900;
+    line-height: 18px; text-align: center;
+    border: 2px solid white;
+    z-index: 3;
+}
 
-.sp-seat.sp-occupied { color: #dc2626; background: #fef2f2; border-color: #fca5a5; cursor: not-allowed; }
-.sp-seat.sp-occupied .sp-seat-num { color: #dc2626; font-size: 11px; }
-.sp-seat.sp-occupied .sp-occ-name { font-size: 8px; color: #b91c1c; font-weight: 700; max-width: 46px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center; position: relative; z-index: 1; }
+.sp-seat.sp-occupied  { --seat-cushion: #fecaca; --seat-back: #dc2626; --seat-arm: #f87171; --seat-text: #7f1d1d; cursor: not-allowed; }
+.sp-seat.sp-occupied .sp-seat-num { font-size: 11px; }
+.sp-seat.sp-occupied .sp-occ-name {
+    position: absolute;
+    bottom: -13px; left: 50%;
+    transform: translateX(-50%);
+    font-size: 9px; color: #b91c1c; font-weight: 700;
+    background: #fff;
+    padding: 1px 5px;
+    border-radius: 6px;
+    border: 1px solid #fca5a5;
+    max-width: 66px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    z-index: 3;
+    line-height: 1.1;
+}
 
-.sp-seat.sp-driver { color: #ca8a04; background: #fefce8; border-color: #fbbf24; cursor: default; }
-.sp-seat.sp-driver .sp-seat-num { color: #a16207; font-size: 10px; }
+/* Водій — сіре крісло з кермом замість номера */
+.sp-seat.sp-driver    { --seat-cushion: #e2e8f0; --seat-back: #475569; --seat-arm: #94a3b8; --seat-text: transparent; cursor: default; }
+.sp-seat.sp-driver .sp-seat-num { display: none; }
+.sp-seat.sp-driver::before { box-shadow: inset -12px 0 0 var(--seat-back); }
+.sp-seat.sp-driver .sp-wheel {
+    position: absolute;
+    top: 50%; left: 9px;
+    transform: translateY(-50%);
+    width: 16px; height: 16px;
+    border: 2.5px solid #1e293b;
+    border-radius: 50%;
+    z-index: 2;
+    background:
+        radial-gradient(circle at center, #1e293b 0 2px, transparent 3px),
+        linear-gradient(0deg,  transparent 45%, #1e293b 45% 55%, transparent 55%),
+        linear-gradient(90deg, transparent 45%, #1e293b 45% 55%, transparent 55%);
+}
 
-.sp-seat.sp-empty { border: none; background: transparent; cursor: default; }
+.sp-seat.sp-empty { background: transparent; cursor: default; }
 .sp-seat.sp-empty::before, .sp-seat.sp-empty::after { display: none; }
 
-.sp-seat.sp-reserve { color: #7c3aed; background: #ede9fe; border-color: #a78bfa; border-style: dashed; }
-.sp-seat.sp-reserve .sp-seat-num { color: #6d28d9; }
+.sp-seat.sp-reserve   { --seat-cushion: #ede9fe; --seat-back: #7c3aed; --seat-arm: #a78bfa; --seat-text: #4c1d95; }
+.sp-seat.sp-reserve::before { border-style: dashed; }
+
+/* ── Задній диван: 3 фіксовані сидіння злитим блоком, сірі, не клікаються ── */
+.sp-bench {
+    align-self: stretch;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-around;
+    gap: 3px;
+    padding: 6px 4px 6px 6px;
+    margin-left: 4px;
+    width: 42px;
+    background: #94a3b8;
+    border: 1.5px solid #64748b;
+    border-radius: 6px 18px 18px 6px;
+    box-shadow: inset -10px 0 0 #64748b;
+    flex-shrink: 0;
+    position: relative;
+}
+.sp-bench-seat {
+    flex: 1;
+    background: #cbd5e1;
+    border: 1px solid #94a3b8;
+    border-radius: 3px 9px 9px 3px;
+    min-height: 18px;
+    margin-right: 8px;
+}
 
 .sp-legend { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 16px; justify-content: center; }
 .sp-legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: #64748b; font-weight: 600; }
-.sp-legend-dot { width: 14px; height: 14px; border-radius: 3px 3px 6px 6px; border: 2px solid; }
-.sp-legend-dot.l-free { background: #ecfdf5; border-color: #6ee7b7; }
-.sp-legend-dot.l-sel { background: #2563eb; border-color: #1d4ed8; }
-.sp-legend-dot.l-occ { background: #fef2f2; border-color: #fca5a5; }
-.sp-legend-dot.l-drv { background: #fefce8; border-color: #fbbf24; border-radius: 6px 6px 3px 3px; }
+.sp-legend-dot { width: 14px; height: 14px; border-radius: 4px 8px 8px 4px; border: 1.5px solid; }
+.sp-legend-dot.l-free  { background: #bbf7d0; border-color: #16a34a; }
+.sp-legend-dot.l-sel   { background: #3b82f6; border-color: #1d4ed8; }
+.sp-legend-dot.l-occ   { background: #fecaca; border-color: #dc2626; }
+.sp-legend-dot.l-drv   { background: #e2e8f0; border-color: #475569; }
+.sp-legend-dot.l-bench { background: #cbd5e1; border-color: #64748b; }
 
 /* Footer */
 .seat-picker-footer { padding: 14px 20px 20px; display: flex; gap: 8px; }
