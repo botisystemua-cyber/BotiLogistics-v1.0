@@ -86,13 +86,15 @@
             color: #fff;
         }
 
-        /* ==== SCAN FRAME OVERLAY ==== */
+        /* ==== SCAN FRAME OVERLAY ====
+           Ширша рамка під 1D штрих-коди — більше горизонтальних пікселів
+           у скан-зоні = стабільніший декод тонких CODE_128. */
         .scan-frame {
             position: absolute;
             top: 50%; left: 50%;
             transform: translate(-50%, -50%);
-            width: min(85vw, 400px);
-            height: 180px;
+            width: min(92vw, 720px);
+            height: min(32vh, 260px);
             border: 2px solid rgba(255,255,255,0.3);
             border-radius: 16px;
             box-shadow: 0 0 0 9999px rgba(0,0,0,0.5);
@@ -1577,6 +1579,41 @@
             }
         }
 
+        // iOS Safari не має нативного BarcodeDetector — падає на JS-ZXing,
+        // тож там потрібна вища роздільна здатність відеопотоку + явний
+        // continuous-focus, інакше тонкі CODE_128 штрих-коди не читаються.
+        var IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+                     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+        // Налаштування камери: просимо 1920×1080 (ideal, не exact — щоб
+        // старіші пристрої не падали з OverconstrainedError).
+        function buildVideoConstraints(exactEnv) {
+            var c = {
+                facingMode: exactEnv ? { exact: 'environment' } : { ideal: 'environment' },
+                width:  { ideal: 1920 },
+                height: { ideal: 1080 }
+            };
+            // iPhone любить зайвий framerate, але ZXing не встигає — тримаємо 15.
+            c.frameRate = { ideal: 15, max: 30 };
+            return c;
+        }
+
+        // Після старту тягнемось до MediaStreamTrack і вмикаємо continuous
+        // фокус + експозицію. Це opt-in фіча WebRTC, підтримується iOS 15.4+
+        // і більшістю Android. Помилки глушимо — не всі пристрої підтримують.
+        function applyCameraOptimizations() {
+            try {
+                if (!scanner || !scanner.applyVideoConstraints) return;
+                var advanced = [];
+                // Кожен constraint додаємо окремо — якщо один не підтримується,
+                // браузер проігнорує лише його, а не весь блок.
+                advanced.push({ focusMode: 'continuous' });
+                advanced.push({ exposureMode: 'continuous' });
+                advanced.push({ whiteBalanceMode: 'continuous' });
+                scanner.applyVideoConstraints({ advanced: advanced }).catch(function(){});
+            } catch (e) { /* noop */ }
+        }
+
         function startScan() {
             if (isScanning) return;
             if (!scanner) scanner = new Html5Qrcode('reader');
@@ -1584,10 +1621,15 @@
             document.getElementById('startScreen').classList.add('hidden');
 
             var config = {
-                fps: 15,
+                // iOS: нижчий fps = більше часу ZXing на декод одного кадру.
+                fps: IS_IOS ? 10 : 15,
+                // Широкий qrbox (90% ширини, ~28% висоти) — критично для
+                // тонких 1D штрих-кодів: чим більше горизонтальних пікселів
+                // проходить крізь штрихи, тим стабільніший декод.
                 qrbox: function(w, h) {
-                    var size = Math.min(w, h) * 0.75;
-                    return { width: Math.min(400, size), height: Math.min(180, size * 0.5) };
+                    var bw = Math.floor(Math.min(w * 0.92, 720));
+                    var bh = Math.floor(Math.min(h * 0.32, 260));
+                    return { width: bw, height: bh };
                 },
                 aspectRatio: 1.7778,
                 formatsToSupport: [
@@ -1603,7 +1645,7 @@
             };
 
             scanner.start(
-                { facingMode: { exact: 'environment' } },
+                buildVideoConstraints(true),
                 config,
                 onScanSuccess,
                 function() {}
@@ -1617,9 +1659,10 @@
                 // C7/4: якщо в оператора вже є скани — показуємо кнопку «📋»
                 showHistoryButtonIfAny();
                 document.getElementById('modePill').classList.add('show');
+                applyCameraOptimizations();
             }).catch(function(err) {
                 scanner.start(
-                    { facingMode: 'environment' },
+                    buildVideoConstraints(false),
                     config,
                     onScanSuccess,
                     function() {}
@@ -1630,6 +1673,7 @@
                     document.getElementById('topbar').style.display = 'flex';
                     document.getElementById('bottombar').style.display = 'flex';
                     document.getElementById('mainBtn').style.display = 'none';
+                    applyCameraOptimizations();
                 }).catch(function(err2) {
                     document.getElementById('startScreen').classList.remove('hidden');
                     alert('Не вдалось увімкнути камеру: ' + (err2.message || err2));
