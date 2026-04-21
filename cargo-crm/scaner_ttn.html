@@ -1031,6 +1031,33 @@
         .inl-msg-btn.msg-telegram.active { border-color: #2aabee; background: rgba(42,171,238,0.25); }
         .inl-msg-btn.msg-chat.active     { border-color: #f59e0b; background: rgba(245,158,11,0.25); }
 
+        /* 🏷️ Швидкі чіпи під описом посилки */
+        .inl-desc-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 8px;
+        }
+        .inl-desc-chip {
+            background: rgba(255,255,255,0.06);
+            color: rgba(255,255,255,0.8);
+            border: 1px solid rgba(255,255,255,0.14);
+            border-radius: 999px;
+            padding: 6px 10px;
+            font-family: inherit;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all 0.12s;
+        }
+        .inl-desc-chip:active { transform: scale(0.95); }
+        .inl-desc-chip.active {
+            background: rgba(16,185,129,0.22);
+            border-color: rgba(16,185,129,0.55);
+            color: #d1fae5;
+        }
+
         /* 📞 Додаткові номери отримувача */
         .inl-phones-box { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
         .inl-phone-row { display: flex; gap: 6px; align-items: stretch; }
@@ -2480,6 +2507,45 @@
             renderFieldsChooser();
         }
 
+        // 📦 Швидкі категорії для опису посилки — toggle-чіпи під textarea.
+        // Кожна категорія додається/видаляється як токен у тексті через ", ".
+        // Оператор може обрати декілька; «🧾 Інше» теж toggle, щоб позначити
+        // «щось інше», а конкретику допише вручну в textarea.
+        var _DESC_CHIPS = [
+            '👕 Особисті речі',
+            '🍪 Продукти',
+            '📦 Товар',
+            '⚙️ Техніка',
+            '📄 Документи',
+            '💊 Ліки',
+            '🧾 Інше'
+        ];
+        function _syncDescChips(textarea, chipsEl) {
+            if (!textarea || !chipsEl) return;
+            var v = textarea.value || '';
+            Array.prototype.slice.call(chipsEl.querySelectorAll('.inl-desc-chip'))
+                .forEach(function(b) {
+                    var tag = b.getAttribute('data-desc-label');
+                    b.classList.toggle('active', v.indexOf(tag) !== -1);
+                });
+        }
+        function _escapeRegExp(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+        function _toggleDescChip(textarea, chipsEl, tag) {
+            var v = (textarea.value || '').trim();
+            if (v.indexOf(tag) !== -1) {
+                // Видаляємо токен разом з комами-роздільниками навколо
+                var re = new RegExp('\\s*,?\\s*' + _escapeRegExp(tag) + '\\s*,?\\s*', 'g');
+                v = v.replace(re, ', ').replace(/^,\s*/, '').replace(/,\s*$/, '')
+                     .replace(/,\s*,/g, ',').trim();
+            } else {
+                v = v ? (v + ', ' + tag) : tag;
+            }
+            textarea.value = v;
+            _syncDescChips(textarea, chipsEl);
+            var parent = textarea.closest('.inl-row');
+            if (parent) parent.classList.toggle('has-value', !!textarea.value.trim());
+        }
+
         function _buildFieldElement(f) {
             // Повертає DOM-елемент .inl-row із відповідним контролом
             var row = document.createElement('div');
@@ -2496,7 +2562,30 @@
             row.appendChild(label);
 
             var el;
-            if (f.type === 'textarea') {
+            if (f.type === 'textarea' && f.col === 'description') {
+                // 📦 Опис з швидкими чіпами категорій — оператор просто клацає
+                // («Особисті речі», «Продукти», тощо), multi-select. «Інше»
+                // як і решта — toggle, але користувач може дописати вручну.
+                el = document.createElement('textarea');
+                el.rows = 2;
+                el.id = 'inl_col_' + f.col;
+                row.appendChild(el);
+                var chipsWrap = document.createElement('div');
+                chipsWrap.className = 'inl-desc-chips';
+                _DESC_CHIPS.forEach(function(tag) {
+                    var b = document.createElement('button');
+                    b.type = 'button';
+                    b.className = 'inl-desc-chip';
+                    b.setAttribute('data-desc-label', tag);
+                    b.textContent = tag;
+                    b.onclick = function() { _toggleDescChip(el, chipsWrap, tag); };
+                    chipsWrap.appendChild(b);
+                });
+                row.appendChild(chipsWrap);
+                el._syncDescChips = function() { _syncDescChips(el, chipsWrap); };
+                el.addEventListener('input', el._syncDescChips);
+                return row;
+            } else if (f.type === 'textarea') {
                 el = document.createElement('textarea');
                 el.rows = 2;
             } else if (f.type === 'select') {
@@ -2958,6 +3047,8 @@
                     el.value = rawVal;
                     // Якщо поле — phone з селектором країни, синхронізуємо flag
                     if (el._cpApi) el._cpApi.syncFromValue();
+                    // Опис посилки — підсвічуємо чіпи, що вже є у тексті
+                    if (typeof el._syncDescChips === 'function') el._syncDescChips();
                     var parent = el.closest('.inl-row');
                     if (parent) {
                         var hasVal = (rawVal !== '');
