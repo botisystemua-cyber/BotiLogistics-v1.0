@@ -9,6 +9,7 @@
     <title>Сканер ТТН</title>
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="country-phone.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
         html, body { height: 100%; width: 100%; overflow: hidden; }
@@ -771,10 +772,23 @@
         }
         .cam-btn:active { transform: scale(0.97); }
         .cam-btn-cancel { background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.18); }
+        .cam-btn-cancel.next {
+            background: linear-gradient(180deg, rgba(100,116,139,0.35), rgba(71,85,105,0.45));
+            border-color: rgba(148,163,184,0.35);
+            color: #e2e8f0;
+        }
         .cam-btn-primary { background: linear-gradient(180deg,#3b82f6,#2563eb); color: #fff; box-shadow: 0 4px 10px rgba(37,99,235,0.35); }
         .cam-btn-primary.save { background: linear-gradient(180deg,#10b981,#059669); box-shadow: 0 4px 10px rgba(16,185,129,0.35); }
         .cam-btn-fill { background: linear-gradient(180deg,#ef4444,#dc2626); color: #fff; box-shadow: 0 4px 10px rgba(220,38,38,0.35), 0 0 0 3px rgba(59,130,246,0.18); }
         .cam-btn-np { background: linear-gradient(180deg,#f59e0b,#d97706); color: #fff; box-shadow: 0 4px 10px rgba(217,119,6,0.35); }
+        .cam-stepper-hint {
+            margin-top: -4px;
+            text-align: center;
+            color: rgba(255,255,255,0.7);
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.2px;
+        }
 
         /* ==== INLINE EDITOR (C7/2): full-screen модалка прямо на сканері ==== */
         .inl-overlay {
@@ -1055,6 +1069,26 @@
         }
         .inl-phones-add:hover { background: rgba(59,130,246,0.25); }
 
+        /* 🌍 Селектор країни біля телефонних полів (country-phone.js) */
+        .cp-wrap { display: flex; gap: 6px; align-items: stretch; width: 100%; }
+        .cp-wrap .cp-select {
+            flex: 0 0 auto;
+            min-width: 108px;
+            background: rgba(255,255,255,0.08);
+            color: #fff;
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 8px;
+            padding: 0 6px;
+            font-family: inherit; font-size: 13px; font-weight: 600;
+            cursor: pointer;
+        }
+        .cp-wrap .cp-select option { background: #1f2937; color: #fff; }
+        .cp-wrap .cp-select:focus {
+            outline: 2px solid rgba(59,130,246,0.6);
+            outline-offset: -1px;
+        }
+        .cp-wrap .cp-input { flex: 1 1 auto; min-width: 0; }
+
         /* ==== FIELDS CHOOSER (C7/3) ==== */
         .fc-overlay {
             position: fixed; inset: 0;
@@ -1324,11 +1358,12 @@
                 <button type="button" class="cam-stepper-btn" onclick="stepperChange(1)">+</button>
                 <span class="cam-stepper-label">📥 Місць НП</span>
             </div>
+            <div class="cam-stepper-hint" id="camStepperHint" style="display:none"></div>
             <div class="cam-actions cam-actions-4" id="camActions">
                 <button type="button" class="cam-btn cam-btn-fill" onclick="checkActionFill()">📝 Заповнити</button>
                 <button type="button" class="cam-btn cam-btn-primary" id="camBtnPrimary" onclick="checkActionPrimary()">💾 Зберегти</button>
                 <button type="button" class="cam-btn cam-btn-np" onclick="openNpModal()">💰 НП-оплата</button>
-                <button type="button" class="cam-btn cam-btn-cancel" onclick="checkActionCancel()">❌ Скасувати</button>
+                <button type="button" class="cam-btn cam-btn-cancel" id="camBtnCancel" onclick="checkActionCancel()">❌ Скасувати</button>
             </div>
         </div>
 
@@ -1758,15 +1793,11 @@
             // Перевіряти-only: показуємо action-menu прямо в bottombar.
             // Редірект у CRM не відбувається ні в якому випадку.
             if (res && res.ok && res.pkg_id) {
-                // C7/5: дубль у сесії = друга коробка тієї ж накладної →
-                // лог 'unpack' + авто +1 до np_places (кількість фізичних
-                // коробок з тим же ТТН), без action-menu.
+                // Уніфікована поведінка: меню показуємо ЗАВЖДИ, навіть при
+                // повторному скані тієї самої ТТН у сесії. Оператор сам
+                // вирішує — додати коробку (+), просто редагувати чи
+                // пропустити (→ Далі).
                 var prev = _sessionScans[ttn] || 0;
-                if (prev >= 1) {
-                    handleDuplicateUnpack(ttn, res.pkg_id, res.np_places);
-                    _sessionScans[ttn] = prev + 1;
-                    return;
-                }
                 _sessionScans[ttn] = prev + 1;
                 setTimeout(function() {
                     showCheckActionMenu({
@@ -1774,7 +1805,8 @@
                         pkg_id: res.pkg_id,
                         count: Math.max(1, parseInt(res.np_places, 10) || 1),
                         isUnknown: false,
-                        scanStatus: res.scan_status
+                        scanStatus: res.scan_status,
+                        sessionDup: prev >= 1
                     });
                 }, 600);
             } else if (res && !res.ok && typeof res.error === 'string' && /не знайдено/i.test(res.error)) {
@@ -1790,81 +1822,25 @@
             }
         }
 
-        // ==== DUPLICATE UNPACK (C7/5) ==========================================
-        // Викликається коли в check-режимі той самий ТТН сканується вдруге+
-        // у цій сесії. Трактуємо як другу/третю коробку тієї ж накладної:
-        //   • INSERT у package_scan_log mode='unpack' з timestamp і pkg_id
-        //   • PATCH packages.item_count = item_count + 1 (оптимістично)
-        //   • Toast «Другий знайшовся (коробка #N)»
-        //   • НЕ показуємо action-menu — одразу resume, щоб не гальмувати
-        function handleDuplicateUnpack(ttn, pkgId, prevNpPlaces) {
-            if (!TENANT_ID || !pkgId) return;
-            var currentBox = (_sessionScans[ttn] || 0) + 1;
-
-            // 1) лог (fire-and-forget) — окрема мітка часу кожної розпаковки
-            fetch(SUPABASE_URL + '/rest/v1/package_scan_log', {
-                method: 'POST',
-                headers: {
-                    apikey: SUPABASE_ANON_KEY,
-                    Authorization: 'Bearer ' + SUPABASE_ANON_KEY,
-                    'Content-Type': 'application/json',
-                    Prefer: 'return=minimal'
-                },
-                body: JSON.stringify({
-                    tenant_id: TENANT_ID,
-                    pkg_id: pkgId,
-                    ttn_number: ttn,
-                    scanned_by: USER_LOGIN,
-                    mode: 'unpack',
-                    direction: DEFAULT_DIRECTION,
-                    from_status: null,
-                    to_status: 'unpack',
-                    outcome: 'already'
-                })
-            }).catch(function(){});
-
-            // 2) np_places += 1 (кількість фізичних коробок з цим ТТН)
-            var nextCount = Math.max(currentBox, (parseInt(prevNpPlaces, 10) || 0) + 1);
-            fetch(SUPABASE_URL + '/rest/v1/packages' +
-                  '?tenant_id=eq.' + encodeURIComponent(TENANT_ID) +
-                  '&pkg_id=eq.' + encodeURIComponent(pkgId), {
-                method: 'PATCH',
-                headers: {
-                    apikey: SUPABASE_ANON_KEY,
-                    Authorization: 'Bearer ' + SUPABASE_ANON_KEY,
-                    'Content-Type': 'application/json',
-                    Prefer: 'return=minimal'
-                },
-                body: JSON.stringify({ np_places: nextCount })
-            }).catch(function(){});
-
-            // 3) toast + авто-resume
-            showToast({
-                variant: 'success',
-                icon: '🎯',
-                label: 'Другий знайшовся!',
-                value: ttn,
-                status: 'Коробка #' + currentBox + ' · Місць НП: ' + nextCount
-            });
-            setTimeout(function() {
-                document.getElementById('resultToast').classList.remove('show');
-                resumeAfterSheet();
-            }, 1600);
-        }
-
         // ==== CHECK ACTION MENU (C7/1) =========================================
         // Показується в режимі «Перевіряти» після успішного скану (знайдений
-        // або невідомий ТТН). Містить stepper кількості + 2 кнопки дії.
-        var _camState = { ttn: '', pkg_id: null, count: 1, isUnknown: false };
+        // або невідомий ТТН). Містить stepper кількості + 4 кнопки дії.
+        // Уніфіковане меню: показується однаково і на першому, і на повторному
+        // скані тієї ж ТТН. Оператор вирішує — додати коробку (+), редагувати
+        // чи «→ Далі» (пропустити, без змін статусу).
+        var _camState = { ttn: '', pkg_id: null, count: 1, baseline: 1,
+                          isUnknown: false, sessionDup: false };
 
         function showCheckActionMenu(cfg) {
             _camState.ttn        = cfg.ttn || '';
             _camState.pkg_id     = cfg.pkg_id || null;
             _camState.count      = Math.max(1, parseInt(cfg.count, 10) || 1);
+            _camState.baseline   = _camState.count;
             _camState.isUnknown  = !!cfg.isUnknown;
             // scanStatus з peek_ttn: 'received' (щойно створений, не в перевірці),
             // 'checked' (вже в перевірці), 'awaiting_route', 'delivered' тощо
             _camState.scanStatus = cfg.scanStatus || null;
+            _camState.sessionDup = !!cfg.sessionDup;
 
             document.getElementById('camTtnCode').textContent = _camState.ttn || '—';
             var badge = document.getElementById('camTtnBadge');
@@ -1879,6 +1855,23 @@
                 badge.className = 'cam-ttn-badge found';
             }
             document.getElementById('camStepperVal').textContent = _camState.count;
+
+            // Subtitle «Зараз: N місць» — щоб оператор бачив baseline ДО того,
+            // як натисне +/−. Особливо корисно при повторному скані тієї ж ТТН.
+            var hint = document.getElementById('camStepperHint');
+            if (hint) {
+                if (!_camState.isUnknown && _camState.baseline >= 1) {
+                    var txt = 'Зараз: ' + _camState.baseline + ' місц' +
+                              (_camState.baseline === 1 ? 'е' :
+                               (_camState.baseline < 5 ? 'я' : 'ь'));
+                    if (_camState.sessionDup) txt += ' · повторний скан';
+                    hint.textContent = txt;
+                    hint.style.display = '';
+                } else {
+                    hint.textContent = '';
+                    hint.style.display = 'none';
+                }
+            }
 
             // Primary button міняємо залежно від стану:
             //   unknown            → «💾 Зберегти» (створює як Невідомого)
@@ -1896,6 +1889,21 @@
                 primary.classList.add('save');
             }
 
+            // Cancel-кнопка: для невідомого це справжнє «Скасувати» (створить
+            // лід як відхилений). Для вже відомого — просто «→ Далі» (закриває
+            // меню, не змінює статус). Навіть якщо лід уже в «Відхилені» —
+            // повторне «Скасувати» непотрібне, рухаємось далі.
+            var cancelBtn = document.getElementById('camBtnCancel');
+            if (cancelBtn) {
+                if (_camState.isUnknown) {
+                    cancelBtn.textContent = '❌ Скасувати';
+                    cancelBtn.classList.remove('next');
+                } else {
+                    cancelBtn.textContent = '→ Далі';
+                    cancelBtn.classList.add('next');
+                }
+            }
+
             // Щоб НП-оплата з cam-actions мала куди писати
             if (_camState.pkg_id) {
                 lastScannedPkgId = _camState.pkg_id;
@@ -1909,7 +1917,8 @@
 
         function closeCheckActionMenu() {
             document.getElementById('checkActionMenu').classList.remove('show');
-            _camState = { ttn: '', pkg_id: null, count: 1, isUnknown: false };
+            _camState = { ttn: '', pkg_id: null, count: 1, baseline: 1,
+                          isUnknown: false, sessionDup: false };
         }
 
         function stepperChange(delta) {
@@ -2621,18 +2630,7 @@
             inp.className = 'inl-phone-extra';
             inp.placeholder = '+380… або +48… +420…';
             inp.value = (initial || '');
-            inp.addEventListener('focus', function() { if (!inp.value) inp.value = '+380'; });
-            inp.addEventListener('paste', function(e) {
-                e.preventDefault();
-                var pasted = (e.clipboardData || window.clipboardData).getData('text');
-                inp.value = _normalizePhoneIntl(pasted);
-                _syncExtraPhonesHidden(col);
-            });
-            inp.addEventListener('blur', function() {
-                if (inp.value && inp.value !== '+380') inp.value = _normalizePhoneIntl(inp.value);
-                _syncExtraPhonesHidden(col);
-            });
-            inp.addEventListener('input', function(){ _syncExtraPhonesHidden(col); });
+            wrap.appendChild(inp);
             var rm = document.createElement('button');
             rm.type = 'button';
             rm.className = 'inl-phone-rm';
@@ -2642,9 +2640,31 @@
                 wrap.remove();
                 _syncExtraPhonesHidden(col);
             };
-            wrap.appendChild(inp);
             wrap.appendChild(rm);
             box.appendChild(wrap);
+            if (window.CountryPhone) {
+                // Додатковий номер зазвичай «EU-сторона» → дефолт Польща;
+                // якщо вже був збережений — хай сам детектить.
+                var cpDef = initial ? 'UA' : 'PL';
+                window.CountryPhone.attach(inp, {
+                    theme: 'dark',
+                    defaultCountry: cpDef,
+                    onChange: function(){ _syncExtraPhonesHidden(col); },
+                });
+            } else {
+                inp.addEventListener('focus', function() { if (!inp.value) inp.value = '+380'; });
+                inp.addEventListener('paste', function(e) {
+                    e.preventDefault();
+                    var pasted = (e.clipboardData || window.clipboardData).getData('text');
+                    inp.value = _normalizePhoneIntl(pasted);
+                    _syncExtraPhonesHidden(col);
+                });
+                inp.addEventListener('blur', function() {
+                    if (inp.value && inp.value !== '+380') inp.value = _normalizePhoneIntl(inp.value);
+                    _syncExtraPhonesHidden(col);
+                });
+                inp.addEventListener('input', function(){ _syncExtraPhonesHidden(col); });
+            }
             if (!initial) setTimeout(function(){ inp.focus(); }, 50);
         }
 
@@ -2742,34 +2762,43 @@
         function _attachPhoneListener(col) {
             var el = document.getElementById('inl_col_' + col);
             if (!el) return;
-            // Автопрефікс при фокусі на пустому полі
-            el.addEventListener('focus', function() {
-                if (!el.value) el.value = '+380';
-            });
-            // На вставці — нормалізуємо одразу
-            el.addEventListener('paste', function(e) {
-                e.preventDefault();
-                var pasted = (e.clipboardData || window.clipboardData).getData('text');
-                el.value = _normalizePhoneIntl(pasted);
-                el.dispatchEvent(new Event('change'));
-            });
             var tmr = null;
             var fire = function() {
                 _lookupClientInline(el.value).then(function(items) {
                     _renderInlineClientSuggestions(col, items);
                 });
             };
-            el.addEventListener('change', fire);
-            el.addEventListener('blur', function() {
-                // Нормалізуємо якщо щось ввели вручну
-                if (el.value && el.value !== '+380') {
-                    el.value = _normalizePhoneIntl(el.value);
-                }
-                setTimeout(fire, 150);
-            });
-            el.addEventListener('input', function() {
-                clearTimeout(tmr); tmr = setTimeout(fire, 400);
-            });
+            if (window.CountryPhone) {
+                // Селектор країни + нормалізація.
+                window.CountryPhone.attach(el, {
+                    theme: 'dark',
+                    defaultCountry: 'UA',
+                    onChange: function() {
+                        clearTimeout(tmr); tmr = setTimeout(fire, 400);
+                    },
+                });
+            } else {
+                // Fallback (якщо country-phone.js не завантажився)
+                el.addEventListener('focus', function() {
+                    if (!el.value) el.value = '+380';
+                });
+                el.addEventListener('paste', function(e) {
+                    e.preventDefault();
+                    var pasted = (e.clipboardData || window.clipboardData).getData('text');
+                    el.value = _normalizePhoneIntl(pasted);
+                    el.dispatchEvent(new Event('change'));
+                });
+                el.addEventListener('change', fire);
+                el.addEventListener('blur', function() {
+                    if (el.value && el.value !== '+380') {
+                        el.value = _normalizePhoneIntl(el.value);
+                    }
+                    setTimeout(fire, 150);
+                });
+                el.addEventListener('input', function() {
+                    clearTimeout(tmr); tmr = setTimeout(fire, 400);
+                });
+            }
         }
 
         function _renderInlineTimeline(pkgId, npPlaces) {
@@ -2871,6 +2900,8 @@
                         return;
                     }
                     el.value = (v == null ? '' : String(v));
+                    // Якщо поле — phone з селектором країни, синхронізуємо flag
+                    if (el._cpApi) el._cpApi.syncFromValue();
                     var parent = el.closest('.inl-row');
                     if (parent) {
                         var hasVal = (v != null && String(v).trim() !== '');

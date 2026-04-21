@@ -1019,6 +1019,19 @@ body {
   padding: 8px 12px; font-family: inherit; font-size: 13px; cursor: pointer;
 }
 .fill-phones-add:hover { background: #dbeafe; }
+
+/* 🌍 Селектор країни біля телефонних полів (country-phone.js) */
+.cp-wrap { display: flex; gap: 6px; align-items: stretch; width: 100%; }
+.cp-wrap .cp-select {
+  flex: 0 0 auto;
+  min-width: 108px;
+  background: #fff; color: #0f172a;
+  border: 1px solid #cbd5e1; border-radius: 8px;
+  padding: 0 6px; font-family: inherit; font-size: 13px; font-weight: 600;
+  cursor: pointer;
+}
+.cp-wrap .cp-select:focus { outline: 2px solid #3b82f6; outline-offset: -1px; }
+.cp-wrap .cp-input { flex: 1 1 auto; min-width: 0; }
 .card-finance {
   margin-left: auto;
   display: flex; align-items: center; gap: 8px;
