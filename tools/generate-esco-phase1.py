@@ -428,32 +428,63 @@ def build_owner_account(rows):
     return sql
 
 
-def build_extra_owners_as_staff(owner_rows):
-    """Додаткові власники (не primary) йдуть у staff з role='owner',
-    щоб не втратити їхні дані. primary = перший у списку."""
+def build_extra_owners_as_staff(owner_rows, existing_staff_rows):
+    """Додаткові власники (не primary) — перевіряємо, чи вони вже є у staff.
+    - Якщо login/email збігаються з існуючим staff → UPDATE role='owner' +
+      додаємо відмітку у notes.
+    - Якщо НІ → INSERT як новий staff з role='owner'.
+    Це потрібно бо staff.login має UNIQUE constraint."""
+    # Збираємо логіни/email вже вставлених персоналу
+    existing = set()
+    for s in existing_staff_rows:
+        lg = nn(s.get('Логін'))
+        em = nn(s.get('EMAIL'))
+        if lg: existing.add(str(lg).strip().lower())
+        if em: existing.add(str(em).strip().lower())
+
     sql = []
     for r in owner_rows[1:]:
         uid = nn(r.get('USER_ID'))
         if not uid:
             continue
-        notes_parts = ['Другий власник (primary — у owner_account)']
-        if nn(r.get('Доступ до таблиць')):
-            notes_parts.append(f"Доступ: {nn(r.get('Доступ до таблиць'))}")
-        if nn(r.get('Примітка')):
-            notes_parts.append(str(nn(r.get('Примітка'))))
-        notes = '; '.join(notes_parts)
+        login = nn(r.get('Логін'))
+        email = nn(r.get('EMAIL'))
+        login_lc = str(login).strip().lower() if login else None
+        email_lc = str(email).strip().lower() if email else None
 
-        sql.append(
-            f"INSERT INTO public.staff ("
-            f"tenant_id, staff_id, full_name, phone, email, role, login, "
-            f"employment_status, last_activity, notes) VALUES ("
-            f"{q(TENANT)}, {q(uid)}, {q(nn(r.get('Піб')))}, "
-            f"{q(norm_phone(r.get('Телефон')))}, {q(nn(r.get('EMAIL')))}, "
-            f"{q('owner')}, {q(nn(r.get('Логін')))}, "
-            f"{q(norm_status(r.get('Статус')))}, "
-            f"{q(to_date(r.get('Остання активність')))}, {q(notes)}"
-            f") ON CONFLICT (tenant_id, staff_id) DO NOTHING;"
-        )
+        note_tail = f'Власник {uid} (primary — у owner_account)'
+        if nn(r.get('Доступ до таблиць')):
+            note_tail += f"; Доступ: {nn(r.get('Доступ до таблиць'))}"
+
+        # Чи є вже у staff? (match по login або email)
+        match_in_staff = (login_lc and login_lc in existing) or (email_lc and email_lc in existing)
+
+        if match_in_staff:
+            # UPDATE існуючого staff: підняти role до owner, додати примітку.
+            match_val = login if login else email
+            match_col = 'login' if login else 'email'
+            sql.append(
+                f"UPDATE public.staff SET role={q('owner')}, "
+                f"notes=concat_ws('; ', notes, {q(note_tail)}), "
+                f"updated_at=now() "
+                f"WHERE tenant_id={q(TENANT)} AND lower({match_col})={q(str(match_val).strip().lower())};"
+            )
+        else:
+            # INSERT як новий staff з role='owner'
+            notes_full = 'Другий власник (primary — у owner_account); ' + note_tail
+            if nn(r.get('Примітка')):
+                notes_full += '; ' + str(nn(r.get('Примітка')))
+            sql.append(
+                f"INSERT INTO public.staff ("
+                f"tenant_id, staff_id, full_name, phone, email, role, login, "
+                f"employment_status, last_activity, notes) VALUES ("
+                f"{q(TENANT)}, {q(uid)}, {q(nn(r.get('Піб')))}, "
+                f"{q(norm_phone(r.get('Телефон')))}, {q(email)}, "
+                f"{q('owner')}, {q(login)}, "
+                f"{q(norm_status(r.get('Статус')))}, "
+                f"{q(to_date(r.get('Остання активність')))}, {q(notes_full)}"
+                f") ON CONFLICT (tenant_id, staff_id) DO NOTHING;"
+            )
     return sql
 
 
@@ -525,7 +556,8 @@ def main():
 
     # ── 3. INSERT'и ──────────────────────────────────────────────────────────
     # Додаткові власники (крім primary) йдуть у staff як role='owner'
-    extra_owner_staff = build_extra_owners_as_staff(owners)
+    # (або UPDATE якщо email/login вже є у staff з Персоналу)
+    extra_owner_staff = build_extra_owners_as_staff(owners, staff)
 
     sections = [
         ('system_settings',       build_system_settings(settings)),
