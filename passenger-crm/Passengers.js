@@ -5151,16 +5151,27 @@ function getSeatLayout(layout, maxSeats, hasReserve) {
     // Driver position = steering wheel center in the PNG:
     //   minivan-top.png → (19, 50)   bus-top.png → (15, 51)
     // Seat height (aspect 1/1): 8.5% × 3.02 ≈ 25.7% for van. Rows touch when Δy ≈ 25.
+    // 1-3-3 uses per-seat mask PNGs extracted from van-1-3-3.png (image 771×324).
+    // Each seat's bbox is defined in %-coords of the van container; `mask` is the
+    // pre-rendered alpha stencil — CSS background-color paints through it.
     if (layout === '1-3-3') {
-        seats.push({ name: 'D', x: 19, y: 50, type: 'driver' });
-        seats.push({ name: '1', x: 32, y: 50, type: 'seat' });
-        seats.push({ name: '2', x: 62, y: 25, type: 'seat' });
-        seats.push({ name: '3', x: 62, y: 50, type: 'seat' });
-        seats.push({ name: '4', x: 62, y: 75, type: 'seat' });
-        seats.push({ name: '5', x: 85, y: 25, type: 'seat' });
-        seats.push({ name: '6', x: 85, y: 50, type: 'seat' });
-        seats.push({ name: '7', x: 85, y: 75, type: 'seat' });
-        if (hasReserve) seats.push({ name: 'R', x: 32, y: 24, type: 'reserve' });
+        const s = (name, type, px0, py0, px1, py1, mask) => ({
+            name, type, mask,
+            boxed: true,
+            x: px0 / 771 * 100,
+            y: py0 / 324 * 100,
+            w: (px1 - px0) / 771 * 100,
+            h: (py1 - py0) / 324 * 100,
+        });
+        seats.push(s('D', 'driver', 95,  75,  235, 170, 'seat-masks/van-1-3-3-D.png'));
+        seats.push(s('1', 'seat',   95,  172, 235, 260, 'seat-masks/van-1-3-3-1.png'));
+        seats.push(s('2', 'seat',   280, 70,  430, 135, 'seat-masks/van-1-3-3-2.png'));
+        seats.push(s('3', 'seat',   280, 138, 430, 205, 'seat-masks/van-1-3-3-3.png'));
+        seats.push(s('4', 'seat',   280, 208, 430, 270, 'seat-masks/van-1-3-3-4.png'));
+        seats.push(s('5', 'seat',   485, 70,  645, 135, 'seat-masks/van-1-3-3-5.png'));
+        seats.push(s('6', 'seat',   485, 138, 645, 205, 'seat-masks/van-1-3-3-6.png'));
+        seats.push(s('7', 'seat',   485, 208, 645, 270, 'seat-masks/van-1-3-3-7.png'));
+        if (hasReserve) seats.push(s('R', 'reserve', 240, 75, 280, 170, 'seat-masks/van-1-3-3-D.png'));
         return seats;
     }
 
@@ -5213,7 +5224,9 @@ function getSeatLayout(layout, maxSeats, hasReserve) {
 }
 
 function renderVanBody(layout) {
-    const src = layout === 'bus' ? 'bus-top.png' : 'minivan-top.png';
+    const src = layout === 'bus'   ? 'bus-top.png'
+              : layout === '1-3-3' ? 'van-1-3-3.png'
+              : 'minivan-top.png';
     // SVG fallback renders only if the image fails to load.
     const fallback = layout === 'bus'
         ? `<svg class="van-svg-fallback" viewBox="0 0 360 72" preserveAspectRatio="none"><rect x="4" y="5" width="352" height="62" rx="14" fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/></svg>`
@@ -5230,10 +5243,42 @@ function renderVan(opts) {
     const interactive = opts.interactive !== false;
 
     const positions = getSeatLayout(layout, maxSeats, hasReserve);
-    const vanCls = layout === 'bus' ? 'van van-bus' : 'van';
+    const vanCls = layout === 'bus'   ? 'van van-bus'
+                 : layout === '1-3-3' ? 'van van-1-3-3'
+                 : 'van';
 
     const chairImg = '<img class="seat-chair" src="chair-top.png" alt="">';
     const seatsHtml = positions.map(s => {
+        // Boxed seats (mask-based rendering — for layouts with a dedicated van PNG):
+        if (s.boxed) {
+            const style = `left:${s.x}%;top:${s.y}%;width:${s.w}%;height:${s.h}%;--seat-mask:url('${s.mask}')`;
+            if (s.type === 'driver') {
+                return `<div class="seat-box seat-driver" style="${style}" title="Водій"><div class="seat-tint"></div></div>`;
+            }
+            const occName = occupiedMap[s.name];
+            if (occName) {
+                return `<div class="seat-box seat-occupied" style="${style}" title="Зайнято: ${occName}">
+                    <div class="seat-tint"></div>
+                    <div class="seat-num">${s.name}</div>
+                    <div class="seat-occ-name">${occName}</div>
+                </div>`;
+            }
+            if (selected && selected === s.name) {
+                const handler = interactive ? `onclick="seatPickerSelect('${s.name}')"` : '';
+                return `<div class="seat-box seat-selected" style="${style}" ${handler}>
+                    <div class="seat-tint"></div>
+                    <div class="seat-num">${s.name}</div>
+                    <div class="seat-check">✓</div>
+                </div>`;
+            }
+            const stateCls = s.type === 'reserve' ? 'seat-reserve' : 'seat-free';
+            const handler = interactive ? `onclick="seatPickerSelect('${s.name}')"` : '';
+            return `<div class="seat-box ${stateCls}" style="${style}" ${handler}>
+                <div class="seat-tint"></div>
+                <div class="seat-num">${s.name}</div>
+            </div>`;
+        }
+        // Legacy point-style seat (chair-top.png icon) — used for layouts without a dedicated van PNG yet:
         const style = `left:${s.x}%;top:${s.y}%`;
         if (s.type === 'driver') {
             return `<div class="seat seat-driver" style="${style}" title="Водій">${chairImg}</div>`;
