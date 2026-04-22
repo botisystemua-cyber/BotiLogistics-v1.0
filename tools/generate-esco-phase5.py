@@ -215,9 +215,15 @@ def build_archive_packages(rows):
 
 def build_change_logs(rows):
     sql = []
+    seen = {}  # log_id → лічильник дублів
     for r in rows:
-        log_id = nn(r.get('LOG_ID'))
-        if not log_id: continue
+        log_id_raw = nn(r.get('LOG_ID'))
+        if not log_id_raw: continue
+        # log_id у xlsx часто datetime (тоді xlsx генерував id з часу).
+        # Перетворюю на text + якщо дубль — додаю суфікс _2, _3...
+        log_id_str = log_id_raw.isoformat() if isinstance(log_id_raw, (datetime, date)) else str(log_id_raw)
+        seen[log_id_str] = seen.get(log_id_str, 0) + 1
+        log_id = log_id_str if seen[log_id_str] == 1 else f"{log_id_str}_{seen[log_id_str]}"
         action = nn(r.get('Дія')) or 'unknown'
         table_name = nn(r.get('Таблиця')) or 'unknown'
         sql.append(
@@ -275,9 +281,13 @@ def build_audit_logs(rows):
 
 def build_access_logs(rows):
     sql = []
+    seen = {}
     for r in rows:
-        log_id = nn(r.get('LOG_ID'))
-        if not log_id: continue
+        log_id_raw = nn(r.get('LOG_ID'))
+        if not log_id_raw: continue
+        log_id_str = log_id_raw.isoformat() if isinstance(log_id_raw, (datetime, date)) else str(log_id_raw)
+        seen[log_id_str] = seen.get(log_id_str, 0) + 1
+        log_id = log_id_str if seen[log_id_str] == 1 else f"{log_id_str}_{seen[log_id_str]}"
         action = nn(r.get('Дія')) or 'unknown'
         sql.append(
             f"INSERT INTO public.access_logs ("
