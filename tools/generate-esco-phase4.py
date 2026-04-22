@@ -209,7 +209,7 @@ def build_routes(rows_zurich, rows_geneva):
             f"{q(str(to_num(r.get('Вага багажу'))) if to_num(r.get('Вага багажу')) is not None else None)}, "
             f"{q(nn(r.get('Внутрішній №')))}, {q(nn(r.get('Номер ТТН')))}, "
             f"{q_jsonb(extra)}"
-            f") ON CONFLICT (tenant_id, rte_id) DO NOTHING;"
+            f") ON CONFLICT (tenant_id, rte_id) WHERE tenant_id = 'esco' DO NOTHING;"
         )
     return sql
 
@@ -249,7 +249,7 @@ def build_payments(rows):
             f"{q(nn(r.get('Форма оплати')))}, {q(nn(r.get('Статус платежу')))}, "
             f"{q(to_num(r.get('Борг сума')))}, {q(nn(r.get('Борг валюта')) or 'UAH')}, "
             f"{q(to_date_only(r.get('Дата погашення')))}, {q(notes)}"
-            f") ON CONFLICT (tenant_id, pay_id) DO NOTHING;"
+            f") ON CONFLICT (tenant_id, pay_id) WHERE tenant_id = 'esco' DO NOTHING;"
         )
     return sql
 
@@ -298,7 +298,7 @@ def build_dispatches(rows_zurich, rows_geneva):
             f"{q(nn(r.get('Форма оплати')))}, {q(nn(r.get('Статус оплати')) or 'pending')}, "
             f"{q(to_num(r.get('Борг')))}, {q(nn(r.get('Статус')) or 'pending')}, "
             f"{q(notes)}"
-            f") ON CONFLICT (tenant_id, dispatch_id) DO NOTHING;"
+            f") ON CONFLICT (tenant_id, dispatch_id) WHERE tenant_id = 'esco' DO NOTHING;"
         )
     return sql
 
@@ -332,7 +332,7 @@ def build_orders(rows):
             f"{q(nn(r.get('Статус посилки')) or 'pending')}, "
             f"{q(to_date_only(r.get('Дата доставки')))}, "
             f"{q(nn(r.get('Примітка клієнта')))}, {q(nn(r.get('Примітка менеджера')))}"
-            f") ON CONFLICT (tenant_id, order_id) DO NOTHING;"
+            f") ON CONFLICT (tenant_id, order_id) WHERE tenant_id = 'esco' DO NOTHING;"
         )
     return sql
 
@@ -374,11 +374,12 @@ def main():
     out.append("ALTER TABLE public.dispatches ALTER COLUMN route_id DROP NOT NULL;")
     out.append("ALTER TABLE public.dispatches ALTER COLUMN vehicle_id DROP NOT NULL;")
     out.append("")
-    out.append("-- ── UNIQUE indexes ──────────────────────────────────────────────")
-    out.append("CREATE UNIQUE INDEX IF NOT EXISTS routes_tenant_rte_uidx ON public.routes (tenant_id, rte_id);")
-    out.append("CREATE UNIQUE INDEX IF NOT EXISTS payments_tenant_pay_uidx ON public.payments (tenant_id, pay_id);")
-    out.append("CREATE UNIQUE INDEX IF NOT EXISTS dispatches_tenant_disp_uidx ON public.dispatches (tenant_id, dispatch_id);")
-    out.append("CREATE UNIQUE INDEX IF NOT EXISTS orders_tenant_order_uidx ON public.orders (tenant_id, order_id);")
+    out.append("-- ── UNIQUE indexes (PARTIAL — лише для tenant='esco', щоб не зачіпати ──")
+    out.append("--    дублі інших тенантів типу express_sv_travel) ─────────────────")
+    out.append("CREATE UNIQUE INDEX IF NOT EXISTS routes_esco_rte_uidx ON public.routes (tenant_id, rte_id) WHERE tenant_id = 'esco';")
+    out.append("CREATE UNIQUE INDEX IF NOT EXISTS payments_esco_pay_uidx ON public.payments (tenant_id, pay_id) WHERE tenant_id = 'esco';")
+    out.append("CREATE UNIQUE INDEX IF NOT EXISTS dispatches_esco_disp_uidx ON public.dispatches (tenant_id, dispatch_id) WHERE tenant_id = 'esco';")
+    out.append("CREATE UNIQUE INDEX IF NOT EXISTS orders_esco_order_uidx ON public.orders (tenant_id, order_id) WHERE tenant_id = 'esco';")
     out.append("")
     out.append(f"-- ── routes ({len(routes_sql)}) ───────────────────────────────────")
     out.extend(routes_sql)
