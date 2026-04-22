@@ -5249,33 +5249,25 @@ function renderVan(opts) {
 
     const chairImg = '<img class="seat-chair" src="chair-top.png" alt="">';
     const seatsHtml = positions.map(s => {
-        // Boxed seats (mask-based rendering — for layouts with a dedicated van PNG):
+        // Boxed seats → render as a small colored PIN at the seat's center (not a rectangle).
         if (s.boxed) {
-            const style = `left:${s.x}%;top:${s.y}%;width:${s.w}%;height:${s.h}%`;
+            const cx = s.x + s.w / 2;
+            const cy = s.y + s.h / 2;
+            const style = `left:${cx}%;top:${cy}%`;
             if (s.type === 'driver') {
-                return `<div class="seat-box seat-driver" style="${style}" title="Водій"></div>`;
+                return `<div class="seat-pin seat-driver" style="${style}" title="Водій"></div>`;
             }
             const occName = occupiedMap[s.name];
             if (occName) {
-                return `<div class="seat-box seat-occupied" style="${style}" title="Зайнято: ${occName}">
-                    <div class="seat-tint"></div>
-                    <div class="seat-num">${s.name}</div>
-                    <div class="seat-occ-name">${occName}</div>
-                </div>`;
+                return `<div class="seat-pin seat-occupied" style="${style}" title="Зайнято: ${occName}">${s.name}<div class="seat-occ-name">${occName}</div></div>`;
             }
             if (selected && selected === s.name) {
                 const handler = interactive ? `onclick="seatPickerSelect('${s.name}')"` : '';
-                return `<div class="seat-box seat-selected" style="${style}" ${handler}>
-                    <div class="seat-tint"></div>
-                    <div class="seat-num">${s.name}</div>
-                    <div class="seat-check">✓</div>
-                </div>`;
+                return `<div class="seat-pin seat-selected" style="${style}" ${handler}>${s.name}<div class="seat-check">✓</div></div>`;
             }
             const stateCls = s.type === 'reserve' ? 'seat-reserve' : 'seat-free';
             const handler = interactive ? `onclick="seatPickerSelect('${s.name}')"` : '';
-            return `<div class="seat-box ${stateCls}" style="${style}" ${handler}>
-                <div class="seat-num">${s.name}</div>
-            </div>`;
+            return `<div class="seat-pin ${stateCls}" style="${style}" ${handler}>${s.name}</div>`;
         }
         // Legacy point-style seat (chair-top.png icon) — used for layouts without a dedicated van PNG yet:
         const style = `left:${s.x}%;top:${s.y}%`;
