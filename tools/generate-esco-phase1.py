@@ -398,12 +398,14 @@ def build_staff(rows):
 
 
 def build_owner_account(rows):
+    """owner_account має UNIQUE(tenant_id) — один тенант = один власник.
+    Вставляємо ТІЛЬКИ ПЕРШОГО власника (primary). Інші йдуть у staff як
+    role='owner' через build_staff (їх додає extra_owners параметр)."""
     sql = []
-    for r in rows:
+    for r in rows[:1]:  # тільки primary
         login = nn(r.get('Логін'))
         if not login:
             continue
-        # NOT NULL: password_hash — ставимо плейсхолдер.
         pwd_placeholder = f'CHANGE_ME_ESCO_{login}'
         access_scope = nn(r.get('Доступ до таблиць'))
         notes = nn(r.get('Примітка'))
@@ -421,7 +423,36 @@ def build_owner_account(rows):
             f"{q(to_date(r.get('Дата створення')))}, {q(to_date(r.get('Остання активність')))}, "
             f"{q(to_date(r.get('Дата зміни пароля')))}, "
             f"{q(access_scope)}, {q(notes)}"
-            f") ON CONFLICT (tenant_id, login) DO NOTHING;"
+            f") ON CONFLICT (tenant_id) DO NOTHING;"
+        )
+    return sql
+
+
+def build_extra_owners_as_staff(owner_rows):
+    """Додаткові власники (не primary) йдуть у staff з role='owner',
+    щоб не втратити їхні дані. primary = перший у списку."""
+    sql = []
+    for r in owner_rows[1:]:
+        uid = nn(r.get('USER_ID'))
+        if not uid:
+            continue
+        notes_parts = ['Другий власник (primary — у owner_account)']
+        if nn(r.get('Доступ до таблиць')):
+            notes_parts.append(f"Доступ: {nn(r.get('Доступ до таблиць'))}")
+        if nn(r.get('Примітка')):
+            notes_parts.append(str(nn(r.get('Примітка'))))
+        notes = '; '.join(notes_parts)
+
+        sql.append(
+            f"INSERT INTO public.staff ("
+            f"tenant_id, staff_id, full_name, phone, email, role, login, "
+            f"employment_status, last_activity, notes) VALUES ("
+            f"{q(TENANT)}, {q(uid)}, {q(nn(r.get('Піб')))}, "
+            f"{q(norm_phone(r.get('Телефон')))}, {q(nn(r.get('EMAIL')))}, "
+            f"{q('owner')}, {q(nn(r.get('Логін')))}, "
+            f"{q(norm_status(r.get('Статус')))}, "
+            f"{q(to_date(r.get('Остання активність')))}, {q(notes)}"
+            f") ON CONFLICT (tenant_id, staff_id) DO NOTHING;"
         )
     return sql
 
@@ -493,13 +524,16 @@ def main():
     out.append("")
 
     # ── 3. INSERT'и ──────────────────────────────────────────────────────────
+    # Додаткові власники (крім primary) йдуть у staff як role='owner'
+    extra_owner_staff = build_extra_owners_as_staff(owners)
+
     sections = [
         ('system_settings',       build_system_settings(settings)),
         ('app_content',           build_app_content(app_content)),
         ('distribution_template', build_distribution_template(templates)),
         ('notifications',         build_notifications(notifications)),
         ('clients_directory',     build_clients_directory(clients)),
-        ('staff',                 build_staff(staff)),
+        ('staff',                 build_staff(staff) + extra_owner_staff),
         ('owner_account',         build_owner_account(owners)),
     ]
 
