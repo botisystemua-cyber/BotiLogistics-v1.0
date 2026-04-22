@@ -5153,12 +5153,12 @@ function getSeatLayout(layout, maxSeats, hasReserve) {
     if (layout === '1-3-3') {
         seats.push({ name: 'D', x: 19, y: 50, type: 'driver' });
         seats.push({ name: '1', x: 32, y: 50, type: 'seat' });
-        seats.push({ name: '2', x: 62, y: 25, type: 'seat' });
+        seats.push({ name: '2', x: 62, y: 30, type: 'seat' });
         seats.push({ name: '3', x: 62, y: 50, type: 'seat' });
-        seats.push({ name: '4', x: 62, y: 75, type: 'seat' });
-        seats.push({ name: '5', x: 84, y: 25, type: 'seat' });
+        seats.push({ name: '4', x: 62, y: 70, type: 'seat' });
+        seats.push({ name: '5', x: 84, y: 30, type: 'seat' });
         seats.push({ name: '6', x: 84, y: 50, type: 'seat' });
-        seats.push({ name: '7', x: 84, y: 75, type: 'seat' });
+        seats.push({ name: '7', x: 84, y: 70, type: 'seat' });
         if (hasReserve) seats.push({ name: 'R', x: 32, y: 28, type: 'reserve' });
         return seats;
     }
@@ -5169,9 +5169,9 @@ function getSeatLayout(layout, maxSeats, hasReserve) {
         seats.push({ name: '2', x: 38, y: 72, type: 'seat' });
         seats.push({ name: '3', x: 60, y: 28, type: 'seat' });
         seats.push({ name: '4', x: 60, y: 72, type: 'seat' });
-        seats.push({ name: '5', x: 85, y: 25, type: 'seat' });
+        seats.push({ name: '5', x: 85, y: 30, type: 'seat' });
         seats.push({ name: '6', x: 85, y: 50, type: 'seat' });
-        seats.push({ name: '7', x: 85, y: 75, type: 'seat' });
+        seats.push({ name: '7', x: 85, y: 70, type: 'seat' });
         if (hasReserve) seats.push({ name: 'R', x: 28, y: 50, type: 'reserve' });
         return seats;
     }
@@ -5194,7 +5194,7 @@ function getSeatLayout(layout, maxSeats, hasReserve) {
         const rowsNeeded = Math.ceil(n / 4);
         const xStart = 28, xEnd = 92;
         const step = rowsNeeded === 1 ? 0 : (xEnd - xStart) / (rowsNeeded - 1);
-        const ys = [18, 40, 60, 82];
+        const ys = [20, 40, 60, 80];
         let placed = 0;
         for (let r = 0; r < rowsNeeded && placed < n; r++) {
             const x = xStart + step * r;
