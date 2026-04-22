@@ -142,36 +142,37 @@ function setupTriggers() {
         }
     });
 
-    SpreadsheetApp.getUi().alert(
-        'Тригери встановлено:\n' +
+    const msg = 'Тригери встановлено:\n' +
         ' • syncNewRequests — кожні 5 хв\n' +
         ' • onSpreadsheetChange_ — при зміні таблиці\n' +
         (initialized.length
             ? '\nСтартова точка: ЗАРАЗ (' + new Date(nowMs).toLocaleString() + ').\n' +
               'Історія НЕ переноситься. Тільки нові заявки.\n' +
               'Аркуші: ' + initialized.join(', ')
-            : '\nПрогрес уже був виставлений — не чіпаю.')
-    );
+            : '\nПрогрес уже був виставлений — не чіпаю.');
+    safeAlert_(msg);
 }
 
 /** Виставити «синкати тільки нові з цього моменту» — ігнорувати все, що
  *  зараз у таблиці, переносити тільки заявки з createDate > NOW. */
 function menuStartFromNow_() {
-    const ui = SpreadsheetApp.getUi();
-    const ans = ui.alert(
-        'Почати з цього моменту?',
-        'Усі заявки, що ЗАРАЗ у таблиці, будуть проігноровані.\n' +
-        'Синкатимуться тільки нові, що з\'являться після натискання OK.\n\n' +
-        'Продовжити?',
-        ui.ButtonSet.YES_NO
-    );
-    if (ans !== ui.Button.YES) return;
-
+    let ui = null;
+    try { ui = SpreadsheetApp.getUi(); } catch (e) { /* standalone */ }
+    if (ui) {
+        const ans = ui.alert(
+            'Почати з цього моменту?',
+            'Усі заявки, що ЗАРАЗ у таблиці, будуть проігноровані.\n' +
+            'Синкатимуться тільки нові, що з\'являться після натискання OK.\n\n' +
+            'Продовжити?',
+            ui.ButtonSet.YES_NO
+        );
+        if (ans !== ui.Button.YES) return;
+    }
     const props = PropertiesService.getScriptProperties();
     const nowMs = Date.now();
     SHEETS.forEach(cfg => props.setProperty('LAST_CREATE_' + cfg.name, String(nowMs)));
-    ui.alert('Готово. Стартова точка: ' + new Date(nowMs).toLocaleString() +
-             '.\nІсторія ігнорується.');
+    safeAlert_('Готово. Стартова точка: ' + new Date(nowMs).toLocaleString() +
+               '.\nІсторія ігнорується.');
 }
 
 /** Installable onChange handler — реагує на вставку рядків (у т.ч. через API). */
@@ -195,7 +196,7 @@ function onOpen() {
 
 function menuSyncNow_() {
     const s = syncNewRequests();
-    SpreadsheetApp.getUi().alert(
+    safeAlert_(
         'Синк завершено:\n' +
         '  усього переглянуто: ' + s.total + '\n' +
         '  вставлено: ' + s.success + '\n' +
@@ -209,22 +210,34 @@ function menuShowLog_() {
     const ss = SpreadsheetApp.openById(SHEET_ID);
     let sh = ss.getSheetByName(LOG_SHEET_NAME);
     if (!sh) sh = ensureLogSheet_(ss);
-    ss.setActiveSheet(sh);
+    try { ss.setActiveSheet(sh); } catch (e) { /* standalone — нема активного контексту */ }
+}
+
+/** Показує alert якщо скрипт bound до таблиці, інакше просто в консоль —
+ *  щоб у standalone проекті скрипт не завис чекаючи на UI. */
+function safeAlert_(msg) {
+    try {
+        SpreadsheetApp.getUi().alert(msg);
+    } catch (e) {
+        console.log(msg);
+    }
 }
 
 function menuResetProgress_() {
-    const ui = SpreadsheetApp.getUi();
-    const ans = ui.alert(
-        'Скинути last-processed дату для обох аркушів?',
-        'Це означає що наступний синк пройдеться по ВСІХ рядках заново.\n' +
-        'Дублі все одно відсікне БД, але це навантаження. Впевнений?',
-        ui.ButtonSet.YES_NO
-    );
-    if (ans !== ui.Button.YES) return;
-
+    let ui = null;
+    try { ui = SpreadsheetApp.getUi(); } catch (e) { /* standalone */ }
+    if (ui) {
+        const ans = ui.alert(
+            'Скинути last-processed дату для обох аркушів?',
+            'Це означає що наступний синк пройдеться по ВСІХ рядках заново.\n' +
+            'Дублі все одно відсікне БД, але це навантаження. Впевнений?',
+            ui.ButtonSet.YES_NO
+        );
+        if (ans !== ui.Button.YES) return;
+    }
     const props = PropertiesService.getScriptProperties();
     SHEETS.forEach(cfg => props.deleteProperty('LAST_CREATE_' + cfg.name));
-    ui.alert('Прогрес скинуто. Натисни «Синкнути зараз» для перезаливу.');
+    safeAlert_('Прогрес скинуто. Натисни «Синкнути зараз» для перезаливу.');
 }
 
 
