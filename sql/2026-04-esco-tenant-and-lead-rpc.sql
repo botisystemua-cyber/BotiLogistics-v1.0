@@ -23,7 +23,7 @@ BEGIN;
 -- ─── 1. Рядок клієнта 'esco' ───────────────────────────────────────────────
 -- Інші тенанти створюються ззовні (через config-crm), але 'esco' потрібен
 -- негайно — FK passengers.tenant_id → clients.tenant_id не пустить INSERT.
-INSERT INTO public.clients (tenant_id, tenant_name, modules)
+INSERT INTO public.clients (tenant_id, name, modules)
 VALUES ('esco', 'Esco', ARRAY['passenger','cargo'])
 ON CONFLICT (tenant_id) DO NOTHING;
 
