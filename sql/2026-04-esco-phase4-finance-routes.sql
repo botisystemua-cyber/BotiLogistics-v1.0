@@ -20,6 +20,7 @@ BEGIN;
 ALTER TABLE public.routes ADD COLUMN IF NOT EXISTS extra_data jsonb;
 ALTER TABLE public.dispatches ALTER COLUMN route_id DROP NOT NULL;
 ALTER TABLE public.dispatches ALTER COLUMN vehicle_id DROP NOT NULL;
+ALTER TABLE public.dispatches ALTER COLUMN route_date DROP NOT NULL;
 
 -- ── UNIQUE indexes (PARTIAL — лише для tenant='esco', щоб не зачіпати ──
 --    дублі інших тенантів типу express_sv_travel) ─────────────────

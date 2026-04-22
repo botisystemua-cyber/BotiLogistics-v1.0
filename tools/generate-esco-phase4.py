@@ -373,6 +373,7 @@ def main():
     out.append("ALTER TABLE public.routes ADD COLUMN IF NOT EXISTS extra_data jsonb;")
     out.append("ALTER TABLE public.dispatches ALTER COLUMN route_id DROP NOT NULL;")
     out.append("ALTER TABLE public.dispatches ALTER COLUMN vehicle_id DROP NOT NULL;")
+    out.append("ALTER TABLE public.dispatches ALTER COLUMN route_date DROP NOT NULL;")
     out.append("")
     out.append("-- ── UNIQUE indexes (PARTIAL — лише для tenant='esco', щоб не зачіпати ──")
     out.append("--    дублі інших тенантів типу express_sv_travel) ─────────────────")
