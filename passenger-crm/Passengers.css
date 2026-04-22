@@ -1167,7 +1167,7 @@ body.route-sort-active #rteTogglePay {
 /* Flat modern seats — solid fills, thin borders, no gradients or shadows. */
 .seat {
     position: absolute;
-    width: 8%;
+    width: 7%;
     aspect-ratio: 1 / 1;
     transform: translate(-50%, -50%);
     cursor: pointer;
@@ -1176,7 +1176,7 @@ body.route-sort-active #rteTogglePay {
     transition: transform 0.15s;
     z-index: 2;
 }
-.van-bus .seat { width: 4.5%; }
+.van-bus .seat { width: 4%; }
 .seat:active:not(.seat-occupied):not(.seat-driver):not(.seat-disabled) { transform: translate(-50%, -50%) scale(0.93); }
 .seat:hover:not(.seat-occupied):not(.seat-driver):not(.seat-disabled)  { transform: translate(-50%, calc(-50% - 2px)); }
 
@@ -1198,6 +1198,10 @@ body.route-sort-active #rteTogglePay {
 .seat-selected .seat-chair { filter: brightness(1.15) sepia(0.8) hue-rotate(180deg) saturate(6) drop-shadow(0 2px 2px rgba(0,0,0,0.35)); }
 .seat-occupied .seat-chair { filter: brightness(1.05) sepia(0.85) hue-rotate(-40deg) saturate(5) drop-shadow(0 2px 2px rgba(0,0,0,0.35)); cursor: not-allowed; }
 .seat-reserve  .seat-chair { filter: brightness(1.10) sepia(0.8) hue-rotate(230deg) saturate(3.5) drop-shadow(0 2px 2px rgba(0,0,0,0.35)); }
+/* Driver — desaturated darker grey, no click interaction */
+.seat-driver { cursor: default; }
+.seat-driver .seat-chair { filter: brightness(0.7) saturate(0) drop-shadow(0 2px 2px rgba(0,0,0,0.4)); }
+.seat-driver .seat-num { display: none; }
 
 /* Number badge — white circle over the cushion (left half of chair) */
 .seat-num {

@@ -5148,47 +5148,53 @@ function getSeatLayout(layout, maxSeats, hasReserve) {
     //   bus-top.png (5:1):     empty cabin x=24..93%, y=14..82%.
     // hasReserve adds one extra seat labeled "R" in the front-most passenger slot.
 
+    // Driver position = steering wheel center in the PNG:
+    //   minivan-top.png → (19, 50)   bus-top.png → (15, 51)
     if (layout === '1-3-3') {
+        seats.push({ name: 'D', x: 19, y: 50, type: 'driver' });
         seats.push({ name: '1', x: 32, y: 50, type: 'seat' });
-        seats.push({ name: '2', x: 54, y: 25, type: 'seat' });
-        seats.push({ name: '3', x: 54, y: 50, type: 'seat' });
-        seats.push({ name: '4', x: 54, y: 75, type: 'seat' });
-        seats.push({ name: '5', x: 82, y: 25, type: 'seat' });
-        seats.push({ name: '6', x: 82, y: 50, type: 'seat' });
-        seats.push({ name: '7', x: 82, y: 75, type: 'seat' });
-        if (hasReserve) seats.push({ name: 'R', x: 32, y: 25, type: 'reserve' });
+        seats.push({ name: '2', x: 62, y: 25, type: 'seat' });
+        seats.push({ name: '3', x: 62, y: 50, type: 'seat' });
+        seats.push({ name: '4', x: 62, y: 75, type: 'seat' });
+        seats.push({ name: '5', x: 84, y: 25, type: 'seat' });
+        seats.push({ name: '6', x: 84, y: 50, type: 'seat' });
+        seats.push({ name: '7', x: 84, y: 75, type: 'seat' });
+        if (hasReserve) seats.push({ name: 'R', x: 32, y: 28, type: 'reserve' });
         return seats;
     }
 
     if (layout === '2-2-3') {
-        seats.push({ name: '1', x: 34, y: 28, type: 'seat' });
-        seats.push({ name: '2', x: 34, y: 72, type: 'seat' });
-        seats.push({ name: '3', x: 56, y: 28, type: 'seat' });
-        seats.push({ name: '4', x: 56, y: 72, type: 'seat' });
-        seats.push({ name: '5', x: 84, y: 25, type: 'seat' });
-        seats.push({ name: '6', x: 84, y: 50, type: 'seat' });
-        seats.push({ name: '7', x: 84, y: 75, type: 'seat' });
-        if (hasReserve) seats.push({ name: 'R', x: 34, y: 50, type: 'reserve' });
+        seats.push({ name: 'D', x: 19, y: 50, type: 'driver' });
+        seats.push({ name: '1', x: 38, y: 28, type: 'seat' });
+        seats.push({ name: '2', x: 38, y: 72, type: 'seat' });
+        seats.push({ name: '3', x: 60, y: 28, type: 'seat' });
+        seats.push({ name: '4', x: 60, y: 72, type: 'seat' });
+        seats.push({ name: '5', x: 85, y: 25, type: 'seat' });
+        seats.push({ name: '6', x: 85, y: 50, type: 'seat' });
+        seats.push({ name: '7', x: 85, y: 75, type: 'seat' });
+        if (hasReserve) seats.push({ name: 'R', x: 28, y: 50, type: 'reserve' });
         return seats;
     }
 
     if (layout === '2-2-2') {
-        seats.push({ name: '1', x: 34, y: 25, type: 'seat' });
-        seats.push({ name: '2', x: 34, y: 75, type: 'seat' });
-        seats.push({ name: '3', x: 56, y: 25, type: 'seat' });
-        seats.push({ name: '4', x: 56, y: 75, type: 'seat' });
-        seats.push({ name: '5', x: 82, y: 25, type: 'seat' });
-        seats.push({ name: '6', x: 82, y: 75, type: 'seat' });
-        if (hasReserve) seats.push({ name: 'R', x: 34, y: 50, type: 'reserve' });
+        seats.push({ name: 'D', x: 19, y: 50, type: 'driver' });
+        seats.push({ name: '1', x: 38, y: 25, type: 'seat' });
+        seats.push({ name: '2', x: 38, y: 75, type: 'seat' });
+        seats.push({ name: '3', x: 60, y: 25, type: 'seat' });
+        seats.push({ name: '4', x: 60, y: 75, type: 'seat' });
+        seats.push({ name: '5', x: 83, y: 25, type: 'seat' });
+        seats.push({ name: '6', x: 83, y: 75, type: 'seat' });
+        if (hasReserve) seats.push({ name: 'R', x: 28, y: 50, type: 'reserve' });
         return seats;
     }
 
     if (layout === 'bus') {
+        seats.push({ name: 'D', x: 15, y: 51, type: 'driver' });
         const n = Math.max(8, parseInt(maxSeats) || 20);
         const rowsNeeded = Math.ceil(n / 4);
         const xStart = 28, xEnd = 92;
         const step = rowsNeeded === 1 ? 0 : (xEnd - xStart) / (rowsNeeded - 1);
-        const ys = [14, 38, 62, 86];
+        const ys = [18, 40, 60, 82];
         let placed = 0;
         for (let r = 0; r < rowsNeeded && placed < n; r++) {
             const x = xStart + step * r;
@@ -5197,7 +5203,7 @@ function getSeatLayout(layout, maxSeats, hasReserve) {
                 seats.push({ name: String(placed), x, y: ys[c], type: 'seat' });
             }
         }
-        if (hasReserve) seats.push({ name: 'R', x: 20, y: 50, type: 'reserve' });
+        if (hasReserve) seats.push({ name: 'R', x: 22, y: 30, type: 'reserve' });
         return seats;
     }
 
@@ -5227,7 +5233,9 @@ function renderVan(opts) {
     const chairImg = '<img class="seat-chair" src="chair-top.png" alt="">';
     const seatsHtml = positions.map(s => {
         const style = `left:${s.x}%;top:${s.y}%`;
-        if (s.type === 'driver') return '';  // Driver cabin is in the van PNG already
+        if (s.type === 'driver') {
+            return `<div class="seat seat-driver" style="${style}" title="Водій">${chairImg}</div>`;
+        }
         const occName = occupiedMap[s.name];
         if (occName) {
             return `<div class="seat seat-occupied" style="${style}" title="Зайнято: ${occName}">
