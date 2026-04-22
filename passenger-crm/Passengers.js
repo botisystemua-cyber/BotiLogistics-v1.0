@@ -5163,15 +5163,15 @@ function getSeatLayout(layout, maxSeats, hasReserve) {
             w: (px1 - px0) / 771 * 100,
             h: (py1 - py0) / 324 * 100,
         });
-        seats.push(s('D', 'driver', 95,  75,  235, 170, 'seat-masks/van-1-3-3-D.png'));
-        seats.push(s('1', 'seat',   95,  172, 235, 260, 'seat-masks/van-1-3-3-1.png'));
-        seats.push(s('2', 'seat',   280, 70,  430, 135, 'seat-masks/van-1-3-3-2.png'));
-        seats.push(s('3', 'seat',   280, 138, 430, 205, 'seat-masks/van-1-3-3-3.png'));
-        seats.push(s('4', 'seat',   280, 208, 430, 270, 'seat-masks/van-1-3-3-4.png'));
-        seats.push(s('5', 'seat',   485, 70,  645, 135, 'seat-masks/van-1-3-3-5.png'));
-        seats.push(s('6', 'seat',   485, 138, 645, 205, 'seat-masks/van-1-3-3-6.png'));
-        seats.push(s('7', 'seat',   485, 208, 645, 270, 'seat-masks/van-1-3-3-7.png'));
-        if (hasReserve) seats.push(s('R', 'reserve', 240, 75, 280, 170, 'seat-masks/van-1-3-3-D.png'));
+        seats.push(s('1', 'seat',   125, 75,  265, 170, 'seat-masks/van-1-3-3-D.png'));
+        seats.push(s('D', 'driver', 125, 172, 265, 260, 'seat-masks/van-1-3-3-1.png'));
+        seats.push(s('2', 'seat',   310, 70,  460, 135, 'seat-masks/van-1-3-3-2.png'));
+        seats.push(s('3', 'seat',   310, 138, 460, 205, 'seat-masks/van-1-3-3-3.png'));
+        seats.push(s('4', 'seat',   310, 208, 460, 270, 'seat-masks/van-1-3-3-4.png'));
+        seats.push(s('5', 'seat',   455, 70,  615, 135, 'seat-masks/van-1-3-3-5.png'));
+        seats.push(s('6', 'seat',   455, 138, 615, 205, 'seat-masks/van-1-3-3-6.png'));
+        seats.push(s('7', 'seat',   455, 208, 615, 270, 'seat-masks/van-1-3-3-7.png'));
+        if (hasReserve) seats.push(s('R', 'reserve', 180, 150, 210, 190, 'seat-masks/van-1-3-3-D.png'));
         return seats;
     }
 
