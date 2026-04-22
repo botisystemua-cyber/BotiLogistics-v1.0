@@ -294,12 +294,16 @@ def build_notifications(rows):
 
 
 def to_rating(v, max_val=5.0):
-    """Рейтинг у межах [0, max_val]. Якщо поза — повертає (None, raw) для
-    збереження raw у notes. Якщо в межах — повертає (value, None)."""
+    """Рейтинг у межах (0, max_val]. Нуль означає «ще нема оцінок» → NULL.
+    Якщо значення поза межами — повертає (None, raw) для збереження raw у notes."""
     n = to_num(v)
     if n is None:
         return (None, None)
-    if 0 <= n <= max_val:
+    if n == 0:
+        # 0 = «рейтингу ще нема», у БД CHECK constraint не пускає 0 — ставимо NULL,
+        # нічого не губимо (ratings_count=0 все одно каже «немає оцінок»).
+        return (None, None)
+    if 0 < n <= max_val:
         return (n, None)
     return (None, n)  # поза діапазоном → у БД NULL, raw → у notes
 
