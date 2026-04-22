@@ -105,7 +105,10 @@ function syncNewRequests() {
     return summary;
 }
 
-/** Встановлює тригери. Запустити руками один раз після вставки файлу. */
+/** Встановлює тригери. Запустити руками один раз після вставки файлу.
+ *  При першій інсталяції прогрес по обох аркушах ставиться на ЗАРАЗ,
+ *  щоб історію не тягти — синкаємо лише нові заявки, що з'являться далі.
+ *  Якщо прогрес уже виставлений (повторний запуск) — не чіпаємо. */
 function setupTriggers() {
     // Почистити старі тригери цього скрипта (щоб не дублювати).
     ScriptApp.getProjectTriggers().forEach(t => {
@@ -125,11 +128,50 @@ function setupTriggers() {
         .onChange()
         .create();
 
+    // Ініціалізація прогресу: стартуємо з теперішнього моменту, історію
+    // не переносимо. Якщо для аркуша вже є збережене значення — не чіпаємо,
+    // щоб не відкотити прогрес при повторному натисканні setupTriggers.
+    const props = PropertiesService.getScriptProperties();
+    const nowMs = Date.now();
+    const initialized = [];
+    SHEETS.forEach(cfg => {
+        const key = 'LAST_CREATE_' + cfg.name;
+        if (!props.getProperty(key)) {
+            props.setProperty(key, String(nowMs));
+            initialized.push(cfg.name);
+        }
+    });
+
     SpreadsheetApp.getUi().alert(
         'Тригери встановлено:\n' +
         ' • syncNewRequests — кожні 5 хв\n' +
-        ' • onSpreadsheetChange_ — при зміні таблиці'
+        ' • onSpreadsheetChange_ — при зміні таблиці\n' +
+        (initialized.length
+            ? '\nСтартова точка: ЗАРАЗ (' + new Date(nowMs).toLocaleString() + ').\n' +
+              'Історія НЕ переноситься. Тільки нові заявки.\n' +
+              'Аркуші: ' + initialized.join(', ')
+            : '\nПрогрес уже був виставлений — не чіпаю.')
     );
+}
+
+/** Виставити «синкати тільки нові з цього моменту» — ігнорувати все, що
+ *  зараз у таблиці, переносити тільки заявки з createDate > NOW. */
+function menuStartFromNow_() {
+    const ui = SpreadsheetApp.getUi();
+    const ans = ui.alert(
+        'Почати з цього моменту?',
+        'Усі заявки, що ЗАРАЗ у таблиці, будуть проігноровані.\n' +
+        'Синкатимуться тільки нові, що з\'являться після натискання OK.\n\n' +
+        'Продовжити?',
+        ui.ButtonSet.YES_NO
+    );
+    if (ans !== ui.Button.YES) return;
+
+    const props = PropertiesService.getScriptProperties();
+    const nowMs = Date.now();
+    SHEETS.forEach(cfg => props.setProperty('LAST_CREATE_' + cfg.name, String(nowMs)));
+    ui.alert('Готово. Стартова точка: ' + new Date(nowMs).toLocaleString() +
+             '.\nІсторія ігнорується.');
 }
 
 /** Installable onChange handler — реагує на вставку рядків (у т.ч. через API). */
@@ -146,6 +188,7 @@ function onOpen() {
         .addItem('Показати лог',                 'menuShowLog_')
         .addSeparator()
         .addItem('Встановити тригери',           'setupTriggers')
+        .addItem('Почати з цього моменту (ігнорувати історію)', 'menuStartFromNow_')
         .addItem('Скинути прогрес (синкне все наново)', 'menuResetProgress_')
         .addToUi();
 }
