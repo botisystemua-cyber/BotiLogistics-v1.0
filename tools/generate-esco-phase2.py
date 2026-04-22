@@ -163,7 +163,10 @@ def build_vehicles(autopark_rows):
     for auto_id, seats in groups.items():
         first = seats[0]
         name = nn(first.get('Назва авто')) or '(без назви)'
-        plate = nn(first.get('Держ. номер')) or 'не вказано'
+        # vehicles має UNIQUE(plate_number) глобально. Якщо у xlsx None —
+        # робимо унікальний placeholder з auto_id, щоб не зламати індекс.
+        plate_raw = nn(first.get('Держ. номер'))
+        plate = plate_raw if plate_raw else f'не вказано ({auto_id})'
         layout = norm_layout(first.get('Тип розкладки'))
         total = to_num(first.get('Місткість')) or len(seats)
 
