@@ -5251,9 +5251,9 @@ function renderVan(opts) {
     const seatsHtml = positions.map(s => {
         // Boxed seats (mask-based rendering — for layouts with a dedicated van PNG):
         if (s.boxed) {
-            const style = `left:${s.x}%;top:${s.y}%;width:${s.w}%;height:${s.h}%;--seat-mask:url('${s.mask}')`;
+            const style = `left:${s.x}%;top:${s.y}%;width:${s.w}%;height:${s.h}%`;
             if (s.type === 'driver') {
-                return `<div class="seat-box seat-driver" style="${style}" title="Водій"><div class="seat-tint"></div></div>`;
+                return `<div class="seat-box seat-driver" style="${style}" title="Водій"></div>`;
             }
             const occName = occupiedMap[s.name];
             if (occName) {
@@ -5274,7 +5274,6 @@ function renderVan(opts) {
             const stateCls = s.type === 'reserve' ? 'seat-reserve' : 'seat-free';
             const handler = interactive ? `onclick="seatPickerSelect('${s.name}')"` : '';
             return `<div class="seat-box ${stateCls}" style="${style}" ${handler}>
-                <div class="seat-tint"></div>
                 <div class="seat-num">${s.name}</div>
             </div>`;
         }
