@@ -5143,53 +5143,52 @@ function updateSeatPreview(idx) {
 function getSeatLayout(layout, maxSeats, hasReserve) {
     const seats = [];
 
-    // Layout grid: x=front→rear, y=driver-side→passenger-side. Seat is 9.5% wide × 22% tall.
+    // Coordinates match the actual PNG interior bounds:
+    //   minivan-top.png (3:1): empty cabin x=28..92%, y=16..82%. Driver cabin on image left → no D element.
+    //   bus-top.png (5:1):     empty cabin x=24..93%, y=14..82%.
+    // hasReserve adds one extra seat labeled "R" in the front-most passenger slot.
+
     if (layout === '1-3-3') {
-        seats.push({ name: 'D', x: 22, y: 28, type: 'driver' });
-        seats.push({ name: '1', x: 22, y: 72, type: 'seat' });
-        seats.push({ name: '2', x: 48, y: 18, type: 'seat' });
-        seats.push({ name: '3', x: 48, y: 50, type: 'seat' });
-        seats.push({ name: '4', x: 48, y: 82, type: 'seat' });
-        seats.push({ name: '5', x: 74, y: 18, type: 'seat' });
-        seats.push({ name: '6', x: 74, y: 50, type: 'seat' });
-        seats.push({ name: '7', x: 74, y: 82, type: 'seat' });
-        if (hasReserve) seats.push({ name: 'R', x: 35, y: 50, type: 'reserve' });
+        seats.push({ name: '1', x: 32, y: 50, type: 'seat' });
+        seats.push({ name: '2', x: 54, y: 25, type: 'seat' });
+        seats.push({ name: '3', x: 54, y: 50, type: 'seat' });
+        seats.push({ name: '4', x: 54, y: 75, type: 'seat' });
+        seats.push({ name: '5', x: 82, y: 25, type: 'seat' });
+        seats.push({ name: '6', x: 82, y: 50, type: 'seat' });
+        seats.push({ name: '7', x: 82, y: 75, type: 'seat' });
+        if (hasReserve) seats.push({ name: 'R', x: 32, y: 25, type: 'reserve' });
         return seats;
     }
 
     if (layout === '2-2-3') {
-        seats.push({ name: 'D', x: 22, y: 28, type: 'driver' });
-        if (hasReserve) seats.push({ name: 'R', x: 22, y: 72, type: 'reserve' });
-        seats.push({ name: '1', x: 44, y: 28, type: 'seat' });
-        seats.push({ name: '2', x: 44, y: 72, type: 'seat' });
-        seats.push({ name: '3', x: 60, y: 28, type: 'seat' });
-        seats.push({ name: '4', x: 60, y: 72, type: 'seat' });
-        seats.push({ name: '5', x: 82, y: 18, type: 'seat' });
-        seats.push({ name: '6', x: 82, y: 50, type: 'seat' });
-        seats.push({ name: '7', x: 82, y: 82, type: 'seat' });
+        seats.push({ name: '1', x: 34, y: 28, type: 'seat' });
+        seats.push({ name: '2', x: 34, y: 72, type: 'seat' });
+        seats.push({ name: '3', x: 56, y: 28, type: 'seat' });
+        seats.push({ name: '4', x: 56, y: 72, type: 'seat' });
+        seats.push({ name: '5', x: 84, y: 25, type: 'seat' });
+        seats.push({ name: '6', x: 84, y: 50, type: 'seat' });
+        seats.push({ name: '7', x: 84, y: 75, type: 'seat' });
+        if (hasReserve) seats.push({ name: 'R', x: 34, y: 50, type: 'reserve' });
         return seats;
     }
 
     if (layout === '2-2-2') {
-        seats.push({ name: 'D', x: 22, y: 28, type: 'driver' });
-        if (hasReserve) seats.push({ name: 'R', x: 22, y: 72, type: 'reserve' });
-        seats.push({ name: '1', x: 44, y: 28, type: 'seat' });
-        seats.push({ name: '2', x: 44, y: 72, type: 'seat' });
-        seats.push({ name: '3', x: 60, y: 28, type: 'seat' });
-        seats.push({ name: '4', x: 60, y: 72, type: 'seat' });
-        seats.push({ name: '5', x: 76, y: 28, type: 'seat' });
-        seats.push({ name: '6', x: 76, y: 72, type: 'seat' });
+        seats.push({ name: '1', x: 34, y: 25, type: 'seat' });
+        seats.push({ name: '2', x: 34, y: 75, type: 'seat' });
+        seats.push({ name: '3', x: 56, y: 25, type: 'seat' });
+        seats.push({ name: '4', x: 56, y: 75, type: 'seat' });
+        seats.push({ name: '5', x: 82, y: 25, type: 'seat' });
+        seats.push({ name: '6', x: 82, y: 75, type: 'seat' });
+        if (hasReserve) seats.push({ name: 'R', x: 34, y: 50, type: 'reserve' });
         return seats;
     }
 
     if (layout === 'bus') {
-        seats.push({ name: 'D', x: 5, y: 28, type: 'driver' });
-        if (hasReserve) seats.push({ name: 'R', x: 5, y: 72, type: 'reserve' });
         const n = Math.max(8, parseInt(maxSeats) || 20);
         const rowsNeeded = Math.ceil(n / 4);
-        const xStart = 15, xEnd = 95;
+        const xStart = 28, xEnd = 92;
         const step = rowsNeeded === 1 ? 0 : (xEnd - xStart) / (rowsNeeded - 1);
-        const ys = [14, 38, 62, 86];
+        const ys = [19, 38, 60, 81];
         let placed = 0;
         for (let r = 0; r < rowsNeeded && placed < n; r++) {
             const x = xStart + step * r;
@@ -5198,6 +5197,7 @@ function getSeatLayout(layout, maxSeats, hasReserve) {
                 seats.push({ name: String(placed), x, y: ys[c], type: 'seat' });
             }
         }
+        if (hasReserve) seats.push({ name: 'R', x: 20, y: 50, type: 'reserve' });
         return seats;
     }
 
@@ -5205,25 +5205,12 @@ function getSeatLayout(layout, maxSeats, hasReserve) {
 }
 
 function renderVanBody(layout) {
-    if (layout === 'bus') {
-        // Flat modern bus — simple rounded rectangle, thin stroke, minimal details.
-        return `<svg class="van-svg" viewBox="0 0 360 90" preserveAspectRatio="none" aria-hidden="true">
-            <rect x="4" y="5" width="352" height="80" rx="14" ry="14" fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
-            <rect x="8" y="28" width="18" height="34" rx="3" fill="#1e293b"/>
-            <line x1="30" y1="8" x2="30" y2="82" stroke="#cbd5e1" stroke-width="1"/>
-            <line x1="352" y1="20" x2="352" y2="70" stroke="#cbd5e1" stroke-width="1"/>
-        </svg>`;
-    }
-    // Flat modern minivan — rounded rect with slightly rounded nose (bigger radius on left).
-    return `<svg class="van-svg" viewBox="0 0 220 90" preserveAspectRatio="none" aria-hidden="true">
-        <path d="M 22 6 L 202 6 Q 214 6 214 18 L 214 72 Q 214 84 202 84 L 22 84 Q 4 84 4 66 L 4 24 Q 4 6 22 6 Z"
-              fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
-        <rect x="10" y="30" width="18" height="30" rx="4" fill="#1e293b"/>
-        <line x1="32" y1="10" x2="32" y2="80" stroke="#cbd5e1" stroke-width="1"/>
-        <line x1="110" y1="6"  x2="110" y2="14" stroke="#cbd5e1" stroke-width="1"/>
-        <line x1="110" y1="76" x2="110" y2="84" stroke="#cbd5e1" stroke-width="1"/>
-        <line x1="208" y1="22" x2="208" y2="68" stroke="#cbd5e1" stroke-width="1"/>
-    </svg>`;
+    const src = layout === 'bus' ? 'bus-top.png' : 'minivan-top.png';
+    // SVG fallback renders only if the image fails to load.
+    const fallback = layout === 'bus'
+        ? `<svg class="van-svg-fallback" viewBox="0 0 360 72" preserveAspectRatio="none"><rect x="4" y="5" width="352" height="62" rx="14" fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/></svg>`
+        : `<svg class="van-svg-fallback" viewBox="0 0 300 100" preserveAspectRatio="none"><path d="M 22 6 L 284 6 Q 294 6 294 18 L 294 82 Q 294 94 284 94 L 22 94 Q 4 94 4 76 L 4 24 Q 4 6 22 6 Z" fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/></svg>`;
+    return `<img class="van-img" src="${src}" alt="" onerror="this.style.display='none'">${fallback}`;
 }
 
 function renderVan(opts) {
@@ -5239,9 +5226,8 @@ function renderVan(opts) {
 
     const seatsHtml = positions.map(s => {
         const style = `left:${s.x}%;top:${s.y}%`;
-        if (s.type === 'driver') {
-            return `<div class="seat seat-driver" style="${style}" title="Водій"><div class="seat-arms"></div><div class="seat-wheel"></div></div>`;
-        }
+        // Driver cabin is baked into the PNG background — skip rendering the D seat.
+        if (s.type === 'driver') return '';
         const occName = occupiedMap[s.name];
         if (occName) {
             return `<div class="seat seat-occupied" style="${style}" title="Зайнято: ${occName}">
