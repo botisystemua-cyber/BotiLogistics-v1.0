@@ -5168,9 +5168,9 @@ function getSeatLayout(layout, maxSeats, hasReserve) {
         seats.push(s('2', 'seat',   310, 70,  460, 135, 'seat-masks/van-1-3-3-2.png'));
         seats.push(s('3', 'seat',   310, 138, 460, 205, 'seat-masks/van-1-3-3-3.png'));
         seats.push(s('4', 'seat',   310, 208, 460, 270, 'seat-masks/van-1-3-3-4.png'));
-        seats.push(s('5', 'seat',   455, 70,  615, 135, 'seat-masks/van-1-3-3-5.png'));
-        seats.push(s('6', 'seat',   455, 138, 615, 205, 'seat-masks/van-1-3-3-6.png'));
-        seats.push(s('7', 'seat',   455, 208, 615, 270, 'seat-masks/van-1-3-3-7.png'));
+        seats.push(s('5', 'seat',   430, 70,  590, 135, 'seat-masks/van-1-3-3-5.png'));
+        seats.push(s('6', 'seat',   430, 138, 590, 205, 'seat-masks/van-1-3-3-6.png'));
+        seats.push(s('7', 'seat',   430, 208, 590, 270, 'seat-masks/van-1-3-3-7.png'));
         if (hasReserve) seats.push(s('R', 'reserve', 180, 150, 210, 190, 'seat-masks/van-1-3-3-D.png'));
         return seats;
     }
