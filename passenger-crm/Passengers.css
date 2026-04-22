@@ -1167,83 +1167,89 @@ body.route-sort-active #rteTogglePay {
 /* Flat modern seats — solid fills, thin borders, no gradients or shadows. */
 .seat {
     position: absolute;
-    width: 6%;
-    height: 20%;
+    width: 8%;
+    aspect-ratio: 1 / 1;
     transform: translate(-50%, -50%);
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
     user-select: none;
-    transition: transform 0.12s;
-    --seat-cushion: #86efac;
-    --seat-back:    #15803d;
-    --seat-text:    #052e16;
-    filter: drop-shadow(0 1px 2px rgba(0,0,0,0.3));
+    transition: transform 0.15s;
+    z-index: 2;
 }
-.van-bus .seat { width: 3.8%; height: 18%; }
-.seat:active:not(.seat-occupied):not(.seat-driver):not(.seat-disabled) { transform: translate(-50%, -50%) scale(0.92); }
-.seat:hover:not(.seat-occupied):not(.seat-driver):not(.seat-disabled)  { transform: translate(-50%, calc(-50% - 1px)); }
-/* Cushion — flat fill, left-rounded (person faces left). */
-.seat::before {
-    content: '';
-    position: absolute;
-    inset: 12% 32% 12% 6%;
-    background: var(--seat-cushion);
-    border: 1.5px solid var(--seat-back);
-    border-radius: 10px 3px 3px 10px;
-}
-/* Backrest — solid strip on the right, rounded on its right edge. */
-.seat::after {
-    content: '';
-    position: absolute;
-    top: 10%; bottom: 10%; right: 6%;
-    width: 26%;
-    background: var(--seat-back);
-    border-radius: 3px 8px 8px 3px;
-}
-/* Armrests — optional, hidden by default for flat style */
-.seat-arms { display: none; }
+.van-bus .seat { width: 4.5%; }
+.seat:active:not(.seat-occupied):not(.seat-driver):not(.seat-disabled) { transform: translate(-50%, -50%) scale(0.93); }
+.seat:hover:not(.seat-occupied):not(.seat-driver):not(.seat-disabled)  { transform: translate(-50%, calc(-50% - 2px)); }
 
-.seat-num {
+/* Chair image — grey base with real alpha channel */
+.seat-chair {
     position: absolute;
     inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    pointer-events: none;
+    user-select: none;
+    transition: filter 0.2s;
+    filter: drop-shadow(0 2px 2px rgba(0,0,0,0.35));
+}
+
+/* Tint greyscale chair via filter chain: sepia warms → hue-rotate spins → saturate pumps → brightness lifts */
+.seat-free     .seat-chair { filter: brightness(1.25) sepia(0.8) hue-rotate(65deg)  saturate(5) drop-shadow(0 2px 2px rgba(0,0,0,0.35)); }
+.seat-selected .seat-chair { filter: brightness(1.15) sepia(0.8) hue-rotate(180deg) saturate(6) drop-shadow(0 2px 2px rgba(0,0,0,0.35)); }
+.seat-occupied .seat-chair { filter: brightness(1.05) sepia(0.85) hue-rotate(-40deg) saturate(5) drop-shadow(0 2px 2px rgba(0,0,0,0.35)); cursor: not-allowed; }
+.seat-reserve  .seat-chair { filter: brightness(1.10) sepia(0.8) hue-rotate(230deg) saturate(3.5) drop-shadow(0 2px 2px rgba(0,0,0,0.35)); }
+
+/* Number badge — white circle over the cushion (left half of chair) */
+.seat-num {
+    position: absolute;
+    left: 38%; top: 50%;
+    transform: translate(-50%, -50%);
+    width: 38%;
+    aspect-ratio: 1 / 1;
+    background: #ffffff;
+    border: 1.5px solid rgba(15,23,42,0.25);
+    border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
-    font-size: clamp(10px, 1.3vw, 12px);
-    font-weight: 700;
-    color: var(--seat-text);
-    padding-right: 28%;
+    font-size: clamp(9px, 1.1vw, 12px);
+    font-weight: 800;
     font-family: -apple-system, 'Inter', 'Segoe UI', system-ui, sans-serif;
-    letter-spacing: -0.2px;
-    z-index: 2;
+    color: #0f172a;
+    letter-spacing: -0.3px;
+    z-index: 3;
+    pointer-events: none;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+}
+.van-bus .seat-num { font-size: 8px; width: 42%; border-width: 1px; }
+
+/* Selected check badge corner */
+.seat-check {
+    position: absolute;
+    top: -4px; right: -4px;
+    width: 18px; height: 18px;
+    background: #16a34a;
+    border-radius: 50%;
+    color: white;
+    font-size: 11px; font-weight: 900;
+    line-height: 18px; text-align: center;
+    border: 2px solid white;
+    z-index: 4;
     pointer-events: none;
 }
-.van-bus .seat-num { font-size: 9px; padding-right: 22%; }
 
-/* States — flat solid colors */
-.seat-free      { --seat-cushion: #86efac; --seat-back: #15803d; --seat-text: #052e16; }
-.seat-free:hover{ --seat-cushion: #4ade80; }
-.seat-selected  { --seat-cushion: #60a5fa; --seat-back: #1d4ed8; --seat-text: #ffffff; }
-.seat-occupied  { --seat-cushion: #fca5a5; --seat-back: #b91c1c; --seat-text: #7f1d1d; cursor: not-allowed; }
-.seat-reserve   { --seat-cushion: #c4b5fd; --seat-back: #6d28d9; --seat-text: #3730a3; }
-.seat-reserve::before { border-style: dashed; }
-
-/* Driver — solid slate, clearly visible on light van body, with wheel overlay */
-.seat-driver    { --seat-cushion: #475569; --seat-back: #0f172a; --seat-text: transparent; cursor: default; }
-.seat-driver .seat-num { display: none; }
-
-/* Steering wheel — flat: white ring with spokes on the dark driver cushion */
-.seat-wheel {
+/* Occupied passenger name label under the seat */
+.seat-occ-name {
     position: absolute;
-    top: 50%; left: 28%;
-    transform: translate(-50%, -50%);
-    width: 44%; height: 44%;
-    border: 2px solid #ffffff;
-    border-radius: 50%;
-    background:
-        radial-gradient(circle at center, #ffffff 0 14%, transparent 16%),
-        linear-gradient(0deg,  transparent 44%, #ffffff 44% 56%, transparent 56%),
-        linear-gradient(90deg, transparent 44%, #ffffff 44% 56%, transparent 56%),
-        transparent;
-    z-index: 3;
+    bottom: -16px; left: 50%;
+    transform: translateX(-50%);
+    font-size: 9px; color: #b91c1c; font-weight: 700;
+    background: #fff;
+    padding: 1px 5px;
+    border-radius: 6px;
+    border: 1px solid #fca5a5;
+    max-width: 120%;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    z-index: 4;
+    line-height: 1.1;
     pointer-events: none;
 }
 

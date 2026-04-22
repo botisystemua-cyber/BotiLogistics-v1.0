@@ -5188,7 +5188,7 @@ function getSeatLayout(layout, maxSeats, hasReserve) {
         const rowsNeeded = Math.ceil(n / 4);
         const xStart = 28, xEnd = 92;
         const step = rowsNeeded === 1 ? 0 : (xEnd - xStart) / (rowsNeeded - 1);
-        const ys = [19, 38, 60, 81];
+        const ys = [14, 38, 62, 86];
         let placed = 0;
         for (let r = 0; r < rowsNeeded && placed < n; r++) {
             const x = xStart + step * r;
@@ -5224,14 +5224,14 @@ function renderVan(opts) {
     const positions = getSeatLayout(layout, maxSeats, hasReserve);
     const vanCls = layout === 'bus' ? 'van van-bus' : 'van';
 
+    const chairImg = '<img class="seat-chair" src="chair-top.png" alt="">';
     const seatsHtml = positions.map(s => {
         const style = `left:${s.x}%;top:${s.y}%`;
-        // Driver cabin is baked into the PNG background — skip rendering the D seat.
-        if (s.type === 'driver') return '';
+        if (s.type === 'driver') return '';  // Driver cabin is in the van PNG already
         const occName = occupiedMap[s.name];
         if (occName) {
             return `<div class="seat seat-occupied" style="${style}" title="Зайнято: ${occName}">
-                <div class="seat-arms"></div>
+                ${chairImg}
                 <div class="seat-num">${s.name}</div>
                 <div class="seat-occ-name">${occName}</div>
             </div>`;
@@ -5239,15 +5239,15 @@ function renderVan(opts) {
         if (selected && selected === s.name) {
             const handler = interactive ? `onclick="seatPickerSelect('${s.name}')"` : '';
             return `<div class="seat seat-selected" style="${style}" ${handler}>
-                <div class="seat-arms"></div>
-                <div class="seat-check">✓</div>
+                ${chairImg}
                 <div class="seat-num">${s.name}</div>
+                <div class="seat-check">✓</div>
             </div>`;
         }
         const stateCls = s.type === 'reserve' ? 'seat-reserve' : 'seat-free';
         const handler = interactive ? `onclick="seatPickerSelect('${s.name}')"` : '';
         return `<div class="seat ${stateCls}" style="${style}" ${handler}>
-            <div class="seat-arms"></div>
+            ${chairImg}
             <div class="seat-num">${s.name}</div>
         </div>`;
     }).join('');
