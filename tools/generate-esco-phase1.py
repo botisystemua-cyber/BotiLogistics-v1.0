@@ -293,12 +293,42 @@ def build_notifications(rows):
     return sql
 
 
+def to_rating(v, max_val=5.0):
+    """Рейтинг у межах [0, max_val]. Якщо поза — повертає (None, raw) для
+    збереження raw у notes. Якщо в межах — повертає (value, None)."""
+    n = to_num(v)
+    if n is None:
+        return (None, None)
+    if 0 <= n <= max_val:
+        return (n, None)
+    return (None, n)  # поза діапазоном → у БД NULL, raw → у notes
+
+
 def build_clients_directory(rows):
     sql = []
     for r in rows:
         cid = nn(r.get('CLI_ID'))
         if not cid:
             continue
+
+        # Рейтинги з CHECK-constraint 0..5. Якщо raw поза межами — зберігаємо в notes.
+        driver_rating,   raw_drv = to_rating(r.get('Рейт. водія'))
+        manager_rating,  raw_mgr = to_rating(r.get('Рейт. менеджера'))
+        internal_rating, raw_int = to_rating(r.get('Внутрішній рейтинг'))
+        bot_rating,      raw_bot = to_rating(r.get('Рейт. через бот'))
+
+        raw_notes = []
+        if raw_drv is not None:   raw_notes.append(f"driver_rating(raw)={raw_drv}")
+        if raw_mgr is not None:   raw_notes.append(f"manager_rating(raw)={raw_mgr}")
+        if raw_int is not None:   raw_notes.append(f"internal_rating(raw)={raw_int}")
+        if raw_bot is not None:   raw_notes.append(f"bot_rating(raw)={raw_bot}")
+        notes_parts = []
+        if raw_notes:
+            notes_parts.append('OUT_OF_RANGE: ' + ', '.join(raw_notes))
+        if nn(r.get('Примітка')):
+            notes_parts.append(str(nn(r.get('Примітка'))))
+        notes = '; '.join(notes_parts) if notes_parts else None
+
         sql.append(
             f"INSERT INTO public.clients_directory ("
             f"tenant_id, cli_id, smart_id, registered_at, last_activity, phone, additional_phone, "
@@ -320,14 +350,14 @@ def build_clients_directory(rows):
             f"{q(to_date(r.get('Остання оплата')))}, "
             f"{q(to_num(r.get('Борг UAH')))}, {q(to_num(r.get('Борг CHF')))}, {q(to_num(r.get('Борг EUR')))}, "
             f"{q(to_num(r.get('Борг PLN')))}, {q(to_num(r.get('Борг CZK')))}, "
-            f"{q(to_num(r.get('Рейт. водія')))}, {q(to_num(r.get('Оцінок від водія')))}, {q(to_num(r.get('Сума балів водія')))}, "
-            f"{q(to_num(r.get('Рейт. менеджера')))}, {q(to_num(r.get('Оцінок від менеджера')))}, {q(to_num(r.get('Сума балів менеджера')))}, "
-            f"{q(to_num(r.get('Внутрішній рейтинг')))}, "
-            f"{q(to_num(r.get('Рейт. через бот')))}, {q(to_num(r.get('Оцінок через бот')))}, {q(to_num(r.get('Сума балів бот')))}, "
+            f"{q(driver_rating)}, {q(to_num(r.get('Оцінок від водія')))}, {q(to_num(r.get('Сума балів водія')))}, "
+            f"{q(manager_rating)}, {q(to_num(r.get('Оцінок від менеджера')))}, {q(to_num(r.get('Сума балів менеджера')))}, "
+            f"{q(internal_rating)}, "
+            f"{q(bot_rating)}, {q(to_num(r.get('Оцінок через бот')))}, {q(to_num(r.get('Сума балів бот')))}, "
             f"{q(to_num(r.get('Супер 😊')))}, {q(to_num(r.get('Добре 😐')))}, {q(to_num(r.get('Погано 😞')))}, "
             f"{q(nn(r.get('Останні 3 коментарі')))}, {q(nn(r.get('Останній відгук')))}, "
             f"{q(to_date(r.get('Дата останнього відгуку')))}, "
-            f"{q(norm_status(r.get('Статус апки')))}, {q(nn(r.get('Примітка')))}"
+            f"{q(norm_status(r.get('Статус апки')))}, {q(notes)}"
             f") ON CONFLICT (tenant_id, cli_id) DO NOTHING;"
         )
     return sql
