@@ -438,7 +438,8 @@ function renderRoutePointDropdown(which) {
 
     const flagByCountry = {
         UA: '🇺🇦', MD: '🇲🇩', RO: '🇷🇴', SK: '🇸🇰', CZ: '🇨🇿', DE: '🇩🇪', ES: '🇪🇸',
-        PL: '🇵🇱', AT: '🇦🇹', HU: '🇭🇺', CH: '🇨🇭', IT: '🇮🇹', FR: '🇫🇷'
+        PL: '🇵🇱', AT: '🇦🇹', HU: '🇭🇺', CH: '🇨🇭', IT: '🇮🇹', FR: '🇫🇷',
+        SE: '🇸🇪', NO: '🇳🇴', DK: '🇩🇰'
     };
     dd.innerHTML = filtered.map(p => {
         const flag = flagByCountry[p.country_code] || '';
@@ -5157,14 +5158,14 @@ function addVehicleBuilder() {
         </div>
         <div class="bs-row" style="align-items:center;">
             <div class="bs-field"><label class="bs-label">Кількість місць</label>
-                <div class="seat-counter">
+                <div class="seat-counter locked">
                     <button onclick="changeSeatCount(${idx},-1)">−</button>
                     <span class="vb-seats-num" id="vbSeats-${idx}">7</span>
                     <button onclick="changeSeatCount(${idx},1)">+</button>
                 </div>
             </div>
             <div class="bs-field"><label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
-                <input type="checkbox" class="vb-reserve" style="width:16px;height:16px;">
+                <input type="checkbox" class="vb-reserve" onchange="updateSeatPreview(${idx})" style="width:16px;height:16px;">
                 <span class="bs-label" style="margin:0;">+ Резервне R1</span>
             </label></div>
         </div>
@@ -5174,17 +5175,33 @@ function addVehicleBuilder() {
     updateSeatPreview(idx);
 }
 
+// Layouts with a fixed physical seat count (can't be changed via +/−)
+const FIXED_COUNT_LAYOUTS = { '1-3-3': 7, '2-2-3': 7, '2-2-2': 6 };
+
 function selectLayout(el, idx) {
     el.parentElement.querySelectorAll('.layout-option').forEach(o => o.classList.remove('active'));
     el.classList.add('active');
     const layout = el.dataset.layout;
-    const all = LAYOUTS[layout] || [];
-    const seats = layout === 'bus' ? 20 : all.filter(s => s !== 'D').length;
-    document.getElementById('vbSeats-' + idx).textContent = seats;
+    const seatsEl = document.getElementById('vbSeats-' + idx);
+    const vb = document.getElementById('vb-' + idx);
+    const counter = vb?.querySelector('.seat-counter');
+
+    if (FIXED_COUNT_LAYOUTS[layout]) {
+        seatsEl.textContent = FIXED_COUNT_LAYOUTS[layout];
+        counter?.classList.add('locked');
+    } else {
+        // bus — allow custom seat count
+        const cur = parseInt(seatsEl.textContent) || 20;
+        if (cur < 8) seatsEl.textContent = 20;
+        counter?.classList.remove('locked');
+    }
     updateSeatPreview(idx);
 }
 
 function changeSeatCount(idx, delta) {
+    const vb = document.getElementById('vb-' + idx);
+    const counter = vb?.querySelector('.seat-counter');
+    if (counter?.classList.contains('locked')) return;  // layout dictates count
     const el = document.getElementById('vbSeats-' + idx);
     const cur = parseInt(el.textContent) || 0;
     const nv = Math.max(1, cur + delta);
@@ -5198,23 +5215,231 @@ function updateSeatPreview(idx) {
     const vb = document.getElementById('vb-' + idx);
     const layoutEl = vb.querySelector('.vb-layouts .layout-option.active');
     const layout = layoutEl ? layoutEl.dataset.layout : '1-3-3';
-    const seats = parseInt(document.getElementById('vbSeats-' + idx).textContent) || 7;
-    const hasReserve = vb.querySelector('.vb-reserve')?.checked;
+    const maxSeats = parseInt(document.getElementById('vbSeats-' + idx).textContent) || 7;
+    const hasReserve = !!vb.querySelector('.vb-reserve')?.checked;
 
-    let seatNames = [];
-    if (layout === 'bus') {
-        for (let i = 1; i <= seats; i++) seatNames.push(String(i));
-    } else {
-        seatNames = (LAYOUTS[layout] || []).slice(0, seats);
+    container.innerHTML = renderVan({
+        layout, maxSeats, hasReserve,
+        occupiedMap: {}, selected: '',
+        interactive: false,
+    });
+
+    // Widen the trip-form bottom sheet when bus layout is selected
+    const sheet = vb.closest('.bottom-sheet');
+    if (sheet) sheet.classList.toggle('has-bus', layout === 'bus');
+}
+
+// ================================================================
+// VAN V2 — SVG body + absolutely-positioned seats. Nose on LEFT.
+// Coordinates in % inside .van (0,0 = top-left; x grows → rear).
+// ================================================================
+function getSeatLayout(layout, maxSeats, hasReserve) {
+    const seats = [];
+
+    // Coordinates match the actual PNG interior bounds:
+    //   minivan-top.png (3:1): empty cabin x=28..92%, y=16..82%. Driver cabin on image left → no D element.
+    //   bus-top.png (5:1):     empty cabin x=24..93%, y=14..82%.
+    // hasReserve adds one extra seat labeled "R" in the front-most passenger slot.
+
+    // Driver position = steering wheel center in the PNG:
+    //   minivan-top.png → (19, 50)   bus-top.png → (15, 51)
+    // Seat height (aspect 1/1): 8.5% × 3.02 ≈ 25.7% for van. Rows touch when Δy ≈ 25.
+    // 1-3-3 uses per-seat mask PNGs extracted from van-1-3-3.png (image 771×324).
+    // Each seat's bbox is defined in %-coords of the van container; `mask` is the
+    // pre-rendered alpha stencil — CSS background-color paints through it.
+    if (layout === '1-3-3') {
+        const s = (name, type, px0, py0, px1, py1, mask) => ({
+            name, type, mask,
+            boxed: true,
+            x: px0 / 771 * 100,
+            y: py0 / 324 * 100,
+            w: (px1 - px0) / 771 * 100,
+            h: (py1 - py0) / 324 * 100,
+        });
+        seats.push(s('1', 'seat',   180, 75,  320, 170, 'seat-masks/van-1-3-3-D.png'));
+        seats.push(s('D', 'driver', 180, 172, 320, 260, 'seat-masks/van-1-3-3-1.png'));
+        seats.push(s('2', 'seat',   310, 70,  460, 135, 'seat-masks/van-1-3-3-2.png'));
+        seats.push(s('3', 'seat',   310, 138, 460, 205, 'seat-masks/van-1-3-3-3.png'));
+        seats.push(s('4', 'seat',   310, 208, 460, 270, 'seat-masks/van-1-3-3-4.png'));
+        seats.push(s('5', 'seat',   430, 70,  590, 135, 'seat-masks/van-1-3-3-5.png'));
+        seats.push(s('6', 'seat',   430, 138, 590, 205, 'seat-masks/van-1-3-3-6.png'));
+        seats.push(s('7', 'seat',   430, 208, 590, 270, 'seat-masks/van-1-3-3-7.png'));
+        if (hasReserve) seats.push(s('R', 'reserve', 235, 150, 265, 190, 'seat-masks/van-1-3-3-D.png'));
+        return seats;
     }
-    if (hasReserve) seatNames.push('8');
 
-    const cols = layout === '1-3-3' ? 4 : layout === '2-2-3' ? 5 : layout === '2-2-2' ? 5 : Math.min(seats, 5);
-    container.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
-    container.innerHTML = seatNames.map(s => {
-        const cls = s === 'D' ? 'driver' : '';
-        return `<div class="seat-preview-item ${cls}">${s}</div>`;
+    if (layout === '2-2-3') {
+        const s = (name, type, px0, py0, px1, py1) => ({
+            name, type, boxed: true,
+            x: px0 / 771 * 100,
+            y: py0 / 324 * 100,
+            w: (px1 - px0) / 771 * 100,
+            h: (py1 - py0) / 324 * 100,
+        });
+        // 2-2-3 on van-2-2-3.png (771×324):
+        //   Front cabin: D + special slot (C or R)
+        //   Middle: 2+2 rows (seats 1/2, 3/4)
+        //   Rear bench: 3 seats stacked vertically (5/6/7)
+        seats.push(s(hasReserve ? 'R' : 'C',
+                     hasReserve ? 'reserve' : 'driver',
+                     195, 75,  295, 165));
+        seats.push(s('D', 'driver', 195, 165, 295, 255));
+        seats.push(s('1', 'seat',   290, 75,  390, 165));
+        seats.push(s('2', 'seat',   290, 165, 390, 255));
+        seats.push(s('3', 'seat',   400, 75,  500, 165));
+        seats.push(s('4', 'seat',   400, 165, 500, 255));
+        seats.push(s('5', 'seat',   475, 75,  615, 140));
+        seats.push(s('6', 'seat',   475, 140, 615, 205));
+        seats.push(s('7', 'seat',   475, 205, 615, 275));
+        return seats;
+    }
+
+    if (layout === '2-2-2') {
+        const s = (name, type, px0, py0, px1, py1) => ({
+            name, type, boxed: true,
+            x: px0 / 1600 * 100,
+            y: py0 / 672  * 100,
+            w: (px1 - px0) / 1600 * 100,
+            h: (py1 - py0) / 672  * 100,
+        });
+        // 2-2-2 on van-2-2-2.png (1600×672):
+        //   Column 0 (x≈170-310) is DASHBOARD area — NO seats here.
+        //   Column 1 (x≈395-535): front cabin — R on top, D on bottom (driver sits here).
+        //   Columns 2-4: passenger rows of 2 seats each — 6 passenger seats total (1..6).
+        //   Rear cargo empty.
+        seats.push(s(hasReserve ? 'R' : 'C',
+                     hasReserve ? 'reserve' : 'driver',
+                     395, 120, 535, 310));
+        seats.push(s('D', 'driver', 395, 350, 535, 540));
+        seats.push(s('1', 'seat',  605, 120, 755, 310));
+        seats.push(s('2', 'seat',  605, 350, 755, 540));
+        seats.push(s('3', 'seat',  825, 120, 965, 310));
+        seats.push(s('4', 'seat',  825, 350, 965, 540));
+        seats.push(s('5', 'seat', 1045, 120, 1185, 310));
+        seats.push(s('6', 'seat', 1045, 350, 1185, 540));
+        return seats;
+    }
+
+    if (layout === 'bus') {
+        // bus-top.png is 1024×205. Driver cabin takes the front-left; passenger cabin
+        // empty from x≈250 to x≈990. Rows of 2+aisle+2 stretched along the length.
+        const s = (name, type, px0, py0, px1, py1) => ({
+            name, type, boxed: true,
+            x: px0 / 1024 * 100,
+            y: py0 / 205  * 100,
+            w: (px1 - px0) / 1024 * 100,
+            h: (py1 - py0) / 205  * 100,
+        });
+        // Driver cabin: D + special slot (co-driver / reserve) already visible on bus PNG
+        seats.push(s('D', 'driver', 175, 40, 245, 95));
+        seats.push(s(hasReserve ? 'R' : 'C',
+                     hasReserve ? 'reserve' : 'driver',
+                     175, 110, 245, 170));
+
+        const n = Math.max(8, parseInt(maxSeats) || 20);
+        const rowsNeeded = Math.ceil(n / 4);
+        const xStart = 310, xEnd = 960;
+        const step = rowsNeeded === 1 ? 0 : (xEnd - xStart) / (rowsNeeded - 1);
+        const seatW = Math.min(58, step - 6); // fits the number of rows we need
+        // 4 seats per row: 2 on the driver side (top), aisle, 2 on passenger side (bottom).
+        // y bands pulled inward so pins don't poke out of the body silhouette.
+        const yBands = [[22, 60], [60, 100], [108, 148], [148, 186]];
+        let placed = 0;
+        for (let r = 0; r < rowsNeeded && placed < n; r++) {
+            const cx = xStart + step * r;
+            for (let c = 0; c < 4 && placed < n; c++) {
+                placed++;
+                const px0 = Math.round(cx - seatW / 2);
+                const px1 = Math.round(cx + seatW / 2);
+                seats.push(s(String(placed), 'seat', px0, yBands[c][0], px1, yBands[c][1]));
+            }
+        }
+        return seats;
+    }
+
+    return [];
+}
+
+function renderVanBody(layout) {
+    const src = layout === 'bus'   ? 'bus-top.png'
+              : layout === '1-3-3' ? 'van-1-3-3.png'
+              : layout === '2-2-3' ? 'van-2-2-3.png'
+              : layout === '2-2-2' ? 'van-2-2-2.png'
+              : 'minivan-top.png';
+    // SVG fallback renders only if the image fails to load.
+    const fallback = layout === 'bus'
+        ? `<svg class="van-svg-fallback" viewBox="0 0 360 72" preserveAspectRatio="none"><rect x="4" y="5" width="352" height="62" rx="14" fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/></svg>`
+        : `<svg class="van-svg-fallback" viewBox="0 0 300 100" preserveAspectRatio="none"><path d="M 22 6 L 284 6 Q 294 6 294 18 L 294 82 Q 294 94 284 94 L 22 94 Q 4 94 4 76 L 4 24 Q 4 6 22 6 Z" fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/></svg>`;
+    return `<img class="van-img" src="${src}" alt="" onerror="this.style.display='none'">${fallback}`;
+}
+
+function renderVan(opts) {
+    const layout = opts.layout || '1-3-3';
+    const maxSeats = parseInt(opts.maxSeats) || 7;
+    const hasReserve = !!opts.hasReserve;
+    const occupiedMap = opts.occupiedMap || {};
+    const selected = opts.selected || '';
+    const interactive = opts.interactive !== false;
+
+    const positions = getSeatLayout(layout, maxSeats, hasReserve);
+    const vanCls = layout === 'bus'   ? 'van van-bus'
+                 : layout === '1-3-3' ? 'van van-1-3-3'
+                 : layout === '2-2-3' ? 'van van-2-2-3'
+                 : layout === '2-2-2' ? 'van van-2-2-2'
+                 : 'van';
+
+    const chairImg = '<img class="seat-chair" src="chair-top.png" alt="">';
+    const seatsHtml = positions.map(s => {
+        // Boxed seats → render as a small colored PIN at the seat's center (not a rectangle).
+        if (s.boxed) {
+            const cx = s.x + s.w / 2;
+            const cy = s.y + s.h / 2;
+            const style = `left:${cx}%;top:${cy}%`;
+            if (s.type === 'driver') {
+                return `<div class="seat-pin seat-driver" style="${style}" title="Водій"></div>`;
+            }
+            const occName = occupiedMap[s.name];
+            if (occName) {
+                return `<div class="seat-pin seat-occupied" style="${style}" title="Зайнято: ${occName}">${s.name}<div class="seat-occ-name">${occName}</div></div>`;
+            }
+            if (selected && selected === s.name) {
+                const handler = interactive ? `onclick="seatPickerSelect('${s.name}')"` : '';
+                return `<div class="seat-pin seat-selected" style="${style}" ${handler}>${s.name}<div class="seat-check">✓</div></div>`;
+            }
+            const stateCls = s.type === 'reserve' ? 'seat-reserve' : 'seat-free';
+            const handler = interactive ? `onclick="seatPickerSelect('${s.name}')"` : '';
+            return `<div class="seat-pin ${stateCls}" style="${style}" ${handler}>${s.name}</div>`;
+        }
+        // Legacy point-style seat (chair-top.png icon) — used for layouts without a dedicated van PNG yet:
+        const style = `left:${s.x}%;top:${s.y}%`;
+        if (s.type === 'driver') {
+            return `<div class="seat seat-driver" style="${style}" title="Водій">${chairImg}</div>`;
+        }
+        const occName = occupiedMap[s.name];
+        if (occName) {
+            return `<div class="seat seat-occupied" style="${style}" title="Зайнято: ${occName}">
+                ${chairImg}
+                <div class="seat-num">${s.name}</div>
+                <div class="seat-occ-name">${occName}</div>
+            </div>`;
+        }
+        if (selected && selected === s.name) {
+            const handler = interactive ? `onclick="seatPickerSelect('${s.name}')"` : '';
+            return `<div class="seat seat-selected" style="${style}" ${handler}>
+                ${chairImg}
+                <div class="seat-num">${s.name}</div>
+                <div class="seat-check">✓</div>
+            </div>`;
+        }
+        const stateCls = s.type === 'reserve' ? 'seat-reserve' : 'seat-free';
+        const handler = interactive ? `onclick="seatPickerSelect('${s.name}')"` : '';
+        return `<div class="seat ${stateCls}" style="${style}" ${handler}>
+            ${chairImg}
+            <div class="seat-num">${s.name}</div>
+        </div>`;
     }).join('');
+
+    return `<div class="van-wrap"><div class="${vanCls}">${renderVanBody(layout)}${seatsHtml}</div></div>`;
 }
 
 // ================================================================
@@ -5285,40 +5510,43 @@ function getSeatRows(layout, maxSeats, hasReserve) {
         return rows;
     }
 
-    // 2-2-3: 4 columns, 3 rows
-    // Front: D  2  |  4  7
-    // Mid:   _  _  |  _  6
-    // Back:  8  1  |  3  5
-    if (layout === '2-2-3') {
-        const rows = [
-            [{ name: 'D', type: 'driver' }, { name: '2', type: 'seat' }, { type: 'aisle' }, { name: '4', type: 'seat' }, { name: '7', type: 'seat' }],
-            [{ type: 'empty' }, { type: 'empty' }, { type: 'aisle' }, { type: 'empty' }, { name: '6', type: 'seat' }],
-            [hasReserve ? { name: '8', type: 'seat' } : { type: 'empty' }, { name: '1', type: 'seat' }, { type: 'aisle' }, { name: '3', type: 'seat' }, { name: '5', type: 'seat' }]
-        ];
-        return rows;
-    }
+    // Sprinter-style (horizontal, 2 rows top+bottom, driver bottom-left)
+    // Кожен "row" тут = ОДНА КОЛОНКА у візуалізації (зверху→вниз).
+    // Верх = пасажирська сторона, низ = водійська.
 
-    // 1-3-3: 3 columns, 3 rows
-    // Front: D  |  3  6
-    // Mid:   7  |  2  5
-    // Back:  8  |  1  4
+    // 1-3-3 — 7 пас.: верх 1-2-3-4, низ D-5-6-7
     if (layout === '1-3-3') {
         const rows = [
-            [{ name: 'D', type: 'driver' }, { type: 'aisle' }, { name: '3', type: 'seat' }, { name: '6', type: 'seat' }],
-            [{ name: '7', type: 'seat' }, { type: 'aisle' }, { name: '2', type: 'seat' }, { name: '5', type: 'seat' }],
-            [hasReserve ? { name: '8', type: 'seat' } : { type: 'empty' }, { type: 'aisle' }, { name: '1', type: 'seat' }, { name: '4', type: 'seat' }]
+            [{ name: '1', type: 'seat' }, { name: 'D', type: 'driver' }],
+            [{ name: '2', type: 'seat' }, { name: '5', type: 'seat' }],
+            [{ name: '3', type: 'seat' }, { name: '6', type: 'seat' }],
+            [{ name: '4', type: 'seat' }, { name: '7', type: 'seat' }],
         ];
+        if (hasReserve) rows.push([{ name: '8', type: 'seat' }, { type: 'empty' }]);
         return rows;
     }
 
-    // 2-2-2: 4 columns, 2 rows
-    // Front: D  2  |  4  6
-    // Back:  8  1  |  3  5
+    // 2-2-3 — 7 пас.: так само (верх 4, низ водій+3) — 7-місний мінівен
+    if (layout === '2-2-3') {
+        const rows = [
+            [{ name: '1', type: 'seat' }, { name: 'D', type: 'driver' }],
+            [{ name: '2', type: 'seat' }, { name: '5', type: 'seat' }],
+            [{ name: '3', type: 'seat' }, { name: '6', type: 'seat' }],
+            [{ name: '4', type: 'seat' }, { name: '7', type: 'seat' }],
+        ];
+        if (hasReserve) rows.push([{ name: '8', type: 'seat' }, { type: 'empty' }]);
+        return rows;
+    }
+
+    // 2-2-2 — 6 пас.: водій сам спереду, далі 3 колонки по 2 (верх 1-2-3, низ 4-5-6)
     if (layout === '2-2-2') {
         const rows = [
-            [{ name: 'D', type: 'driver' }, { name: '2', type: 'seat' }, { type: 'aisle' }, { name: '4', type: 'seat' }, { name: '6', type: 'seat' }],
-            [hasReserve ? { name: '8', type: 'seat' } : { type: 'empty' }, { name: '1', type: 'seat' }, { type: 'aisle' }, { name: '3', type: 'seat' }, { name: '5', type: 'seat' }]
+            [{ type: 'empty' }, { name: 'D', type: 'driver' }],
+            [{ name: '1', type: 'seat' }, { name: '4', type: 'seat' }],
+            [{ name: '2', type: 'seat' }, { name: '5', type: 'seat' }],
+            [{ name: '3', type: 'seat' }, { name: '6', type: 'seat' }],
         ];
+        if (hasReserve) rows.push([{ name: '8', type: 'seat' }, { type: 'empty' }]);
         return rows;
     }
 
@@ -5336,7 +5564,7 @@ function buildSeatHtml(seatObj, occupiedMap) {
     if (s.type === 'aisle') return '<div class="sp-car-aisle"></div>';
     if (s.type === 'empty') return '<div class="sp-seat sp-empty"></div>';
     if (s.type === 'driver') {
-        return `<div class="sp-seat sp-driver"><div class="sp-seat-num">${s.name}</div><div style="font-size:10px;color:#a16207;">Водій</div></div>`;
+        return `<div class="sp-seat sp-driver" title="Водій"><div class="sp-wheel"></div><div class="sp-seat-num">${s.name}</div></div>`;
     }
     const isOcc = occupiedMap[s.name];
     const isSel = seatPickerSelected === s.name;
@@ -5349,13 +5577,22 @@ function buildSeatHtml(seatObj, occupiedMap) {
     return `<div class="sp-seat sp-free" onclick="seatPickerSelect('${s.name}')"><div class="sp-seat-ico"></div><div class="sp-seat-num">${s.name}</div></div>`;
 }
 
-function renderSeatsGrid(rows, occupiedMap) {
+function renderBenchHtml() {
+    return '<div class="sp-bench" aria-label="Задній ряд (3 фіксовані сидіння)">'
+        + '<div class="sp-bench-seat"></div>'
+        + '<div class="sp-bench-seat"></div>'
+        + '<div class="sp-bench-seat"></div>'
+        + '</div>';
+}
+
+function renderSeatsGrid(rows, occupiedMap, hasBench) {
     let html = '';
     rows.forEach(row => {
         html += '<div class="sp-car-row">';
         row.forEach(s => { html += buildSeatHtml(s, occupiedMap); });
         html += '</div>';
     });
+    if (hasBench) html += renderBenchHtml();
     return html;
 }
 
@@ -5384,15 +5621,15 @@ function renderSeatPickerModal(trip, occupiedMap) {
     const maxSeats = parseInt(trip.max_seats) || 7;
     const autoName = cleanAutoName(trip.auto_name) || 'Авто';
     const hasReserve = trip.reserve === true || trip.reserve === 'true';
-    const rows = getSeatRows(layout, maxSeats, hasReserve);
-    const seatsHtml = renderSeatsGrid(rows, occupiedMap);
+    const vanHtml = renderVan({ layout, maxSeats, hasReserve, occupiedMap, selected: seatPickerSelected, interactive: true });
     const tripDate = formatTripDate(trip.date);
     const tripCity = trip.city || '';
     const occ = Object.keys(occupiedMap).length;
     const free = maxSeats - occ;
+    const modalCls = layout === 'bus' ? 'seat-picker-modal has-bus' : 'seat-picker-modal';
 
     const html = `<div class="seat-picker-overlay" id="seatPickerOverlay" onclick="if(event.target===this)closeSeatPicker()">
-        <div class="seat-picker-modal">
+        <div class="${modalCls}">
             <div class="seat-picker-header">
                 <h3>Вибір місця</h3>
                 <button class="seat-picker-close" onclick="closeSeatPicker()">✕</button>
@@ -5405,14 +5642,7 @@ function renderSeatPickerModal(trip, occupiedMap) {
                         <div>${tripDate} · ${tripCity} · <span style="color:#16a34a;font-weight:700;">${free} вільн.</span> / ${maxSeats} місць</div>
                     </div>
                 </div>
-                <div class="sp-car-wrap">
-                    <div class="sp-car-shape">
-                        <div class="sp-car-front"></div>
-                        <div class="sp-car-seats" id="seatPickerGrid">
-                            ${seatsHtml}
-                        </div>
-                    </div>
-                </div>
+                <div id="seatPickerGrid">${vanHtml}</div>
                 <div class="sp-legend">
                     <div class="sp-legend-item"><div class="sp-legend-dot l-free"></div>Вільне</div>
                     <div class="sp-legend-item"><div class="sp-legend-dot l-sel"></div>Обрано</div>
@@ -5432,7 +5662,6 @@ function renderSeatPickerModal(trip, occupiedMap) {
 
 function seatPickerSelect(seatName) {
     seatPickerSelected = (seatPickerSelected === seatName) ? '' : seatName;
-    // Re-render grid
     const p = passengers.find(x => x['PAX_ID'] === seatPickerPaxId);
     if (!p) return;
     const calId = p['CAL_ID'] || '';
@@ -5441,9 +5670,9 @@ function seatPickerSelect(seatName) {
     const occupiedMap = getOccupiedSeats(calId, seatPickerPaxId);
     const layout = detectLayout(trip);
     const hasReserve = trip.reserve === true || trip.reserve === 'true';
-    const rows = getSeatRows(layout, parseInt(trip.max_seats) || 7, hasReserve);
+    const maxSeats = parseInt(trip.max_seats) || 7;
     const grid = document.getElementById('seatPickerGrid');
-    if (grid) grid.innerHTML = renderSeatsGrid(rows, occupiedMap);
+    if (grid) grid.innerHTML = renderVan({ layout, maxSeats, hasReserve, occupiedMap, selected: seatPickerSelected, interactive: true });
 }
 
 async function saveSeatPicker() {
@@ -5632,9 +5861,12 @@ function editTrip(calId) {
         const nameInput = vb.querySelector('.vb-name');
         if (nameInput) nameInput.value = t.auto_name || '';
         const layoutBtns = vb.querySelectorAll('.vb-layouts .layout-option');
-        layoutBtns.forEach(b => b.classList.toggle('active', b.dataset.layout === t.layout));
+        const activeLayout = ['1-3-3','2-2-3','2-2-2','bus'].includes(t.layout) ? t.layout : '1-3-3';
+        layoutBtns.forEach(b => b.classList.toggle('active', b.dataset.layout === activeLayout));
         const seatsEl = vb.querySelector('.vb-seats-num');
-        if (seatsEl) seatsEl.textContent = t.max_seats || 7;
+        if (seatsEl) seatsEl.textContent = FIXED_COUNT_LAYOUTS[activeLayout] || (t.max_seats || 20);
+        const counter = vb.querySelector('.seat-counter');
+        if (counter) counter.classList.toggle('locked', !!FIXED_COUNT_LAYOUTS[activeLayout]);
     }
 
     // Calendar renders dateStr as DD.MM.YYYY, so normalise the trip's
@@ -6526,7 +6758,6 @@ function renderTripModalCalendar() {
                 '<span class="tcal-month-label">' + monthNames[tmCalMonth] + ' ' + tmCalYear + '</span>' +
                 '<div class="tcal-nav">' +
                     '<button class="tcal-nav-btn" onclick="tmCalPrev()">&larr;</button>' +
-                    '<button class="tcal-nav-btn" style="width:auto;padding:0 10px;font-size:11px;" onclick="tmCalToday()">Сьогодні</button>' +
                     '<button class="tcal-nav-btn" onclick="tmCalNext()">&rarr;</button>' +
                 '</div>' +
             '</div>' +
@@ -6534,10 +6765,13 @@ function renderTripModalCalendar() {
             '<div class="tcal-days">' + daysHtml + '</div>' +
             '<div class="tcal-footer">' +
                 '<div class="tcal-legend">' +
-                    '<span class="tcal-legend-item"><span class="tcal-legend-box" style="border-color:#2563eb;"></span> UA→EU</span>' +
-                    '<span class="tcal-legend-item"><span class="tcal-legend-box" style="border-color:#059669;"></span> EU→UA</span>' +
-                    '<span class="tcal-legend-item"><span class="tcal-legend-box" style="border-color:#9ca3af;background:repeating-linear-gradient(45deg,rgba(0,0,0,0.08),rgba(0,0,0,0.08) 2px,transparent 2px,transparent 4px);"></span> Повний</span>' +
-                    '<span class="tcal-legend-item"><span class="tcal-legend-box" style="border-color:#dc2626;"></span> Перебір</span>' +
+                    '<span class="tcal-legend-item"><span class="tcal-legend-dot" style="background:#2563eb;"></span> UA→EU</span>' +
+                    '<span class="tcal-legend-item"><span class="tcal-legend-dot" style="background:#059669;"></span> EU→UA</span>' +
+                    '<span class="tcal-legend-item"><span class="tcal-legend-dot" style="background:#dc2626;"></span> Перебір</span>' +
+                '</div>' +
+                '<div style="display:flex;gap:4px;">' +
+                    '<button class="tcal-footer-btn today-btn" onclick="tmCalToday()">Сьогодні</button>' +
+                    '<button class="tcal-footer-btn clear-btn" onclick="tmCalClear()">Скинути</button>' +
                 '</div>' +
             '</div>' +
         '</div>' +
@@ -6620,6 +6854,20 @@ function renderTmCalDay(d, key, info, otherMonth, isToday, selectedKey) {
     var isSelected = key === selectedKey;
     var isCurrent = !!tmCurrentDate && key === tmCurrentDate;
 
+    // Повний-день детекція (збережено з паралельної гілки):
+    // якщо всі рейси дня повні — замість переходу на Step2 показуємо
+    // popup з деталями, щоб оператор не тикався у «немає вільних».
+    var fullCount = 0;
+    if (info && info.trips) {
+        info.trips.forEach(function(t) {
+            var occ = parseInt(t.occupied) || 0;
+            var max = parseInt(t.max_seats) || 0;
+            if (max > 0 && occ >= max && occ <= max) fullCount++;
+        });
+    }
+    var totalCount = info ? info.count : 0;
+    var isFull = !!(info && !info.overbooked && totalCount > 0 && fullCount === totalCount);
+
     var cls = 'tcal-day pax-cal-style';
     if (otherMonth) cls += ' other-month';
     if (isToday) cls += ' today';
@@ -6627,6 +6875,7 @@ function renderTmCalDay(d, key, info, otherMonth, isToday, selectedKey) {
     if (isSelected) cls += ' selected';
     if (isCurrent) cls += ' tm-current';
     if (info && info.overbooked) cls += ' overbooked';
+    if (isFull) cls += ' full';
 
     // Tooltip — список рейсів для цього дня (щоб оператор бачив перш ніж клікнути)
     var titleLines = [];
@@ -6657,7 +6906,12 @@ function renderTmCalDay(d, key, info, otherMonth, isToday, selectedKey) {
         ? '<span class="tm-current-badge"><span class="tm-current-badge-ico">👤</span>' + (tmCurrentBound ? '✓' : '') + tmEsc(tmCurrentBadgeText) + '</span>'
         : '';
     var todayLabel = isToday ? '<span class="tcal-today-label">Сьогодні</span>' : '';
-    var onclick = hasTrip ? ' onclick="selectTripDate(\'' + key + '\')"' : '';
+
+    // Клік: є рейси і не повний → selectTripDate (крок 2);
+    //       повний день → showTmDayInfo (popup з деталями).
+    var onclick = '';
+    if (hasTrip && !isFull) onclick = ' onclick="selectTripDate(\'' + key + '\')"';
+    else if (isFull) onclick = ' onclick="showTmDayInfo(\'' + key + '\', this)"';
 
     return '<button class="' + cls + '" data-key="' + key + '"' + onclick + titleAttr + '>' +
         currentBadge +
@@ -6681,6 +6935,19 @@ function tmCalToday() {
     var now = new Date();
     tmCalMonth = now.getMonth();
     tmCalYear = now.getFullYear();
+    renderTripModalCalendar();
+}
+
+// Скидання вибору (дата + авто), залишає місяць, підсвітку знімає
+function tmCalClear() {
+    tmSelectedDate = '';
+    tmSelectedCalId = '';
+    var saveBtn = document.getElementById('tmSaveBtn');
+    if (saveBtn) saveBtn.disabled = true;
+    var vehWrap = document.getElementById('tmVehiclesWrap');
+    if (vehWrap) vehWrap.innerHTML = '';
+    var step = document.getElementById('tmStep');
+    if (step) step.textContent = 'Крок 1 — оберіть дату';
     renderTripModalCalendar();
 }
 
