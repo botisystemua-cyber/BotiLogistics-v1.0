@@ -887,10 +887,10 @@ body.route-sort-active #rteTogglePay {
 @media (min-width: 500px) { .seat-picker-overlay { align-items: center; } }
 .seat-picker-modal { background: white; border-radius: 20px 20px 0 0; padding: 0; width: 100%; max-height: 92vh; overflow-y: auto; box-shadow: 0 -4px 30px rgba(0,0,0,0.15); }
 @media (min-width: 500px) { .seat-picker-modal { border-radius: 20px; max-width: 500px; width: 94%; } }
-/* Bus mode: let the picker + trip-form sheet expand on wider screens */
+/* Bus mode: let the picker + trip-form sheet expand modestly on wider screens */
 @media (min-width: 760px) {
-    .seat-picker-modal.has-bus, .seat-picker-modal:has(.van-bus) { max-width: 1500px; width: 96%; }
-    .bottom-sheet.has-bus, .bottom-sheet:has(.van-bus) { max-width: 1500px; }
+    .seat-picker-modal.has-bus, .seat-picker-modal:has(.van-bus) { max-width: 1000px; width: 96%; }
+    .bottom-sheet.has-bus, .bottom-sheet:has(.van-bus) { max-width: 900px; }
 }
 .seat-picker-header { padding: 18px 20px 14px; display: flex; justify-content: space-between; align-items: center; }
 .seat-picker-header h3 { margin: 0; font-size: 17px; font-weight: 800; color: #1e293b; }
@@ -1167,7 +1167,7 @@ body.route-sort-active #rteTogglePay {
 }
 .van-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; display: block; pointer-events: none; user-select: none; }
 .van-svg-fallback { position: absolute; inset: 0; width: 100%; height: 100%; display: block; pointer-events: none; z-index: -1; }
-.van.van-bus { aspect-ratio: 1024 / 205; max-width: 1400px; container-type: inline-size; }
+.van.van-bus { aspect-ratio: 1024 / 205; max-width: 960px; container-type: inline-size; }
 
 /* Bus pins scale with container width (container queries). Fallback to px for older browsers. */
 .van-bus .seat-pin {
@@ -1408,7 +1408,7 @@ body.route-sort-active #rteTogglePay {
 /* Preview variant in the trip form — tighter, non-interactive */
 .seat-preview .van-wrap { padding: 6px 2px; }
 .seat-preview .van { max-width: 380px; }
-.seat-preview .van.van-bus { max-width: 1400px; }    /* bus breaks out of the 380px cap */
+.seat-preview .van.van-bus { max-width: 860px; }     /* bus breaks out of the 380px cap but fits the 900px sheet */
 .seat-preview .van.van-1-3-3,
 .seat-preview .van.van-2-2-3,
 .seat-preview .van.van-2-2-2 { max-width: 640px; }   /* vans get a bit more room too */
