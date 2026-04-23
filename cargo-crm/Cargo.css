@@ -2420,3 +2420,23 @@ body.route-sort-active #routeFiltersBar {
     line-height: 16px;
 }
 .route-date-chip.active .route-date-chip-cnt { background: rgba(255,255,255,0.3); color: white; }
+
+/* Кнопка 🗺 біля адреси на картці — відкриває Google Maps */
+.card-address-map-btn {
+    background: none;
+    border: 1px solid var(--border, #e5e7eb);
+    border-radius: 4px;
+    padding: 0 4px;
+    margin-left: 4px;
+    cursor: pointer;
+    font-size: 10px;
+    line-height: 16px;
+    color: var(--info, #3b82f6);
+    font-family: inherit;
+    flex-shrink: 0;
+    vertical-align: middle;
+}
+.card-address-map-btn:hover {
+    background: #eff6ff;
+    border-color: var(--info, #3b82f6);
+}

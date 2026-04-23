@@ -181,6 +181,8 @@ const ALL_CARD_COLUMNS = [
   { key: 'deposit',     label: '💵 Завдаток' },
   { key: 'debt',        label: '📛 Борг' },
   { key: 'ttn',         label: '📋 Номер ТТН' },
+  { key: 'smartId',     label: '🆔 Ід_смарт' },
+  { key: 'innerNum',    label: '🔢 Внутрішній №' },
   { key: 'date',        label: '📅 Дата створення' },
   { key: 'statusPkg',   label: '📦 Статус посилки' },
   { key: 'tag',         label: '🏷️ Тег' },
@@ -249,7 +251,7 @@ const ALL_PARCEL_COLUMNS = [
   { key: 'timing',      label: '⏱️ Таймінг' },
 ];
 
-const DEFAULT_CARD_COLS = ['phone','weight','sum','deposit','debt','ttn','date','statusPkg','tag','address','leadBadge','payBadge','checkBadge','route'];
+const DEFAULT_CARD_COLS = ['phone','weight','sum','deposit','debt','ttn','smartId','date','statusPkg','tag','address','leadBadge','payBadge','checkBadge','route'];
 const DEFAULT_OSNOVNE_COLS = ['sender','phone','addressFrom','receiver','phoneRecv','addressTo','leadStatus','tag'];
 const DEFAULT_PARCEL_COLS = ['description','details','qty','weight','estValue','ttn','innerNum','statusPkg','sum','currency','payStatus','photo','rating','ratingComment'];
 
@@ -1076,6 +1078,8 @@ function renderCard(p) {
   let metaHtml = '';
   if (visCols.includes('date') && dateCreated) metaHtml += `<span class="meta-tag">📅 ${escapeHtml(dateCreated)}</span>`;
   if (visCols.includes('statusPkg') && statusPkg) metaHtml += `<span class="meta-tag">${escapeHtml(statusPkg)}</span>`;
+  if (visCols.includes('smartId') && p['Ід_смарт']) metaHtml += `<span class="meta-tag">🆔 ${highlightMatch(String(p['Ід_смарт']))}</span>`;
+  if (visCols.includes('innerNum') && p['Внутрішній №']) metaHtml += `<span class="meta-tag">🔢 №${highlightMatch(String(p['Внутрішній №']))}</span>`;
   if (visCols.includes('phone') && phone) metaHtml += `<span class="meta-tag">📞 ${highlightMatch(phone)}</span>`;
   if (visCols.includes('phoneRecv') && receiverPhone) metaHtml += `<span class="meta-tag">📱 ${highlightMatch(receiverPhone)}</span>`;
   if (visCols.includes('tag') && tag) metaHtml += `<span class="meta-tag ${tag === 'VIP' || tag === 'срочна' ? 'tag-vip' : ''}">#${highlightMatch(tag)}</span>`;
@@ -1238,7 +1242,19 @@ function renderCard(p) {
             ${(_unreadCounts[pkgId] || 0) > 0 ? `<span style="display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 6px;border-radius:10px;background:#ef4444;color:#fff;font-size:11px;font-weight:700;animation:pulse-badge 2s infinite;" title="${_unreadCounts[pkgId]} нових повідомлень">${_unreadCounts[pkgId]}</span>` : ''}
             ${visCols.includes('leadBadge') ? leadBadge : ''} ${visCols.includes('payBadge') ? payBadge : ''} ${visCols.includes('checkBadge') ? checkBadge : ''}
           </div>
-          ${visCols.includes('address') && (addressFrom || addressTo) ? `<div class="card-address">📍 ${addressFrom && addressTo ? highlightMatch(addressFrom) + ' → ' + highlightMatch(addressTo) : highlightMatch(addressFrom || addressTo)}</div>` : ''}
+          ${visCols.includes('address') && (addressFrom || addressTo) ? (() => {
+              // Безпечний ескейп для single-quoted onclick
+              const sqEsc = (s) => String(s || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+              const safeFrom = sqEsc(addressFrom);
+              const safeTo   = sqEsc(addressTo);
+              const mapBtn = (safe) => `<button class="card-address-map-btn" onclick="event.stopPropagation(); openMap('${safe}')" title="Відкрити в Google Maps">🗺</button>`;
+              if (addressFrom && addressTo) {
+                return `<div class="card-address">📍 ${highlightMatch(addressFrom)}${mapBtn(safeFrom)} → ${highlightMatch(addressTo)}${mapBtn(safeTo)}</div>`;
+              }
+              const one = addressFrom || addressTo;
+              const oneSafe = addressFrom ? safeFrom : safeTo;
+              return `<div class="card-address">📍 ${highlightMatch(one)}${mapBtn(oneSafe)}</div>`;
+            })() : ''}
           ${metaHtml ? `<div class="card-meta-tags">${metaHtml}</div>` : ''}
         </div>
       </div>
@@ -3026,6 +3042,15 @@ function showConfirm(msg, cb) { if (confirm(msg)) cb(true); else cb(false); }
 function formatTripDate(d) { if (!d) return '—'; var s = String(d); if (s.match(/^\d{4}-\d{2}-\d{2}/)) { var p = s.split('-'); return p[2].substring(0,2) + '.' + p[1] + '.' + p[0]; } return s; }
 function getDirectionCode(dir) { var d = (dir || '').toLowerCase(); return (d.indexOf('єв') === 0 || d.indexOf('eu') === 0 || d.indexOf('європа') === 0) ? 'eu-ua' : 'ua-eu'; }
 function openMessengerPopup(phone, smartId) { var clean = (phone || '').replace(/[^+\d]/g, ''); var grid = document.getElementById('messengerGrid'); if (!grid) return; grid.innerHTML = '<a href="viber://chat?number=' + clean + '" style="display:block;padding:10px;margin:4px 0;background:#7360f2;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;text-align:center;">Viber</a><a href="https://t.me/' + clean + '" style="display:block;padding:10px;margin:4px 0;background:#0088cc;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;text-align:center;">Telegram</a><a href="https://wa.me/' + clean.replace('+','') + '" style="display:block;padding:10px;margin:4px 0;background:#25d366;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;text-align:center;">WhatsApp</a>'; document.getElementById('messengerOverlay').classList.add('show'); }
+
+// Відкриває адресу у Google Maps (пошук за текстом). Викликається з кнопки 🗺
+// біля адреси на картці ліда. Ескейпимо тут, бо у onclick передали вже
+// escaped string (single-quote), проте на всяк випадок — ще раз санітайз.
+function openMap(address) {
+  if (!address) return;
+  const clean = String(address).replace(/\\'/g, "'").replace(/\\\\/g, '\\');
+  window.open('https://www.google.com/maps/search/' + encodeURIComponent(clean), '_blank');
+}
 function closeMessengerPopup() { var el = document.getElementById('messengerOverlay'); if (el) el.classList.remove('show'); }
 function promptDeleteLinkedSheets(baseName) { if (activeRouteIdx !== null) activeRouteIdx = null; loadRoutes(); }
 
