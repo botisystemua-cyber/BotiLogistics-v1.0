@@ -86,6 +86,47 @@
             color: #fff;
         }
 
+        /* ==== ZOOM BUTTON (циклічна 1× / 2× / 3×) ==== */
+        .zoom-btn {
+            position: absolute;
+            top: 70px; right: 12px;
+            z-index: 15;
+            width: 56px; height: 56px;
+            border-radius: 50%;
+            border: none;
+            background: rgba(0, 0, 0, 0.55);
+            color: #fff;
+            font-size: 13px;
+            font-weight: 800;
+            font-family: inherit;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            transition: transform 0.1s, background 0.15s;
+        }
+        .zoom-btn:active { transform: scale(0.92); background: rgba(0,0,0,0.75); }
+
+        /* ==== TAP-FOCUS RING (індикатор точки фокуса при тапі) ==== */
+        .tap-focus-ring {
+            position: fixed;
+            width: 50px; height: 50px;
+            border: 2px solid #fbbf24;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 20;
+            box-shadow: 0 0 12px rgba(251, 191, 36, 0.6);
+        }
+        .tap-focus-ring.pulse { animation: tap-focus-pulse 0.85s ease-out forwards; }
+        @keyframes tap-focus-pulse {
+            0%   { transform: scale(1.3); opacity: 0; }
+            20%  { transform: scale(1);   opacity: 1; }
+            100% { transform: scale(0.7); opacity: 0; }
+        }
+
         /* ==== SCAN FRAME OVERLAY ====
            Ширша рамка під 1D штрих-коди — більше горизонтальних пікселів
            у скан-зоні = стабільніший декод тонких CODE_128. */
@@ -1331,16 +1372,26 @@
     </div>
 
     <!-- CAMERA -->
-    <div id="reader"></div>
+    <div id="reader" onclick="handleTapFocus(event)"></div>
 
     <!-- MODE PILL (режим + напрям поверх камери) -->
     <div class="mode-pill" id="modePill">—</div>
+
+    <!-- ZOOM BUTTON — цифровий/оптичний зум камери.
+         1× → 2× → 3× циклічно. Особливо допомагає на iPhone з
+         вузькими штрих-кодами (шириною ~банк-картки). -->
+    <button type="button" class="zoom-btn" id="zoomBtn" style="display:none;"
+            onclick="cycleZoom()" title="Збільшити кадр (1× / 2× / 3×)">🔍 1×</button>
+
+    <!-- TAP-FOCUS INDICATOR — маленький кружок, що зʼявляється на місці тапу
+         і показує юзеру, що камера робить refocus у цій точці. -->
+    <div class="tap-focus-ring" id="tapFocusRing" style="display:none;"></div>
 
     <!-- SCAN FRAME OVERLAY -->
     <div class="scan-frame" id="scanFrame" style="display:none;">
         <span></span>
         <div class="scan-line" id="scanLine"></div>
-        <div class="scan-hint">Наведи на штрих-код</div>
+        <div class="scan-hint">Наведи на штрих-код · тапни для фокусу</div>
     </div>
 
     <!-- TOP BAR -->
@@ -1648,6 +1699,84 @@
             setTimeout(tryApply, 800);
         }
 
+        // ============================================================
+        // Camera zoom — циклічна кнопка 1× → 2× → 3× → 1×. Критично для
+        // вузьких штрих-кодів на iPhone: без зуму тонкий штрих у HD-потоці
+        // займає лише 2-3 пікселі на смужку. При 2-3× — 5-8, надійний декод.
+        // На Android теж працює (де підтримує track.getCapabilities().zoom).
+        // Якщо пристрій zoom не тягне — кнопка мовчки нічого не робить
+        // (applyVideoConstraints ігнорує unsupported constraints).
+        // ============================================================
+        var _zoomLevels = [1, 2, 3];
+        var _zoomIdx = 0;
+        function cycleZoom() {
+            _zoomIdx = (_zoomIdx + 1) % _zoomLevels.length;
+            var z = _zoomLevels[_zoomIdx];
+            var btn = document.getElementById('zoomBtn');
+            if (btn) btn.textContent = '🔍 ' + z + '×';
+            try {
+                if (!scanner || !scanner.applyVideoConstraints) return;
+                var p = scanner.applyVideoConstraints({ advanced: [{ zoom: z }] });
+                if (p && typeof p.catch === 'function') {
+                    p.catch(function() { /* device не підтримує zoom — нічого */ });
+                }
+            } catch (e) { /* ignore */ }
+        }
+
+        // ============================================================
+        // Tap-to-focus — юзер торкається місця на відео де штрих-код,
+        // камера робить single-shot refocus саме туди. Після 2 сек явно
+        // відновлюємо continuous-focus, щоб не застрягнути у фіксованому
+        // фокусі. Візуальний індикатор — маленький кружок у точці тапу.
+        // ============================================================
+        var _focusRestoreTimer = null;
+        function handleTapFocus(ev) {
+            if (!scanner || !isScanning) return;
+            var reader = document.getElementById('reader');
+            if (!reader) return;
+            var rect = reader.getBoundingClientRect();
+            var x = (ev.clientX - rect.left) / rect.width;   // 0..1
+            var y = (ev.clientY - rect.top)  / rect.height;  // 0..1
+            if (x < 0 || x > 1 || y < 0 || y > 1) return;
+
+            // Візуальний індикатор — кружок на місці тапу
+            var ring = document.getElementById('tapFocusRing');
+            if (ring) {
+                ring.style.left = (ev.clientX - 25) + 'px';
+                ring.style.top  = (ev.clientY - 25) + 'px';
+                ring.style.display = 'block';
+                ring.classList.remove('pulse');
+                // force reflow щоб animation знов спрацював
+                void ring.offsetWidth;
+                ring.classList.add('pulse');
+                setTimeout(function() { ring.style.display = 'none'; }, 900);
+            }
+
+            // Single-shot focus + refocus у цій точці.
+            // `pointsOfInterest` — спрощений API, deprecated але ще працює.
+            // Новіший — `focusDistance` (числовий), але потребує знання діапазону.
+            try {
+                if (!scanner.applyVideoConstraints) return;
+                scanner.applyVideoConstraints({
+                    advanced: [{
+                        focusMode: 'single-shot',
+                        pointsOfInterest: [{ x: x, y: y }]
+                    }]
+                }).catch(function(){});
+            } catch (e) { /* ignore */ }
+
+            // Через 2 сек повертаємо continuous, щоб фокус далі сам підтримувався.
+            if (_focusRestoreTimer) clearTimeout(_focusRestoreTimer);
+            _focusRestoreTimer = setTimeout(function() {
+                try {
+                    if (!scanner || !scanner.applyVideoConstraints) return;
+                    scanner.applyVideoConstraints({
+                        advanced: [{ focusMode: 'continuous' }]
+                    }).catch(function(){});
+                } catch (e) { /* ignore */ }
+            }, 2000);
+        }
+
         function startScan() {
             if (isScanning) return;
             if (!scanner) scanner = new Html5Qrcode('reader');
@@ -1693,6 +1822,10 @@
                 // C7/4: якщо в оператора вже є скани — показуємо кнопку «📋»
                 showHistoryButtonIfAny();
                 document.getElementById('modePill').classList.add('show');
+                // Показати zoom-кнопку (скидаємо стан на 1×)
+                _zoomIdx = 0;
+                var zb = document.getElementById('zoomBtn');
+                if (zb) { zb.style.display = 'flex'; zb.textContent = '🔍 1×'; }
                 applyCameraOptimizations();
             }).catch(function(err) {
                 scanner.start(
@@ -1707,6 +1840,9 @@
                     document.getElementById('topbar').style.display = 'flex';
                     document.getElementById('bottombar').style.display = 'flex';
                     document.getElementById('mainBtn').style.display = 'none';
+                    _zoomIdx = 0;
+                    var zb2 = document.getElementById('zoomBtn');
+                    if (zb2) { zb2.style.display = 'flex'; zb2.textContent = '🔍 1×'; }
                     applyCameraOptimizations();
                 }).catch(function(err2) {
                     document.getElementById('startScreen').classList.remove('hidden');
@@ -3915,6 +4051,9 @@
                 document.getElementById('bottombar').style.display = 'none';
                 document.getElementById('modePill').classList.remove('show');
                 document.getElementById('resultToast').classList.remove('show');
+                var zb = document.getElementById('zoomBtn');
+                if (zb) zb.style.display = 'none';
+                _zoomIdx = 0;
                 // editBtn видалено
                 lastScannedPkgId = null;
                 lastScannedTtn   = null;
