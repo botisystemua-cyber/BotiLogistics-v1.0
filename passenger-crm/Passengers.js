@@ -5087,7 +5087,7 @@ function addVehicleBuilder() {
 }
 
 // Layouts with a fixed physical seat count (can't be changed via +/−)
-const FIXED_COUNT_LAYOUTS = { '1-3-3': 7, '2-2-3': 7, '2-2-2': 8 };
+const FIXED_COUNT_LAYOUTS = { '1-3-3': 7, '2-2-3': 7, '2-2-2': 6 };
 
 function selectLayout(el, idx) {
     el.parentElement.querySelectorAll('.layout-option').forEach(o => o.classList.remove('active'));
@@ -5187,10 +5187,10 @@ function getSeatLayout(layout, maxSeats, hasReserve) {
         //   Front cabin: D + special slot (C or R)
         //   Middle: 2+2 rows (seats 1/2, 3/4)
         //   Rear bench: 3 seats stacked vertically (5/6/7)
-        seats.push(s('D', 'driver', 155, 75,  255, 165));
         seats.push(s(hasReserve ? 'R' : 'C',
                      hasReserve ? 'reserve' : 'driver',
-                     155, 165, 255, 255));
+                     155, 75,  255, 165));
+        seats.push(s('D', 'driver', 155, 165, 255, 255));
         seats.push(s('1', 'seat',   255, 75,  355, 165));
         seats.push(s('2', 'seat',   255, 165, 355, 255));
         seats.push(s('3', 'seat',   365, 75,  465, 165));
@@ -5210,21 +5210,20 @@ function getSeatLayout(layout, maxSeats, hasReserve) {
             h: (py1 - py0) / 672  * 100,
         });
         // 2-2-2 on van-2-2-2.png (1600×672):
-        //   Front cabin: D + C/R
-        //   4 columns of 2 passenger seats — 8 passenger seats total (1..8)
+        //   Column 0 (x≈170-310) is DASHBOARD area — NO seats here.
+        //   Column 1 (x≈395-535): front cabin — R on top, D on bottom (driver sits here).
+        //   Columns 2-4: passenger rows of 2 seats each — 6 passenger seats total (1..6).
         //   Rear cargo empty.
-        seats.push(s('D', 'driver', 170, 120, 310, 310));
         seats.push(s(hasReserve ? 'R' : 'C',
                      hasReserve ? 'reserve' : 'driver',
-                     170, 350, 310, 540));
-        seats.push(s('1', 'seat',  395, 120, 535, 310));
-        seats.push(s('2', 'seat',  395, 350, 535, 540));
-        seats.push(s('3', 'seat',  605, 120, 755, 310));
-        seats.push(s('4', 'seat',  605, 350, 755, 540));
-        seats.push(s('5', 'seat',  825, 120, 965, 310));
-        seats.push(s('6', 'seat',  825, 350, 965, 540));
-        seats.push(s('7', 'seat', 1045, 120, 1185, 310));
-        seats.push(s('8', 'seat', 1045, 350, 1185, 540));
+                     395, 120, 535, 310));
+        seats.push(s('D', 'driver', 395, 350, 535, 540));
+        seats.push(s('1', 'seat',  605, 120, 755, 310));
+        seats.push(s('2', 'seat',  605, 350, 755, 540));
+        seats.push(s('3', 'seat',  825, 120, 965, 310));
+        seats.push(s('4', 'seat',  825, 350, 965, 540));
+        seats.push(s('5', 'seat', 1045, 120, 1185, 310));
+        seats.push(s('6', 'seat', 1045, 350, 1185, 540));
         return seats;
     }
 
