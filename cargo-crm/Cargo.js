@@ -265,29 +265,90 @@ const ALLOWED_TABS = ['parcel','basic','np','finance','route','system'];
 let colCfgMode = 'card';
 let colCfgTemp = [];
 
-function getDefaultTab() {
+// Мапінг localStorage-ключів на ключі у users.ui_prefs (jsonb).
+// DB тепер — source of truth; localStorage слугує sync-fallback'ом на
+// випадок холодного рендеру (до того як sbLoadUiPrefs() повернеться).
+const UI_PREFS_MAP = {
+  [LS_KEY_CARD]:        'cargo_card_cols',
+  [LS_KEY_OSNOVNE]:     'cargo_osnovne_cols',
+  [LS_KEY_PARCEL]:      'cargo_parcel_cols',
+  [LS_KEY_DEFAULT_TAB]: 'cargo_default_tab',
+};
+
+function _readUiPref(lsKey, fallback) {
+  // 1) DB-кеш (source of truth після логіну)
+  const prefKey = UI_PREFS_MAP[lsKey];
+  if (prefKey && typeof window.sbGetUiPrefsSync === 'function') {
+    const prefs = window.sbGetUiPrefsSync();
+    if (prefs && prefs[prefKey] !== undefined && prefs[prefKey] !== null) return prefs[prefKey];
+  }
+  // 2) localStorage (legacy або write-through cache)
   try {
-    const v = localStorage.getItem(LS_KEY_DEFAULT_TAB);
-    if (v && ALLOWED_TABS.includes(v)) return v;
-  } catch(e) {}
+    const s = localStorage.getItem(lsKey);
+    if (s != null && s !== '') {
+      // default_tab — скаляр, решта — jsonArray
+      return lsKey === LS_KEY_DEFAULT_TAB ? s : JSON.parse(s);
+    }
+  } catch (e) { /* ignore */ }
+  return fallback;
+}
+
+function _writeUiPref(lsKey, value) {
+  // Write-through: спочатку БД, потім localStorage (як кеш / offline fallback)
+  const prefKey = UI_PREFS_MAP[lsKey];
+  if (prefKey && typeof window.sbSaveUiPref === 'function') {
+    // Fire-and-forget — UI не чекає на мережу
+    window.sbSaveUiPref(prefKey, value);
+  }
+  try {
+    localStorage.setItem(lsKey, lsKey === LS_KEY_DEFAULT_TAB ? String(value) : JSON.stringify(value));
+  } catch (e) { /* quota? ignore */ }
+}
+
+// Одноразова міграція: якщо в БД ще не було налаштувань (новий юзер чи
+// перший вхід після оновлення), а в localStorage залишились з попередніх
+// сесій — заливаємо їх у БД, щоб нічого не втратити. Виконується раз
+// після sbLoadUiPrefs().
+async function _migrateLegacyColPrefsToDb(prefs) {
+  if (!prefs || typeof window.sbSaveUiPref !== 'function') return;
+  const pairs = [
+    [LS_KEY_CARD,        'cargo_card_cols',    'array'],
+    [LS_KEY_OSNOVNE,     'cargo_osnovne_cols', 'array'],
+    [LS_KEY_PARCEL,      'cargo_parcel_cols',  'array'],
+    [LS_KEY_DEFAULT_TAB, 'cargo_default_tab',  'scalar'],
+  ];
+  for (const [lsKey, prefKey, type] of pairs) {
+    if (prefs[prefKey] !== undefined && prefs[prefKey] !== null) continue; // в БД вже є
+    const raw = localStorage.getItem(lsKey);
+    if (raw == null || raw === '') continue;
+    try {
+      const parsed = type === 'array' ? JSON.parse(raw) : raw;
+      await window.sbSaveUiPref(prefKey, parsed);
+    } catch (e) { /* bad legacy value — пропускаємо */ }
+  }
+}
+
+function getDefaultTab() {
+  const v = _readUiPref(LS_KEY_DEFAULT_TAB, null);
+  if (v && ALLOWED_TABS.includes(v)) return v;
   return DEFAULT_TAB_PKG;
 }
 function setDefaultTab(tab) {
   if (!ALLOWED_TABS.includes(tab)) return;
-  try { localStorage.setItem(LS_KEY_DEFAULT_TAB, tab); } catch(e) {}
+  _writeUiPref(LS_KEY_DEFAULT_TAB, tab);
 }
 
 function getVisibleCardColumns() {
-  try { const s = localStorage.getItem(LS_KEY_CARD); if (s) return JSON.parse(s); } catch(e) {}
-  return [...DEFAULT_CARD_COLS];
+  const v = _readUiPref(LS_KEY_CARD, null);
+  return Array.isArray(v) ? v : [...DEFAULT_CARD_COLS];
 }
 function getVisibleOsnovneColumns() {
-  try { const s = localStorage.getItem(LS_KEY_OSNOVNE); if (s) return JSON.parse(s); } catch(e) {}
-  return [...DEFAULT_OSNOVNE_COLS];
+  const v = _readUiPref(LS_KEY_OSNOVNE, null);
+  return Array.isArray(v) ? v : [...DEFAULT_OSNOVNE_COLS];
 }
 function getVisibleParcelColumns() {
-  try { const s = localStorage.getItem(LS_KEY_PARCEL); if (s) return JSON.parse(s); } catch(e) {}
-  return [...DEFAULT_PARCEL_COLS];
+  const v = _readUiPref(LS_KEY_PARCEL, null);
+  return Array.isArray(v) ? v : [...DEFAULT_PARCEL_COLS];
 }
 
 function getCfgDataForMode(mode) {
@@ -374,7 +435,8 @@ function saveColCfg() {
     return;
   }
   const cfg = getCfgDataForMode(colCfgMode);
-  localStorage.setItem(cfg.lsKey, JSON.stringify(colCfgTemp));
+  // Write-through: DB (source of truth) + localStorage (sync кеш).
+  _writeUiPref(cfg.lsKey, colCfgTemp);
   showToast('Налаштування збережено', 'success');
   closeColCfg();
   renderCards();
@@ -705,6 +767,18 @@ document.addEventListener('DOMContentLoaded', async function() {
   }
 
   updateAvatarUI();
+
+  // Per-user UI-налаштування з БД (users.ui_prefs). Не блокуємо основний
+  // init — якщо завантажиться пізніше за renderCards, він просто
+  // ре-рендериться з новими налаштуваннями. До цього працює legacy
+  // localStorage-кеш (для старих юзерів, які вже мали свої налаштування).
+  if (typeof window.sbLoadUiPrefs === 'function') {
+    window.sbLoadUiPrefs().then(async function(prefs) {
+      await _migrateLegacyColPrefsToDb(prefs);
+      // Фінальний ре-рендер з акуратно завантаженими налаштуваннями
+      if (typeof renderCards === 'function') renderCards();
+    }).catch(function() { /* не падаємо навіть якщо БД недоступна */ });
+  }
 
   // Show install banner unless already running as installed PWA
   if (!window.matchMedia('(display-mode: standalone)').matches && !navigator.standalone) {
