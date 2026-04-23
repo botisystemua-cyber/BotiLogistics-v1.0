@@ -5350,7 +5350,7 @@ function renderVan(opts) {
         </div>`;
     }).join('');
 
-    return `<div class="van-wrap${layout === 'bus' ? ' is-bus' : ''}"><div class="${vanCls}">${renderVanBody(layout)}${seatsHtml}</div></div>`;
+    return `<div class="van-wrap"><div class="${vanCls}">${renderVanBody(layout)}${seatsHtml}</div></div>`;
 }
 
 // ================================================================
