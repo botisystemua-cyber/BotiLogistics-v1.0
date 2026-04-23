@@ -5310,14 +5310,14 @@ function getSeatLayout(layout, maxSeats, hasReserve) {
             h: (py1 - py0) / 205  * 100,
         });
         // Driver cabin: D + special slot (co-driver / reserve) already visible on bus PNG
-        seats.push(s('D', 'driver', 110, 35, 175, 90));
+        seats.push(s('D', 'driver', 175, 40, 245, 95));
         seats.push(s(hasReserve ? 'R' : 'C',
                      hasReserve ? 'reserve' : 'driver',
-                     110, 110, 175, 175));
+                     175, 110, 245, 170));
 
         const n = Math.max(8, parseInt(maxSeats) || 20);
         const rowsNeeded = Math.ceil(n / 4);
-        const xStart = 275, xEnd = 950;
+        const xStart = 310, xEnd = 960;
         const step = rowsNeeded === 1 ? 0 : (xEnd - xStart) / (rowsNeeded - 1);
         const seatW = Math.min(58, step - 6); // fits the number of rows we need
         // 4 seats per row: 2 on the driver side (top), aisle, 2 on passenger side (bottom).
