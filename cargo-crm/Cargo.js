@@ -4269,7 +4269,17 @@ function renderRoutes() {
         html += '<div style="padding:40px;text-align:center;color:var(--text-secondary);font-size:13px;">' +
             (rawRows.length === 0 ? 'Маршрут порожній — перенесіть посилки з головного списку' : 'Немає записів за обраним фільтром') + '</div>';
     } else {
-        html += filtered.map((r, idx) => renderRouteCard(r, idx, sheet.sheetName)).join('');
+        // Використовуємо основний renderCard() щоб картка ліда виглядала
+        // ідентично у всіх контекстах (Напрямок / Перевірка / Маршрути).
+        // Знаходимо оригінал у allData за PKG_ID; якщо не знайдено (пасажир
+        // чи видалений запис) — fallback на старий renderRouteCard зі
+        // спрощеним виглядом, щоб нічого не падало.
+        html += filtered.map((r, idx) => {
+            const leadId = r['PKG_ID'] || r['PAX_ID'] || '';
+            const p = leadId ? allData.find(x => (x['PKG_ID'] || '') === leadId) : null;
+            if (p) return renderCard(p);
+            return renderRouteCard(r, idx, sheet.sheetName);
+        }).join('');
     }
 
     list.innerHTML = html;
