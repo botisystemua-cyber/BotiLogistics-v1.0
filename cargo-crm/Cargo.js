@@ -174,6 +174,8 @@ let SWISS_POINTS = [];
 
 // ===== [SECT-COLUMNS] COLUMN CONFIGURATOR =====
 const ALL_CARD_COLUMNS = [
+  { key: 'sender',      label: '👤 ПІБ відправника' },
+  { key: 'receiver',    label: '👤 ПІБ отримувача' },
   { key: 'phone',       label: '📞 Телефон реєстратора' },
   { key: 'phoneRecv',   label: '📱 Телефон отримувача' },
   { key: 'weight',      label: '⚖️ Вага (кг)' },
@@ -250,7 +252,7 @@ const ALL_PARCEL_COLUMNS = [
   { key: 'timing',      label: '⏱️ Таймінг' },
 ];
 
-const DEFAULT_CARD_COLS = ['phone','weight','sum','deposit','debt','ttn','smartId','date','statusPkg','tag','address','leadBadge','payBadge','checkBadge'];
+const DEFAULT_CARD_COLS = ['sender','receiver','phone','weight','sum','deposit','debt','ttn','smartId','date','statusPkg','tag','address','leadBadge','payBadge','checkBadge'];
 const DEFAULT_OSNOVNE_COLS = ['sender','phone','addressFrom','receiver','phoneRecv','addressTo','leadStatus','tag'];
 const DEFAULT_PARCEL_COLS = ['description','details','qty','weight','estValue','ttn','innerNum','statusPkg','sum','currency','payStatus','photo','rating','ratingComment'];
 
@@ -1318,8 +1320,17 @@ function renderCard(p) {
         </div>
         <div class="card-row2-wrap">
           <div class="card-row2">
-            <span class="card-pkgid">${highlightMatch(pkgId)}</span>
-            <span class="card-sender-recv">👤 ${name ? highlightMatch(name) : '—'} → ${receiver ? highlightMatch(receiver) : '—'}</span>
+            ${(() => {
+              // Відправник / отримувач — два окремих тоггли. pkg_id прибрано —
+              // його видно в деталях на вкладці «⚙ Системні» (readonly).
+              const showSender = visCols.includes('sender');
+              const showRecv   = visCols.includes('receiver');
+              if (!showSender && !showRecv) return '';
+              const parts = [];
+              if (showSender) parts.push(name ? highlightMatch(name) : '—');
+              if (showRecv)   parts.push(receiver ? highlightMatch(receiver) : '(невідомо)');
+              return `<span class="card-sender-recv">👤 ${parts.join(' → ')}</span>`;
+            })()}
             ${(_unreadCounts[pkgId] || 0) > 0 ? `<span style="display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 6px;border-radius:10px;background:#ef4444;color:#fff;font-size:11px;font-weight:700;animation:pulse-badge 2s infinite;" title="${_unreadCounts[pkgId]} нових повідомлень">${_unreadCounts[pkgId]}</span>` : ''}
             ${visCols.includes('leadBadge') ? leadBadge : ''} ${visCols.includes('payBadge') ? payBadge : ''} ${visCols.includes('checkBadge') ? checkBadge : ''}
           </div>
