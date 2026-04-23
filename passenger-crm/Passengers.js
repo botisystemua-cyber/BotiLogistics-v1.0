@@ -6744,10 +6744,9 @@ function renderTripModalCalendar() {
             '<div class="tcal-days">' + daysHtml + '</div>' +
             '<div class="tcal-footer">' +
                 '<div class="tcal-legend">' +
-                    '<span class="tcal-legend-item"><span class="tcal-legend-box" style="border-color:#2563eb;"></span> UA→EU</span>' +
-                    '<span class="tcal-legend-item"><span class="tcal-legend-box" style="border-color:#059669;"></span> EU→UA</span>' +
-                    '<span class="tcal-legend-item"><span class="tcal-legend-box" style="border-color:#9ca3af;background:repeating-linear-gradient(45deg,rgba(0,0,0,0.08),rgba(0,0,0,0.08) 2px,transparent 2px,transparent 4px);"></span> Повний</span>' +
-                    '<span class="tcal-legend-item"><span class="tcal-legend-box" style="border-color:#dc2626;"></span> Перебір</span>' +
+                    '<span class="tcal-legend-item"><span class="tcal-legend-box" style="border-radius:50%;background:#2563eb;border-color:#2563eb;"></span> UA→EU</span>' +
+                    '<span class="tcal-legend-item"><span class="tcal-legend-box" style="border-radius:50%;background:#059669;border-color:#059669;"></span> EU→UA</span>' +
+                    '<span class="tcal-legend-item"><span class="tcal-legend-box" style="border-radius:50%;background:#dc2626;border-color:#dc2626;"></span> Перебір</span>' +
                 '</div>' +
             '</div>' +
         '</div>' +
@@ -6826,20 +6825,6 @@ function renderTmCalDay(d, key, info, otherMonth, isToday, selectedKey) {
     var hasTrip = !!info;
     var isSelected = key === selectedKey;
     var isCurrent = !!tmCurrentDate && key === tmCurrentDate;
-    var free = info ? (info.maxSeats - info.pax) : 0;
-
-    // Підрахунок повністю заповнених рейсів (не перебір) серед усіх рейсів дати
-    var fullCount = 0;
-    if (info && info.trips) {
-        info.trips.forEach(function(t) {
-            var occ = parseInt(t.occupied) || 0;
-            var max = parseInt(t.max_seats) || 0;
-            if (max > 0 && occ >= max && occ <= max) fullCount++;
-        });
-    }
-    var totalCount = info ? info.count : 0;
-    var isFull = !!(info && !info.overbooked && totalCount > 0 && fullCount === totalCount);
-    var isPartial = !!(info && !info.overbooked && !isFull && fullCount > 0 && fullCount < totalCount);
 
     var cls = 'tcal-day';
     if (otherMonth) cls += ' other-month';
@@ -6850,27 +6835,25 @@ function renderTmCalDay(d, key, info, otherMonth, isToday, selectedKey) {
     if (isCurrent && tmCurrentBound) cls += ' tm-bound';
     else if (isCurrent) cls += ' tm-soft';
     if (info && info.overbooked) cls += ' overbooked';
-    if (isFull) cls += ' full';
-    if (isPartial) cls += ' partial';
     if (info) {
         if (info.uaeu > 0 && info.euua > 0) cls += ' dir-both';
         else if (info.uaeu > 0) cls += ' dir-ua-eu';
         else if (info.euua > 0) cls += ' dir-eu-ua';
     }
 
-    // Мікроінфа — вільні місця у правому нижньому куті
-    var seatsHtml = '';
-    if (info && info.maxSeats > 0) {
-        var seatCls = 'tcal-seats';
-        if (info.overbooked || free <= 0) seatCls += ' low';
-        else if (free <= 2) seatCls += ' warn';
-        else seatCls += ' ok';
-        var seatTxt = info.overbooked ? '!' : (free < 0 ? 0 : free) + 'м';
-        seatsHtml = '<div class="' + seatCls + '">' + seatTxt + '</div>';
+    // Доти за напрямком — та сама логіка що й у сайдбарному віджеті (renderCalDay)
+    var dotsHtml = '';
+    if (info) {
+        if (info.overbooked) {
+            dotsHtml = '<span class="dot-overbooked"></span>';
+        } else if (info.uaeu > 0 && info.euua > 0) {
+            dotsHtml = '<span class="dot-ua-eu"></span><span class="dot-eu-ua"></span>';
+        } else if (info.uaeu > 0) {
+            dotsHtml = '<span class="dot-ua-eu"></span>';
+        } else if (info.euua > 0) {
+            dotsHtml = '<span class="dot-eu-ua"></span>';
+        }
     }
-
-    // Частково повні — маркер у лівому нижньому куті
-    var partialHtml = isPartial ? '<div class="tcal-partial" title="Частина рейсів заповнена">' + fullCount + '/' + totalCount + '</div>' : '';
 
     // Назва рейсу всередині клітинки (перший + «+N» якщо кілька)
     var nameHtml = '';
@@ -6904,18 +6887,16 @@ function renderTmCalDay(d, key, info, otherMonth, isToday, selectedKey) {
     var currentBadge = isCurrent && tmCurrentBadgeText
         ? '<span class="tm-current-badge"><span class="tm-current-badge-ico">👤</span>' + (tmCurrentBound ? '✓' : '') + tmEsc(tmCurrentBadgeText) + '</span>'
         : '';
-    // Повний день → клік показує деталі (а не selectTripDate, який призведе до "немає вільних")
-    var onclick = '';
-    if (hasTrip && !isFull) onclick = ' onclick="selectTripDate(\'' + key + '\')"';
-    else if (isFull) onclick = ' onclick="showTmDayInfo(\'' + key + '\', this)"';
+    // Будь-яка дата з рейсом клікабельна (як у сайдбарному віджеті).
+    // Перевірка вільних місць відбувається на кроці 2 (список авто) та при підтвердженні.
+    var onclick = hasTrip ? ' onclick="selectTripDate(\'' + key + '\')"' : '';
     var todayLabel = isToday ? '<span class="tcal-today-label">Сьогодні</span>' : '';
     return '<button class="' + cls + '" data-key="' + key + '"' + onclick + titleAttr + '>' +
         currentBadge +
         todayLabel +
         nameHtml +
         '<span class="tcal-day-num">' + d + '</span>' +
-        partialHtml +
-        seatsHtml +
+        (dotsHtml ? '<div class="tcal-dots">' + dotsHtml + '</div>' : '') +
     '</button>';
 }
 
