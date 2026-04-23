@@ -1297,6 +1297,10 @@ function renderCard(p, routeCtx) {
     ['Статус CRM', statusCrm],
     ['Контроль перевірки', controlCheck],
     ['Дата перевірки', fmtShortDate(p['Дата перевірки']), {readonly: true}],
+    // Аудит переходу у «В перевірці» — WHO + WHEN + звідки (CRM чи сканер)
+    ['Ким перевірено', p['Ким перевірено'] || '', {readonly: true}],
+    ['Дата переходу в перевірку', fmtShortDate(p['Дата переходу в перевірку']), {readonly: true}],
+    ['Джерело перевірки', p['Джерело перевірки'] || '', {readonly: true}],
     ['Примітка', note],
     ['Примітка СМС', p['Примітка СМС'] || ''],
   ], pkgId);
@@ -2740,17 +2744,28 @@ function startVerification(pkgId) {
     return;
   }
 
+  // Аудит: хто і коли перевів у перевірку (показується у вкладці «⚙ Системні»).
+  const sess = getBotiSession() || {};
+  const who = sess.user_name || sess.user_login || 'CRM';
+  const when = new Date().toISOString();
+
   // Оновити локально
   item['Контроль перевірки'] = 'В перевірці';
-  item['Дата перевірки'] = new Date().toISOString();
+  item['Дата перевірки'] = when;
+  item['Ким перевірено'] = who;
+  item['Дата переходу в перевірку'] = when;
+  item['Джерело перевірки'] = 'crm';
   item['Статус ліда'] = 'В роботі';
   renderCards();
   updateCounters();
   showToast('Переведено в перевірку', 'success');
 
-  // Відправити на сервер
+  // Відправити на сервер (write-through у БД)
   apiPost('updateField', { pkg_id: pkgId, col: 'Контроль перевірки', value: 'В перевірці' });
   apiPost('updateField', { pkg_id: pkgId, col: 'Статус ліда', value: 'В роботі' });
+  apiPost('updateField', { pkg_id: pkgId, col: 'Ким перевірено', value: who });
+  apiPost('updateField', { pkg_id: pkgId, col: 'Дата переходу в перевірку', value: when });
+  apiPost('updateField', { pkg_id: pkgId, col: 'Джерело перевірки', value: 'crm' });
 
   // Автоматично шукати дублікати
   apiPost('findDuplicatesByRecipient', { pkg_id: pkgId }).then(res => {

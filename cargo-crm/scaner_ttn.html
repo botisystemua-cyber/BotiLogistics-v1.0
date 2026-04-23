@@ -2304,7 +2304,12 @@
                             'Content-Type': 'application/json',
                             Prefer: 'return=minimal'
                         },
-                        body: JSON.stringify({ scan_status: 'checked' })
+                        body: JSON.stringify({
+                            scan_status: 'checked',
+                            verified_by: USER_LOGIN || 'scanner',
+                            verified_at: new Date().toISOString(),
+                            verified_source: 'scanner'
+                        })
                     }).then(function(r) {
                         if (!r.ok) {
                             showToast({ variant: 'error', icon: '❌', label: 'Не переведено',
@@ -3201,6 +3206,11 @@
             });
 
             diff.scan_status = 'checked';
+            // Аудит: хто і коли перевів лід у «В перевірці» через
+            // сканер-редактор (показується у cargo-crm вкладці ⚙ Системні).
+            diff.verified_by = USER_LOGIN || 'scanner';
+            diff.verified_at = new Date().toISOString();
+            diff.verified_source = 'scanner';
 
             // Якщо був «Невідомий» — знімаємо цей прапорець автоматично,
             // щоб лід не висів у «Невідомі» ТА «В перевірці» одночасно.
