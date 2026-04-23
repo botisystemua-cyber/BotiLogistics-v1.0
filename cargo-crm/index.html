@@ -176,9 +176,9 @@
     <!-- Direction Section -->
     <div class="sidebar-section" data-section="direction">
       <div class="sidebar-section-header" onclick="toggleSection(this)">
-        🧭 Напрямок <span class="toggle open">▶</span>
+        🧭 Напрямок <span class="toggle">▶</span>
       </div>
-      <div class="sidebar-section-body">
+      <div class="sidebar-section-body hidden">
         <div class="sidebar-item" data-dir="new24" onclick="setDirection('new24')">
           🆕 Нові (24 год) <span class="badge-count" id="countNew24" style="background:#fef3c7;color:#d97706;">0</span>
         </div>
@@ -194,9 +194,9 @@
     <!-- Verification Section -->
     <div class="sidebar-section" data-section="verify">
       <div class="sidebar-section-header" onclick="toggleSection(this)">
-        🔍 Перевірка <span class="toggle open">▶</span>
+        🔍 Перевірка <span class="toggle">▶</span>
       </div>
-      <div class="sidebar-section-body">
+      <div class="sidebar-section-body hidden">
         <button class="sidebar-scan-btn" onclick="openScannerPage()">📷 Сканувати ТТН</button>
         <div class="sidebar-item active" data-filter="all" onclick="setVerFilter('all')">
           Всі <span class="badge-count" id="countAll">0</span>
@@ -219,9 +219,9 @@
     <!-- Routes Section (+ вкладені: Відправка, Витрати, Зведення) -->
     <div class="sidebar-section" data-section="routes">
       <div class="sidebar-section-header" onclick="toggleSection(this)">
-        🚚 Маршрути <span class="toggle open">▶</span>
+        🚚 Маршрути <span class="toggle">▶</span>
       </div>
-      <div class="sidebar-section-body" id="routesSectionBody">
+      <div class="sidebar-section-body hidden" id="routesSectionBody">
         <div id="routesSidebar">
           <!-- Filled by JS -->
         </div>
