@@ -1603,3 +1603,53 @@ async function apiPostSupabase(action, data) {
 
     return handler(data || {});
 }
+
+// ================================================================
+// UI PREFS — per-user, зберігається у users.ui_prefs (jsonb).
+// Ключі пласкі з префіксом app-і («cargo_card_cols», «pax_hidden_cols»,
+// «driver_theme» тощо), щоб три CRM не конфліктували у одному blob'і.
+// ================================================================
+let _UI_PREFS_CACHE = null;
+
+async function sbLoadUiPrefs() {
+    if (!BOTI_SESSION || !BOTI_SESSION.tenant_id || !BOTI_SESSION.user_login) {
+        _UI_PREFS_CACHE = {};
+        return {};
+    }
+    try {
+        const { data, error } = await sb.from('users')
+            .select('ui_prefs')
+            .eq('tenant_id', BOTI_SESSION.tenant_id)
+            .eq('login', BOTI_SESSION.user_login)
+            .maybeSingle();
+        if (error) throw error;
+        _UI_PREFS_CACHE = (data && data.ui_prefs && typeof data.ui_prefs === 'object')
+            ? data.ui_prefs : {};
+        return _UI_PREFS_CACHE;
+    } catch (e) {
+        console.warn('[ui_prefs] load failed:', e);
+        _UI_PREFS_CACHE = {};
+        return {};
+    }
+}
+
+function sbGetUiPrefsSync() { return _UI_PREFS_CACHE || {}; }
+
+async function sbSaveUiPref(key, value) {
+    if (!BOTI_SESSION || !BOTI_SESSION.tenant_id || !BOTI_SESSION.user_login) return;
+    if (!_UI_PREFS_CACHE) _UI_PREFS_CACHE = {};
+    _UI_PREFS_CACHE[key] = value;
+    try {
+        const { error } = await sb.from('users')
+            .update({ ui_prefs: _UI_PREFS_CACHE })
+            .eq('tenant_id', BOTI_SESSION.tenant_id)
+            .eq('login', BOTI_SESSION.user_login);
+        if (error) throw error;
+    } catch (e) {
+        console.warn('[ui_prefs] save failed (key=' + key + '):', e);
+    }
+}
+
+window.sbLoadUiPrefs = sbLoadUiPrefs;
+window.sbGetUiPrefsSync = sbGetUiPrefsSync;
+window.sbSaveUiPref = sbSaveUiPref;
