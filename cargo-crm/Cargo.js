@@ -186,6 +186,7 @@ const ALL_CARD_COLUMNS = [
   { key: 'smartId',     label: '🆔 Ід_смарт' },
   { key: 'innerNum',    label: '🔢 Внутрішній №' },
   { key: 'date',        label: '📅 Дата створення' },
+  { key: 'receivedDate',label: '📅 Дата отримання' },
   { key: 'statusPkg',   label: '📦 Статус посилки' },
   { key: 'tag',         label: '🏷️ Тег' },
   { key: 'address',     label: '📍 Адреса маршруту' },
@@ -252,7 +253,7 @@ const ALL_PARCEL_COLUMNS = [
   { key: 'timing',      label: '⏱️ Таймінг' },
 ];
 
-const DEFAULT_CARD_COLS = ['sender','receiver','phone','weight','sum','deposit','debt','ttn','smartId','date','statusPkg','tag','address','leadBadge','payBadge','checkBadge'];
+const DEFAULT_CARD_COLS = ['sender','receiver','phone','weight','sum','deposit','debt','ttn','smartId','date','receivedDate','statusPkg','tag','address','leadBadge','payBadge','checkBadge'];
 const DEFAULT_OSNOVNE_COLS = ['sender','phone','addressFrom','receiver','phoneRecv','addressTo','leadStatus','tag'];
 const DEFAULT_PARCEL_COLS = ['description','details','qty','weight','estValue','ttn','innerNum','statusPkg','sum','currency','payStatus','photo','rating','ratingComment'];
 
@@ -1168,6 +1169,11 @@ function renderCard(p, routeCtx) {
   const visCols = getVisibleCardColumns();
   let metaHtml = '';
   if (visCols.includes('date') && dateCreated) metaHtml += `<span class="meta-tag">📅 ${escapeHtml(dateCreated)}</span>`;
+  if (visCols.includes('receivedDate') && p['Дата отримання']) {
+    // Дата візиту — коли водій заїде на адресу. У UA→EU це доставка до отримувача,
+    // у EU→UA це коли кур'єр забере у відправника. Одна колонка для обох.
+    metaHtml += `<span class="meta-tag" style="background:#fef3c7;color:#92400e;">📅 Візит: ${escapeHtml(formatTripDate(p['Дата отримання']))}</span>`;
+  }
   if (visCols.includes('statusPkg') && statusPkg) metaHtml += `<span class="meta-tag">${escapeHtml(statusPkg)}</span>`;
   if (visCols.includes('smartId') && p['Ід_смарт']) metaHtml += `<span class="meta-tag">🆔 ${highlightMatch(String(p['Ід_смарт']))}</span>`;
   if (visCols.includes('innerNum') && p['Внутрішній №']) metaHtml += `<span class="meta-tag">🔢 №${highlightMatch(String(p['Внутрішній №']))}</span>`;
@@ -4153,6 +4159,17 @@ function rteResetAll(btn) {
     var p = document.getElementById('rtePanelPay'); if (p) p.style.display = 'none';
     renderRoutes();
 }
+// Helper: «Дата отримання» живе у таблиці `packages`, а не у `routes`
+// (route-row тримає тільки snapshot базових полів). Шукаємо оригінал
+// у allData за PKG_ID і читаємо дату звідти; якщо нема — порожньо.
+function _getRouteRowReceivedDate(r) {
+    const leadId = (r && (r['PKG_ID'] || r['PAX_ID'])) || '';
+    if (!leadId) return '';
+    const p = allData.find(x => (x['PKG_ID'] || '') === leadId);
+    if (!p) return '';
+    return formatTripDate(p['Дата отримання'] || '');
+}
+
 function getFilteredRouteRows(rows) {
     let filtered = rows;
     if (routeTypeFilter === 'pax') filtered = filtered.filter(r => (r['Тип запису'] || '').includes('Пасажир'));
@@ -4160,7 +4177,7 @@ function getFilteredRouteRows(rows) {
     if (routeStatusFilter !== 'all') filtered = filtered.filter(r => (r['Статус'] || '') === routeStatusFilter);
     if (routePayFilter !== 'all') filtered = filtered.filter(r => (r['Статус оплати'] || '') === routePayFilter);
     if (routeDateFilter) {
-        filtered = filtered.filter(r => formatTripDate(r['Дата отримання'] || '') === routeDateFilter);
+        filtered = filtered.filter(r => _getRouteRowReceivedDate(r) === routeDateFilter);
     }
     return filtered;
 }
@@ -4171,7 +4188,7 @@ function getFilteredRouteRows(rows) {
 function getRouteUniqueDates(rows) {
     const set = new Set();
     (rows || []).forEach(r => {
-        const d = formatTripDate(r['Дата отримання'] || '');
+        const d = _getRouteRowReceivedDate(r);
         if (d && d !== '—') set.add(d);
     });
     return Array.from(set).sort((a, b) => {
@@ -4275,7 +4292,7 @@ function renderRoutes() {
         html += '<span class="route-date-chips-label">📅 Дата візиту:</span>';
         uniqueDates.forEach(d => {
             const active = (routeDateFilter === d);
-            const cnt = rawRows.filter(r => formatTripDate(r['Дата отримання'] || '') === d).length;
+            const cnt = rawRows.filter(r => _getRouteRowReceivedDate(r) === d).length;
             html += '<button class="route-date-chip' + (active ? ' active' : '') + '" ' +
                 'onclick="setRouteDateFilter(\'' + d + '\')" ' +
                 'title="' + (active ? 'Зняти фільтр' : 'Показати тільки ' + d) + '">' +
