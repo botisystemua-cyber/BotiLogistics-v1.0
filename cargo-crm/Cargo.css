@@ -2367,3 +2367,56 @@ body.route-sort-active #routeFiltersBar {
 }
 .route-card-chosen { box-shadow: 0 8px 22px rgba(245,158,11,0.35) !important; }
 .route-card-drag { transform: rotate(1deg); }
+
+/* Чіпи дат візиту у маршруті — над списком лідів. */
+.route-date-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+    padding: 10px 14px;
+    background: #fefce8;
+    border: 1px solid #fde68a;
+    border-radius: 10px;
+    margin: 8px 0;
+}
+.route-date-chips-label {
+    font-size: 12px;
+    font-weight: 700;
+    color: #92400e;
+    margin-right: 4px;
+}
+.route-date-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: white;
+    color: #7c2d12;
+    border: 1px solid #fcd34d;
+    border-radius: 999px;
+    padding: 5px 12px;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.15s;
+}
+.route-date-chip:hover { border-color: #f59e0b; background: #fff7ed; }
+.route-date-chip.active {
+    background: #f59e0b;
+    color: white;
+    border-color: #f59e0b;
+}
+.route-date-chip-cnt {
+    display: inline-block;
+    min-width: 18px;
+    padding: 0 5px;
+    background: rgba(124, 45, 18, 0.12);
+    color: #7c2d12;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 800;
+    text-align: center;
+    line-height: 16px;
+}
+.route-date-chip.active .route-date-chip-cnt { background: rgba(255,255,255,0.3); color: white; }
