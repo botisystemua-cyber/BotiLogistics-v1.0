@@ -4586,47 +4586,32 @@ function renderTripsCalendarView() {
 }
 
 function renderTripsCalCell(dayNum, key, dayTrips, otherMonth, isToday) {
-    const maxVisible = 3;
-    const visible = dayTrips.slice(0, maxVisible);
-    const hidden = dayTrips.length - visible.length;
-    let cls = 'tc-cell';
+    // Компактний дизайн: номер дня + бейдж з сумою зайнятих місць за день.
+    // Клік → popup зі списком авто для цієї дати (вибір рейсу).
+    let cls = 'tc-cell pax-cal-style';
     if (otherMonth) cls += ' other-month';
     if (isToday) cls += ' today';
 
-    const eventsHtml = visible.map(t => {
-        const dir = getTripDirection(t);
-        const dirCls = dir === 'ua-eu' ? 'dir-ua-eu' : dir === 'eu-ua' ? 'dir-eu-ua' : 'dir-other';
-        const dirIcon = dir === 'ua-eu' ? '🇺🇦→🇪🇺' : dir === 'eu-ua' ? '🇪🇺→🇺🇦' : '↔';
-        const maxS = parseInt(t.max_seats) || 0;
-        const occ = parseInt(t.occupied) || 0;
-        const pct = maxS > 0 ? Math.min(100, Math.round(occ/maxS*100)) : 0;
-        const over = occ > maxS && maxS > 0;
-        const auto = cleanAutoName(t.auto_name) || '';
-        const city = t.city || '—';
-        const safeCalId = String(t.cal_id || '').replace(/'/g, "\\'");
-        const autoHtml = auto ? '<span class="tc-event-auto">' + tmEsc(auto) + '</span>' : '';
-        return '<div class="tc-event ' + dirCls + (over ? ' over' : '') + '" onclick="event.stopPropagation();openTripFromCalendar(\'' + safeCalId + '\')" title="' + tmEsc(city + (auto ? ' · ' + auto : '') + ' · ' + occ + '/' + maxS) + '">' +
-            '<div class="tc-event-row1">' +
-                '<span class="tc-event-dir">' + dirIcon + '</span>' +
-                '<span class="tc-event-name">' + tmEsc(city) + '</span>' +
-                '<span class="tc-event-seats">' + occ + '/' + maxS + '</span>' +
-            '</div>' +
-            '<div class="tc-event-row2">' +
-                autoHtml +
-                '<span class="tc-event-bar"><span class="tc-event-bar-fill' + (over ? ' over' : pct >= 100 ? ' full' : '') + '" style="width:' + pct + '%"></span></span>' +
-            '</div>' +
-        '</div>';
-    }).join('');
+    const tripsCount = dayTrips.length;
+    let totalOccupied = 0;
+    dayTrips.forEach(t => { totalOccupied += (parseInt(t.occupied) || 0); });
 
-    const moreHtml = hidden > 0
-        ? '<div class="tc-more" onclick="event.stopPropagation();showTripsCalDay(\'' + key + '\')">+' + hidden + ' ще</div>'
+    // Жовтий бейдж якщо більше 3 рейсів (warning — багато активності);
+    // інакше стандартний червоний як у pax-календарі.
+    const badgeCls = tripsCount > 3 ? 'pax-cal-badge many-trips' : 'pax-cal-badge';
+    const badgeHtml = (tripsCount > 0 && totalOccupied > 0)
+        ? '<span class="' + badgeCls + '" title="' + tripsCount + ' рейс(ів), ' + totalOccupied + ' зайнято">' + totalOccupied + '</span>'
         : '';
 
     const todayLabel = isToday ? '<div class="tc-today-label">Сьогодні</div>' : '';
-    return '<div class="' + cls + '" data-key="' + key + '">' +
+    const onClick = tripsCount > 0
+        ? 'onclick="event.stopPropagation();showTripsCalDay(\'' + key + '\')"'
+        : '';
+
+    return '<div class="' + cls + '" data-key="' + key + '" ' + onClick + '>' +
         todayLabel +
-        '<div class="tc-day-num">' + dayNum + '</div>' +
-        '<div class="tc-events">' + eventsHtml + moreHtml + '</div>' +
+        '<div class="pax-cal-num">' + dayNum + '</div>' +
+        badgeHtml +
     '</div>';
 }
 
@@ -6628,64 +6613,22 @@ function bindTmCalendarTouch() {
 }
 
 function renderTmCalDay(d, key, info, otherMonth, isToday, selectedKey) {
+    // Компактна клітинка, дизайн як у paxCalendar: лише цифра дня + бейдж
+    // із сумою зайнятих місць по всіх рейсах дня. Більше 3 рейсів → жовтий
+    // бейдж (warning), інакше стандартний червоний.
     var hasTrip = !!info;
     var isSelected = key === selectedKey;
     var isCurrent = !!tmCurrentDate && key === tmCurrentDate;
-    var free = info ? (info.maxSeats - info.pax) : 0;
 
-    // Підрахунок повністю заповнених рейсів (не перебір) серед усіх рейсів дати
-    var fullCount = 0;
-    if (info && info.trips) {
-        info.trips.forEach(function(t) {
-            var occ = parseInt(t.occupied) || 0;
-            var max = parseInt(t.max_seats) || 0;
-            if (max > 0 && occ >= max && occ <= max) fullCount++;
-        });
-    }
-    var totalCount = info ? info.count : 0;
-    var isFull = !!(info && !info.overbooked && totalCount > 0 && fullCount === totalCount);
-    var isPartial = !!(info && !info.overbooked && !isFull && fullCount > 0 && fullCount < totalCount);
-
-    var cls = 'tcal-day';
+    var cls = 'tcal-day pax-cal-style';
     if (otherMonth) cls += ' other-month';
     if (isToday) cls += ' today';
     if (hasTrip) cls += ' has-trip';
     if (isSelected) cls += ' selected';
     if (isCurrent) cls += ' tm-current';
-    if (isCurrent && tmCurrentBound) cls += ' tm-bound';
-    else if (isCurrent) cls += ' tm-soft';
     if (info && info.overbooked) cls += ' overbooked';
-    if (isFull) cls += ' full';
-    if (isPartial) cls += ' partial';
-    if (info) {
-        if (info.uaeu > 0 && info.euua > 0) cls += ' dir-both';
-        else if (info.uaeu > 0) cls += ' dir-ua-eu';
-        else if (info.euua > 0) cls += ' dir-eu-ua';
-    }
 
-    // Мікроінфа — вільні місця у правому нижньому куті
-    var seatsHtml = '';
-    if (info && info.maxSeats > 0) {
-        var seatCls = 'tcal-seats';
-        if (info.overbooked || free <= 0) seatCls += ' low';
-        else if (free <= 2) seatCls += ' warn';
-        else seatCls += ' ok';
-        var seatTxt = info.overbooked ? '!' : (free < 0 ? 0 : free) + 'м';
-        seatsHtml = '<div class="' + seatCls + '">' + seatTxt + '</div>';
-    }
-
-    // Частково повні — маркер у лівому нижньому куті
-    var partialHtml = isPartial ? '<div class="tcal-partial" title="Частина рейсів заповнена">' + fullCount + '/' + totalCount + '</div>' : '';
-
-    // Назва рейсу всередині клітинки (перший + «+N» якщо кілька)
-    var nameHtml = '';
-    if (info && info.trips && info.trips.length) {
-        var firstCity = String(info.trips[0].city || '').trim() || '—';
-        var extra = info.trips.length > 1 ? ' +' + (info.trips.length - 1) : '';
-        nameHtml = '<span class="tcal-tripname" title="' + tmEsc(firstCity + extra) + '">' + tmEsc(firstCity) + extra + '</span>';
-    }
-
-    // Tooltip
+    // Tooltip — список рейсів для цього дня (щоб оператор бачив перш ніж клікнути)
     var titleLines = [];
     if (isCurrent && tmCurrentFullName) {
         titleLines.push('👤 ' + tmCurrentFullName + (tmCurrentBound ? ' · прив\'язаний' : ' · лише дата виїзду'));
@@ -6693,34 +6636,34 @@ function renderTmCalDay(d, key, info, otherMonth, isToday, selectedKey) {
     if (info && info.trips && info.trips.length) {
         info.trips.forEach(function(t) {
             var dir = getTripDirection(t) === 'ua-eu' ? 'UA→EU' : 'EU→UA';
-            var freeT = parseInt(t.free_seats) || 0;
             var maxT = parseInt(t.max_seats) || 0;
             var occT = parseInt(t.occupied) || 0;
+            var freeT = Math.max(0, maxT - occT);
             var seat = (occT > maxT && maxT > 0) ? ('перебір +' + (occT - maxT))
-                     : (occT >= maxT && maxT > 0) ? 'повний'
                      : (freeT + '/' + maxT);
             titleLines.push(dir + ' · ' + (t.auto_name || 'Авто') + ' · ' + (t.city || '—') + ' · ' + seat);
         });
-    } else if (isCurrent) {
-        titleLines.push('Поточна дата виїзду (рейсів на цей день немає)');
     }
     var titleAttr = titleLines.length ? ' title="' + tmEsc(titleLines.join('\n')) + '"' : '';
+
+    // Бейдж: сума зайнятих місць за день. >3 рейсів → клас many-trips (жовтий).
+    var badgeHtml = '';
+    if (info && info.count > 0 && info.pax > 0) {
+        var badgeCls = info.count > 3 ? 'pax-cal-badge many-trips' : 'pax-cal-badge';
+        badgeHtml = '<span class="' + badgeCls + '" title="' + info.count + ' рейс(ів)">' + info.pax + '</span>';
+    }
 
     var currentBadge = isCurrent && tmCurrentBadgeText
         ? '<span class="tm-current-badge"><span class="tm-current-badge-ico">👤</span>' + (tmCurrentBound ? '✓' : '') + tmEsc(tmCurrentBadgeText) + '</span>'
         : '';
-    // Повний день → клік показує деталі (а не selectTripDate, який призведе до "немає вільних")
-    var onclick = '';
-    if (hasTrip && !isFull) onclick = ' onclick="selectTripDate(\'' + key + '\')"';
-    else if (isFull) onclick = ' onclick="showTmDayInfo(\'' + key + '\', this)"';
     var todayLabel = isToday ? '<span class="tcal-today-label">Сьогодні</span>' : '';
+    var onclick = hasTrip ? ' onclick="selectTripDate(\'' + key + '\')"' : '';
+
     return '<button class="' + cls + '" data-key="' + key + '"' + onclick + titleAttr + '>' +
         currentBadge +
         todayLabel +
-        nameHtml +
-        '<span class="tcal-day-num">' + d + '</span>' +
-        partialHtml +
-        seatsHtml +
+        '<span class="pax-cal-num">' + d + '</span>' +
+        badgeHtml +
     '</button>';
 }
 

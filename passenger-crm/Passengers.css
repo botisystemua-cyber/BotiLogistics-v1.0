@@ -1225,6 +1225,50 @@ body.route-sort-active #rteTogglePay {
 .pax-cal-reset { width: 100%; margin-top: 6px; padding: 6px; border: 1px dashed var(--border); border-radius: 6px; background: white; font-size: 10px; font-weight: 600; cursor: pointer; color: var(--text-secondary); font-family: inherit; transition: all 0.15s; }
 .pax-cal-reset:hover { border-color: var(--primary); color: var(--primary); }
 
+/* Жовтий бейдж: коли рейсів на дату > 3 — «warning, багато активності».
+   Раніше всі бейджі були червоні; тепер червоний лишається для 1-3 рейсів,
+   жовтий — для 4+. Застосовується і у Рейси-календарі, і в модалці
+   призначення рейсу. */
+.pax-cal-badge.many-trips { background: #f59e0b; color: white; }
+.pax-cal-day.selected .pax-cal-badge.many-trips { background: white; color: #b45309; }
+
+/* Компактний стиль для клітинок tripsCalendar + tripModal — наслідують
+   .pax-cal-day розміри, але ширші (цілі grid колонки tc-grid / tcal-days). */
+.tc-cell.pax-cal-style,
+.tcal-day.pax-cal-style {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 56px;
+    padding: 6px 4px;
+    border-radius: 6px;
+    border: 2px solid transparent;
+    background: var(--bg-main);
+    cursor: pointer;
+    transition: all 0.15s;
+    font-family: inherit;
+}
+.tc-cell.pax-cal-style .pax-cal-num,
+.tcal-day.pax-cal-style .pax-cal-num {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text-primary);
+    line-height: 1;
+    margin-bottom: 4px;
+}
+.tc-cell.pax-cal-style:hover,
+.tcal-day.pax-cal-style:hover { background: #e2e8f0; }
+.tc-cell.pax-cal-style.today,
+.tcal-day.pax-cal-style.today { border-color: var(--primary); }
+.tc-cell.pax-cal-style.other-month,
+.tcal-day.pax-cal-style.other-month { opacity: 0.3; background: transparent; cursor: default; }
+.tcal-day.pax-cal-style.selected { background: var(--primary); border-color: var(--primary); }
+.tcal-day.pax-cal-style.selected .pax-cal-num { color: white; }
+.tcal-day.pax-cal-style.selected .pax-cal-badge { background: white; color: #dc2626; }
+.tcal-day.pax-cal-style.overbooked .pax-cal-badge { background: #dc2626; color: white; }
+
 /* Mobile calendar dark theme overrides */
 .side-menu .pax-cal-nav { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.2); color: white; }
 .side-menu .pax-cal-nav:hover { background: rgba(255,255,255,0.25); }
