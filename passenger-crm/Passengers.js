@@ -5189,8 +5189,8 @@ function getSeatLayout(layout, maxSeats, hasReserve) {
         //   Rear bench: 3 seats stacked vertically (5/6/7)
         seats.push(s(hasReserve ? 'R' : 'C',
                      hasReserve ? 'reserve' : 'driver',
-                     155, 75,  255, 165));
-        seats.push(s('D', 'driver', 155, 165, 255, 255));
+                     195, 75,  295, 165));
+        seats.push(s('D', 'driver', 195, 165, 295, 255));
         seats.push(s('1', 'seat',   290, 75,  390, 165));
         seats.push(s('2', 'seat',   290, 165, 390, 255));
         seats.push(s('3', 'seat',   400, 75,  500, 165));
