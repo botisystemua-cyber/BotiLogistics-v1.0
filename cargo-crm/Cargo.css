@@ -1218,6 +1218,31 @@ body {
   background: #f0fdf4;
 }
 
+/* Кнопка «+ Новий маршрут» у sidebar (desktop + mobile) — dashed pill у
+   коричневій палітрі cargo, щоб пасувала до pill'ів меню. */
+.sidebar-new-route-btn,
+.mob-new-route-btn {
+  margin-top: 8px;
+  padding: 11px 14px;
+  border: 2px dashed #fcd34d;
+  border-radius: 8px;
+  background: #fffbeb;
+  color: #7c2d12;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  text-align: center;
+  font-family: inherit;
+  transition: all 0.15s;
+}
+.sidebar-new-route-btn:hover,
+.mob-new-route-btn:active {
+  border-color: #d97706;
+  background: #fef3c7;
+  color: #92400e;
+}
+.mob-new-route-btn { margin: 10px 12px; }
+
 /* Quick Actions Panel */
 .card-actions {
   display: none;
