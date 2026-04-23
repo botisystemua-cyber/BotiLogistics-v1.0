@@ -190,7 +190,6 @@ const ALL_CARD_COLUMNS = [
   { key: 'leadBadge',   label: '🔵 Статус ліда' },
   { key: 'payBadge',    label: '💳 Статус оплати' },
   { key: 'checkBadge',  label: '✅ Контроль перевірки' },
-  { key: 'route',       label: '🚐 Маршрут / Рейс' },
   { key: 'note',        label: '📝 Примітка' },
   { key: 'description', label: '📄 Опис посилки' },
   { key: 'qty',         label: '📊 Кількість позицій' },
@@ -251,7 +250,7 @@ const ALL_PARCEL_COLUMNS = [
   { key: 'timing',      label: '⏱️ Таймінг' },
 ];
 
-const DEFAULT_CARD_COLS = ['phone','weight','sum','deposit','debt','ttn','smartId','date','statusPkg','tag','address','leadBadge','payBadge','checkBadge','route'];
+const DEFAULT_CARD_COLS = ['phone','weight','sum','deposit','debt','ttn','smartId','date','statusPkg','tag','address','leadBadge','payBadge','checkBadge'];
 const DEFAULT_OSNOVNE_COLS = ['sender','phone','addressFrom','receiver','phoneRecv','addressTo','leadStatus','tag'];
 const DEFAULT_PARCEL_COLS = ['description','details','qty','weight','estValue','ttn','innerNum','statusPkg','sum','currency','payStatus','photo','rating','ratingComment'];
 
@@ -1142,10 +1141,18 @@ function renderCard(p) {
   // TTN display
   const ttnHtml = (isUE && ttn) ? `<span class="card-ttn">TTH: ${highlightMatch(ttn)}</span>` : '';
 
-  // Route strip
+  // Route strip — завжди видимий. Зелений «✅ В маршруті» якщо призначено,
+  // жовтий «⚠️ Без маршруту» якщо ще ні. Клік — відкриває модалку призначення
+  // (як на пасажирській картці «Призначити рейс»).
   const routeStrip = rteId
-    ? `<div class="card-route-strip">✅ В маршруті: ${highlightMatch(rteId)}${auto ? ' · 🚐 ' + highlightMatch(auto) : ''}</div>`
-    : '';
+    ? `<div class="card-route-strip has-route" onclick="event.stopPropagation(); openRouteModal('${pkgId}')">
+         <span class="card-route-text">✅ В маршруті: ${highlightMatch(rteId)}${auto ? ' · 🚐 ' + highlightMatch(auto) : ''}</span>
+         <span class="card-route-arrow">›</span>
+       </div>`
+    : `<div class="card-route-strip no-route" onclick="event.stopPropagation(); openRouteModal('${pkgId}')">
+         <span class="card-route-text">⚠️ Без маршруту — натисніть щоб призначити</span>
+         <span class="card-route-arrow">›</span>
+       </div>`;
 
   // Meta tags (configurable via column configurator)
   const visCols = getVisibleCardColumns();
@@ -1332,7 +1339,7 @@ function renderCard(p) {
           ${metaHtml ? `<div class="card-meta-tags">${metaHtml}</div>` : ''}
         </div>
       </div>
-      ${visCols.includes('route') ? routeStrip : ''}
+      ${routeStrip}
       <div class="card-actions" id="actions-${pkgId}">
         <button onclick="event.stopPropagation(); window.open('tel:${phone}')">📞 Дзвінок</button>
         <button onclick="event.stopPropagation(); openMessenger('${phone}','${pkgId}')">💬 Писати</button>
@@ -1342,7 +1349,6 @@ function renderCard(p) {
         ${controlCheck === 'В перевірці' ? `<button onclick="event.stopPropagation(); rejectVerification('${pkgId}')" style="background:var(--danger);color:#fff;">❌ Відхилити</button>` : ''}
         ${controlCheck === 'Готова до маршруту' ? `<span style="display:inline-flex;align-items:center;padding:6px 12px;background:#dcfce7;color:#166534;border-radius:8px;font-size:12px;font-weight:600;">✅ Готова</span>` : ''}
         ${controlCheck === 'Відхилено' ? `<span style="display:inline-flex;align-items:center;padding:6px 12px;background:#fee2e2;color:#991b1b;border-radius:8px;font-size:12px;font-weight:600;">❌ Відхилено</span>` : ''}
-        <button onclick="event.stopPropagation(); openRouteModal('${pkgId}')">🚖 Маршрут</button>
         ${leadStatus !== 'Невідомий' ? `<button onclick="event.stopPropagation(); setLeadUnknown('${pkgId}')" style="background:#fef3c7;color:#92400e;">❓ Невідомий</button>` : `<span style="display:inline-flex;align-items:center;padding:6px 12px;background:#fef3c7;color:#92400e;border-radius:8px;font-size:12px;font-weight:600;">❓ Невідомий</span>`}
         <button class="btn-danger" onclick="event.stopPropagation(); deleteRecord('${pkgId}')">🗑️</button>
       </div>
@@ -5077,7 +5083,14 @@ function openRouteModal(pkgId) {
   }
   _routeModalPkgIds = [pkgId];
   _routeModalMode = 'single';
-  showRoutePickerModal('🗺️ Перенести в маршрут', 'Обрати маршрут для посилки:');
+  // Заголовок і підзаголовок міняємо залежно від того, чи лід уже у маршруті.
+  var pkg = allData.find(function(p) { return p['PKG_ID'] === pkgId; });
+  var inRoute = !!(pkg && pkg['RTE_ID']);
+  var title = inRoute ? '🗺️ Перенести в маршрут' : '🗺️ Призначити маршрут';
+  var subtitle = inRoute
+    ? 'Оберіть інший маршрут, щоб перенести посилку (або «✕ Зняти з маршруту» внизу):'
+    : 'Обрати маршрут для посилки:';
+  showRoutePickerModal(title, subtitle);
 }
 
 function closeRouteDetail() {
@@ -5099,18 +5112,38 @@ function showRoutePickerModal(title, subtitle) {
     document.body.appendChild(overlay);
   }
 
+  // Визначаємо поточний маршрут(и) пакетів, щоб підсвітити в списку та
+  // показати кнопку «Зняти з маршруту» у футері (якщо принаймні один уже
+  // призначений). Для bulk-режиму — достатньо щоб хоча б один мав маршрут.
+  var anyInRoute = false;
+  var currentRteIds = new Set();
+  _routeModalPkgIds.forEach(function(id) {
+    var pkg = allData.find(function(p) { return p['PKG_ID'] === id; });
+    if (pkg && pkg['RTE_ID']) {
+      anyInRoute = true;
+      currentRteIds.add(pkg['RTE_ID']);
+    }
+  });
+
   var routeButtons = '';
   if (routes.length === 0) {
     routeButtons = '<div style="text-align:center;padding:20px;color:var(--text-secondary);font-size:12px;">Немає доступних маршрутів.<br>Створіть маршрут у меню зліва.</div>';
   } else {
     routeButtons = routes.map(function(r, i) {
       var name = r.city || (r.sheetName || '').replace(/^Маршрут_/, '');
-      return '<button class="route-pick-btn" onclick="doAssignToRoute(' + i + ')">' +
-        '<span>🗺️ ' + name + '</span>' +
+      var isCurrent = currentRteIds.has(r.sheetName);
+      var currentMark = isCurrent ? ' <span style="color:#059669;font-size:10px;">· поточний</span>' : '';
+      return '<button class="route-pick-btn' + (isCurrent ? ' route-pick-current' : '') + '" onclick="doAssignToRoute(' + i + ')">' +
+        '<span>🗺️ ' + name + currentMark + '</span>' +
         '<span style="font-size:10px;color:var(--text-secondary);font-weight:400;">👤' + (r.paxCount||0) + ' · 📦' + (r.parcelCount||0) + '</span>' +
       '</button>';
     }).join('');
   }
+
+  // Футер: «Скасувати» завжди, «✕ Зняти з маршруту» якщо лід(и) вже у маршруті.
+  var unassignBtn = anyInRoute
+    ? '<button onclick="doRemoveFromRoute()" style="padding:6px 16px;border:1px solid #fecaca;border-radius:6px;background:#fef2f2;color:#b91c1c;font-family:inherit;font-size:12px;cursor:pointer;font-weight:600;">✕ Зняти з маршруту</button>'
+    : '';
 
   overlay.innerHTML =
     '<div class="route-detail-panel">' +
@@ -5122,8 +5155,9 @@ function showRoutePickerModal(title, subtitle) {
         '<div style="font-size:12px;color:var(--text-secondary);margin-bottom:10px;">' + subtitle + '</div>' +
         '<div style="display:flex;flex-direction:column;gap:8px;">' + routeButtons + '</div>' +
       '</div>' +
-      '<div class="route-modal-footer">' +
-        '<button onclick="closeRouteDetail()" style="padding:6px 16px;border:1px solid var(--border);border-radius:6px;background:#fff;font-family:inherit;font-size:12px;cursor:pointer;">Скасувати</button>' +
+      '<div class="route-modal-footer" style="display:flex;justify-content:space-between;gap:8px;">' +
+        unassignBtn +
+        '<button onclick="closeRouteDetail()" style="padding:6px 16px;border:1px solid var(--border);border-radius:6px;background:#fff;font-family:inherit;font-size:12px;cursor:pointer;margin-left:auto;">Скасувати</button>' +
       '</div>' +
     '</div>';
   overlay.classList.add('open');
@@ -5176,6 +5210,57 @@ async function doAssignToRoute(routeIdx) {
     try { await loadRouteSheetData(routeIdx, true); renderRoutes(); } catch(_) {}
   }
   // Оновлюємо лічильники в sidebar
+  if (typeof renderRouteSidebar === 'function') renderRouteSidebar();
+}
+
+// «✕ Зняти з маршруту» — викликається з футера модалки вибору маршруту.
+// Знімає RTE_ID у всіх _routeModalPkgIds, локально чистить allData й
+// інвалідує кеш старих маршрутів, щоб sidebar/список оновились одразу.
+async function doRemoveFromRoute() {
+  var ids = _routeModalPkgIds.slice();
+  closeRouteDetail();
+  if (!ids.length) return;
+
+  // Збираємо зачеплені маршрути (для інвалідації кешу і оновлення лічильників)
+  var affected = new Set();
+  ids.forEach(function(id) {
+    var pkg = allData.find(function(p) { return p['PKG_ID'] === id; });
+    if (pkg && pkg['RTE_ID']) affected.add(pkg['RTE_ID']);
+  });
+
+  showToast('Знімаємо ' + ids.length + ' запис(ів) з маршруту...', 'info');
+
+  var success = 0;
+  for (var i = 0; i < ids.length; i++) {
+    var pkg = allData.find(function(p) { return p['PKG_ID'] === ids[i]; });
+    var rteId = pkg ? pkg['RTE_ID'] : '';
+    if (!rteId) continue;
+    try {
+      var res = await apiPost('removeFromRoute', { pkg_id: ids[i], rte_id: rteId });
+      if (res.ok) {
+        success++;
+        if (pkg) pkg['RTE_ID'] = '';
+      }
+    } catch (e) { /* ignore */ }
+  }
+
+  // Інвалідуємо кеш зачеплених маршрутів — наступне відкриття перезавантажить rows.
+  affected.forEach(function(rteId) {
+    var r = routes.find(function(x) { return x.sheetName === rteId; });
+    if (r) {
+      r.rows = null;
+      r.rowCount = Math.max(0, (r.rowCount || 0) - success);
+      r.parcelCount = Math.max(0, (r.parcelCount || 0) - success);
+    }
+    if (typeof allRouteSheets !== 'undefined') {
+      var allIdx = allRouteSheets.findIndex(function(s) { return s.sheetName === rteId; });
+      if (allIdx !== -1) { allRouteSheets[allIdx].rows = null; }
+    }
+  });
+
+  showToast('Знято з маршруту: ' + success + ' з ' + ids.length, success > 0 ? 'success' : 'error');
+  if (_routeModalMode === 'bulk') afterBulkAction();
+  else renderCards();
   if (typeof renderRouteSidebar === 'function') renderRouteSidebar();
 }
 
