@@ -1323,12 +1323,15 @@ function renderCard(p) {
             ${(() => {
               // Відправник / отримувач — два окремих тоггли. pkg_id прибрано —
               // його видно в деталях на вкладці «⚙ Системні» (readonly).
+              // Якщо тоггл увімкнений АЛЕ імені нема — пропускаємо (без «—»
+              // чи «(невідомо)»), щоб картка не була засмічена заглушками.
               const showSender = visCols.includes('sender');
               const showRecv   = visCols.includes('receiver');
               if (!showSender && !showRecv) return '';
               const parts = [];
-              if (showSender) parts.push(name ? highlightMatch(name) : '—');
-              if (showRecv)   parts.push(receiver ? highlightMatch(receiver) : '(невідомо)');
+              if (showSender && name)      parts.push(highlightMatch(name));
+              if (showRecv   && receiver)  parts.push(highlightMatch(receiver));
+              if (parts.length === 0) return '';
               return `<span class="card-sender-recv">👤 ${parts.join(' → ')}</span>`;
             })()}
             ${(_unreadCounts[pkgId] || 0) > 0 ? `<span style="display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 6px;border-radius:10px;background:#ef4444;color:#fff;font-size:11px;font-weight:700;animation:pulse-badge 2s infinite;" title="${_unreadCounts[pkgId]} нових повідомлень">${_unreadCounts[pkgId]}</span>` : ''}
