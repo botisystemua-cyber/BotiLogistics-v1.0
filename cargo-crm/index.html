@@ -43,7 +43,7 @@
   </div>
 
   <!-- Напрямок -->
-  <div class="mob-section">
+  <div class="mob-section" data-section="direction">
     <div class="mob-section-title" onclick="toggleMobSection(this)">🧭 Напрямок <span class="mob-toggle">▶</span></div>
     <div class="mob-section-body mob-collapsed">
       <div class="mob-item" data-dir="new24" onclick="setDirection('new24')">🆕 Нові (24 год) <span class="badge-count" id="mobCountNew24" style="background:#fef3c7;color:#d97706;">0</span></div>
@@ -53,7 +53,7 @@
   </div>
 
   <!-- Перевірка -->
-  <div class="mob-section">
+  <div class="mob-section" data-section="verify">
     <div class="mob-section-title" onclick="toggleMobSection(this)">🔍 Перевірка <span class="mob-toggle">▶</span></div>
     <div class="mob-section-body mob-collapsed">
       <button class="sidebar-scan-btn" onclick="openScannerPage();closeMobileSidebar();">📷 Сканувати ТТН</button>
@@ -66,7 +66,7 @@
   </div>
 
   <!-- Маршрути -->
-  <div class="mob-section">
+  <div class="mob-section" data-section="routes">
     <div class="mob-section-title" onclick="toggleMobSection(this)">🚚 Маршрути <span class="mob-toggle">▶</span></div>
     <div class="mob-section-body mob-collapsed" id="mobRoutesSidebar">
       <!-- Filled by JS -->
@@ -74,7 +74,7 @@
   </div>
 
   <!-- Відправка -->
-  <div class="mob-section">
+  <div class="mob-section" data-section="dispatch">
     <div class="mob-section-title" onclick="toggleMobSection(this)">📥 Відправка <span class="mob-toggle">▶</span></div>
     <div class="mob-section-body mob-collapsed" id="mobDispatchSidebar">
       <!-- Filled by JS -->
@@ -82,7 +82,7 @@
   </div>
 
   <!-- Витрати -->
-  <div class="mob-section">
+  <div class="mob-section" data-section="expenses">
     <div class="mob-section-title" onclick="toggleMobSection(this)">💰 Витрати <span class="mob-toggle">▶</span></div>
     <div class="mob-section-body mob-collapsed" id="mobExpensesSidebar">
       <!-- Filled by JS -->
@@ -174,7 +174,7 @@
   <!-- SIDEBAR (Desktop) -->
   <aside class="sidebar" id="sidebar">
     <!-- Direction Section -->
-    <div class="sidebar-section">
+    <div class="sidebar-section" data-section="direction">
       <div class="sidebar-section-header" onclick="toggleSection(this)">
         🧭 Напрямок <span class="toggle open">▶</span>
       </div>
@@ -192,7 +192,7 @@
     </div>
 
     <!-- Verification Section -->
-    <div class="sidebar-section">
+    <div class="sidebar-section" data-section="verify">
       <div class="sidebar-section-header" onclick="toggleSection(this)">
         🔍 Перевірка <span class="toggle open">▶</span>
       </div>
@@ -217,7 +217,7 @@
     </div>
 
     <!-- Routes Section -->
-    <div class="sidebar-section">
+    <div class="sidebar-section" data-section="routes">
       <div class="sidebar-section-header" onclick="toggleSection(this)">
         🚚 Маршрути <span class="toggle open">▶</span>
       </div>
@@ -227,7 +227,7 @@
     </div>
 
     <!-- Dispatch Section -->
-    <div class="sidebar-section">
+    <div class="sidebar-section" data-section="dispatch">
       <div class="sidebar-section-header" onclick="toggleSection(this)">
         📥 Відправка <span class="toggle">▶</span>
       </div>
@@ -237,7 +237,7 @@
     </div>
 
     <!-- Expenses Section -->
-    <div class="sidebar-section">
+    <div class="sidebar-section" data-section="expenses">
       <div class="sidebar-section-header" onclick="toggleSection(this)">
         💰 Витрати <span class="toggle">▶</span>
       </div>

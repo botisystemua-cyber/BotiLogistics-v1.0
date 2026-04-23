@@ -2937,6 +2937,8 @@ function bulkOptimizeRoute() {
 }
 
 function setDirection(dir) {
+  // Перехід у секцію «Напрямок» → інші секції згортаються, їхні фільтри скидаються.
+  setActiveSidebarSection('direction');
   currentDirection = dir;
   // active-клас: для напрямків — кольоровий (active-ue / active-eu),
   // для «Нові (24 год)» — нейтральний active.
@@ -2991,18 +2993,118 @@ function onSearch(value) {
 }
 
 // ===== [SECT-SIDEBAR] SIDEBAR =====
+// === Sidebar accordion: one section active at a time + filter reset ===
+// Коли юзер переключає секцію меню, попередня автоматично згортається і її
+// фільтри скидаються до дефолту — так жодний «застарілий» фільтр не тягнеться
+// у новий контекст. Той самий патерн що ми реалізували у passenger-crm.
+var _activeSidebarSection = 'direction';
+var _SIDEBAR_SECTIONS = ['direction', 'verify', 'routes', 'dispatch', 'expenses'];
+
+// Повертає фільтр секції до дефолту. Не чіпає інші секції.
+function _resetSidebarSectionFilter(name) {
+  if (name === 'direction') {
+    currentDirection = 'ue';
+    // Підсвічуємо дефолтний таб (UE) — і desktop, і mobile
+    document.querySelectorAll('.sidebar [data-dir]').forEach(function(el) {
+      el.className = 'sidebar-item' + (el.dataset.dir === 'ue' ? ' active-ue' : '');
+    });
+    document.querySelectorAll('#mobileSidebar [data-dir]').forEach(function(el) {
+      el.className = 'mob-item' + (el.dataset.dir === 'ue' ? ' active-ue' : '');
+    });
+  } else if (name === 'verify') {
+    currentVerifyFilter = 'all';
+    document.querySelectorAll('.sidebar [data-filter]').forEach(function(el) {
+      el.className = 'sidebar-item' + (el.dataset.filter === 'all' ? ' active' : '');
+    });
+    document.querySelectorAll('#mobileSidebar [data-mfilter]').forEach(function(el) {
+      el.className = 'mob-item' + (el.dataset.mfilter === 'all' ? ' active' : '');
+    });
+    if (typeof hideVerifyPanel === 'function') hideVerifyPanel();
+    if (typeof setBulkContext === 'function') setBulkContext('general');
+  }
+  // routes/dispatch/expenses — це списки навігації, власного «фільтра списку
+  // посилок» не тримають, тож скидати нічого. Активний маршрут (activeRouteIdx)
+  // скидається в backToParcels, не тут.
+}
+
+// Відкриває одну секцію і згортає решту. Якщо попередня секція існувала і
+// відрізнялась — скидаємо її фільтри. name=null → згорнути всі (режим архів/зведення).
+function setActiveSidebarSection(name) {
+  var prev = _activeSidebarSection;
+  if (prev && prev !== name) {
+    _resetSidebarSectionFilter(prev);
+  }
+  _activeSidebarSection = name;
+  // Desktop
+  _SIDEBAR_SECTIONS.forEach(function(s) {
+    var sec = document.querySelector('.sidebar .sidebar-section[data-section="' + s + '"]');
+    if (!sec) return;
+    var body = sec.querySelector('.sidebar-section-body');
+    var toggle = sec.querySelector('.toggle');
+    if (body) body.classList.toggle('hidden', s !== name);
+    if (toggle) toggle.classList.toggle('open', s === name);
+  });
+  // Mobile
+  _SIDEBAR_SECTIONS.forEach(function(s) {
+    var sec = document.querySelector('#mobileSidebar .mob-section[data-section="' + s + '"]');
+    if (!sec) return;
+    var body = sec.querySelector('.mob-section-body');
+    var toggle = sec.querySelector('.mob-toggle');
+    if (body) body.classList.toggle('mob-collapsed', s !== name);
+    if (toggle) toggle.classList.toggle('open', s === name);
+  });
+  // Якщо фільтр скинувся і ми на головному списку — перерендеримо.
+  if (prev && prev !== name && currentView === 'parcels') {
+    if (typeof renderCards === 'function') renderCards();
+  }
+}
+
 function toggleMobSection(titleEl) {
-  var body = titleEl.nextElementSibling;
-  var toggle = titleEl.querySelector('.mob-toggle');
-  if (body) body.classList.toggle('mob-collapsed');
-  if (toggle) toggle.classList.toggle('open');
+  var sec = titleEl.closest('.mob-section');
+  var name = sec && sec.getAttribute('data-section');
+  if (!name) {
+    // Fallback для секцій без data-section (Зведення/Архів — single items)
+    var body = titleEl.nextElementSibling;
+    var toggle = titleEl.querySelector('.mob-toggle');
+    if (body) body.classList.toggle('mob-collapsed');
+    if (toggle) toggle.classList.toggle('open');
+    return;
+  }
+  var body = sec.querySelector('.mob-section-body');
+  var isCollapsed = body && body.classList.contains('mob-collapsed');
+  if (isCollapsed) {
+    // Розгортаємо → інші згортаються автоматично + фільтри попередньої скидаються.
+    setActiveSidebarSection(name);
+  } else {
+    // Вже відкрита — класичний toggle: згортаємо лише її (юзер явно хоче закрити).
+    if (body) body.classList.add('mob-collapsed');
+    var tg = titleEl.querySelector('.mob-toggle');
+    if (tg) tg.classList.remove('open');
+    _activeSidebarSection = null;
+  }
 }
 
 function toggleSection(header) {
-  const body = header.nextElementSibling;
-  const toggle = header.querySelector('.toggle');
-  body.classList.toggle('hidden');
-  toggle.classList.toggle('open');
+  var sec = header.closest('.sidebar-section');
+  var name = sec && sec.getAttribute('data-section');
+  if (!name) {
+    // Fallback для секцій без data-section
+    var body0 = header.nextElementSibling;
+    var tg0 = header.querySelector('.toggle');
+    if (body0) body0.classList.toggle('hidden');
+    if (tg0) tg0.classList.toggle('open');
+    return;
+  }
+  var body = sec.querySelector('.sidebar-section-body');
+  var isCollapsed = body && body.classList.contains('hidden');
+  if (isCollapsed) {
+    setActiveSidebarSection(name);
+  } else {
+    if (body) body.classList.add('hidden');
+    var tg = header.querySelector('.toggle');
+    if (tg) tg.classList.remove('open');
+    _activeSidebarSection = null;
+  }
 }
 
 function toggleSidebar() {
@@ -3113,6 +3215,9 @@ function switchMainView(view) {
 function backToParcels() {
   activeRouteIdx = null;
   switchMainView('parcels');
+  // Вихід з маршруту назад у список посилок → фокус повертається у «Напрямок»
+  // із дефолтним UE. Інші секції згорнуті.
+  if (typeof setActiveSidebarSection === 'function') setActiveSidebarSection('direction');
   renderCards();
 }
 
@@ -3861,6 +3966,9 @@ function toggleMobileRoutesList() {
 
 // ── Відкрити конкретний маршрут ──
 async function openRoute(idx, forceRefresh) {
+    // Вхід у маршрут — це перехід у секцію «Маршрути»: інші згортаються,
+    // фільтри Напрямок/Перевірка повертаються до дефолту.
+    setActiveSidebarSection('routes');
     // При перемиканні маршруту скидаємо фільтр дат — у новому свої дати.
     if (activeRouteIdx !== idx) routeDateFilter = null;
     activeRouteIdx = idx;
@@ -5030,6 +5138,8 @@ function renderExpensesView(exp) {
 // ===== SUMMARY VIEW =====
 function openSummaryView() {
   activeRouteIdx = null;
+  // Зведення — не належить жодній секції, згортаємо всі.
+  if (typeof setActiveSidebarSection === 'function') setActiveSidebarSection(null);
   switchMainView('summary');
   showToast('Завантаження зведення...', 'info');
 
@@ -5314,6 +5424,8 @@ function setFilter(f) {
 }
 
 function setVerFilter(f) {
+  // Перехід у секцію «Перевірка» → згортаємо інші, скидаємо їхні фільтри.
+  setActiveSidebarSection('verify');
   currentVerifyFilter = f;
   // Update desktop sidebar
   document.querySelectorAll('.sidebar [data-filter]').forEach(el => {
@@ -5554,6 +5666,11 @@ async function deleteRecord(pkgId) {
 // Перемкнути вид Архів / Активні
 async function toggleArchiveView() {
   showArchive = !showArchive;
+  // Архів — одноразова дія без своєї акордеон-секції. При вході згортаємо все;
+  // при виході з архіву повертаємось у «Напрямок» (дефолт UE).
+  if (typeof setActiveSidebarSection === 'function') {
+    setActiveSidebarSection(showArchive ? null : 'direction');
+  }
   var btn = document.getElementById('archiveToggleBtn');
   if (btn) {
     if (showArchive) {
