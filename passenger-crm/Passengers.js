@@ -169,13 +169,30 @@ function getManagerCardKey() {
     var name = getManagerName() || 'default';
     return 'oksi_card_' + name.replace(/\s+/g, '_');
 }
+// Per-user UI-налаштування зберігаються у users.ui_prefs (jsonb); читаємо з
+// DB-кешу, fallback — старий localStorage (на час холодного рендеру чи для
+// юзерів, які ще не мігрували). Запис — write-through: БД + localStorage.
+function _pxReadPref(dbKey, lsKey, fallback) {
+    if (typeof window.sbGetUiPrefsSync === 'function') {
+        var prefs = window.sbGetUiPrefsSync();
+        if (prefs && prefs[dbKey] !== undefined && prefs[dbKey] !== null) return prefs[dbKey];
+    }
+    try { var s = localStorage.getItem(lsKey); if (s) return JSON.parse(s); } catch (e) {}
+    return fallback;
+}
+function _pxWritePref(dbKey, lsKey, value) {
+    if (typeof window.sbSaveUiPref === 'function') {
+        window.sbSaveUiPref(dbKey, value);
+    }
+    try { localStorage.setItem(lsKey, JSON.stringify(value)); } catch (e) { /* ignore */ }
+}
 function getCardFields() {
-    try { var s = localStorage.getItem(getManagerCardKey()); if (s) return JSON.parse(s); } catch(e) {}
-    return DEFAULT_CARD_FIELDS;
+    var v = _pxReadPref('pax_card_cols', getManagerCardKey(), null);
+    return Array.isArray(v) ? v : DEFAULT_CARD_FIELDS;
 }
 function getOsnovneFields() {
-    try { var s = localStorage.getItem(getManagerColsKey()); if (s) return JSON.parse(s); } catch(e) {}
-    return DEFAULT_OSNOVNE_FIELDS;
+    var v = _pxReadPref('pax_osnovne_cols', getManagerColsKey(), null);
+    return Array.isArray(v) ? v : DEFAULT_OSNOVNE_FIELDS;
 }
 function getDetailSections() {
     return [
@@ -808,6 +825,25 @@ document.addEventListener('DOMContentLoaded', () => {
     updateAvatarUI();
     if (!getManagerName()) {
         openManagerModal();
+    }
+
+    // Per-user UI-prefs з БД (users.ui_prefs). Не блокуємо init — щойно
+    // prefs завантажаться, тригеримо ре-рендер з акуратними налаштуваннями.
+    if (typeof window.sbLoadUiPrefs === 'function') {
+        window.sbLoadUiPrefs().then(function(prefs) {
+            // Одноразова міграція legacy localStorage → БД (pax_card_cols/pax_osnovne_cols)
+            if (prefs && typeof window.sbSaveUiPref === 'function') {
+                ['pax_card_cols', 'pax_osnovne_cols'].forEach(function(dbKey) {
+                    if (prefs[dbKey] !== undefined && prefs[dbKey] !== null) return;
+                    var lsKey = (dbKey === 'pax_card_cols') ? getManagerCardKey() : getManagerColsKey();
+                    try {
+                        var raw = localStorage.getItem(lsKey);
+                        if (raw) window.sbSaveUiPref(dbKey, JSON.parse(raw));
+                    } catch (e) { /* ignore */ }
+                });
+            }
+            if (typeof render === 'function') render();
+        }).catch(function() { /* БД недоступна — живемо на localStorage */ });
     }
 
     showLoader('Завантаження...');
@@ -5310,14 +5346,14 @@ function getSeatLayout(layout, maxSeats, hasReserve) {
             h: (py1 - py0) / 205  * 100,
         });
         // Driver cabin: D + special slot (co-driver / reserve) already visible on bus PNG
-        seats.push(s('D', 'driver', 110, 35, 175, 90));
+        seats.push(s('D', 'driver', 175, 40, 245, 95));
         seats.push(s(hasReserve ? 'R' : 'C',
                      hasReserve ? 'reserve' : 'driver',
-                     110, 110, 175, 175));
+                     175, 110, 245, 170));
 
         const n = Math.max(8, parseInt(maxSeats) || 20);
         const rowsNeeded = Math.ceil(n / 4);
-        const xStart = 275, xEnd = 950;
+        const xStart = 310, xEnd = 960;
         const step = rowsNeeded === 1 ? 0 : (xEnd - xStart) / (rowsNeeded - 1);
         const seatW = Math.min(58, step - 6); // fits the number of rows we need
         // 4 seats per row: 2 on the driver side (top), aisle, 2 on passenger side (bottom).
@@ -6366,8 +6402,9 @@ function toggleColCfg(key) {
 function saveColumnConfig() {
     if (cfgActiveTab === 'osnovne' && colCfgTemp.length === 0) { showToast('Оберіть хоча б одну колонку'); return; }
     if (cfgActiveTab === 'card' && cardCfgTemp.length === 0) { showToast('Оберіть хоча б один елемент'); return; }
-    localStorage.setItem(getManagerColsKey(), JSON.stringify(colCfgTemp));
-    localStorage.setItem(getManagerCardKey(), JSON.stringify(cardCfgTemp));
+    // Write-through: users.ui_prefs (source of truth) + localStorage (cache).
+    _pxWritePref('pax_osnovne_cols', getManagerColsKey(), colCfgTemp);
+    _pxWritePref('pax_card_cols',    getManagerCardKey(), cardCfgTemp);
     closeModal('columnModal');
     if (openDetailsId) {
         var p = passengers.find(function(x) { return x['PAX_ID'] === openDetailsId; });
@@ -6736,7 +6773,6 @@ function renderTripModalCalendar() {
                 '<span class="tcal-month-label">' + monthNames[tmCalMonth] + ' ' + tmCalYear + '</span>' +
                 '<div class="tcal-nav">' +
                     '<button class="tcal-nav-btn" onclick="tmCalPrev()">&larr;</button>' +
-                    '<button class="tcal-nav-btn" style="width:auto;padding:0 10px;font-size:11px;" onclick="tmCalToday()">Сьогодні</button>' +
                     '<button class="tcal-nav-btn" onclick="tmCalNext()">&rarr;</button>' +
                 '</div>' +
             '</div>' +
@@ -6744,9 +6780,13 @@ function renderTripModalCalendar() {
             '<div class="tcal-days">' + daysHtml + '</div>' +
             '<div class="tcal-footer">' +
                 '<div class="tcal-legend">' +
-                    '<span class="tcal-legend-item"><span class="tcal-legend-box" style="border-radius:50%;background:#2563eb;border-color:#2563eb;"></span> UA→EU</span>' +
-                    '<span class="tcal-legend-item"><span class="tcal-legend-box" style="border-radius:50%;background:#059669;border-color:#059669;"></span> EU→UA</span>' +
-                    '<span class="tcal-legend-item"><span class="tcal-legend-box" style="border-radius:50%;background:#dc2626;border-color:#dc2626;"></span> Перебір</span>' +
+                    '<span class="tcal-legend-item"><span class="tcal-legend-dot" style="background:#2563eb;"></span> UA→EU</span>' +
+                    '<span class="tcal-legend-item"><span class="tcal-legend-dot" style="background:#059669;"></span> EU→UA</span>' +
+                    '<span class="tcal-legend-item"><span class="tcal-legend-dot" style="background:#dc2626;"></span> Перебір</span>' +
+                '</div>' +
+                '<div style="display:flex;gap:4px;">' +
+                    '<button class="tcal-footer-btn today-btn" onclick="tmCalToday()">Сьогодні</button>' +
+                    '<button class="tcal-footer-btn clear-btn" onclick="tmCalClear()">Скинути</button>' +
                 '</div>' +
             '</div>' +
         '</div>' +
@@ -6841,7 +6881,7 @@ function renderTmCalDay(d, key, info, otherMonth, isToday, selectedKey) {
         else if (info.euua > 0) cls += ' dir-eu-ua';
     }
 
-    // Доти за напрямком — та сама логіка що й у сайдбарному віджеті (renderCalDay)
+    // Доти за напрямком — та сама логіка, що й у сайдбарному віджеті (renderCalDay)
     var dotsHtml = '';
     if (info) {
         if (info.overbooked) {
@@ -6863,7 +6903,7 @@ function renderTmCalDay(d, key, info, otherMonth, isToday, selectedKey) {
         nameHtml = '<span class="tcal-tripname" title="' + tmEsc(firstCity + extra) + '">' + tmEsc(firstCity) + extra + '</span>';
     }
 
-    // Tooltip
+    // Tooltip з деталями рейсів
     var titleLines = [];
     if (isCurrent && tmCurrentFullName) {
         titleLines.push('👤 ' + tmCurrentFullName + (tmCurrentBound ? ' · прив\'язаний' : ' · лише дата виїзду'));
@@ -6914,6 +6954,19 @@ function tmCalToday() {
     var now = new Date();
     tmCalMonth = now.getMonth();
     tmCalYear = now.getFullYear();
+    renderTripModalCalendar();
+}
+
+// Скидання вибору (дата + авто), залишає місяць, підсвітку знімає
+function tmCalClear() {
+    tmSelectedDate = '';
+    tmSelectedCalId = '';
+    var saveBtn = document.getElementById('tmSaveBtn');
+    if (saveBtn) saveBtn.disabled = true;
+    var vehWrap = document.getElementById('tmVehiclesWrap');
+    if (vehWrap) vehWrap.innerHTML = '';
+    var step = document.getElementById('tmStep');
+    if (step) step.textContent = 'Крок 1 — оберіть дату';
     renderTripModalCalendar();
 }
 

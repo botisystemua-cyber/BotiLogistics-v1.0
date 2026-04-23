@@ -1099,12 +1099,31 @@ body {
 @keyframes pulse-new24 { 0%,100%{opacity:1} 50%{opacity:0.6} }
 @keyframes pulse-badge { 0%,100%{transform:scale(1);} 50%{transform:scale(1.15);} }
 
-/* Route Strip */
+/* Route Strip — кліком відкриває модалку призначення/зміни маршруту.
+   Зелений has-route = посилка у маршруті; жовтий no-route = ще не призначено. */
 .card-route-strip {
   display: flex; align-items: center; gap: 6px;
-  padding: 4px 10px;
-  background: #f0fdf4; border-top: 1px solid #d1fae5;
-  font-size: 11px; color: #065f46; font-weight: 600;
+  padding: 6px 10px;
+  border-top: 1px solid var(--border);
+  font-size: 11px; font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.card-route-strip .card-route-text { flex: 1; min-width: 0; }
+.card-route-strip .card-route-arrow { font-size: 14px; color: var(--text-secondary); flex-shrink: 0; }
+.card-route-strip.has-route {
+  background: #f0fdf4; border-top-color: #d1fae5; color: #065f46;
+}
+.card-route-strip.has-route:hover { background: #dcfce7; }
+.card-route-strip.no-route {
+  background: #fffbeb; border-top: 1px dashed #fbbf24; color: #92400e;
+}
+.card-route-strip.no-route:hover { background: #fef3c7; }
+
+/* Позначка «поточний маршрут» у списку модалки */
+.route-pick-btn.route-pick-current {
+  border-color: #10b981;
+  background: #f0fdf4;
 }
 
 /* Quick Actions Panel */

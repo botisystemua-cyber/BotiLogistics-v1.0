@@ -190,7 +190,6 @@ const ALL_CARD_COLUMNS = [
   { key: 'leadBadge',   label: '🔵 Статус ліда' },
   { key: 'payBadge',    label: '💳 Статус оплати' },
   { key: 'checkBadge',  label: '✅ Контроль перевірки' },
-  { key: 'route',       label: '🚐 Маршрут / Рейс' },
   { key: 'note',        label: '📝 Примітка' },
   { key: 'description', label: '📄 Опис посилки' },
   { key: 'qty',         label: '📊 Кількість позицій' },
@@ -251,7 +250,7 @@ const ALL_PARCEL_COLUMNS = [
   { key: 'timing',      label: '⏱️ Таймінг' },
 ];
 
-const DEFAULT_CARD_COLS = ['phone','weight','sum','deposit','debt','ttn','smartId','date','statusPkg','tag','address','leadBadge','payBadge','checkBadge','route'];
+const DEFAULT_CARD_COLS = ['phone','weight','sum','deposit','debt','ttn','smartId','date','statusPkg','tag','address','leadBadge','payBadge','checkBadge'];
 const DEFAULT_OSNOVNE_COLS = ['sender','phone','addressFrom','receiver','phoneRecv','addressTo','leadStatus','tag'];
 const DEFAULT_PARCEL_COLS = ['description','details','qty','weight','estValue','ttn','innerNum','statusPkg','sum','currency','payStatus','photo','rating','ratingComment'];
 
@@ -265,29 +264,90 @@ const ALLOWED_TABS = ['parcel','basic','np','finance','route','system'];
 let colCfgMode = 'card';
 let colCfgTemp = [];
 
-function getDefaultTab() {
+// Мапінг localStorage-ключів на ключі у users.ui_prefs (jsonb).
+// DB тепер — source of truth; localStorage слугує sync-fallback'ом на
+// випадок холодного рендеру (до того як sbLoadUiPrefs() повернеться).
+const UI_PREFS_MAP = {
+  [LS_KEY_CARD]:        'cargo_card_cols',
+  [LS_KEY_OSNOVNE]:     'cargo_osnovne_cols',
+  [LS_KEY_PARCEL]:      'cargo_parcel_cols',
+  [LS_KEY_DEFAULT_TAB]: 'cargo_default_tab',
+};
+
+function _readUiPref(lsKey, fallback) {
+  // 1) DB-кеш (source of truth після логіну)
+  const prefKey = UI_PREFS_MAP[lsKey];
+  if (prefKey && typeof window.sbGetUiPrefsSync === 'function') {
+    const prefs = window.sbGetUiPrefsSync();
+    if (prefs && prefs[prefKey] !== undefined && prefs[prefKey] !== null) return prefs[prefKey];
+  }
+  // 2) localStorage (legacy або write-through cache)
   try {
-    const v = localStorage.getItem(LS_KEY_DEFAULT_TAB);
-    if (v && ALLOWED_TABS.includes(v)) return v;
-  } catch(e) {}
+    const s = localStorage.getItem(lsKey);
+    if (s != null && s !== '') {
+      // default_tab — скаляр, решта — jsonArray
+      return lsKey === LS_KEY_DEFAULT_TAB ? s : JSON.parse(s);
+    }
+  } catch (e) { /* ignore */ }
+  return fallback;
+}
+
+function _writeUiPref(lsKey, value) {
+  // Write-through: спочатку БД, потім localStorage (як кеш / offline fallback)
+  const prefKey = UI_PREFS_MAP[lsKey];
+  if (prefKey && typeof window.sbSaveUiPref === 'function') {
+    // Fire-and-forget — UI не чекає на мережу
+    window.sbSaveUiPref(prefKey, value);
+  }
+  try {
+    localStorage.setItem(lsKey, lsKey === LS_KEY_DEFAULT_TAB ? String(value) : JSON.stringify(value));
+  } catch (e) { /* quota? ignore */ }
+}
+
+// Одноразова міграція: якщо в БД ще не було налаштувань (новий юзер чи
+// перший вхід після оновлення), а в localStorage залишились з попередніх
+// сесій — заливаємо їх у БД, щоб нічого не втратити. Виконується раз
+// після sbLoadUiPrefs().
+async function _migrateLegacyColPrefsToDb(prefs) {
+  if (!prefs || typeof window.sbSaveUiPref !== 'function') return;
+  const pairs = [
+    [LS_KEY_CARD,        'cargo_card_cols',    'array'],
+    [LS_KEY_OSNOVNE,     'cargo_osnovne_cols', 'array'],
+    [LS_KEY_PARCEL,      'cargo_parcel_cols',  'array'],
+    [LS_KEY_DEFAULT_TAB, 'cargo_default_tab',  'scalar'],
+  ];
+  for (const [lsKey, prefKey, type] of pairs) {
+    if (prefs[prefKey] !== undefined && prefs[prefKey] !== null) continue; // в БД вже є
+    const raw = localStorage.getItem(lsKey);
+    if (raw == null || raw === '') continue;
+    try {
+      const parsed = type === 'array' ? JSON.parse(raw) : raw;
+      await window.sbSaveUiPref(prefKey, parsed);
+    } catch (e) { /* bad legacy value — пропускаємо */ }
+  }
+}
+
+function getDefaultTab() {
+  const v = _readUiPref(LS_KEY_DEFAULT_TAB, null);
+  if (v && ALLOWED_TABS.includes(v)) return v;
   return DEFAULT_TAB_PKG;
 }
 function setDefaultTab(tab) {
   if (!ALLOWED_TABS.includes(tab)) return;
-  try { localStorage.setItem(LS_KEY_DEFAULT_TAB, tab); } catch(e) {}
+  _writeUiPref(LS_KEY_DEFAULT_TAB, tab);
 }
 
 function getVisibleCardColumns() {
-  try { const s = localStorage.getItem(LS_KEY_CARD); if (s) return JSON.parse(s); } catch(e) {}
-  return [...DEFAULT_CARD_COLS];
+  const v = _readUiPref(LS_KEY_CARD, null);
+  return Array.isArray(v) ? v : [...DEFAULT_CARD_COLS];
 }
 function getVisibleOsnovneColumns() {
-  try { const s = localStorage.getItem(LS_KEY_OSNOVNE); if (s) return JSON.parse(s); } catch(e) {}
-  return [...DEFAULT_OSNOVNE_COLS];
+  const v = _readUiPref(LS_KEY_OSNOVNE, null);
+  return Array.isArray(v) ? v : [...DEFAULT_OSNOVNE_COLS];
 }
 function getVisibleParcelColumns() {
-  try { const s = localStorage.getItem(LS_KEY_PARCEL); if (s) return JSON.parse(s); } catch(e) {}
-  return [...DEFAULT_PARCEL_COLS];
+  const v = _readUiPref(LS_KEY_PARCEL, null);
+  return Array.isArray(v) ? v : [...DEFAULT_PARCEL_COLS];
 }
 
 function getCfgDataForMode(mode) {
@@ -374,7 +434,8 @@ function saveColCfg() {
     return;
   }
   const cfg = getCfgDataForMode(colCfgMode);
-  localStorage.setItem(cfg.lsKey, JSON.stringify(colCfgTemp));
+  // Write-through: DB (source of truth) + localStorage (sync кеш).
+  _writeUiPref(cfg.lsKey, colCfgTemp);
   showToast('Налаштування збережено', 'success');
   closeColCfg();
   renderCards();
@@ -705,6 +766,18 @@ document.addEventListener('DOMContentLoaded', async function() {
   }
 
   updateAvatarUI();
+
+  // Per-user UI-налаштування з БД (users.ui_prefs). Не блокуємо основний
+  // init — якщо завантажиться пізніше за renderCards, він просто
+  // ре-рендериться з новими налаштуваннями. До цього працює legacy
+  // localStorage-кеш (для старих юзерів, які вже мали свої налаштування).
+  if (typeof window.sbLoadUiPrefs === 'function') {
+    window.sbLoadUiPrefs().then(async function(prefs) {
+      await _migrateLegacyColPrefsToDb(prefs);
+      // Фінальний ре-рендер з акуратно завантаженими налаштуваннями
+      if (typeof renderCards === 'function') renderCards();
+    }).catch(function() { /* не падаємо навіть якщо БД недоступна */ });
+  }
 
   // Show install banner unless already running as installed PWA
   if (!window.matchMedia('(display-mode: standalone)').matches && !navigator.standalone) {
@@ -1068,10 +1141,18 @@ function renderCard(p) {
   // TTN display
   const ttnHtml = (isUE && ttn) ? `<span class="card-ttn">TTH: ${highlightMatch(ttn)}</span>` : '';
 
-  // Route strip
+  // Route strip — завжди видимий. Зелений «✅ В маршруті» якщо призначено,
+  // жовтий «⚠️ Без маршруту» якщо ще ні. Клік — відкриває модалку призначення
+  // (як на пасажирській картці «Призначити рейс»).
   const routeStrip = rteId
-    ? `<div class="card-route-strip">✅ В маршруті: ${highlightMatch(rteId)}${auto ? ' · 🚐 ' + highlightMatch(auto) : ''}</div>`
-    : '';
+    ? `<div class="card-route-strip has-route" onclick="event.stopPropagation(); openRouteModal('${pkgId}')">
+         <span class="card-route-text">✅ В маршруті: ${highlightMatch(rteId)}${auto ? ' · 🚐 ' + highlightMatch(auto) : ''}</span>
+         <span class="card-route-arrow">›</span>
+       </div>`
+    : `<div class="card-route-strip no-route" onclick="event.stopPropagation(); openRouteModal('${pkgId}')">
+         <span class="card-route-text">⚠️ Без маршруту — натисніть щоб призначити</span>
+         <span class="card-route-arrow">›</span>
+       </div>`;
 
   // Meta tags (configurable via column configurator)
   const visCols = getVisibleCardColumns();
@@ -1258,7 +1339,7 @@ function renderCard(p) {
           ${metaHtml ? `<div class="card-meta-tags">${metaHtml}</div>` : ''}
         </div>
       </div>
-      ${visCols.includes('route') ? routeStrip : ''}
+      ${routeStrip}
       <div class="card-actions" id="actions-${pkgId}">
         <button onclick="event.stopPropagation(); window.open('tel:${phone}')">📞 Дзвінок</button>
         <button onclick="event.stopPropagation(); openMessenger('${phone}','${pkgId}')">💬 Писати</button>
@@ -1268,7 +1349,6 @@ function renderCard(p) {
         ${controlCheck === 'В перевірці' ? `<button onclick="event.stopPropagation(); rejectVerification('${pkgId}')" style="background:var(--danger);color:#fff;">❌ Відхилити</button>` : ''}
         ${controlCheck === 'Готова до маршруту' ? `<span style="display:inline-flex;align-items:center;padding:6px 12px;background:#dcfce7;color:#166534;border-radius:8px;font-size:12px;font-weight:600;">✅ Готова</span>` : ''}
         ${controlCheck === 'Відхилено' ? `<span style="display:inline-flex;align-items:center;padding:6px 12px;background:#fee2e2;color:#991b1b;border-radius:8px;font-size:12px;font-weight:600;">❌ Відхилено</span>` : ''}
-        <button onclick="event.stopPropagation(); openRouteModal('${pkgId}')">🚖 Маршрут</button>
         ${leadStatus !== 'Невідомий' ? `<button onclick="event.stopPropagation(); setLeadUnknown('${pkgId}')" style="background:#fef3c7;color:#92400e;">❓ Невідомий</button>` : `<span style="display:inline-flex;align-items:center;padding:6px 12px;background:#fef3c7;color:#92400e;border-radius:8px;font-size:12px;font-weight:600;">❓ Невідомий</span>`}
         <button class="btn-danger" onclick="event.stopPropagation(); deleteRecord('${pkgId}')">🗑️</button>
       </div>
@@ -5003,7 +5083,14 @@ function openRouteModal(pkgId) {
   }
   _routeModalPkgIds = [pkgId];
   _routeModalMode = 'single';
-  showRoutePickerModal('🗺️ Перенести в маршрут', 'Обрати маршрут для посилки:');
+  // Заголовок і підзаголовок міняємо залежно від того, чи лід уже у маршруті.
+  var pkg = allData.find(function(p) { return p['PKG_ID'] === pkgId; });
+  var inRoute = !!(pkg && pkg['RTE_ID']);
+  var title = inRoute ? '🗺️ Перенести в маршрут' : '🗺️ Призначити маршрут';
+  var subtitle = inRoute
+    ? 'Оберіть інший маршрут, щоб перенести посилку (або «✕ Зняти з маршруту» внизу):'
+    : 'Обрати маршрут для посилки:';
+  showRoutePickerModal(title, subtitle);
 }
 
 function closeRouteDetail() {
@@ -5025,18 +5112,38 @@ function showRoutePickerModal(title, subtitle) {
     document.body.appendChild(overlay);
   }
 
+  // Визначаємо поточний маршрут(и) пакетів, щоб підсвітити в списку та
+  // показати кнопку «Зняти з маршруту» у футері (якщо принаймні один уже
+  // призначений). Для bulk-режиму — достатньо щоб хоча б один мав маршрут.
+  var anyInRoute = false;
+  var currentRteIds = new Set();
+  _routeModalPkgIds.forEach(function(id) {
+    var pkg = allData.find(function(p) { return p['PKG_ID'] === id; });
+    if (pkg && pkg['RTE_ID']) {
+      anyInRoute = true;
+      currentRteIds.add(pkg['RTE_ID']);
+    }
+  });
+
   var routeButtons = '';
   if (routes.length === 0) {
     routeButtons = '<div style="text-align:center;padding:20px;color:var(--text-secondary);font-size:12px;">Немає доступних маршрутів.<br>Створіть маршрут у меню зліва.</div>';
   } else {
     routeButtons = routes.map(function(r, i) {
       var name = r.city || (r.sheetName || '').replace(/^Маршрут_/, '');
-      return '<button class="route-pick-btn" onclick="doAssignToRoute(' + i + ')">' +
-        '<span>🗺️ ' + name + '</span>' +
+      var isCurrent = currentRteIds.has(r.sheetName);
+      var currentMark = isCurrent ? ' <span style="color:#059669;font-size:10px;">· поточний</span>' : '';
+      return '<button class="route-pick-btn' + (isCurrent ? ' route-pick-current' : '') + '" onclick="doAssignToRoute(' + i + ')">' +
+        '<span>🗺️ ' + name + currentMark + '</span>' +
         '<span style="font-size:10px;color:var(--text-secondary);font-weight:400;">👤' + (r.paxCount||0) + ' · 📦' + (r.parcelCount||0) + '</span>' +
       '</button>';
     }).join('');
   }
+
+  // Футер: «Скасувати» завжди, «✕ Зняти з маршруту» якщо лід(и) вже у маршруті.
+  var unassignBtn = anyInRoute
+    ? '<button onclick="doRemoveFromRoute()" style="padding:6px 16px;border:1px solid #fecaca;border-radius:6px;background:#fef2f2;color:#b91c1c;font-family:inherit;font-size:12px;cursor:pointer;font-weight:600;">✕ Зняти з маршруту</button>'
+    : '';
 
   overlay.innerHTML =
     '<div class="route-detail-panel">' +
@@ -5048,8 +5155,9 @@ function showRoutePickerModal(title, subtitle) {
         '<div style="font-size:12px;color:var(--text-secondary);margin-bottom:10px;">' + subtitle + '</div>' +
         '<div style="display:flex;flex-direction:column;gap:8px;">' + routeButtons + '</div>' +
       '</div>' +
-      '<div class="route-modal-footer">' +
-        '<button onclick="closeRouteDetail()" style="padding:6px 16px;border:1px solid var(--border);border-radius:6px;background:#fff;font-family:inherit;font-size:12px;cursor:pointer;">Скасувати</button>' +
+      '<div class="route-modal-footer" style="display:flex;justify-content:space-between;gap:8px;">' +
+        unassignBtn +
+        '<button onclick="closeRouteDetail()" style="padding:6px 16px;border:1px solid var(--border);border-radius:6px;background:#fff;font-family:inherit;font-size:12px;cursor:pointer;margin-left:auto;">Скасувати</button>' +
       '</div>' +
     '</div>';
   overlay.classList.add('open');
@@ -5102,6 +5210,57 @@ async function doAssignToRoute(routeIdx) {
     try { await loadRouteSheetData(routeIdx, true); renderRoutes(); } catch(_) {}
   }
   // Оновлюємо лічильники в sidebar
+  if (typeof renderRouteSidebar === 'function') renderRouteSidebar();
+}
+
+// «✕ Зняти з маршруту» — викликається з футера модалки вибору маршруту.
+// Знімає RTE_ID у всіх _routeModalPkgIds, локально чистить allData й
+// інвалідує кеш старих маршрутів, щоб sidebar/список оновились одразу.
+async function doRemoveFromRoute() {
+  var ids = _routeModalPkgIds.slice();
+  closeRouteDetail();
+  if (!ids.length) return;
+
+  // Збираємо зачеплені маршрути (для інвалідації кешу і оновлення лічильників)
+  var affected = new Set();
+  ids.forEach(function(id) {
+    var pkg = allData.find(function(p) { return p['PKG_ID'] === id; });
+    if (pkg && pkg['RTE_ID']) affected.add(pkg['RTE_ID']);
+  });
+
+  showToast('Знімаємо ' + ids.length + ' запис(ів) з маршруту...', 'info');
+
+  var success = 0;
+  for (var i = 0; i < ids.length; i++) {
+    var pkg = allData.find(function(p) { return p['PKG_ID'] === ids[i]; });
+    var rteId = pkg ? pkg['RTE_ID'] : '';
+    if (!rteId) continue;
+    try {
+      var res = await apiPost('removeFromRoute', { pkg_id: ids[i], rte_id: rteId });
+      if (res.ok) {
+        success++;
+        if (pkg) pkg['RTE_ID'] = '';
+      }
+    } catch (e) { /* ignore */ }
+  }
+
+  // Інвалідуємо кеш зачеплених маршрутів — наступне відкриття перезавантажить rows.
+  affected.forEach(function(rteId) {
+    var r = routes.find(function(x) { return x.sheetName === rteId; });
+    if (r) {
+      r.rows = null;
+      r.rowCount = Math.max(0, (r.rowCount || 0) - success);
+      r.parcelCount = Math.max(0, (r.parcelCount || 0) - success);
+    }
+    if (typeof allRouteSheets !== 'undefined') {
+      var allIdx = allRouteSheets.findIndex(function(s) { return s.sheetName === rteId; });
+      if (allIdx !== -1) { allRouteSheets[allIdx].rows = null; }
+    }
+  });
+
+  showToast('Знято з маршруту: ' + success + ' з ' + ids.length, success > 0 ? 'success' : 'error');
+  if (_routeModalMode === 'bulk') afterBulkAction();
+  else renderCards();
   if (typeof renderRouteSidebar === 'function') renderRouteSidebar();
 }
 
