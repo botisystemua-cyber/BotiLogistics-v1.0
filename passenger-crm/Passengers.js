@@ -4587,18 +4587,39 @@ function renderTripsCalendarView() {
 }
 
 function renderTripsCalCell(dayNum, key, dayTrips, otherMonth, isToday) {
-    // Компактний дизайн: номер дня + бейдж з сумою зайнятих місць за день.
-    // Клік → popup зі списком авто для цієї дати (вибір рейсу).
+    // Компактна клітинка у стилі sidebar-paxCalendar:
+    //   • зверху — крапки (кількість = кількість авто на дату, максимум 3,
+    //     далі «+N» текст)
+    //   • центр — номер дня
+    //   • знизу — бейдж із сумою зайнятих місць по всіх рейсах дня
+    //     (>3 рейсів → жовтий «many-trips» bewarn).
+    // Клік = перемикання у List-view з фільтром по цій даті (див. tripsCalDayClick).
     let cls = 'tc-cell pax-cal-style';
     if (otherMonth) cls += ' other-month';
     if (isToday) cls += ' today';
 
     const tripsCount = dayTrips.length;
+    // Унікальних авто (бо один auto може мати кілька записів, а крапка = «одне авто»)
+    const uniqueAutos = new Set();
     let totalOccupied = 0;
-    dayTrips.forEach(t => { totalOccupied += (parseInt(t.occupied) || 0); });
+    dayTrips.forEach(t => {
+        const auto = cleanAutoName(t.auto_name) || t.cal_id || ('_' + (t.auto_id || ''));
+        uniqueAutos.add(auto);
+        totalOccupied += (parseInt(t.occupied) || 0);
+    });
+    const autoCount = uniqueAutos.size;
 
-    // Жовтий бейдж якщо більше 3 рейсів (warning — багато активності);
-    // інакше стандартний червоний як у pax-календарі.
+    // Крапки: max 3, «+N» для решти
+    let dotsHtml = '';
+    if (autoCount > 0) {
+        const visibleDots = Math.min(3, autoCount);
+        const more = autoCount > 3 ? (autoCount - 3) : 0;
+        const dots = Array(visibleDots).fill('<span class="tcal-dot"></span>').join('');
+        const moreTag = more > 0 ? '<span class="tcal-dots-more">+' + more + '</span>' : '';
+        dotsHtml = '<div class="tcal-dots">' + dots + moreTag + '</div>';
+    }
+
+    // Бейдж суми зайнятих місць. Жовтий якщо рейсів > 3.
     const badgeCls = tripsCount > 3 ? 'pax-cal-badge many-trips' : 'pax-cal-badge';
     const badgeHtml = (tripsCount > 0 && totalOccupied > 0)
         ? '<span class="' + badgeCls + '" title="' + tripsCount + ' рейс(ів), ' + totalOccupied + ' зайнято">' + totalOccupied + '</span>'
@@ -4606,14 +4627,32 @@ function renderTripsCalCell(dayNum, key, dayTrips, otherMonth, isToday) {
 
     const todayLabel = isToday ? '<div class="tc-today-label">Сьогодні</div>' : '';
     const onClick = tripsCount > 0
-        ? 'onclick="event.stopPropagation();showTripsCalDay(\'' + key + '\')"'
+        ? 'onclick="event.stopPropagation();tripsCalDayClick(\'' + key + '\')"'
         : '';
 
     return '<div class="' + cls + '" data-key="' + key + '" ' + onClick + '>' +
         todayLabel +
+        dotsHtml +
         '<div class="pax-cal-num">' + dayNum + '</div>' +
         badgeHtml +
     '</div>';
+}
+
+// Клік по даті у tripsCalendar → перемикаємося у List-view з фільтром
+// по цій даті; у списку одразу видно всі рейси цього дня (у форматі, як
+// у звичайному режимі «Список»).
+function tripsCalDayClick(key) {
+    // key = 'DD.MM.YYYY' → конвертуємо у ISO для tripDateFilter
+    try {
+        const parts = key.split('.');
+        if (parts.length === 3) {
+            tripDateFilter = parts[2] + '-' + parts[1] + '-' + parts[0];
+        } else {
+            tripDateFilter = '';
+        }
+    } catch (_) { tripDateFilter = ''; }
+    setTripsViewMode('list');
+    renderTrips();
 }
 
 // Відкриваємо модалку рейсу — реюзимо картку рейсу з діями
@@ -6895,6 +6934,25 @@ function renderTmCalDay(d, key, info, otherMonth, isToday, selectedKey) {
     }
     var titleAttr = titleLines.length ? ' title="' + tmEsc(titleLines.join('\n')) + '"' : '';
 
+    // Крапки зверху = кількість унікальних авто (max 3, далі «+N»).
+    var dotsHtml = '';
+    if (info && info.trips && info.trips.length) {
+        var uniqueAutos = new Set();
+        info.trips.forEach(function(t) {
+            var key = (t.auto_name || '') + '|' + (t.auto_id || '') + '|' + (t.cal_id || '');
+            uniqueAutos.add(key);
+        });
+        var autoCount = uniqueAutos.size;
+        if (autoCount > 0) {
+            var visible = Math.min(3, autoCount);
+            var more = autoCount > 3 ? (autoCount - 3) : 0;
+            var dots = '';
+            for (var di = 0; di < visible; di++) dots += '<span class="tcal-dot"></span>';
+            var moreTag = more > 0 ? '<span class="tcal-dots-more">+' + more + '</span>' : '';
+            dotsHtml = '<div class="tcal-dots">' + dots + moreTag + '</div>';
+        }
+    }
+
     // Бейдж: сума зайнятих місць за день. >3 рейсів → клас many-trips (жовтий).
     var badgeHtml = '';
     if (info && info.count > 0 && info.pax > 0) {
@@ -6907,7 +6965,7 @@ function renderTmCalDay(d, key, info, otherMonth, isToday, selectedKey) {
         : '';
     var todayLabel = isToday ? '<span class="tcal-today-label">Сьогодні</span>' : '';
 
-    // Клік: є рейси і не повний → selectTripDate (крок 2);
+    // Клік: є рейси і не повний → selectTripDate (inline vehicle list знизу);
     //       повний день → showTmDayInfo (popup з деталями).
     var onclick = '';
     if (hasTrip && !isFull) onclick = ' onclick="selectTripDate(\'' + key + '\')"';
@@ -6916,6 +6974,7 @@ function renderTmCalDay(d, key, info, otherMonth, isToday, selectedKey) {
     return '<button class="' + cls + '" data-key="' + key + '"' + onclick + titleAttr + '>' +
         currentBadge +
         todayLabel +
+        dotsHtml +
         '<span class="pax-cal-num">' + d + '</span>' +
         badgeHtml +
     '</button>';
