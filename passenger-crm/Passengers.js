@@ -5152,6 +5152,10 @@ function updateSeatPreview(idx) {
         occupiedMap: {}, selected: '',
         interactive: false,
     });
+
+    // Widen the trip-form bottom sheet when bus layout is selected
+    const sheet = vb.closest('.bottom-sheet');
+    if (sheet) sheet.classList.toggle('has-bus', layout === 'bus');
 }
 
 // ================================================================
@@ -5551,9 +5555,10 @@ function renderSeatPickerModal(trip, occupiedMap) {
     const tripCity = trip.city || '';
     const occ = Object.keys(occupiedMap).length;
     const free = maxSeats - occ;
+    const modalCls = layout === 'bus' ? 'seat-picker-modal has-bus' : 'seat-picker-modal';
 
     const html = `<div class="seat-picker-overlay" id="seatPickerOverlay" onclick="if(event.target===this)closeSeatPicker()">
-        <div class="seat-picker-modal">
+        <div class="${modalCls}">
             <div class="seat-picker-header">
                 <h3>Вибір місця</h3>
                 <button class="seat-picker-close" onclick="closeSeatPicker()">✕</button>
