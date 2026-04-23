@@ -174,6 +174,8 @@ let SWISS_POINTS = [];
 
 // ===== [SECT-COLUMNS] COLUMN CONFIGURATOR =====
 const ALL_CARD_COLUMNS = [
+  { key: 'sender',      label: '👤 ПІБ відправника' },
+  { key: 'receiver',    label: '👤 ПІБ отримувача' },
   { key: 'phone',       label: '📞 Телефон реєстратора' },
   { key: 'phoneRecv',   label: '📱 Телефон отримувача' },
   { key: 'weight',      label: '⚖️ Вага (кг)' },
@@ -250,7 +252,7 @@ const ALL_PARCEL_COLUMNS = [
   { key: 'timing',      label: '⏱️ Таймінг' },
 ];
 
-const DEFAULT_CARD_COLS = ['phone','weight','sum','deposit','debt','ttn','smartId','date','statusPkg','tag','address','leadBadge','payBadge','checkBadge'];
+const DEFAULT_CARD_COLS = ['sender','receiver','phone','weight','sum','deposit','debt','ttn','smartId','date','statusPkg','tag','address','leadBadge','payBadge','checkBadge'];
 const DEFAULT_OSNOVNE_COLS = ['sender','phone','addressFrom','receiver','phoneRecv','addressTo','leadStatus','tag'];
 const DEFAULT_PARCEL_COLS = ['description','details','qty','weight','estValue','ttn','innerNum','statusPkg','sum','currency','payStatus','photo','rating','ratingComment'];
 
@@ -1318,8 +1320,17 @@ function renderCard(p) {
         </div>
         <div class="card-row2-wrap">
           <div class="card-row2">
-            <span class="card-pkgid">${highlightMatch(pkgId)}</span>
-            <span class="card-sender-recv">👤 ${name ? highlightMatch(name) : '—'} → ${receiver ? highlightMatch(receiver) : '—'}</span>
+            ${(() => {
+              // Відправник / отримувач — два окремих тоггли. pkg_id прибрано —
+              // його видно в деталях на вкладці «⚙ Системні» (readonly).
+              const showSender = visCols.includes('sender');
+              const showRecv   = visCols.includes('receiver');
+              if (!showSender && !showRecv) return '';
+              const parts = [];
+              if (showSender) parts.push(name ? highlightMatch(name) : '—');
+              if (showRecv)   parts.push(receiver ? highlightMatch(receiver) : '(невідомо)');
+              return `<span class="card-sender-recv">👤 ${parts.join(' → ')}</span>`;
+            })()}
             ${(_unreadCounts[pkgId] || 0) > 0 ? `<span style="display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 6px;border-radius:10px;background:#ef4444;color:#fff;font-size:11px;font-weight:700;animation:pulse-badge 2s infinite;" title="${_unreadCounts[pkgId]} нових повідомлень">${_unreadCounts[pkgId]}</span>` : ''}
             ${visCols.includes('leadBadge') ? leadBadge : ''} ${visCols.includes('payBadge') ? payBadge : ''} ${visCols.includes('checkBadge') ? checkBadge : ''}
           </div>
@@ -2998,7 +3009,57 @@ function onSearch(value) {
 // фільтри скидаються до дефолту — так жодний «застарілий» фільтр не тягнеться
 // у новий контекст. Той самий патерн що ми реалізували у passenger-crm.
 var _activeSidebarSection = 'direction';
-var _SIDEBAR_SECTIONS = ['direction', 'verify', 'routes', 'dispatch', 'expenses'];
+// Відправку/Витрати/Зведення перенесено всередину «Маршрути» як підсекції,
+// тож вони більше не в топ-рівні.
+var _SIDEBAR_SECTIONS = ['direction', 'verify', 'routes'];
+
+// Підсекції всередині «Маршрути» (dispatch / expenses) — також mutual-exclusive:
+// відкрита лише одна, інша згортається. Зведення — просто кнопка, не акордеон.
+var _activeRoutesSubSection = null;
+var _ROUTES_SUBSECTIONS = ['dispatch', 'expenses'];
+
+function setActiveRoutesSubSection(name) {
+  _activeRoutesSubSection = name;
+  // Desktop
+  _ROUTES_SUBSECTIONS.forEach(function(s) {
+    var sec = document.querySelector('.sidebar .sidebar-sub-section[data-sub="' + s + '"]');
+    if (!sec) return;
+    var body = sec.querySelector('.sidebar-sub-body');
+    var toggle = sec.querySelector('.sub-toggle');
+    if (body) body.classList.toggle('hidden', s !== name);
+    if (toggle) toggle.classList.toggle('open', s === name);
+  });
+  // Mobile
+  _ROUTES_SUBSECTIONS.forEach(function(s) {
+    var sec = document.querySelector('#mobileSidebar .mob-sub-section[data-sub="' + s + '"]');
+    if (!sec) return;
+    var body = sec.querySelector('.mob-sub-body');
+    var toggle = sec.querySelector('.mob-sub-toggle');
+    if (body) body.classList.toggle('mob-collapsed', s !== name);
+    if (toggle) toggle.classList.toggle('open', s === name);
+  });
+}
+
+function toggleSubSection(header) {
+  var sec = header.closest('.sidebar-sub-section');
+  var name = sec && sec.getAttribute('data-sub');
+  if (!name) return;
+  var body = sec.querySelector('.sidebar-sub-body');
+  var isCollapsed = body && body.classList.contains('hidden');
+  // Відкриваємо Маршрути-секцію (якщо раптом закрита), бо sub-section живе всередині.
+  if (_activeSidebarSection !== 'routes') setActiveSidebarSection('routes');
+  setActiveRoutesSubSection(isCollapsed ? name : null);
+}
+
+function toggleMobSubSection(titleEl) {
+  var sec = titleEl.closest('.mob-sub-section');
+  var name = sec && sec.getAttribute('data-sub');
+  if (!name) return;
+  var body = sec.querySelector('.mob-sub-body');
+  var isCollapsed = body && body.classList.contains('mob-collapsed');
+  if (_activeSidebarSection !== 'routes') setActiveSidebarSection('routes');
+  setActiveRoutesSubSection(isCollapsed ? name : null);
+}
 
 // Повертає фільтр секції до дефолту. Не чіпає інші секції.
 function _resetSidebarSectionFilter(name) {

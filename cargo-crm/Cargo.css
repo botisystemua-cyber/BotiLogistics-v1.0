@@ -275,6 +275,52 @@ body {
 .sidebar-item.active-ue .badge-count { background: rgba(29,78,216,0.15); color: #1d4ed8; }
 .sidebar-item.active-eu .badge-count { background: rgba(4,120,87,0.15); color: #047857; }
 
+/* Підсекції всередині «Маршрути» (Відправка / Витрати) — менші, з відступом
+   від лівого краю, щоб було видно що це дочірні пункти. */
+.sidebar-sub-section {
+  margin-top: 8px;
+  border-top: 1px dashed rgba(146,64,14,0.2);
+  padding-top: 6px;
+}
+.sidebar-sub-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 12px;
+  cursor: pointer;
+  border-radius: 8px;
+  background: #fff7ed;
+  color: #7c2d12;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  user-select: none;
+  transition: background 0.15s;
+}
+.sidebar-sub-header:hover { background: #fed7aa; }
+.sidebar-sub-header .sub-toggle { transition: transform 0.2s; font-size: 10px; color: #9a3412; }
+.sidebar-sub-header .sub-toggle.open { transform: rotate(90deg); }
+.sidebar-sub-body {
+  padding: 6px 4px 4px;
+  max-height: 400px;
+  overflow-y: auto;
+  transition: max-height 0.3s ease, opacity 0.25s ease;
+  opacity: 1;
+}
+.sidebar-sub-body.hidden { max-height: 0; padding-top: 0; padding-bottom: 0; opacity: 0; display: block; overflow: hidden; }
+
+/* Зведення рейсів — акцентна кнопка всередині Маршрутів */
+.sidebar-item.sidebar-item-summary {
+  margin-top: 10px;
+  background: linear-gradient(135deg, #fef3c7, #fde68a);
+  border-color: #fcd34d;
+  color: #7c2d12;
+}
+.sidebar-item.sidebar-item-summary:hover {
+  border-color: #d97706;
+  background: linear-gradient(135deg, #fde68a, #fcd34d);
+}
+
 /* ===== MAIN CONTENT ===== */
 .main-content {
   flex: 1;
@@ -1567,6 +1613,31 @@ body {
   font-weight: 700;
   margin: 8px 12px;
 }
+
+/* Mobile підсекції всередині Маршрутів */
+.mobile-sidebar .mob-sub-section {
+  margin: 6px 12px 0;
+  border-top: 1px dashed rgba(146,64,14,0.2);
+  padding-top: 6px;
+}
+.mobile-sidebar .mob-sub-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 11px 14px;
+  border-radius: 10px;
+  background: #fff7ed;
+  color: #7c2d12;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  user-select: none;
+}
+.mobile-sidebar .mob-sub-title:active { background: #fed7aa; }
+.mob-sub-toggle { font-size: 11px; transition: transform 0.2s; color: #9a3412; }
+.mob-sub-toggle.open { transform: rotate(90deg); }
+.mobile-sidebar .mob-sub-body { padding: 4px 0 0; }
+.mobile-sidebar .mob-sub-body.mob-collapsed { display: none; }
 .mobile-sidebar .mob-item-muted {
   background: #f1f5f9;
   color: #64748b;
