@@ -5163,15 +5163,15 @@ function getSeatLayout(layout, maxSeats, hasReserve) {
             w: (px1 - px0) / 771 * 100,
             h: (py1 - py0) / 324 * 100,
         });
-        seats.push(s('1', 'seat',   160, 75,  300, 170, 'seat-masks/van-1-3-3-D.png'));
-        seats.push(s('D', 'driver', 160, 172, 300, 260, 'seat-masks/van-1-3-3-1.png'));
+        seats.push(s('1', 'seat',   180, 75,  320, 170, 'seat-masks/van-1-3-3-D.png'));
+        seats.push(s('D', 'driver', 180, 172, 320, 260, 'seat-masks/van-1-3-3-1.png'));
         seats.push(s('2', 'seat',   310, 70,  460, 135, 'seat-masks/van-1-3-3-2.png'));
         seats.push(s('3', 'seat',   310, 138, 460, 205, 'seat-masks/van-1-3-3-3.png'));
         seats.push(s('4', 'seat',   310, 208, 460, 270, 'seat-masks/van-1-3-3-4.png'));
         seats.push(s('5', 'seat',   430, 70,  590, 135, 'seat-masks/van-1-3-3-5.png'));
         seats.push(s('6', 'seat',   430, 138, 590, 205, 'seat-masks/van-1-3-3-6.png'));
         seats.push(s('7', 'seat',   430, 208, 590, 270, 'seat-masks/van-1-3-3-7.png'));
-        if (hasReserve) seats.push(s('R', 'reserve', 215, 150, 245, 190, 'seat-masks/van-1-3-3-D.png'));
+        if (hasReserve) seats.push(s('R', 'reserve', 235, 150, 265, 190, 'seat-masks/van-1-3-3-D.png'));
         return seats;
     }
 
@@ -5191,10 +5191,10 @@ function getSeatLayout(layout, maxSeats, hasReserve) {
                      hasReserve ? 'reserve' : 'driver',
                      155, 75,  255, 165));
         seats.push(s('D', 'driver', 155, 165, 255, 255));
-        seats.push(s('1', 'seat',   255, 75,  355, 165));
-        seats.push(s('2', 'seat',   255, 165, 355, 255));
-        seats.push(s('3', 'seat',   365, 75,  465, 165));
-        seats.push(s('4', 'seat',   365, 165, 465, 255));
+        seats.push(s('1', 'seat',   290, 75,  390, 165));
+        seats.push(s('2', 'seat',   290, 165, 390, 255));
+        seats.push(s('3', 'seat',   400, 75,  500, 165));
+        seats.push(s('4', 'seat',   400, 165, 500, 255));
         seats.push(s('5', 'seat',   475, 75,  615, 140));
         seats.push(s('6', 'seat',   475, 140, 615, 205));
         seats.push(s('7', 'seat',   475, 205, 615, 275));
@@ -5228,22 +5228,39 @@ function getSeatLayout(layout, maxSeats, hasReserve) {
     }
 
     if (layout === 'bus') {
-        seats.push({ name: 'D', x: 15, y: 51, type: 'driver' });
+        // bus-top.png is 1024×205. Driver cabin takes the front-left; passenger cabin
+        // empty from x≈250 to x≈990. Rows of 2+aisle+2 stretched along the length.
+        const s = (name, type, px0, py0, px1, py1) => ({
+            name, type, boxed: true,
+            x: px0 / 1024 * 100,
+            y: py0 / 205  * 100,
+            w: (px1 - px0) / 1024 * 100,
+            h: (py1 - py0) / 205  * 100,
+        });
+        // Driver cabin: D + special slot (co-driver / reserve) already visible on bus PNG
+        seats.push(s('D', 'driver', 110, 35, 175, 90));
+        seats.push(s(hasReserve ? 'R' : 'C',
+                     hasReserve ? 'reserve' : 'driver',
+                     110, 110, 175, 175));
+
         const n = Math.max(8, parseInt(maxSeats) || 20);
         const rowsNeeded = Math.ceil(n / 4);
-        const xStart = 28, xEnd = 92;
+        const xStart = 270, xEnd = 970;
         const step = rowsNeeded === 1 ? 0 : (xEnd - xStart) / (rowsNeeded - 1);
-        // Bus seat height: 4.5% × 5 = 22.5%. Rows touch when Δy ≈ 22.
-        const ys = [18, 40, 62, 84];
+        const seatW = Math.min(58, step - 6); // fits the number of rows we need
+        // 4 seats per row: 2 on the driver side (top), aisle, 2 on passenger side (bottom).
+        // y band for each of 4: ~15..55 / 55..95 / 110..150 / 150..190 with aisle gap 95..110.
+        const yBands = [[15, 55], [55, 95], [110, 150], [150, 190]];
         let placed = 0;
         for (let r = 0; r < rowsNeeded && placed < n; r++) {
-            const x = xStart + step * r;
+            const cx = xStart + step * r;
             for (let c = 0; c < 4 && placed < n; c++) {
                 placed++;
-                seats.push({ name: String(placed), x, y: ys[c], type: 'seat' });
+                const px0 = Math.round(cx - seatW / 2);
+                const px1 = Math.round(cx + seatW / 2);
+                seats.push(s(String(placed), 'seat', px0, yBands[c][0], px1, yBands[c][1]));
             }
         }
-        if (hasReserve) seats.push({ name: 'R', x: 22, y: 30, type: 'reserve' });
         return seats;
     }
 
