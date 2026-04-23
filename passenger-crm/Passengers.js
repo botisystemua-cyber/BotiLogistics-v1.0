@@ -1110,6 +1110,13 @@ function goToCargoModule() {
 function showPaxView(dir) {
     currentView = 'pax';
     currentDir = dir || 'all';
+    // Клац таб напрямку Пасажирів = вихід з «Календар-режиму»:
+    // скидаємо дату, щоб список показав усіх за цим напрямком, а не
+    // «цей напрямок на цю дату» (найчастіша причина порожнього списку).
+    if (paxCalSelectedDate) {
+        paxCalSelectedDate = null;
+        renderPaxCalendar();
+    }
     document.getElementById('passengersView').classList.remove('hidden');
     document.getElementById('tripsView').classList.remove('active');
     document.getElementById('routesView').style.display = 'none';
@@ -1117,6 +1124,7 @@ function showPaxView(dir) {
     updatePcSidebarActive();
     updateMobileSidebarActive();
     updateNavActive('pax');
+    setActiveAccordion('pax');
     render();
 }
 
@@ -1129,6 +1137,7 @@ function showTripsView() {
     updatePcSidebarActive();
     updateMobileSidebarActive();
     updateNavActive('trips');
+    setActiveAccordion('trips');
     renderTrips();
 }
 
@@ -1141,6 +1150,7 @@ function showRoutesView() {
     updatePcSidebarActive();
     updateMobileSidebarActive();
     updateNavActive('routes');
+    setActiveAccordion('routes');
     if (routes.length === 0 && allRouteSheets.length === 0) loadRoutes();
     else renderRoutes();
 }
@@ -2955,18 +2965,25 @@ function getFilteredPassengers() {
 
     return passengers.filter(p => {
         if ((p['Статус CRM'] || 'Активний') === 'Архів') return false;
-        if (currentDir === 'new24') { if (!isNew24h(p)) return false; }
-        else if (currentDir !== 'all' && !isDir(p, currentDir)) return false;
+        // Два взаємовиключних режими фільтра списку:
+        //   • Режим «Календар» (активний, коли обрана дата) — бере paxCalSelectedDate
+        //     + paxCalDirFilter (власний напрямок Календаря). currentDir ігнорується.
+        //   • Режим «Пасажири» (дефолт) — бере currentDir (таби Пасажирів).
+        // Це розв'язує плутанину, коли клік по табу UA→EU ніби «не працював»
+        // бо активно була попередня дата з Календаря.
+        if (paxCalSelectedDate) {
+            var depDate = formatTripDate(p['Дата виїзду'] || '');
+            if (depDate !== paxCalSelectedDate) return false;
+            if (paxCalDirFilter !== 'all' && !isDir(p, paxCalDirFilter)) return false;
+        } else {
+            if (currentDir === 'new24') { if (!isNew24h(p)) return false; }
+            else if (currentDir !== 'all' && !isDir(p, currentDir)) return false;
+        }
         if (leadStatus !== 'all' && p['Статус ліда'] !== leadStatus) return false;
         if (payStatus !== 'all' && p['Статус оплати'] !== payStatus) return false;
         if (tripFilter === 'none' && p['CAL_ID']) return false;
         if (tripFilter === 'none' && !p['CAL_ID']) { /* pass */ }
         else if (tripFilter !== 'all' && tripFilter !== 'none' && p['CAL_ID'] !== tripFilter) return false;
-        // Фільтр по даті з календаря пасажирів
-        if (paxCalSelectedDate) {
-            var depDate = formatTripDate(p['Дата виїзду'] || '');
-            if (depDate !== paxCalSelectedDate) return false;
-        }
         if (search) {
             const name = String(p['Піб'] || '').toLowerCase();
             const phone = String(p['Телефон пасажира'] || '');
@@ -2995,6 +3012,7 @@ function updateTripFilterDropdown() {
 // ================================================================
 function render() {
     if (currentView !== 'pax') return;
+    renderPaxActiveFilters();
     const list = document.getElementById('cardsList');
     const filtered = getFilteredPassengers();
 
@@ -5978,27 +5996,72 @@ function closeSideMenu() {
     document.querySelectorAll('.mobile-section-toggle').forEach(function(el) { el.classList.remove('open'); });
 }
 
+// Одна активна sidebar-секція за раз — при розгортанні інші автоматично
+// згортаються. Робить візуальний контекст чистим: юзер завжди бачить
+// «в якій рубриці він знаходиться» і не плутається, чий фільтр активний.
+var _ACCORDION_SECTIONS = ['pax', 'paxCal', 'trips', 'routes'];
+function _capSection(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+function setActiveAccordion(section) {
+    // Desktop sidebar
+    _ACCORDION_SECTIONS.forEach(function(s) {
+        var c = document.getElementById('pcSection' + _capSection(s));
+        var h = c && c.previousElementSibling;
+        if (!c) return;
+        if (s === section) {
+            c.classList.remove('collapsed');
+            if (h) h.classList.remove('collapsed');
+        } else {
+            c.classList.add('collapsed');
+            if (h) h.classList.add('collapsed');
+        }
+    });
+    // Mobile sidebar
+    _ACCORDION_SECTIONS.forEach(function(s) {
+        var c = document.getElementById('mobileSection' + _capSection(s));
+        var tg = document.getElementById('mobileToggle' + _capSection(s));
+        if (!c) return;
+        if (s === section) {
+            c.style.display = 'block';
+            if (tg) tg.classList.add('open');
+        } else {
+            c.style.display = 'none';
+            if (tg) tg.classList.remove('open');
+        }
+    });
+    // Lazy-init для секцій, які рендерять контент лише при відкритті
+    if (section === 'paxCal') renderPaxCalendar();
+    if (section === 'routes' && routes.length === 0) loadRoutes();
+}
+
 function toggleMobileSection(section) {
-    const name = section.charAt(0).toUpperCase() + section.slice(1);
-    const content = document.getElementById('mobileSection' + name);
-    const toggle = document.getElementById('mobileToggle' + name);
-    if (!content) return;
-    const isOpen = content.style.display !== 'none';
-    content.style.display = isOpen ? 'none' : 'block';
-    if (toggle) toggle.classList.toggle('open', !isOpen);
-    // Для маршрутів — підвантажити якщо ще не завантажено
-    if (section === 'routes' && !isOpen && routes.length === 0) loadRoutes();
-    // Для календаря — рендеримо при відкритті
-    if (section === 'paxCal' && !isOpen) renderPaxCalendar();
+    var c = document.getElementById('mobileSection' + _capSection(section));
+    if (!c) return;
+    var isOpen = c.style.display !== 'none';
+    if (!isOpen) {
+        // Розгортаємо → всі інші секції автоматично згорнуться.
+        setActiveAccordion(section);
+    } else {
+        // Вже відкрита — класичний toggle: згортаємо лише її.
+        c.style.display = 'none';
+        var tg = document.getElementById('mobileToggle' + _capSection(section));
+        if (tg) tg.classList.remove('open');
+    }
 }
 
 function togglePcSection(section) {
-    const content = document.getElementById('pcSection' + section.charAt(0).toUpperCase() + section.slice(1));
-    const header = content?.previousElementSibling;
-    if (content) content.classList.toggle('collapsed');
-    if (header) header.classList.toggle('collapsed');
-    // Для календаря — рендеримо при відкритті
-    if (section === 'paxCal' && content && !content.classList.contains('collapsed')) renderPaxCalendar();
+    var c = document.getElementById('pcSection' + _capSection(section));
+    if (!c) return;
+    var isCollapsed = c.classList.contains('collapsed');
+    if (isCollapsed) {
+        // Розгортаємо → інші секції згортаються автоматично.
+        setActiveAccordion(section);
+    } else {
+        // Вже відкрита — згортаємо лише її.
+        c.classList.add('collapsed');
+        var h = c.previousElementSibling;
+        if (h) h.classList.add('collapsed');
+    }
 }
 
 function togglePcSidebar() {
@@ -6116,9 +6179,41 @@ function selectPaxCalDate(dateStr) {
     render();
 }
 
+// Чіпи активних фільтрів над списком — показуються ЛИШЕ у «Календар-режимі»
+// (коли обрана дата). У «Пасажирському режимі» таби самі слугують
+// індикатором, додаткові чіпи не потрібні.
+function renderPaxActiveFilters() {
+    var el = document.getElementById('paxActiveFilters');
+    if (!el) return;
+    if (!paxCalSelectedDate) { el.style.display = 'none'; el.innerHTML = ''; return; }
+    var parts = [];
+    parts.push(
+        '<span class="pax-filter-chip">📅 ' + paxCalSelectedDate +
+        '<button class="pax-filter-chip-x" onclick="selectPaxCalDate(null)" ' +
+        'title="Скинути дату (повернутись у режим Пасажири)">×</button>' +
+        '</span>'
+    );
+    if (paxCalDirFilter === 'ua-eu' || paxCalDirFilter === 'eu-ua') {
+        var label = paxCalDirFilter === 'ua-eu' ? 'UA→EU' : 'EU→UA';
+        parts.push(
+            '<span class="pax-filter-chip">🔀 ' + label +
+            '<button class="pax-filter-chip-x" onclick="setPaxCalDir(\'all\')" ' +
+            'title="Скинути напрямок Календаря">×</button>' +
+            '</span>'
+        );
+    }
+    el.innerHTML = parts.join('');
+    el.style.display = 'flex';
+}
+
 function setPaxCalDir(dir) {
     paxCalDirFilter = dir;
     renderPaxCalendar();
+    // Якщо активний «Календар-режим» — одразу перефільтровуємо список.
+    if (paxCalSelectedDate) {
+        renderPaxActiveFilters();
+        render();
+    }
 }
 
 function openModal(id) { document.getElementById(id)?.classList.add('show'); }
@@ -7749,6 +7844,8 @@ function showArchiveView() {
     document.getElementById('archiveView').style.display = 'block';
     updatePcSidebarActive();
     updateMobileSidebarActive();
+    // Архів — пункт секції «Пасажири», тримаємо цю секцію розгорнутою.
+    setActiveAccordion('pax');
     showLoader('📦 Завантаження архіву...');
     loadArchive().then(function() { hideLoader(); }).catch(function() { hideLoader(); });
 }
