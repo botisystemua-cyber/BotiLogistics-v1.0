@@ -1408,6 +1408,10 @@ body.route-sort-active #rteTogglePay {
 /* Preview variant in the trip form — tighter, non-interactive */
 .seat-preview .van-wrap { padding: 6px 2px; }
 .seat-preview .van { max-width: 380px; }
+.seat-preview .van.van-bus { max-width: 1400px; }    /* bus breaks out of the 380px cap */
+.seat-preview .van.van-1-3-3,
+.seat-preview .van.van-2-2-3,
+.seat-preview .van.van-2-2-2 { max-width: 640px; }   /* vans get a bit more room too */
 .seat-preview .seat { cursor: default; }
 .seat-preview .seat:hover { transform: translate(-50%, -50%); }
 
