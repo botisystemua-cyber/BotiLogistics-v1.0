@@ -1323,14 +1323,20 @@ function renderCard(p) {
             ${(() => {
               // Відправник / отримувач — два окремих тоггли. pkg_id прибрано —
               // його видно в деталях на вкладці «⚙ Системні» (readonly).
-              // Якщо тоггл увімкнений АЛЕ імені нема — пропускаємо (без «—»
-              // чи «(невідомо)»), щоб картка не була засмічена заглушками.
+              // Вважаємо порожнім не лише null/''/whitespace, але й звичайні
+              // заглушки-плейсхолдери («невідомо», «(невідомо)», «—» тощо),
+              // які міг залишити сканер у новому ліді до ручного заповнення.
+              const isEmptyName = (v) => {
+                const s = String(v || '').trim().toLowerCase().replace(/[()«»\s]/g, '');
+                return !s || s === 'невідомо' || s === 'невідома' || s === 'невідомий'
+                         || s === '—' || s === '-' || s === 'unknown' || s === 'нема';
+              };
               const showSender = visCols.includes('sender');
               const showRecv   = visCols.includes('receiver');
               if (!showSender && !showRecv) return '';
               const parts = [];
-              if (showSender && name)      parts.push(highlightMatch(name));
-              if (showRecv   && receiver)  parts.push(highlightMatch(receiver));
+              if (showSender && !isEmptyName(name))     parts.push(highlightMatch(name));
+              if (showRecv   && !isEmptyName(receiver)) parts.push(highlightMatch(receiver));
               if (parts.length === 0) return '';
               return `<span class="card-sender-recv">👤 ${parts.join(' → ')}</span>`;
             })()}
