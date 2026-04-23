@@ -3281,9 +3281,9 @@ function switchMainView(view) {
 function backToParcels() {
   activeRouteIdx = null;
   switchMainView('parcels');
-  // Вихід з маршруту назад у список посилок → фокус повертається у «Напрямок»
-  // із дефолтним UE. Інші секції згорнуті.
-  if (typeof setActiveSidebarSection === 'function') setActiveSidebarSection('direction');
+  // Повернення у список посилок → меню згорнуте повністю (як при першому
+  // заході у CRM). Оператор сам клацне заголовок коли треба.
+  if (typeof setActiveSidebarSection === 'function') setActiveSidebarSection(null);
   renderCards();
 }
 
@@ -5732,10 +5732,11 @@ async function deleteRecord(pkgId) {
 // Перемкнути вид Архів / Активні
 async function toggleArchiveView() {
   showArchive = !showArchive;
-  // Архів — одноразова дія без своєї акордеон-секції. При вході згортаємо все;
-  // при виході з архіву повертаємось у «Напрямок» (дефолт UE).
+  // Архів — одноразова дія без своєї акордеон-секції. Згортаємо все меню
+  // і на вході в архів, і на виході — щоб повернення у CRM завжди давало
+  // чистий згорнутий стан.
   if (typeof setActiveSidebarSection === 'function') {
-    setActiveSidebarSection(showArchive ? null : 'direction');
+    setActiveSidebarSection(null);
   }
   var btn = document.getElementById('archiveToggleBtn');
   if (btn) {
