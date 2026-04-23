@@ -6773,7 +6773,6 @@ function renderTripModalCalendar() {
                 '<span class="tcal-month-label">' + monthNames[tmCalMonth] + ' ' + tmCalYear + '</span>' +
                 '<div class="tcal-nav">' +
                     '<button class="tcal-nav-btn" onclick="tmCalPrev()">&larr;</button>' +
-                    '<button class="tcal-nav-btn" style="width:auto;padding:0 10px;font-size:11px;" onclick="tmCalToday()">Сьогодні</button>' +
                     '<button class="tcal-nav-btn" onclick="tmCalNext()">&rarr;</button>' +
                 '</div>' +
             '</div>' +
@@ -6781,10 +6780,13 @@ function renderTripModalCalendar() {
             '<div class="tcal-days">' + daysHtml + '</div>' +
             '<div class="tcal-footer">' +
                 '<div class="tcal-legend">' +
-                    '<span class="tcal-legend-item"><span class="tcal-legend-box" style="border-color:#2563eb;"></span> UA→EU</span>' +
-                    '<span class="tcal-legend-item"><span class="tcal-legend-box" style="border-color:#059669;"></span> EU→UA</span>' +
-                    '<span class="tcal-legend-item"><span class="tcal-legend-box" style="border-color:#9ca3af;background:repeating-linear-gradient(45deg,rgba(0,0,0,0.08),rgba(0,0,0,0.08) 2px,transparent 2px,transparent 4px);"></span> Повний</span>' +
-                    '<span class="tcal-legend-item"><span class="tcal-legend-box" style="border-color:#dc2626;"></span> Перебір</span>' +
+                    '<span class="tcal-legend-item"><span class="tcal-legend-dot" style="background:#2563eb;"></span> UA→EU</span>' +
+                    '<span class="tcal-legend-item"><span class="tcal-legend-dot" style="background:#059669;"></span> EU→UA</span>' +
+                    '<span class="tcal-legend-item"><span class="tcal-legend-dot" style="background:#dc2626;"></span> Перебір</span>' +
+                '</div>' +
+                '<div style="display:flex;gap:4px;">' +
+                    '<button class="tcal-footer-btn today-btn" onclick="tmCalToday()">Сьогодні</button>' +
+                    '<button class="tcal-footer-btn clear-btn" onclick="tmCalClear()">Скинути</button>' +
                 '</div>' +
             '</div>' +
         '</div>' +
@@ -6863,9 +6865,8 @@ function renderTmCalDay(d, key, info, otherMonth, isToday, selectedKey) {
     var hasTrip = !!info;
     var isSelected = key === selectedKey;
     var isCurrent = !!tmCurrentDate && key === tmCurrentDate;
-    var free = info ? (info.maxSeats - info.pax) : 0;
 
-    // Підрахунок повністю заповнених рейсів (не перебір) серед усіх рейсів дати
+    // Full-day detection (для click routing: повний день → показуємо деталі, не selectTripDate)
     var fullCount = 0;
     if (info && info.trips) {
         info.trips.forEach(function(t) {
@@ -6876,7 +6877,6 @@ function renderTmCalDay(d, key, info, otherMonth, isToday, selectedKey) {
     }
     var totalCount = info ? info.count : 0;
     var isFull = !!(info && !info.overbooked && totalCount > 0 && fullCount === totalCount);
-    var isPartial = !!(info && !info.overbooked && !isFull && fullCount > 0 && fullCount < totalCount);
 
     var cls = 'tcal-day';
     if (otherMonth) cls += ' other-month';
@@ -6887,37 +6887,25 @@ function renderTmCalDay(d, key, info, otherMonth, isToday, selectedKey) {
     if (isCurrent && tmCurrentBound) cls += ' tm-bound';
     else if (isCurrent) cls += ' tm-soft';
     if (info && info.overbooked) cls += ' overbooked';
-    if (isFull) cls += ' full';
-    if (isPartial) cls += ' partial';
+
+    // Dots — as in filter calendar (блакитне UA→EU / зелене EU→UA / червоне перебір)
+    var dotsHtml = '';
+    var paxHtml = '';
     if (info) {
-        if (info.uaeu > 0 && info.euua > 0) cls += ' dir-both';
-        else if (info.uaeu > 0) cls += ' dir-ua-eu';
-        else if (info.euua > 0) cls += ' dir-eu-ua';
+        if (info.overbooked) {
+            dotsHtml = '<span class="dot-overbooked"></span>';
+        } else if (info.uaeu > 0 && info.euua > 0) {
+            dotsHtml = '<span class="dot-ua-eu"></span><span class="dot-eu-ua"></span>';
+        } else if (info.uaeu > 0) {
+            dotsHtml = '<span class="dot-ua-eu"></span>';
+        } else if (info.euua > 0) {
+            dotsHtml = '<span class="dot-eu-ua"></span>';
+        }
+        var paxStyle = info.overbooked ? ' style="color:#d97706;font-weight:800;"' : '';
+        paxHtml = '<span class="tcal-pax"' + paxStyle + ' title="Пасажирів">' + info.pax + '</span>';
     }
 
-    // Мікроінфа — вільні місця у правому нижньому куті
-    var seatsHtml = '';
-    if (info && info.maxSeats > 0) {
-        var seatCls = 'tcal-seats';
-        if (info.overbooked || free <= 0) seatCls += ' low';
-        else if (free <= 2) seatCls += ' warn';
-        else seatCls += ' ok';
-        var seatTxt = info.overbooked ? '!' : (free < 0 ? 0 : free) + 'м';
-        seatsHtml = '<div class="' + seatCls + '">' + seatTxt + '</div>';
-    }
-
-    // Частково повні — маркер у лівому нижньому куті
-    var partialHtml = isPartial ? '<div class="tcal-partial" title="Частина рейсів заповнена">' + fullCount + '/' + totalCount + '</div>' : '';
-
-    // Назва рейсу всередині клітинки (перший + «+N» якщо кілька)
-    var nameHtml = '';
-    if (info && info.trips && info.trips.length) {
-        var firstCity = String(info.trips[0].city || '').trim() || '—';
-        var extra = info.trips.length > 1 ? ' +' + (info.trips.length - 1) : '';
-        nameHtml = '<span class="tcal-tripname" title="' + tmEsc(firstCity + extra) + '">' + tmEsc(firstCity) + extra + '</span>';
-    }
-
-    // Tooltip
+    // Tooltip з деталями рейсів
     var titleLines = [];
     if (isCurrent && tmCurrentFullName) {
         titleLines.push('👤 ' + tmCurrentFullName + (tmCurrentBound ? ' · прив\'язаний' : ' · лише дата виїзду'));
@@ -6938,21 +6926,22 @@ function renderTmCalDay(d, key, info, otherMonth, isToday, selectedKey) {
     }
     var titleAttr = titleLines.length ? ' title="' + tmEsc(titleLines.join('\n')) + '"' : '';
 
-    var currentBadge = isCurrent && tmCurrentBadgeText
-        ? '<span class="tm-current-badge"><span class="tm-current-badge-ico">👤</span>' + (tmCurrentBound ? '✓' : '') + tmEsc(tmCurrentBadgeText) + '</span>'
-        : '';
-    // Повний день → клік показує деталі (а не selectTripDate, який призведе до "немає вільних")
+    // Клік: є рейси і не повний → selectTripDate (крок 2)
+    //       повний день → showTmDayInfo (popup з деталями)
     var onclick = '';
     if (hasTrip && !isFull) onclick = ' onclick="selectTripDate(\'' + key + '\')"';
     else if (isFull) onclick = ' onclick="showTmDayInfo(\'' + key + '\', this)"';
-    var todayLabel = isToday ? '<span class="tcal-today-label">Сьогодні</span>' : '';
+
+    // Бейдж поточного рейсу пасажира (зберігаємо з попередньої версії)
+    var currentBadge = isCurrent && tmCurrentBadgeText
+        ? '<span class="tm-current-badge"><span class="tm-current-badge-ico">👤</span>' + (tmCurrentBound ? '✓' : '') + tmEsc(tmCurrentBadgeText) + '</span>'
+        : '';
+
     return '<button class="' + cls + '" data-key="' + key + '"' + onclick + titleAttr + '>' +
         currentBadge +
-        todayLabel +
-        nameHtml +
-        '<span class="tcal-day-num">' + d + '</span>' +
-        partialHtml +
-        seatsHtml +
+        '<span>' + d + '</span>' +
+        (dotsHtml ? '<div class="tcal-dots">' + dotsHtml + '</div>' : '') +
+        paxHtml +
     '</button>';
 }
 
@@ -6970,6 +6959,19 @@ function tmCalToday() {
     var now = new Date();
     tmCalMonth = now.getMonth();
     tmCalYear = now.getFullYear();
+    renderTripModalCalendar();
+}
+
+// Скидання вибору (дата + авто), залишає місяць, підсвітку знімає
+function tmCalClear() {
+    tmSelectedDate = '';
+    tmSelectedCalId = '';
+    var saveBtn = document.getElementById('tmSaveBtn');
+    if (saveBtn) saveBtn.disabled = true;
+    var vehWrap = document.getElementById('tmVehiclesWrap');
+    if (vehWrap) vehWrap.innerHTML = '';
+    var step = document.getElementById('tmStep');
+    if (step) step.textContent = 'Крок 1 — оберіть дату';
     renderTripModalCalendar();
 }
 
