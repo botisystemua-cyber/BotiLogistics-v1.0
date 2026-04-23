@@ -5950,7 +5950,9 @@ function renderPaxCalendar() {
     var daysInMonth = new Date(y, m + 1, 0).getDate();
     var today = new Date(); today.setHours(0,0,0,0);
 
-    // Рахуємо пасажирів по датах
+    // Рахуємо пасажирів по датах — сумуємо «Кількість місць» (за замовч. 1),
+    // бо один лід може везти 2-3 пасажирів на одному місці. Так бейдж на
+    // даті показує реальну кількість людей, а не кількість заявок.
     var dateCounts = {};
     passengers.forEach(function(p) {
         if ((p['Статус CRM'] || 'Активний') === 'Архів') return;
@@ -5962,7 +5964,9 @@ function renderPaxCalendar() {
         var pm = parseInt(parts[1], 10) - 1;
         var py = parseInt(parts[2], 10);
         if (py === y && pm === m) {
-            dateCounts[dep] = (dateCounts[dep] || 0) + 1;
+            var seats = parseInt(p['Кількість місць'], 10);
+            if (!isFinite(seats) || seats <= 0) seats = 1;
+            dateCounts[dep] = (dateCounts[dep] || 0) + seats;
         }
     });
 
