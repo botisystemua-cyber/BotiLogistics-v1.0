@@ -151,6 +151,7 @@ let routeFilterPay = 'all';
 let routeTypeFilter = 'all';
 let routeStatusFilter = 'all';
 let routePayFilter = 'all';
+let routeDateFilter = null; // null | 'DD.MM.YYYY' — фільтр по 'Дата отримання' (дата візиту водія)
 let routeSelectedIds = new Set();
 let routeOpenDetailsId = null;
 let routeOpenActionsId = null;
@@ -3755,6 +3756,8 @@ function toggleMobileRoutesList() {
 
 // ── Відкрити конкретний маршрут ──
 async function openRoute(idx, forceRefresh) {
+    // При перемиканні маршруту скидаємо фільтр дат — у новому свої дати.
+    if (activeRouteIdx !== idx) routeDateFilter = null;
     activeRouteIdx = idx;
     // Одразу підсвітити активний маршрут в sidebar
     document.querySelectorAll('.route-sidebar-item').forEach(function(el, i) {
@@ -3850,7 +3853,32 @@ function getFilteredRouteRows(rows) {
     if (routeTypeFilter === 'parcel') filtered = filtered.filter(r => (r['Тип запису'] || '').includes('Посилк'));
     if (routeStatusFilter !== 'all') filtered = filtered.filter(r => (r['Статус'] || '') === routeStatusFilter);
     if (routePayFilter !== 'all') filtered = filtered.filter(r => (r['Статус оплати'] || '') === routePayFilter);
+    if (routeDateFilter) {
+        filtered = filtered.filter(r => formatTripDate(r['Дата отримання'] || '') === routeDateFilter);
+    }
     return filtered;
+}
+
+// Унікальні «Дати отримання» серед лідів маршруту — для чіпів дат візиту.
+// У UA→EU це коли привозимо отримувачу, у EU→UA — коли забираємо у відправника;
+// з точки зору водія — «дата візиту на адресу в Європі», тому підпис нейтральний.
+function getRouteUniqueDates(rows) {
+    const set = new Set();
+    (rows || []).forEach(r => {
+        const d = formatTripDate(r['Дата отримання'] || '');
+        if (d && d !== '—') set.add(d);
+    });
+    return Array.from(set).sort((a, b) => {
+        const [da, ma, ya] = a.split('.');
+        const [db, mb, yb] = b.split('.');
+        return (ya + ma + da).localeCompare(yb + mb + db);
+    });
+}
+
+function setRouteDateFilter(dateStr) {
+    // Повторний клік по активному чіпу знімає фільтр.
+    routeDateFilter = (routeDateFilter === dateStr) ? null : dateStr;
+    renderRoutes();
 }
 
 // ── Сортування рядків маршруту за збереженим порядком (масив PKG_ID) ──
@@ -3930,8 +3958,27 @@ function renderRoutes() {
     if (title) title.textContent = '🚐 ' + name;
     if (subtitle) subtitle.textContent = '👤 ' + paxCount + ' пасажирів · 📦 ' + parcelCount + ' посилок · ' + rawRows.length + ' записів';
 
+    // Чіпи дат візиту — над списком. Унікальні 'Дата отримання' беруться
+    // з rawRows (до інших фільтрів), щоб всі наявні дати завжди були видно.
+    const uniqueDates = getRouteUniqueDates(rawRows);
     const filtered = getFilteredRouteRows(rows);
     let html = '';
+
+    if (uniqueDates.length > 0) {
+        html += '<div class="route-date-chips">';
+        html += '<span class="route-date-chips-label">📅 Дата візиту:</span>';
+        uniqueDates.forEach(d => {
+            const active = (routeDateFilter === d);
+            const cnt = rawRows.filter(r => formatTripDate(r['Дата отримання'] || '') === d).length;
+            html += '<button class="route-date-chip' + (active ? ' active' : '') + '" ' +
+                'onclick="setRouteDateFilter(\'' + d + '\')" ' +
+                'title="' + (active ? 'Зняти фільтр' : 'Показати тільки ' + d) + '">' +
+                d + ' <span class="route-date-chip-cnt">' + cnt + '</span>' +
+                (active ? ' ×' : '') +
+                '</button>';
+        });
+        html += '</div>';
+    }
 
     if (filtered.length === 0) {
         html += '<div style="padding:40px;text-align:center;color:var(--text-secondary);font-size:13px;">' +
