@@ -5087,7 +5087,7 @@ function addVehicleBuilder() {
 }
 
 // Layouts with a fixed physical seat count (can't be changed via +/−)
-const FIXED_COUNT_LAYOUTS = { '1-3-3': 7, '2-2-3': 7, '2-2-2': 6 };
+const FIXED_COUNT_LAYOUTS = { '1-3-3': 7, '2-2-3': 7, '2-2-2': 8 };
 
 function selectLayout(el, idx) {
     el.parentElement.querySelectorAll('.layout-option').forEach(o => o.classList.remove('active'));
@@ -5202,14 +5202,29 @@ function getSeatLayout(layout, maxSeats, hasReserve) {
     }
 
     if (layout === '2-2-2') {
-        seats.push({ name: 'D', x: 19, y: 50, type: 'driver' });
-        seats.push({ name: '1', x: 38, y: 25, type: 'seat' });
-        seats.push({ name: '2', x: 38, y: 75, type: 'seat' });
-        seats.push({ name: '3', x: 60, y: 25, type: 'seat' });
-        seats.push({ name: '4', x: 60, y: 75, type: 'seat' });
-        seats.push({ name: '5', x: 83, y: 25, type: 'seat' });
-        seats.push({ name: '6', x: 83, y: 75, type: 'seat' });
-        if (hasReserve) seats.push({ name: 'R', x: 28, y: 50, type: 'reserve' });
+        const s = (name, type, px0, py0, px1, py1) => ({
+            name, type, boxed: true,
+            x: px0 / 1600 * 100,
+            y: py0 / 672  * 100,
+            w: (px1 - px0) / 1600 * 100,
+            h: (py1 - py0) / 672  * 100,
+        });
+        // 2-2-2 on van-2-2-2.png (1600×672):
+        //   Front cabin: D + C/R
+        //   4 columns of 2 passenger seats — 8 passenger seats total (1..8)
+        //   Rear cargo empty.
+        seats.push(s('D', 'driver', 170, 120, 310, 310));
+        seats.push(s(hasReserve ? 'R' : 'C',
+                     hasReserve ? 'reserve' : 'driver',
+                     170, 350, 310, 540));
+        seats.push(s('1', 'seat',  395, 120, 535, 310));
+        seats.push(s('2', 'seat',  395, 350, 535, 540));
+        seats.push(s('3', 'seat',  605, 120, 755, 310));
+        seats.push(s('4', 'seat',  605, 350, 755, 540));
+        seats.push(s('5', 'seat',  825, 120, 965, 310));
+        seats.push(s('6', 'seat',  825, 350, 965, 540));
+        seats.push(s('7', 'seat', 1045, 120, 1185, 310));
+        seats.push(s('8', 'seat', 1045, 350, 1185, 540));
         return seats;
     }
 
@@ -5240,6 +5255,7 @@ function renderVanBody(layout) {
     const src = layout === 'bus'   ? 'bus-top.png'
               : layout === '1-3-3' ? 'van-1-3-3.png'
               : layout === '2-2-3' ? 'van-2-2-3.png'
+              : layout === '2-2-2' ? 'van-2-2-2.png'
               : 'minivan-top.png';
     // SVG fallback renders only if the image fails to load.
     const fallback = layout === 'bus'
@@ -5260,6 +5276,7 @@ function renderVan(opts) {
     const vanCls = layout === 'bus'   ? 'van van-bus'
                  : layout === '1-3-3' ? 'van van-1-3-3'
                  : layout === '2-2-3' ? 'van van-2-2-3'
+                 : layout === '2-2-2' ? 'van van-2-2-2'
                  : 'van';
 
     const chairImg = '<img class="seat-chair" src="chair-top.png" alt="">';
