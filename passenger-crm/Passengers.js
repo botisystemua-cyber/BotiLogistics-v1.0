@@ -5267,8 +5267,8 @@ function getSeatLayout(layout, maxSeats, hasReserve) {
         const step = rowsNeeded === 1 ? 0 : (xEnd - xStart) / (rowsNeeded - 1);
         const seatW = Math.min(58, step - 6); // fits the number of rows we need
         // 4 seats per row: 2 on the driver side (top), aisle, 2 on passenger side (bottom).
-        // y band for each of 4: ~15..55 / 55..95 / 110..150 / 150..190 with aisle gap 95..110.
-        const yBands = [[15, 55], [55, 95], [110, 150], [150, 190]];
+        // y bands cover most of the bus height with aisle gap in the middle.
+        const yBands = [[10, 55], [55, 100], [110, 155], [155, 200]];
         let placed = 0;
         for (let r = 0; r < rowsNeeded && placed < n; r++) {
             const cx = xStart + step * r;
