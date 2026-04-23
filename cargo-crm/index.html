@@ -65,33 +65,33 @@
     </div>
   </div>
 
-  <!-- Маршрути -->
+  <!-- Маршрути (+ вкладені: Відправка, Витрати, Зведення) -->
   <div class="mob-section" data-section="routes">
     <div class="mob-section-title" onclick="toggleMobSection(this)">🚚 Маршрути <span class="mob-toggle">▶</span></div>
-    <div class="mob-section-body mob-collapsed" id="mobRoutesSidebar">
-      <!-- Filled by JS -->
-    </div>
-  </div>
+    <div class="mob-section-body mob-collapsed">
+      <div id="mobRoutesSidebar">
+        <!-- Filled by JS -->
+      </div>
 
-  <!-- Відправка -->
-  <div class="mob-section" data-section="dispatch">
-    <div class="mob-section-title" onclick="toggleMobSection(this)">📥 Відправка <span class="mob-toggle">▶</span></div>
-    <div class="mob-section-body mob-collapsed" id="mobDispatchSidebar">
-      <!-- Filled by JS -->
-    </div>
-  </div>
+      <!-- Підсекція: Відправка -->
+      <div class="mob-sub-section" data-sub="dispatch">
+        <div class="mob-sub-title" onclick="toggleMobSubSection(this)">📥 Відправка <span class="mob-sub-toggle">▶</span></div>
+        <div class="mob-sub-body mob-collapsed" id="mobDispatchSidebar">
+          <!-- Filled by JS -->
+        </div>
+      </div>
 
-  <!-- Витрати -->
-  <div class="mob-section" data-section="expenses">
-    <div class="mob-section-title" onclick="toggleMobSection(this)">💰 Витрати <span class="mob-toggle">▶</span></div>
-    <div class="mob-section-body mob-collapsed" id="mobExpensesSidebar">
-      <!-- Filled by JS -->
-    </div>
-  </div>
+      <!-- Підсекція: Витрати -->
+      <div class="mob-sub-section" data-sub="expenses">
+        <div class="mob-sub-title" onclick="toggleMobSubSection(this)">💰 Витрати <span class="mob-sub-toggle">▶</span></div>
+        <div class="mob-sub-body mob-collapsed" id="mobExpensesSidebar">
+          <!-- Filled by JS -->
+        </div>
+      </div>
 
-  <!-- Зведення -->
-  <div class="mob-section mob-section-single">
-    <div class="mob-item mob-item-accent" onclick="openSummaryView();closeMobileSidebar();">📊 Зведення рейсів</div>
+      <!-- Зведення рейсів — одноразова кнопка всередині Маршрутів -->
+      <div class="mob-item mob-item-accent" onclick="openSummaryView();closeMobileSidebar();">📊 Зведення рейсів</div>
+    </div>
   </div>
 
   <!-- Архів -->
@@ -216,40 +216,40 @@
       </div>
     </div>
 
-    <!-- Routes Section -->
+    <!-- Routes Section (+ вкладені: Відправка, Витрати, Зведення) -->
     <div class="sidebar-section" data-section="routes">
       <div class="sidebar-section-header" onclick="toggleSection(this)">
         🚚 Маршрути <span class="toggle open">▶</span>
       </div>
-      <div class="sidebar-section-body" id="routesSidebar">
-        <!-- Filled by JS -->
-      </div>
-    </div>
+      <div class="sidebar-section-body" id="routesSectionBody">
+        <div id="routesSidebar">
+          <!-- Filled by JS -->
+        </div>
 
-    <!-- Dispatch Section -->
-    <div class="sidebar-section" data-section="dispatch">
-      <div class="sidebar-section-header" onclick="toggleSection(this)">
-        📥 Відправка <span class="toggle">▶</span>
-      </div>
-      <div class="sidebar-section-body hidden" id="dispatchSidebar">
-        <!-- Filled by JS -->
-      </div>
-    </div>
+        <!-- Підсекція: Відправка -->
+        <div class="sidebar-sub-section" data-sub="dispatch">
+          <div class="sidebar-sub-header" onclick="toggleSubSection(this)">
+            📥 Відправка <span class="sub-toggle">▶</span>
+          </div>
+          <div class="sidebar-sub-body hidden" id="dispatchSidebar">
+            <!-- Filled by JS -->
+          </div>
+        </div>
 
-    <!-- Expenses Section -->
-    <div class="sidebar-section" data-section="expenses">
-      <div class="sidebar-section-header" onclick="toggleSection(this)">
-        💰 Витрати <span class="toggle">▶</span>
-      </div>
-      <div class="sidebar-section-body hidden" id="expensesSidebar">
-        <!-- Filled by JS -->
-      </div>
-    </div>
+        <!-- Підсекція: Витрати -->
+        <div class="sidebar-sub-section" data-sub="expenses">
+          <div class="sidebar-sub-header" onclick="toggleSubSection(this)">
+            💰 Витрати <span class="sub-toggle">▶</span>
+          </div>
+          <div class="sidebar-sub-body hidden" id="expensesSidebar">
+            <!-- Filled by JS -->
+          </div>
+        </div>
 
-    <!-- Summary Section -->
-    <div class="sidebar-section">
-      <div class="sidebar-item" onclick="openSummaryView()" id="summarySidebarBtn" style="margin:4px 0;">
-        📊 Зведення рейсів
+        <!-- Зведення рейсів — одноразова кнопка всередині Маршрутів -->
+        <div class="sidebar-item sidebar-item-summary" onclick="openSummaryView()">
+          📊 Зведення рейсів
+        </div>
       </div>
     </div>
 

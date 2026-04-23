@@ -2998,7 +2998,57 @@ function onSearch(value) {
 // фільтри скидаються до дефолту — так жодний «застарілий» фільтр не тягнеться
 // у новий контекст. Той самий патерн що ми реалізували у passenger-crm.
 var _activeSidebarSection = 'direction';
-var _SIDEBAR_SECTIONS = ['direction', 'verify', 'routes', 'dispatch', 'expenses'];
+// Відправку/Витрати/Зведення перенесено всередину «Маршрути» як підсекції,
+// тож вони більше не в топ-рівні.
+var _SIDEBAR_SECTIONS = ['direction', 'verify', 'routes'];
+
+// Підсекції всередині «Маршрути» (dispatch / expenses) — також mutual-exclusive:
+// відкрита лише одна, інша згортається. Зведення — просто кнопка, не акордеон.
+var _activeRoutesSubSection = null;
+var _ROUTES_SUBSECTIONS = ['dispatch', 'expenses'];
+
+function setActiveRoutesSubSection(name) {
+  _activeRoutesSubSection = name;
+  // Desktop
+  _ROUTES_SUBSECTIONS.forEach(function(s) {
+    var sec = document.querySelector('.sidebar .sidebar-sub-section[data-sub="' + s + '"]');
+    if (!sec) return;
+    var body = sec.querySelector('.sidebar-sub-body');
+    var toggle = sec.querySelector('.sub-toggle');
+    if (body) body.classList.toggle('hidden', s !== name);
+    if (toggle) toggle.classList.toggle('open', s === name);
+  });
+  // Mobile
+  _ROUTES_SUBSECTIONS.forEach(function(s) {
+    var sec = document.querySelector('#mobileSidebar .mob-sub-section[data-sub="' + s + '"]');
+    if (!sec) return;
+    var body = sec.querySelector('.mob-sub-body');
+    var toggle = sec.querySelector('.mob-sub-toggle');
+    if (body) body.classList.toggle('mob-collapsed', s !== name);
+    if (toggle) toggle.classList.toggle('open', s === name);
+  });
+}
+
+function toggleSubSection(header) {
+  var sec = header.closest('.sidebar-sub-section');
+  var name = sec && sec.getAttribute('data-sub');
+  if (!name) return;
+  var body = sec.querySelector('.sidebar-sub-body');
+  var isCollapsed = body && body.classList.contains('hidden');
+  // Відкриваємо Маршрути-секцію (якщо раптом закрита), бо sub-section живе всередині.
+  if (_activeSidebarSection !== 'routes') setActiveSidebarSection('routes');
+  setActiveRoutesSubSection(isCollapsed ? name : null);
+}
+
+function toggleMobSubSection(titleEl) {
+  var sec = titleEl.closest('.mob-sub-section');
+  var name = sec && sec.getAttribute('data-sub');
+  if (!name) return;
+  var body = sec.querySelector('.mob-sub-body');
+  var isCollapsed = body && body.classList.contains('mob-collapsed');
+  if (_activeSidebarSection !== 'routes') setActiveSidebarSection('routes');
+  setActiveRoutesSubSection(isCollapsed ? name : null);
+}
 
 // Повертає фільтр секції до дефолту. Не чіпає інші секції.
 function _resetSidebarSectionFilter(name) {
