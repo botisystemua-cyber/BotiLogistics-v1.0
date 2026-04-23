@@ -1078,7 +1078,15 @@ function fmtShortDate(iso) {
 }
 
 // ===== [SECT-CARD] RENDER SINGLE CARD =====
-function renderCard(p) {
+function renderCard(p, routeCtx) {
+  // routeCtx (optional) = { rteId, sheetName } — передається коли картка
+  // рендериться всередині режиму «Маршрути». Тоді додаємо:
+  //   • class="route-card" + data-lead-id + data-rte-id (для SortableJS
+  //     drag-n-drop і route-drop handler'а).
+  //   • Checkbox працює з routeSelectedIds і викликає toggleRouteSelect,
+  //     щоб bulk-дії маршруту (зняти з маршруту, архівувати, оптимізувати)
+  //     бачили правильний набір обраних.
+  const _routeCtx = routeCtx || null;
   const pkgId = p['PKG_ID'] || '';
   const name = p['Піб відправника'] || '';
   const phone = p['Телефон реєстратора'] || '';
@@ -1299,11 +1307,24 @@ function renderCard(p) {
   // Tracking button only for УК→ЄВ with ТТН
   const trackBtn = (isUE && ttn) ? `<button onclick="event.stopPropagation(); window.open('https://novaposhta.ua/tracking/?cargo_number=${ttn}', '_blank')">📦 Трекінг</button>` : '';
 
+  // Route-context: додатковий клас .route-card для SortableJS + data-rte-id /
+  // data-lead-id. Checkbox прив'язуємо до routeSelectedIds/toggleRouteSelect.
+  const _rootCls   = _routeCtx ? `lead-card route-card ${statusClass}` : `lead-card ${statusClass}`;
+  const _rootAttrs = _routeCtx
+    ? `data-id="${pkgId}" data-rte-id="${_routeCtx.rteId || ''}" data-lead-id="${pkgId}"`
+    : `data-id="${pkgId}"`;
+  const _cbChecked = _routeCtx
+    ? (routeSelectedIds && routeSelectedIds.has(_routeCtx.rteId) ? 'checked' : '')
+    : (selectedIds.has(pkgId) ? 'checked' : '');
+  const _cbHandler = _routeCtx
+    ? `onchange="event.stopPropagation(); toggleRouteSelect('${_routeCtx.rteId}', this.checked)"`
+    : `onclick="event.stopPropagation(); toggleSelect('${pkgId}')"`;
+
   return `
-    <div class="lead-card ${statusClass}" data-id="${pkgId}">
+    <div class="${_rootCls}" ${_rootAttrs}>
       <div class="card-header" onclick="toggleCard('${pkgId}')">
         <div class="card-top-row">
-          <input type="checkbox" class="card-checkbox" onclick="event.stopPropagation(); toggleSelect('${pkgId}')" ${selectedIds.has(pkgId) ? 'checked' : ''}>
+          <input type="checkbox" class="card-checkbox" ${_cbHandler} ${_cbChecked}>
           <span class="dir-badge ${dirBadgeClass}">${dirLabel}</span>
           ${isNew24h(p) ? '<span class="badge badge-new24">🆕 NEW</span>' : ''}
           ${visCols.includes('ttn') ? ttnHtml : ''}
@@ -4271,13 +4292,19 @@ function renderRoutes() {
     } else {
         // Використовуємо основний renderCard() щоб картка ліда виглядала
         // ідентично у всіх контекстах (Напрямок / Перевірка / Маршрути).
-        // Знаходимо оригінал у allData за PKG_ID; якщо не знайдено (пасажир
-        // чи видалений запис) — fallback на старий renderRouteCard зі
-        // спрощеним виглядом, щоб нічого не падало.
+        // Знаходимо оригінал у allData за PKG_ID і передаємо routeCtx, щоб
+        // картка правильно працювала у маршруті (SortableJS drag-n-drop,
+        // route-specific чекбокси для bulk-дій). Якщо оригінал не знайдено
+        // (пасажир чи видалений запис) — fallback на старий renderRouteCard.
         html += filtered.map((r, idx) => {
             const leadId = r['PKG_ID'] || r['PAX_ID'] || '';
             const p = leadId ? allData.find(x => (x['PKG_ID'] || '') === leadId) : null;
-            if (p) return renderCard(p);
+            if (p) {
+                return renderCard(p, {
+                    rteId: r['RTE_ID'] || '',
+                    sheetName: sheet.sheetName
+                });
+            }
             return renderRouteCard(r, idx, sheet.sheetName);
         }).join('');
     }
