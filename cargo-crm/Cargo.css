@@ -177,17 +177,28 @@ body {
   user-select: none;
 }
 .sidebar-section-header:hover { background: #fef7ed; /* світло-коричневий hover */ }
-.sidebar-section-header .toggle { transition: transform 0.2s; font-size: 12px; color: var(--text-secondary); }
+.sidebar-section-header .toggle { transition: transform 0.28s cubic-bezier(.4,0,.2,1); font-size: 12px; color: var(--text-secondary); }
 .sidebar-section-header .toggle.open { transform: rotate(90deg); }
+/* Акордеон-анімація: плавний collapse/expand без сіпання.
+   max-height з великим запасом + cubic-bezier для природного easing;
+   overflow:hidden приховує «хвіст» коли секція стискається. */
 .sidebar-section-body {
   padding: 10px 14px 14px;
   background: #fafbfc;
-  max-height: 500px;
+  max-height: 2000px;
   overflow: hidden;
-  transition: max-height 0.4s ease, padding 0.3s ease, opacity 0.3s ease;
   opacity: 1;
+  transition: max-height 0.32s cubic-bezier(.4,0,.2,1),
+              padding 0.28s cubic-bezier(.4,0,.2,1),
+              opacity 0.2s ease;
 }
-.sidebar-section-body.hidden { max-height: 0; padding-top: 0; padding-bottom: 0; opacity: 0; display: block; }
+.sidebar-section-body.hidden {
+  max-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  opacity: 0;
+  display: block; /* важливо: display:none ламає transition */
+}
 
 .sidebar-scan-btn {
   display: flex;
@@ -298,16 +309,25 @@ body {
   transition: background 0.15s;
 }
 .sidebar-sub-header:hover { background: #fed7aa; }
-.sidebar-sub-header .sub-toggle { transition: transform 0.2s; font-size: 10px; color: #9a3412; }
+.sidebar-sub-header .sub-toggle { transition: transform 0.28s cubic-bezier(.4,0,.2,1); font-size: 10px; color: #9a3412; }
 .sidebar-sub-header .sub-toggle.open { transform: rotate(90deg); }
 .sidebar-sub-body {
   padding: 6px 4px 4px;
-  max-height: 400px;
-  overflow-y: auto;
-  transition: max-height 0.3s ease, opacity 0.25s ease;
+  max-height: 1200px;
+  overflow: hidden;
   opacity: 1;
+  transition: max-height 0.3s cubic-bezier(.4,0,.2,1),
+              padding 0.26s cubic-bezier(.4,0,.2,1),
+              opacity 0.2s ease;
 }
-.sidebar-sub-body.hidden { max-height: 0; padding-top: 0; padding-bottom: 0; opacity: 0; display: block; overflow: hidden; }
+.sidebar-sub-body.hidden {
+  max-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  opacity: 0;
+  display: block;
+}
+.sidebar-sub-body:not(.hidden) { overflow-y: auto; }
 
 /* Зведення рейсів — акцентна кнопка всередині Маршрутів */
 .sidebar-item.sidebar-item-summary {
@@ -1562,11 +1582,25 @@ body {
 }
 .mobile-sidebar .mob-section-title:hover { background: #fef7ed; }
 .mobile-sidebar .mob-section-title:active { background: rgba(146,64,14,0.08); }
-.mob-toggle { font-size: 11px; transition: transform 0.2s; color: #94a3b8; }
+.mob-toggle { font-size: 11px; transition: transform 0.28s cubic-bezier(.4,0,.2,1); color: #94a3b8; }
 .mob-toggle.open { transform: rotate(90deg); color: #475569; }
 
-.mob-section-body { padding: 0 0 8px; }
-.mob-section-body.mob-collapsed { display: none; }
+/* Плавна анімація — без display:none (воно ламає transition). */
+.mob-section-body {
+  padding: 0 0 8px;
+  max-height: 2000px;
+  overflow: hidden;
+  opacity: 1;
+  transition: max-height 0.32s cubic-bezier(.4,0,.2,1),
+              padding 0.28s cubic-bezier(.4,0,.2,1),
+              opacity 0.2s ease;
+}
+.mob-section-body.mob-collapsed {
+  max-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  opacity: 0;
+}
 
 .mobile-sidebar .mob-item {
   display: flex;
@@ -1634,10 +1668,23 @@ body {
   user-select: none;
 }
 .mobile-sidebar .mob-sub-title:active { background: #fed7aa; }
-.mob-sub-toggle { font-size: 11px; transition: transform 0.2s; color: #9a3412; }
+.mob-sub-toggle { font-size: 11px; transition: transform 0.28s cubic-bezier(.4,0,.2,1); color: #9a3412; }
 .mob-sub-toggle.open { transform: rotate(90deg); }
-.mobile-sidebar .mob-sub-body { padding: 4px 0 0; }
-.mobile-sidebar .mob-sub-body.mob-collapsed { display: none; }
+.mobile-sidebar .mob-sub-body {
+  padding: 4px 0 0;
+  max-height: 1200px;
+  overflow: hidden;
+  opacity: 1;
+  transition: max-height 0.3s cubic-bezier(.4,0,.2,1),
+              padding 0.26s cubic-bezier(.4,0,.2,1),
+              opacity 0.2s ease;
+}
+.mobile-sidebar .mob-sub-body.mob-collapsed {
+  max-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  opacity: 0;
+}
 .mobile-sidebar .mob-item-muted {
   background: #f1f5f9;
   color: #64748b;
