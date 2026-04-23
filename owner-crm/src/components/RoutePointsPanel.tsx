@@ -28,6 +28,9 @@ const COUNTRIES = [
   { code: 'CH', flag: '\u{1F1E8}\u{1F1ED}', label: '\u{1F1E8}\u{1F1ED} \u0428\u0432\u0435\u0439\u0446\u0430\u0440\u0456\u044F' },
   { code: 'IT', flag: '\u{1F1EE}\u{1F1F9}', label: '\u{1F1EE}\u{1F1F9} \u0406\u0442\u0430\u043B\u0456\u044F' },
   { code: 'FR', flag: '\u{1F1EB}\u{1F1F7}', label: '\u{1F1EB}\u{1F1F7} \u0424\u0440\u0430\u043D\u0446\u0456\u044F' },
+  { code: 'SE', flag: '\u{1F1F8}\u{1F1EA}', label: '\u{1F1F8}\u{1F1EA} \u0428\u0432\u0435\u0446\u0456\u044F' },
+  { code: 'NO', flag: '\u{1F1F3}\u{1F1F4}', label: '\u{1F1F3}\u{1F1F4} \u041D\u043E\u0440\u0432\u0435\u0433\u0456\u044F' },
+  { code: 'DK', flag: '\u{1F1E9}\u{1F1F0}', label: '\u{1F1E9}\u{1F1F0} \u0414\u0430\u043D\u0456\u044F' },
 ] as const;
 
 const flagFor = (code: string) =>
