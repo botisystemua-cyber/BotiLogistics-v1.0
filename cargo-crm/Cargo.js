@@ -1346,6 +1346,14 @@ function renderCard(p, routeCtx) {
             ${visCols.includes('sum') && price ? `<span class="card-price ${priceColorClass}">${price} ${currency}</span>` : ''}
             ${visCols.includes('deposit') && deposit > 0 ? `<span class="card-deposit">завд:${deposit}</span>` : ''}
             ${visCols.includes('debt') && debt > 0 ? `<span class="card-debt">борг:${debt}</span>` : ''}
+            ${(() => {
+              // Підсвічуємо НП-борг жовтим, коли ми оплатили Нову Пошту —
+              // оператор одразу бачить «цей лід має нам повернути X за НП».
+              const npAmt = parseFloat(p['Сума НП']) || 0;
+              const npCur = p['Валюта НП'] || 'UAH';
+              if (npAmt <= 0) return '';
+              return `<span class="card-np-debt" title="Ми оплатили Нову Пошту — клієнт має повернути">🚚 НП: ${npAmt} ${npCur}</span>`;
+            })()}
           </div>
           <button class="card-actions-toggle" onclick="event.stopPropagation(); toggleActions('${pkgId}', this)" title="Дії">▼</button>
         </div>

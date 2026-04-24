@@ -639,6 +639,30 @@
             font-weight: 700;
         }
         .np-amount-row input::placeholder { color: rgba(255,255,255,0.35); }
+        .np-amount-currency { display: flex; gap: 8px; }
+        .np-amount-currency input { flex: 2; }
+        .np-amount-currency select {
+            flex: 1;
+            padding: 12px 8px;
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 10px;
+            color: #fff;
+            font-family: inherit;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .np-amount-currency select option { background: #0f172a; color: #fff; }
+        .np-hint {
+            font-size: 11px;
+            color: rgba(255,255,255,0.6);
+            padding: 6px 8px;
+            background: rgba(99,102,241,0.12);
+            border-radius: 8px;
+            text-align: center;
+            line-height: 1.35;
+        }
         .np-save-btn {
             padding: 14px;
             background: #10b981;
@@ -1463,22 +1487,32 @@
         <button class="history-clear-btn" onclick="clearHistory()">🗑 Очистити історію</button>
     </div>
 
-    <!-- NP-PAYMENT MODAL (bottom-centered, opened via ✏️ button) -->
+    <!-- NP-PAYMENT MODAL (bottom-centered, opened via ✏️ button)
+         Спрощений флоу: одразу сума+валюта+зберегти. Порожньо або 0 =
+         «клієнт оплатив сам» (default). Сума > 0 = «платимо ми» →
+         додається у борг у цій валюті. Повторне відкриття — редагування. -->
     <div class="np-modal" id="npModal">
         <div class="np-modal-header">
-            <div class="np-modal-title">🚚 Оплата Нової Пошти</div>
+            <div class="np-modal-title">🚚 Оплата НП</div>
             <button class="np-modal-close" onclick="closeNpModal()" title="Закрити">×</button>
         </div>
         <div class="np-modal-ttn" id="npModalTtn">—</div>
-        <div class="np-payer-grid">
-            <button type="button" class="np-payer-btn" data-payer="client" onclick="setNpPayer('client')">👤 Клієнт сам</button>
-            <button type="button" class="np-payer-btn" data-payer="us" onclick="setNpPayer('us')">🏢 Платимо ми</button>
+        <div class="np-hint" id="npModalHint">💡 Залиш порожнім або 0 — клієнт оплатить сам на пошті</div>
+        <div class="np-amount-row show">
+            <label>Сума (якщо платимо ми):</label>
+            <div class="np-amount-currency">
+                <input type="number" id="npAmount" min="0" max="999999" step="0.01" inputmode="decimal" placeholder="0">
+                <select id="npCurrency">
+                    <option value="UAH" selected>UAH</option>
+                    <option value="EUR">EUR</option>
+                    <option value="CHF">CHF</option>
+                    <option value="PLN">PLN</option>
+                    <option value="CZK">CZK</option>
+                    <option value="USD">USD</option>
+                </select>
+            </div>
         </div>
-        <div class="np-amount-row" id="npAmountRow">
-            <label>Сума, UAH (додасться у борг)</label>
-            <input type="number" id="npAmount" min="1" max="999999" step="1" inputmode="numeric" placeholder="Напр. 180">
-        </div>
-        <button type="button" class="np-save-btn" id="npSaveBtn" onclick="saveNpPayment()" disabled>💾 Зберегти</button>
+        <button type="button" class="np-save-btn" id="npSaveBtn" onclick="saveNpPayment()">💾 Зберегти</button>
     </div>
 
     <!-- BOX-COUNT MODAL (bottom-right, only for newly created packages) -->
@@ -3923,59 +3957,61 @@
         }
 
         // ==== NP-PAYMENT MODAL ====
-        // Opened via ✏️ НП-оплата button after any successful scan.
-        // Calls register_np_payment RPC which atomically updates np_status,
-        // np_amount, debt and logs to package_scan_log (mode='np_edit').
-        var npPayer = null;   // 'client' | 'us'
+        // Спрощений флоу (redesigned): одразу сума + валюта + зберегти.
+        // Порожньо або 0 = «клієнт оплатив сам» (default, нічого не додаємо).
+        // Сума > 0 = «платимо ми» → зберігаємо у np_amount/np_currency
+        // + додаємо у борг. Повторне відкриття модалки завантажує поточні
+        // значення — оператор може виправити помилково введене.
 
         function openNpModal() {
             if (!lastScannedPkgId) return;
             document.getElementById('npModalTtn').textContent = lastScannedTtn || lastScannedPkgId;
-            document.getElementById('npAmount').value = '';
-            npPayer = null;
-            refreshNpUI();
+            // Pre-load поточних значень з БД — щоб відкривши вдруге можна
+            // було побачити й виправити попередню суму.
+            var amt = document.getElementById('npAmount');
+            var cur = document.getElementById('npCurrency');
+            if (amt) amt.value = '';
+            if (cur) cur.value = 'UAH';
             document.getElementById('npModal').classList.add('show');
+            _prefillNpFromDb();
         }
 
         function closeNpModal() {
             document.getElementById('npModal').classList.remove('show');
-            npPayer = null;
         }
 
-        function setNpPayer(p) {
-            if (p !== 'client' && p !== 'us') return;
-            npPayer = p;
-            refreshNpUI();
+        function _prefillNpFromDb() {
+            if (!lastScannedPkgId || !TENANT_ID) return;
+            var url = SUPABASE_URL + '/rest/v1/packages' +
+                      '?tenant_id=eq.' + encodeURIComponent(TENANT_ID) +
+                      '&pkg_id=eq.' + encodeURIComponent(lastScannedPkgId) +
+                      '&select=np_amount,np_currency,np_status';
+            fetch(url, {
+                headers: { apikey: SUPABASE_ANON_KEY, Authorization: 'Bearer ' + SUPABASE_ANON_KEY }
+            }).then(function(r) { return r.json(); }).then(function(rows) {
+                var row = (rows && rows[0]) || {};
+                var amtEl = document.getElementById('npAmount');
+                var curEl = document.getElementById('npCurrency');
+                if (row.np_amount && parseFloat(row.np_amount) > 0) {
+                    if (amtEl) amtEl.value = row.np_amount;
+                }
+                if (row.np_currency) {
+                    if (curEl) curEl.value = row.np_currency;
+                }
+            }).catch(function(){});
         }
-
-        function refreshNpUI() {
-            document.querySelectorAll('.np-payer-btn').forEach(function(b) {
-                b.classList.toggle('active', b.getAttribute('data-payer') === npPayer);
-            });
-            document.getElementById('npAmountRow').classList.toggle('show', npPayer === 'us');
-            var saveBtn = document.getElementById('npSaveBtn');
-            // Client path is valid immediately; 'us' requires a positive amount.
-            if (npPayer === 'client') {
-                saveBtn.disabled = false;
-            } else if (npPayer === 'us') {
-                var v = parseFloat(document.getElementById('npAmount').value);
-                saveBtn.disabled = !(v > 0);
-            } else {
-                saveBtn.disabled = true;
-            }
-        }
-
-        // Amount input: enable/disable Save live.
-        document.addEventListener('DOMContentLoaded', function() {
-            var amt = document.getElementById('npAmount');
-            if (amt) amt.addEventListener('input', refreshNpUI);
-        });
 
         function saveNpPayment() {
-            if (!lastScannedPkgId || !TENANT_ID || !npPayer) return;
-            var amount = npPayer === 'us'
-                ? parseFloat(document.getElementById('npAmount').value) : null;
-            if (npPayer === 'us' && !(amount > 0)) return;
+            if (!lastScannedPkgId || !TENANT_ID) return;
+            var amtEl = document.getElementById('npAmount');
+            var curEl = document.getElementById('npCurrency');
+            var rawAmount = amtEl ? amtEl.value : '';
+            var amount = parseFloat(rawAmount);
+            var currency = (curEl && curEl.value) || 'UAH';
+
+            // Порожньо або 0 = клієнт сам оплатить на пошті. Сума > 0 = ми оплатили.
+            var payer = (amount > 0) ? 'us' : 'client';
+            var rpcAmount = (payer === 'us') ? amount : null;
 
             var btn = document.getElementById('npSaveBtn');
             btn.disabled = true;
@@ -3984,16 +4020,16 @@
             sb.rpc('register_np_payment', {
                 p_tenant_id: TENANT_ID,
                 p_pkg_id:    lastScannedPkgId,
-                p_payer:     npPayer,
-                p_amount:    amount,
+                p_payer:     payer,
+                p_amount:    rpcAmount,
                 p_user:      USER_LOGIN
             }).then(function(result) {
                 btn.textContent = '💾 Зберегти';
+                btn.disabled = false;
                 if (result.error) {
                     showToast({ variant: 'error', icon: '❌', label: 'Помилка НП',
                                 value: lastScannedTtn || '', status: result.error.message });
                     setTimeout(function(){ document.getElementById('resultToast').classList.remove('show'); }, 2500);
-                    refreshNpUI();
                     return;
                 }
                 var r = result.data || {};
@@ -4001,23 +4037,40 @@
                     showToast({ variant: 'error', icon: '❌', label: 'Помилка НП',
                                 value: lastScannedTtn || '', status: r.error || 'Невідома помилка' });
                     setTimeout(function(){ document.getElementById('resultToast').classList.remove('show'); }, 2500);
-                    refreshNpUI();
                     return;
                 }
-                var label = npPayer === 'client' ? '👤 НП: клієнт сам' : '🏢 НП: платимо ми';
-                var status = npPayer === 'us'
-                    ? ('+' + (r.np_amount || amount) + ' UAH → борг: ' + (r.debt || 0) + ' UAH')
-                    : ('Борг не змінено: ' + (r.debt || 0) + ' UAH');
+
+                // Якщо ми оплатили — додатково запишемо np_currency (RPC не приймає валюту).
+                if (payer === 'us') {
+                    var patchUrl = SUPABASE_URL + '/rest/v1/packages' +
+                                   '?tenant_id=eq.' + encodeURIComponent(TENANT_ID) +
+                                   '&pkg_id=eq.' + encodeURIComponent(lastScannedPkgId);
+                    fetch(patchUrl, {
+                        method: 'PATCH',
+                        headers: {
+                            apikey: SUPABASE_ANON_KEY,
+                            Authorization: 'Bearer ' + SUPABASE_ANON_KEY,
+                            'Content-Type': 'application/json',
+                            Prefer: 'return=minimal'
+                        },
+                        body: JSON.stringify({ np_currency: currency })
+                    }).catch(function(){});
+                }
+
+                var label = payer === 'client' ? '👤 НП: клієнт сам' : '🏢 НП: платимо ми';
+                var status = payer === 'us'
+                    ? ('+' + (r.np_amount || amount) + ' ' + currency + ' → борг: ' + (r.debt || 0))
+                    : 'Клієнт оплатить на пошті';
                 showToast({ variant: 'success', icon: '✅', label: label,
                             value: lastScannedTtn || '', status: status });
-                setTimeout(function(){ document.getElementById('resultToast').classList.remove('show'); }, 2800);
+                setTimeout(function(){ document.getElementById('resultToast').classList.remove('show'); }, 2500);
                 closeNpModal();
             }).catch(function(err) {
                 btn.textContent = '💾 Зберегти';
+                btn.disabled = false;
                 showToast({ variant: 'error', icon: '❌', label: 'Мережа',
                             value: lastScannedTtn || '', status: String(err && err.message || err) });
                 setTimeout(function(){ document.getElementById('resultToast').classList.remove('show'); }, 2500);
-                refreshNpUI();
             });
         }
 

@@ -1137,6 +1137,19 @@ body {
 .card-price.unpaid { color: var(--danger); }
 .card-deposit { font-size: 11px; color: var(--text-secondary); }
 .card-debt { font-size: 11px; color: var(--danger); font-weight: 700; }
+/* НП-борг — жовтий pill, ми оплатили пошту замість клієнта */
+.card-np-debt {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fcd34d;
+  white-space: nowrap;
+}
 .card-actions-toggle {
   background: none; border: none; cursor: pointer;
   font-size: 14px; color: var(--text-secondary);
