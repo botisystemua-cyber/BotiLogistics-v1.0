@@ -157,9 +157,9 @@ const OTHER_SECTIONS = [
     { key:'route', title:'🗺️ Маршрут', fields:['from','to','timing','vehicle','seatInCar','calId'] },
     { key:'finance', title:'💰 Фінанси', fields:['price','currency','deposit','currencyDeposit','weight','weightPrice','currencyWeight','debt'] },
     { key:'payments', title:'💳 Платежі', fields:[], readonly:true, async:true },
-    { key:'statuses', title:'📊 Статуси', fields:['payStatus','leadStatus','crmStatus','tag','messenger','smartId'] },
+    { key:'statuses', title:'📊 Статуси', fields:['payStatus','leadStatus','crmStatus','tag','messenger'] },
     { key:'notes', title:'📝 Примітки', fields:['note','noteSms'] },
-    { key:'system', title:'🔧 Системні', fields:['pax_id','dateCreated','sourceSheet','cliId','bookingId'], readonly:true }
+    { key:'system', title:'🔧 Системні', fields:['pax_id','smartId','dateCreated','sourceSheet','cliId','bookingId'], readonly:true }
 ];
 function getManagerColsKey() {
     var name = getManagerName() || 'default';
@@ -201,6 +201,10 @@ function getDetailSections() {
     ];
 }
 const READONLY_FIELDS = ['pax_id','dateCreated','sourceSheet','cliId','bookingId','rteId','debt','dateArchive','archivedBy','archiveReason','archiveId'];
+// Поля, які залишаються редагованими навіть у readonly-категорії (наприклад
+// «🔧 Системні»). Зараз — тільки SmartSender ID, щоб можна було вручну
+// виправити переплутані значення без розблокування pax_id та інших.
+const EDITABLE_OVERRIDE_FIELDS = ['smartId'];
 
 // Валюти — дефолт, живий список керується з owner-crm через system_settings
 const CURR_MASTER = ['UAH','EUR','USD','CHF','PLN','CZK','GBP','SEK','NOK','DKK','HUF','RON'];
@@ -3356,7 +3360,7 @@ function renderDetailFields(p, fields, isReadonly) {
     fields.forEach(key => {
         const colName = COL_MAP[key] || key;
         const val = p[colName] || '';
-        const isRO = READONLY_FIELDS.includes(key) || isReadonly;
+        const isRO = (READONLY_FIELDS.includes(key) || isReadonly) && !EDITABLE_OVERRIDE_FIELDS.includes(key);
         const DATE_KEYS = ['date','dateCreated','dateArchive'];
         const safeVal = String(val).replace(/'/g,"\\'");
         let displayVal = val || '—';
