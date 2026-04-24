@@ -57,6 +57,7 @@ const RPC_URL = SUPABASE_URL + '/rest/v1/rpc/create_package_from_sheet';
 const LOG_SHEET_NAME = '_SYNC_LOG';
 const LOG_MAX_ROWS = 5000;
 const SYNC_COL_NAME = '_sync';  // службова колонка в кожному джерельному аркуші
+const MAX_ROWS_PER_RUN = 300;   // захист від 6-хв timeout'а Apps Script
 
 // Колонки бот-таблиці (0-based індекси в масиві, 1-based у Sheets API).
 // A=Кг B=Сума C=№ D=Шт E=Адреса отримувача F=Телефон отримувача G=Опис
@@ -155,11 +156,55 @@ function onOpen() {
         .addItem('Показати лог',                          'menuShowLog_')
         .addSeparator()
         .addItem('Імпорт УК→ЄВ рядки 28194..28242',        'menuImportUkrEuRange_')
-        .addItem('Ігнорувати історію ЗАЇЗДИ (пропустити все наявне)', 'menuSkipZaizdyHistory_')
+        .addItem('Ігнорувати ІСТОРІЮ (обидва аркуші)',     'menuSkipAllHistory_')
+        .addItem('Ігнорувати історію ЗАЇЗДИ (окремо)',     'menuSkipZaizdyHistory_')
         .addSeparator()
         .addItem('Встановити тригери',                    'setupTriggers')
         .addItem('Скинути _sync (УВАГА: все наново)',     'menuResetSync_')
         .addToUi();
+}
+
+
+/** Позначає ВСІ порожні _sync у обох аркушах як 'skipped-before-sync'.
+ *  Не чіпає ті що вже мають 'ok ...', 'skip_dup ...', 'fail ...' тощо.
+ *  Викликається ОДИН РАЗ перед вмиканням автосинку, щоб історія (десятки
+ *  тисяч рядків) не лилась у БД. */
+function menuSkipAllHistory_() {
+    let ui = null;
+    try { ui = SpreadsheetApp.getUi(); } catch (e) { }
+    if (ui) {
+        const ans = ui.alert(
+            'Ігнорувати ВСЮ історію?',
+            'У порожні _sync усіх рядків обох аркушів («Аркуш Бот ТТН» і\n' +
+            '«ЗАЇЗДИ») буде проставлено "skipped-before-sync".\n\n' +
+            'Рядки з ok/fail/skip_dup НЕ чіпаємо.\n\n' +
+            'Далі у Supabase потраплятимуть ТІЛЬКИ нові заявки.\n\nПродовжити?',
+            ui.ButtonSet.YES_NO
+        );
+        if (ans !== ui.Button.YES) return;
+    }
+    const ss = SpreadsheetApp.openById(SHEET_ID);
+    let totalMarked = 0;
+    const lines = [];
+    for (const cfg of SHEETS) {
+        const sheet = ss.getSheetByName(cfg.name);
+        if (!sheet) { lines.push(cfg.name + ': аркуш не знайдено'); continue; }
+        const syncCol = ensureSyncColumn_(sheet);
+        const lastRow = sheet.getLastRow();
+        if (lastRow < 2) { lines.push(cfg.name + ': порожній'); continue; }
+        const values = sheet.getRange(2, syncCol, lastRow - 1, 1).getValues();
+        let marked = 0;
+        for (let i = 0; i < values.length; i++) {
+            if (!values[i][0]) { values[i][0] = 'skipped-before-sync'; marked++; }
+        }
+        if (marked > 0) {
+            sheet.getRange(2, syncCol, values.length, 1).setValues(values);
+        }
+        totalMarked += marked;
+        lines.push(cfg.name + ': позначено ' + marked);
+    }
+    safeAlert_('Готово: ' + totalMarked + ' рядків позначено "skipped-before-sync".\n\n' +
+               lines.join('\n') + '\n\nТепер тільки нові заявки потраплять у Supabase.');
 }
 
 
@@ -285,6 +330,9 @@ function processSheet_(sheet, cfg, rowFrom, rowTo) {
     const data = sheet.getRange(startRow, 1, endRow - startRow + 1, numColsToRead).getValues();
 
     const writes = [];  // { rowNum, col, value }
+    // Для live-режиму (rowFrom/rowTo=null) обмежуємо кількість синків
+    // за один виклик, щоб не впертись у 6-хв timeout Apps Script.
+    const maxToProcess = (rowFrom || rowTo) ? Infinity : MAX_ROWS_PER_RUN;
 
     for (let i = 0; i < data.length; i++) {
         const row = data[i];
@@ -298,6 +346,9 @@ function processSheet_(sheet, cfg, rowFrom, rowTo) {
             summary.skipped++;
             continue;
         }
+
+        // Захист від зависань: не більше MAX_ROWS_PER_RUN обробок за виклик.
+        if (summary.total >= maxToProcess) break;
 
         summary.total++;
         const payload = buildPayload_(row, cfg);
