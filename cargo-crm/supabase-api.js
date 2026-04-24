@@ -2045,13 +2045,19 @@ async function sbLoadCurrencyDefaults() {
         return {};
     }
     try {
+        // Зберігається у system_settings як рядок з setting_name='currency_defaults',
+        // setting_value — JSON-рядок об'єкта { cargo: {...}, passenger: {...} }.
         const { data, error } = await sb.from('system_settings')
-            .select('currency_defaults')
+            .select('setting_value')
             .eq('tenant_id', BOTI_SESSION.tenant_id)
+            .eq('setting_name', 'currency_defaults')
             .maybeSingle();
         if (error) throw error;
-        _CURRENCY_DEFAULTS_CACHE = (data && data.currency_defaults && typeof data.currency_defaults === 'object')
-            ? data.currency_defaults : {};
+        let parsed = {};
+        if (data && data.setting_value) {
+            try { parsed = JSON.parse(data.setting_value); } catch (_) { /* corrupt */ }
+        }
+        _CURRENCY_DEFAULTS_CACHE = (parsed && typeof parsed === 'object') ? parsed : {};
         return _CURRENCY_DEFAULTS_CACHE;
     } catch (e) {
         console.warn('[currency_defaults] load failed:', e);

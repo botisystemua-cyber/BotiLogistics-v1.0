@@ -21,6 +21,9 @@ interface CurrencyDefaults {
 }
 
 const CURRENCIES = ['EUR', 'UAH', 'CHF', 'PLN', 'CZK', 'USD'];
+const SETTING_NAME = 'currency_defaults';
+const SETTING_SECTION = 'currencies';
+const SETTING_DESCRIPTION = 'Дефолти валют per-app / per-field (cargo + passenger)';
 
 export function CurrencyDefaultsPanel({ tenantId }: { tenantId: string }) {
   const [open, setOpen] = useState(false);
@@ -31,13 +34,21 @@ export function CurrencyDefaultsPanel({ tenantId }: { tenantId: string }) {
   const load = useCallback(async () => {
     setLoading(true);
     try {
+      // Дані живуть як один рядок у system_settings з setting_name='currency_defaults',
+      // setting_value — JSON-рядок об'єкта. Того самого патерну як інші налаштування
+      // (default_currency / supported_currencies).
       const { data, error } = await supabase
         .from('system_settings')
-        .select('currency_defaults')
+        .select('setting_value')
         .eq('tenant_id', tenantId)
+        .eq('setting_name', SETTING_NAME)
         .maybeSingle();
       if (error) throw error;
-      setDefaults((data?.currency_defaults as CurrencyDefaults) || {});
+      let parsed: CurrencyDefaults = {};
+      if (data?.setting_value) {
+        try { parsed = JSON.parse(data.setting_value) as CurrencyDefaults; } catch { /* corrupt */ }
+      }
+      setDefaults(parsed || {});
     } catch (e) {
       console.warn('[CurrencyDefaults] load failed:', e);
       setDefaults({});
@@ -57,13 +68,40 @@ export function CurrencyDefaultsPanel({ tenantId }: { tenantId: string }) {
   const save = async () => {
     setSaving(true);
     try {
-      const { error } = await supabase
+      const value = JSON.stringify(defaults);
+      const now = new Date().toISOString();
+
+      // Чи є вже такий рядок? (tenant_id + setting_name — унікальна пара, але
+      // явного UNIQUE constraint на PostgREST onConflict немає, тож робимо
+      // select → update/insert вручну.)
+      const { data: existing, error: selErr } = await supabase
         .from('system_settings')
-        .upsert(
-          { tenant_id: tenantId, currency_defaults: defaults },
-          { onConflict: 'tenant_id' }
-        );
-      if (error) throw error;
+        .select('id')
+        .eq('tenant_id', tenantId)
+        .eq('setting_name', SETTING_NAME)
+        .limit(1);
+      if (selErr) throw selErr;
+
+      if (existing && existing.length > 0) {
+        const { error } = await supabase
+          .from('system_settings')
+          .update({ setting_value: value, updated_date: now })
+          .eq('id', existing[0].id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('system_settings')
+          .insert({
+            tenant_id: tenantId,
+            setting_id: `SET-${SETTING_NAME}`.slice(0, 64),
+            setting_section: SETTING_SECTION,
+            setting_name: SETTING_NAME,
+            setting_value: value,
+            setting_description: SETTING_DESCRIPTION,
+            updated_date: now,
+          });
+        if (error) throw error;
+      }
     } catch (e) {
       console.error('[CurrencyDefaults] save failed:', e);
       alert('Не вдалось зберегти: ' + (e as Error).message);
