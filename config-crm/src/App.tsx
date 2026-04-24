@@ -1,8 +1,10 @@
 import { useState } from 'react';
-import { ShieldCheck, Users, Eye, EyeOff, LogIn, Loader2, LogOut, ArrowLeft, CircleCheck, AlertCircle, Truck } from 'lucide-react';
+import { ShieldCheck, Users, Eye, EyeOff, LogIn, Loader2, LogOut, ArrowLeft, CircleCheck, AlertCircle, Truck, ScanLine } from 'lucide-react';
 import { Logo } from './components/shared';
 import { AdminPanel } from './components/AdminPanel';
-import { authenticate } from './api/users';
+import { authenticate, authenticateAny } from './api/users';
+
+const SCANNER_URL = '/BotiLogistics-v1.0/cargo-crm/scaner_ttn.html?from=config';
 
 const ADMIN_LOGIN = 'admin';
 const ADMIN_PASSWORD = 'botibro';
@@ -78,7 +80,7 @@ interface SessionUser {
 }
 
 function App() {
-  const [step, setStep] = useState<'role' | 'login' | 'success' | 'admin'>('role');
+  const [step, setStep] = useState<'role' | 'login' | 'scanner-login' | 'success' | 'admin'>('role');
   const [selectedRole, setSelectedRole] = useState<RoleOption | null>(null);
   const [login, setLogin] = useState('');
   const [password, setPassword] = useState('');
@@ -93,6 +95,47 @@ function App() {
     setLogin('');
     setPassword('');
     setError('');
+  };
+
+  const handleScannerClick = () => {
+    // Якщо вже залогінений — одразу в сканер (існуюча сесія містить tenant_id).
+    if (localStorage.getItem('boti_session')) {
+      window.location.href = SCANNER_URL;
+      return;
+    }
+    setStep('scanner-login');
+    setSelectedRole(null);
+    setLogin('');
+    setPassword('');
+    setError('');
+  };
+
+  const handleScannerLogin = async () => {
+    if (!login.trim() || !password.trim()) {
+      setError('Введіть логін та пароль');
+      return;
+    }
+    setLoading(true);
+    setError('');
+    try {
+      const result = await authenticateAny(login.trim(), password.trim());
+      const primary = result.user.roles && result.user.roles.length > 0 ? result.user.roles[0] : 'manager';
+      localStorage.setItem('boti_session', JSON.stringify({
+        tenant_id: result.user.tenant_id,
+        tenant_name: result.tenantName,
+        logo_url: result.logoUrl || '',
+        user_login: result.user.login,
+        user_name: result.user.full_name || result.user.login,
+        role: primary,
+        roles: result.user.roles ?? [primary],
+        modules: result.modules,
+      }));
+      window.location.href = SCANNER_URL;
+    } catch (e: unknown) {
+      setError((e as Error).message || 'Помилка входу');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleBack = () => {
@@ -207,6 +250,120 @@ function App() {
                 </button>
               );
             })}
+          </div>
+
+          {/* ─── Сканер ТТН — окрема кнопка, доступна з будь-яким логіном ─── */}
+          <div className="mt-5 sm:mt-6 pt-5 sm:pt-6 border-t border-border/60">
+            <button
+              onClick={handleScannerClick}
+              style={{ animationDelay: `${ROLES.length * 80}ms` }}
+              className="w-full bg-card border-2 border-dashed border-border rounded-2xl sm:rounded-3xl p-4 sm:p-5 flex items-center gap-4 sm:gap-5 hover:border-amber-400 hover:shadow-xl hover:shadow-amber-500/20 transition-all duration-300 cursor-pointer active:scale-[0.97] group animate-[slideUp_0.4s_ease-out_backwards]"
+            >
+              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center shrink-0 bg-gradient-to-br from-amber-500 to-orange-600 text-white shadow-lg shadow-amber-500/20 group-hover:scale-105 transition-transform duration-300">
+                <ScanLine className="w-7 h-7 sm:w-8 sm:h-8" />
+              </div>
+              <div className="text-left flex-1 min-w-0">
+                <div className="text-lg sm:text-xl font-extrabold text-text">Сканер ТТН</div>
+                <div className="text-xs sm:text-sm text-muted mt-0.5">Швидкий вхід для сканування посилок</div>
+              </div>
+              <div className="w-8 h-8 rounded-full bg-bg flex items-center justify-center shrink-0 group-hover:bg-amber-100 transition-colors">
+                <ArrowLeft className="w-4 h-4 text-muted rotate-180 group-hover:text-amber-600 transition-colors" />
+              </div>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ═══════ SCANNER LOGIN FORM ═══════ */}
+      {step === 'scanner-login' && (
+        <div className="animate-[fadeIn_0.35s_ease-out]">
+          <div className="mb-6 sm:mb-8">
+            <button
+              onClick={handleBack}
+              className="flex items-center gap-1.5 text-sm text-muted hover:text-text font-semibold cursor-pointer transition-colors"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Назад
+            </button>
+          </div>
+
+          <div className="bg-card border-2 border-border rounded-2xl sm:rounded-3xl p-5 sm:p-7 shadow-sm">
+            <div className="flex items-center gap-4 mb-6 sm:mb-7">
+              <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center shrink-0 bg-gradient-to-br from-amber-500 to-orange-600 text-white shadow-lg shadow-amber-500/20">
+                <ScanLine className="w-6 h-6 sm:w-7 sm:h-7" />
+              </div>
+              <div>
+                <div className="text-xl sm:text-2xl font-extrabold text-text">Сканер ТТН</div>
+                <div className="text-xs sm:text-sm text-muted">Увійдіть будь-яким робочим логіном</div>
+              </div>
+            </div>
+
+            <form onSubmit={(e) => { e.preventDefault(); handleScannerLogin(); }} autoComplete="on">
+              <div className="space-y-4 sm:space-y-5">
+                <div>
+                  <label className="block text-[11px] sm:text-xs font-bold text-muted uppercase tracking-wider mb-2">Логін</label>
+                  <input
+                    type="text"
+                    name="username"
+                    value={login}
+                    onChange={(e) => { setLogin(e.target.value); setError(''); }}
+                    onKeyDown={(e) => e.key === 'Enter' && document.getElementById('scan-pwd')?.focus()}
+                    placeholder="Введіть ваш логін"
+                    autoFocus
+                    autoComplete="username"
+                    className="w-full px-4 py-3.5 sm:py-4 bg-bg border-2 border-border rounded-xl sm:rounded-2xl text-sm sm:text-base text-text placeholder:text-muted/50 focus:outline-none focus:border-amber-500 focus:ring-3 focus:ring-amber-500/10 transition-all"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] sm:text-xs font-bold text-muted uppercase tracking-wider mb-2">Пароль</label>
+                  <div className="relative">
+                    <input
+                      id="scan-pwd"
+                      type={showPassword ? 'text' : 'password'}
+                      name="password"
+                      value={password}
+                      onChange={(e) => { setPassword(e.target.value); setError(''); }}
+                      placeholder="Введіть пароль"
+                      autoComplete="current-password"
+                      className="w-full px-4 py-3.5 sm:py-4 pr-12 bg-bg border-2 border-border rounded-xl sm:rounded-2xl text-sm sm:text-base text-text placeholder:text-muted/50 focus:outline-none focus:border-amber-500 focus:ring-3 focus:ring-amber-500/10 transition-all"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-muted hover:text-text cursor-pointer transition-colors"
+                    >
+                      {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {error && (
+                <div className="mt-4 sm:mt-5 px-4 py-3 bg-red-50 border-2 border-red-200 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-semibold text-error flex items-center gap-2.5 animate-[scaleIn_0.2s_ease-out]">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  {error}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={loading || !login.trim() || !password.trim()}
+                className="w-full mt-5 sm:mt-6 py-3.5 sm:py-4 rounded-xl sm:rounded-2xl text-white text-sm sm:text-base font-bold flex items-center justify-center gap-2.5 cursor-pointer transition-all active:scale-[0.97] disabled:opacity-40 disabled:cursor-not-allowed bg-gradient-to-r from-amber-500 to-orange-600 shadow-lg shadow-amber-500/20 hover:shadow-xl hover:brightness-110"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    Перевірка...
+                  </>
+                ) : (
+                  <>
+                    <ScanLine className="w-5 h-5" />
+                    Відкрити сканер
+                  </>
+                )}
+              </button>
+            </form>
           </div>
         </div>
       )}

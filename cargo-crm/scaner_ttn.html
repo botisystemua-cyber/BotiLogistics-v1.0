@@ -1680,6 +1680,12 @@
                 scanner.stop().catch(function(){});
                 isScanning = false;
             }
+            // Зайшли через публічний config-crm — вертаємо туди, а не в cargo-crm.
+            var fromConfig = new URLSearchParams(location.search).get('from') === 'config';
+            if (fromConfig) {
+                window.location.href = '../config-crm/';
+                return;
+            }
             // Prefer history.back() — the browser can restore index.html from
             // bfcache instantly, avoiding a full loadData() round-trip (≈2–3s
             // on mobile). Fall back to href if there's no history entry.
