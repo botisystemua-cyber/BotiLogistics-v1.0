@@ -192,6 +192,9 @@ body { font-family: 'Montserrat', sans-serif; background: var(--bg-main); color:
 .card-deposit.has-deposit { color: #e89a1d; }
 
 .card-row2-wrap { display: flex; flex-direction: column; gap: 3px; }
+/* Підсвічування знайдених підрядків у пошуку */
+mark.search-hl { background: #fde68a; color: #78350f; padding: 0 2px; border-radius: 3px; font-weight: 700; box-shadow: 0 0 0 1px #fbbf24 inset; }
+
 .card-info-row { display: flex; align-items: center; gap: 6px; min-height: 18px; flex-wrap: wrap; }
 .card-id { font-size: 10px; color: var(--text-secondary); font-weight: 500; background: var(--bg-main); padding: 1px 4px; border-radius: 3px; flex-shrink: 0; }
 .card-name { font-size: 11px; color: var(--text-secondary); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; }

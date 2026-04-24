@@ -134,7 +134,15 @@ function highlightMatch(text) {
   const safe = escapeHtml(text == null ? '' : text);
   if (!searchQuery) return safe;
   const re = new RegExp('(' + escapeRegExp(searchQuery) + ')', 'gi');
-  return safe.replace(re, '<mark class="search-hl">$1</mark>');
+  const subst = safe.replace(re, '<mark class="search-hl">$1</mark>');
+  if (subst !== safe) return subst;
+  // Digit-only fallback для телефонів: '067 123' → знаходить '+38 067 123 45 67'
+  const qDigits = String(searchQuery).replace(/\D/g, '');
+  const sDigits = String(text || '').replace(/\D/g, '');
+  if (qDigits.length >= 3 && sDigits.includes(qDigits)) {
+    return '<mark class="search-hl">' + safe + '</mark>';
+  }
+  return safe;
 }
 let openCardId = null;
 let stats = {};
@@ -1070,13 +1078,19 @@ function filterData() {
     data = data.filter(p => p['Статус оплати'] === currentPayFilter);
   }
 
-  // Search — шукаємо по всіх корисних полях посилки
+  // Search — шукаємо по всіх корисних полях посилки.
+  // Для телефонів окрема digit-only перевірка (щоб «067 123» знаходив «+38 067 123…»)
   if (searchQuery) {
     const q = searchQuery.toLowerCase();
+    const qDigits = q.replace(/\D/g, '');
+    const PHONE_FIELDS_PKG = ['Телефон відправника', 'Телефон реєстратора', 'Телефон отримувача'];
     data = data.filter(p => SEARCHABLE_PKG_FIELDS.some(f => {
       const v = p[f];
       if (v === undefined || v === null || v === '') return false;
-      return String(v).toLowerCase().includes(q);
+      const sv = String(v);
+      if (sv.toLowerCase().includes(q)) return true;
+      if (PHONE_FIELDS_PKG.includes(f) && qDigits.length >= 3 && sv.replace(/\D/g, '').includes(qDigits)) return true;
+      return false;
     }));
   }
 

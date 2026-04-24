@@ -256,6 +256,56 @@ const LAYOUTS = {
 };
 
 // ================================================================
+// SEARCH — uniform matching across multiple fields + phone normalization
+// ================================================================
+const SEARCHABLE_PAX_FIELDS = [
+    'PAX_ID', 'Ід_смарт',
+    'Піб',
+    'Телефон пасажира', 'Телефон реєстратора',
+    'Тег'
+];
+const PHONE_FIELDS_PAX = ['Телефон пасажира', 'Телефон реєстратора'];
+
+function digitsOnly(s) { return String(s || '').replace(/\D/g, ''); }
+
+// Match passenger against lowercased query. Phones match on digits-only,
+// other fields on case-insensitive substring.
+function passengerMatchesQuery(p, qLower) {
+    if (!qLower) return true;
+    const qDigits = digitsOnly(qLower);
+    for (const f of SEARCHABLE_PAX_FIELDS) {
+        const raw = p[f];
+        if (raw === undefined || raw === null || raw === '') continue;
+        const sv = String(raw);
+        if (sv.toLowerCase().includes(qLower)) return true;
+        if (PHONE_FIELDS_PAX.includes(f) && qDigits.length >= 3 && digitsOnly(sv).includes(qDigits)) return true;
+    }
+    return false;
+}
+
+// Wrap matches inside a text value with <span class="search-hl">. Accepts
+// the current query (already lowercased) — callers pass the active search.
+function hlMatch(text, qLower) {
+    if (!qLower || text === undefined || text === null || text === '') return text == null ? '' : String(text);
+    const str = String(text);
+    const low = str.toLowerCase();
+    const idx = low.indexOf(qLower);
+    if (idx >= 0) {
+        return str.slice(0, idx) + '<mark class="search-hl">' + str.slice(idx, idx + qLower.length) + '</mark>' + str.slice(idx + qLower.length);
+    }
+    // Phone: query is digits-only and string has matching digit sequence
+    const qDigits = digitsOnly(qLower);
+    if (qDigits.length >= 3 && digitsOnly(str).includes(qDigits)) {
+        return '<mark class="search-hl">' + str + '</mark>';
+    }
+    return str;
+}
+
+function currentSearchLower() {
+    return (document.getElementById('globalSearch')?.value || '').toLowerCase().trim();
+}
+
+// ================================================================
 // STATE
 // ================================================================
 let passengers = [];
@@ -3111,11 +3161,7 @@ function getFilteredPassengers() {
         if (tripFilter === 'none' && p['CAL_ID']) return false;
         if (tripFilter === 'none' && !p['CAL_ID']) { /* pass */ }
         else if (tripFilter !== 'all' && tripFilter !== 'none' && p['CAL_ID'] !== tripFilter) return false;
-        if (search) {
-            const name = String(p['Піб'] || '').toLowerCase();
-            const phone = String(p['Телефон пасажира'] || '');
-            if (!name.includes(search) && !phone.includes(search)) return false;
-        }
+        if (search && !passengerMatchesQuery(p, search)) return false;
         return true;
     });
 }
@@ -3153,6 +3199,7 @@ function render() {
 
 function renderCard(p) {
     const id = p['PAX_ID'] || '';
+    const _hlQ = currentSearchLower();
     const dir = String(p['Напрям'] || '');
     const dirCode = getDirectionCode(dir);
     const isUaEu = dirCode === 'ua-eu';
@@ -3257,7 +3304,7 @@ function renderCard(p) {
                 <div class="card-body">
                     <div class="card-top-row">
                         ${cf.includes('direction') ? `<span class="card-direction ${dirColorClass}">${dirLabel}</span>` : ''}
-                        ${cf.includes('phone') ? `<span class="card-phone">${phone}</span>` : ''}
+                        ${cf.includes('phone') ? `<span class="card-phone">${hlMatch(phone, _hlQ)}</span>` : ''}
                         ${cf.includes('seats') ? `<span class="card-seats">${seats}м</span>` : ''}
                         ${cf.includes('date') ? `<span class="card-date">${date || '—'}</span>` : ''}
                         ${cf.includes('price') || cf.includes('deposit') ? `<div class="card-price-wrap">
@@ -3267,9 +3314,9 @@ function renderCard(p) {
                     </div>
                     <div class="card-row2-wrap">
                         <div class="card-info-row">
-                            ${cf.includes('pax_id') ? `<span class="card-id">${id}</span>` : ''}
-                            ${cf.includes('smartId') ? `<span class="card-smart-id" onclick="event.stopPropagation(); copyToClipboard('${smartId || ''}'); this.style.background='#d8b4fe'; setTimeout(()=>this.style.background='',400);" title="Натисни щоб скопіювати">SS: ${smartId || '—'}</span>` : ''}
-                            ${cf.includes('name') ? `<span class="card-name">${name}</span>` : ''}
+                            ${cf.includes('pax_id') ? `<span class="card-id">${hlMatch(id, _hlQ)}</span>` : ''}
+                            ${cf.includes('smartId') ? `<span class="card-smart-id" onclick="event.stopPropagation(); copyToClipboard('${smartId || ''}'); this.style.background='#d8b4fe'; setTimeout(()=>this.style.background='',400);" title="Натисни щоб скопіювати">SS: ${smartId ? hlMatch(smartId, _hlQ) : '—'}</span>` : ''}
+                            ${cf.includes('name') ? `<span class="card-name">${hlMatch(name, _hlQ)}</span>` : ''}
                             ${isRecent24h ? '<span class="badge badge-new24">🆕 NEW</span>' : ''}
                             ${cf.includes('leadStatus') ? lsBadge : ''} ${cf.includes('payStatus') ? payBadge : ''}
                             ${cf.includes('debt') && debt > 0 ? '<span class="badge badge-debt">Борг: '+debt+'</span>' : ''}
@@ -8043,11 +8090,7 @@ function showArchiveView() {
 function getArchivedPassengers() {
     const search = (document.getElementById('archiveSearch')?.value || '').toLowerCase().trim();
     return archivedPassengers.filter(p => {
-        if (search) {
-            const name = String(p['Піб'] || '').toLowerCase();
-            const phone = String(p['Телефон пасажира'] || '');
-            if (!name.includes(search) && !phone.includes(search)) return false;
-        }
+        if (search && !passengerMatchesQuery(p, search)) return false;
         return true;
     });
 }
