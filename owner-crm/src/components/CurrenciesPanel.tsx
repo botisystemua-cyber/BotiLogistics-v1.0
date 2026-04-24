@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronRight, Check, Star, Save, RefreshCw } from 'lucide-react';
+import { ChevronRight, Check, Save, RefreshCw } from 'lucide-react';
 import {
   CURRENCIES,
   saveCurrencySettings,
@@ -27,7 +27,6 @@ export function CurrenciesPanel({
     [...enabled].some(c => !settings.enabled.includes(c));
 
   const toggle = (code: CurrencyCode) => {
-    if (code === defaultCode) return;
     setEnabled(prev => {
       const next = new Set(prev);
       if (next.has(code)) next.delete(code);
@@ -38,19 +37,9 @@ export function CurrenciesPanel({
 
   const pickDefault = (code: CurrencyCode) => {
     setDefaultCode(code);
-    setEnabled(prev => {
-      if (prev.has(code)) return prev;
-      const next = new Set(prev);
-      next.add(code);
-      return next;
-    });
   };
 
   const save = async () => {
-    if (!enabled.has(defaultCode)) {
-      alert('Валюта за замовчуванням має бути увімкнена');
-      return;
-    }
     if (enabled.size === 0) {
       alert('Має бути увімкнена хоча б одна валюта');
       return;
@@ -117,38 +106,25 @@ export function CurrenciesPanel({
             <label className="block text-[10px] lg:text-xs font-bold text-muted uppercase tracking-wider mb-2 lg:mb-2.5">
               Увімкнені валюти
             </label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 lg:gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 lg:gap-3">
               {CURRENCIES.map(c => {
                 const isOn = enabled.has(c.code);
-                const isDefault = c.code === defaultCode;
                 return (
                   <button
                     key={c.code}
                     onClick={() => toggle(c.code)}
-                    disabled={isDefault}
-                    className={`flex items-center gap-3 px-3 lg:px-4 py-2.5 lg:py-3 rounded-xl border text-left transition-all cursor-pointer ${
+                    className={`flex items-center gap-2.5 px-3 lg:px-4 py-2.5 lg:py-3 rounded-xl border text-left transition-all cursor-pointer ${
                       isOn
                         ? 'bg-white border-brand shadow-sm'
                         : 'bg-gray-50 border-gray-200 opacity-70 hover:opacity-100'
-                    } ${isDefault ? 'cursor-not-allowed' : ''}`}
+                    }`}
                   >
                     <div className={`w-9 h-9 lg:w-10 lg:h-10 rounded-lg flex items-center justify-center shrink-0 text-lg ${
                       isOn ? 'bg-emerald-50 border border-emerald-200' : 'bg-gray-100 border border-gray-200'
                     }`}>
                       {c.flag}
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-sm lg:text-base font-bold text-text">{c.code}</span>
-                        <span className="text-xs lg:text-sm text-muted">{c.symbol}</span>
-                        {isDefault && (
-                          <span className="flex items-center gap-1 text-[10px] lg:text-xs font-bold px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
-                            <Star className="w-3 h-3 fill-current" /> Дефолт
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-xs text-muted truncate">{c.name}</div>
-                    </div>
+                    <span className="flex-1 text-sm lg:text-base font-bold text-text">{c.code}</span>
                     <div className={`w-5 h-5 lg:w-6 lg:h-6 rounded-md border-2 flex items-center justify-center shrink-0 ${
                       isOn ? 'bg-brand border-brand' : 'bg-white border-gray-300'
                     }`}>
@@ -158,10 +134,6 @@ export function CurrenciesPanel({
                 );
               })}
             </div>
-            <p className="text-[11px] lg:text-xs text-muted mt-2">
-              Тільки увімкнені валюти зʼявляться в дропдаунах у модулях Пасажири та Посилки.
-              Дефолтну валюту неможливо вимкнути — спершу оберіть іншу як дефолтну.
-            </p>
           </div>
 
           {/* Actions */}
