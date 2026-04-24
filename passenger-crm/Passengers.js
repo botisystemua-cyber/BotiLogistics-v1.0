@@ -157,9 +157,9 @@ const OTHER_SECTIONS = [
     { key:'route', title:'🗺️ Маршрут', fields:['from','to','timing','vehicle','seatInCar','calId'] },
     { key:'finance', title:'💰 Фінанси', fields:['price','currency','deposit','currencyDeposit','weight','weightPrice','currencyWeight','debt'] },
     { key:'payments', title:'💳 Платежі', fields:[], readonly:true, async:true },
-    { key:'statuses', title:'📊 Статуси', fields:['payStatus','leadStatus','crmStatus','tag','messenger'] },
+    { key:'statuses', title:'📊 Статуси', fields:['payStatus','leadStatus','crmStatus','tag','messenger','smartId'] },
     { key:'notes', title:'📝 Примітки', fields:['note','noteSms'] },
-    { key:'system', title:'🔧 Системні', fields:['pax_id','smartId','dateCreated','sourceSheet','cliId','bookingId'], readonly:true }
+    { key:'system', title:'🔧 Системні', fields:['pax_id','dateCreated','sourceSheet','cliId','bookingId'], readonly:true }
 ];
 function getManagerColsKey() {
     var name = getManagerName() || 'default';
@@ -200,7 +200,7 @@ function getDetailSections() {
         ...OTHER_SECTIONS
     ];
 }
-const READONLY_FIELDS = ['pax_id','smartId','dateCreated','sourceSheet','cliId','bookingId','rteId','debt','dateArchive','archivedBy','archiveReason','archiveId'];
+const READONLY_FIELDS = ['pax_id','dateCreated','sourceSheet','cliId','bookingId','rteId','debt','dateArchive','archivedBy','archiveReason','archiveId'];
 
 // Валюти — дефолт, живий список керується з owner-crm через system_settings
 const CURR_MASTER = ['UAH','EUR','USD','CHF','PLN','CZK','GBP','SEK','NOK','DKK','HUF','RON'];
