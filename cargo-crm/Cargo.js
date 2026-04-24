@@ -1041,7 +1041,9 @@ function filterData() {
   let data = allData.filter(p => p['Статус CRM'] !== 'Архів');
 
   // Direction filter
-  if (currentDirection === 'new24') {
+  if (currentDirection === 'all') {
+    // Всі напрямки — нічого не відсіюємо (показуємо і UA→EU, і EU→UA).
+  } else if (currentDirection === 'new24') {
     data = data.filter(p => isNew24h(p));
   } else if (currentDirection === 'ue') {
     data = data.filter(p => p['Напрям'] === 'УК→ЄВ');
@@ -5604,13 +5606,17 @@ function updateCounters() {
     const eu = active.filter(p => p['Напрям'] === 'ЄВ→УК');
     const new24 = active.filter(p => isNew24h(p));
     const setCount = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+    setCount('countAllDir', active.length);
     setCount('countUe', ue.length);
     setCount('countEu', eu.length);
     setCount('countNew24', new24.length);
+    setCount('mobCountAllDir', active.length);
     setCount('mobCountUe', ue.length);
     setCount('mobCountEu', eu.length);
     setCount('mobCountNew24', new24.length);
-    const dirData = currentDirection === 'new24' ? new24 : (currentDirection === 'ue' ? ue : eu);
+    const dirData = currentDirection === 'all' ? active
+                  : currentDirection === 'new24' ? new24
+                  : currentDirection === 'ue' ? ue : eu;
     var cAll = dirData.length;
     var cChecking = dirData.filter(p => p['Контроль перевірки'] === 'В перевірці').length;
     var cReady = dirData.filter(p => p['Контроль перевірки'] === 'Готова до маршруту').length;
