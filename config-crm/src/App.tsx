@@ -98,11 +98,8 @@ function App() {
   };
 
   const handleScannerClick = () => {
-    // Якщо вже залогінений — одразу в сканер (існуюча сесія містить tenant_id).
-    if (localStorage.getItem('boti_session')) {
-      window.location.href = SCANNER_URL;
-      return;
-    }
+    // Логін обовʼязковий завжди, навіть якщо сесія вже є — сканер це
+    // «допомога для кожного», підтверджуємо особу на кожен вхід.
     setStep('scanner-login');
     setSelectedRole(null);
     setLogin('');
