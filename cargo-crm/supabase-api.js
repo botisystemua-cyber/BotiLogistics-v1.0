@@ -2031,3 +2031,45 @@ async function sbSaveUiPref(key, value) {
 window.sbLoadUiPrefs = sbLoadUiPrefs;
 window.sbGetUiPrefsSync = sbGetUiPrefsSync;
 window.sbSaveUiPref = sbSaveUiPref;
+
+// ================================================================
+// CURRENCY DEFAULTS — централізовані дефолти валют з system_settings.
+// Власник задає у Owner-panel, cargo/pax читає при старті й використовує
+// як fallback для нових лідів та інлайн-редактора.
+// ================================================================
+let _CURRENCY_DEFAULTS_CACHE = null;
+
+async function sbLoadCurrencyDefaults() {
+    if (!BOTI_SESSION || !BOTI_SESSION.tenant_id) {
+        _CURRENCY_DEFAULTS_CACHE = {};
+        return {};
+    }
+    try {
+        const { data, error } = await sb.from('system_settings')
+            .select('currency_defaults')
+            .eq('tenant_id', BOTI_SESSION.tenant_id)
+            .maybeSingle();
+        if (error) throw error;
+        _CURRENCY_DEFAULTS_CACHE = (data && data.currency_defaults && typeof data.currency_defaults === 'object')
+            ? data.currency_defaults : {};
+        return _CURRENCY_DEFAULTS_CACHE;
+    } catch (e) {
+        console.warn('[currency_defaults] load failed:', e);
+        _CURRENCY_DEFAULTS_CACHE = {};
+        return {};
+    }
+}
+
+// Sync-геттер з кешу. Parameters:
+//   app   = 'cargo' | 'passenger'
+//   field = 'payment' | 'deposit' | 'np' | 'tips' | 'ticket'
+//   fallback — використати якщо в кеші нема (або owner ще не налаштував)
+function sbGetCurrencyDefault(app, field, fallback) {
+    if (!_CURRENCY_DEFAULTS_CACHE) return fallback || '';
+    const appSection = _CURRENCY_DEFAULTS_CACHE[app];
+    if (!appSection || typeof appSection !== 'object') return fallback || '';
+    return appSection[field] || fallback || '';
+}
+
+window.sbLoadCurrencyDefaults = sbLoadCurrencyDefaults;
+window.sbGetCurrencyDefault = sbGetCurrencyDefault;
