@@ -394,7 +394,10 @@ function processSheet_(sheet, cfg, rowFrom, rowTo) {
 
 function buildPayload_(row, cfg) {
     const smartId = row[BOT.smart_id];
-    const pkg_id = 'PKG_' + String(smartId).trim();
+    // pkg_id містить префікс напрямку, щоб той самий SmartSender-ID
+    // міг бути і в УК→ЄВ, і в ЄВ→УК без конфлікту UNIQUE(tenant, pkg_id).
+    const prefix = cfg.direction === 'Україна-ЄВ' ? 'PKG_UK_' : 'PKG_EU_';
+    const pkg_id = prefix + String(smartId).trim();
 
     const payload = {
         pkg_id:            pkg_id,
@@ -436,7 +439,7 @@ function buildPayload_(row, cfg) {
     }
 
     // Валідація
-    if (!payload.pkg_id || payload.pkg_id === 'PKG_' || payload.pkg_id === 'PKG_undefined') {
+    if (!payload.pkg_id || /^PKG_(UK|EU)_$/.test(payload.pkg_id) || /PKG_(UK|EU)_undefined$/.test(payload.pkg_id)) {
         return Object.assign(payload, { _valid: false, _invalidReason: 'немає Ід (SmartSender)' });
     }
 
