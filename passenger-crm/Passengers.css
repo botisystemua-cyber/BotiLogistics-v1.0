@@ -1991,7 +1991,7 @@ body.route-sort-active #rteTogglePay {
 }
 @media (min-width: 901px) {
     .side-menu, .side-menu-overlay { display: none !important; }
-    .bottom-nav { display: flex; }
+    .bottom-nav { display: block; }
     .header { padding: 12px 20px; }
     .logo { font-size: 15px; }
     .search-box { max-width: 300px; }
