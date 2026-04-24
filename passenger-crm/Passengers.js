@@ -8595,16 +8595,16 @@ const OB_CATS = [
         steps: [
             { t: '#navPax', title: '👥 Пасажири', desc: 'Показати список всіх пасажирів' },
             { t: '#navParcels', title: '📦 Посилки', desc: 'Модуль посилок (окреме підключення)' },
-            { t: '.nav-item[onclick*="silentSync"]', title: '🔄 Синхронізація', desc: 'Вручну оновити дані з Google Sheets' },
-            { t: '.nav-item[onclick*="openColumnConfigurator"]', title: '⚙️ Колонки', desc: 'Налаштувати які поля показувати на картках' },
-            { t: '.nav-item[onclick*="openAddModal"]', title: '➕ Додати', desc: 'Створити нового пасажира (є SMS-парсер!)' }
+            { t: '.bottom-nav-item[onclick*="silentSync"]', title: '🔄 Синхронізація', desc: 'Вручну оновити дані з Google Sheets' },
+            { t: '.bottom-nav-item[onclick*="openColumnConfigurator"]', title: '⚙️ Колонки', desc: 'Налаштувати які поля показувати на картках' },
+            { t: '.bottom-nav-item[onclick*="openAddModal"]', title: '➕ Додати', desc: 'Створити нового пасажира (є SMS-парсер!)' }
         ]
     },
     {
         id: 'passengers', icon: '👥', name: 'Робота з пасажирами', color: '#d1fae5',
         desc: 'Картки, редагування, месенджери',
         steps: [
-            { t: '.nav-item[onclick*="openAddModal"]', title: '➕ Додати пасажира', desc: 'Заповніть ПІБ і телефон. Є SMS-парсер — вставте текст і дані заповняться автоматично!' },
+            { t: '.bottom-nav-item[onclick*="openAddModal"]', title: '➕ Додати пасажира', desc: 'Заповніть ПІБ і телефон. Є SMS-парсер — вставте текст і дані заповняться автоматично!' },
             { t: '.search-box', title: '🔍 Пошук', desc: 'Введіть ПІБ або телефон — список фільтрується на льоту' },
             { t: '.lead-card', title: '📋 Натисніть на картку', desc: 'Картка розгорнеться і покаже деталі: ПІБ, адреси, дати, примітки. Кожне поле можна редагувати на місці!', act: 'expand' },
             { t: '.card-actions-toggle', title: '▼ Стрілка справа', desc: 'Натисніть ▼ — з\'являться кнопки: 📞 Дзвінок, ✉️ Писати, ✏️ Редагувати, 🚐 Рейс, 📦 Архів, 🗑️ Видалити', act: 'actions' },
