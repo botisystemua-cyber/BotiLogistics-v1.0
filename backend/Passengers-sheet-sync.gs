@@ -430,9 +430,35 @@ function normalizePhone_(raw) {
 function toDateMs_(val) {
     if (val === '' || val === null || val === undefined) return null;
     if (val instanceof Date) return val.getTime();
-    const d = new Date(val);
-    const ms = d.getTime();
-    return isNaN(ms) ? null : ms;
+    const s = String(val).trim();
+    if (!s) return null;
+
+    // Спроба 1: ISO / стандартний формат (2026-04-24 або 2026-04-24 18:50:21).
+    let d = new Date(s);
+    if (!isNaN(d.getTime())) return d.getTime();
+
+    // Спроба 2: DD.MM.YYYY [HH:mm[:ss]]
+    let m = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
+    if (m) {
+        d = new Date(
+            Number(m[3]),
+            Number(m[2]) - 1,
+            Number(m[1]),
+            Number(m[4] || 0),
+            Number(m[5] || 0),
+            Number(m[6] || 0)
+        );
+        if (!isNaN(d.getTime())) return d.getTime();
+    }
+
+    // Спроба 3: DD/MM/YYYY
+    m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (m) {
+        d = new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]));
+        if (!isNaN(d.getTime())) return d.getTime();
+    }
+
+    return null;
 }
 
 

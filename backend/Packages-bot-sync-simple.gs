@@ -43,13 +43,8 @@ function processTail_(sheet, direction, prefix) {
         // bot_created_at — реальна дата оформлення (колонка O),
         // а не момент синку. Щоб у CRM було видно коли саме заявка прийшла.
         const regDate = row[14];  // O Дата Оформлення
-        let botCreatedAt = null;
-        if (regDate instanceof Date && !isNaN(regDate.getTime())) {
-            botCreatedAt = regDate.toISOString();
-        } else if (regDate) {
-            const d = new Date(regDate);
-            if (!isNaN(d.getTime())) botCreatedAt = d.toISOString();
-        }
+        const botMs = parseDateMs_(regDate);
+        const botCreatedAt = botMs !== null ? new Date(botMs).toISOString() : null;
 
         const payload = {
             pkg_id:            prefix + String(smartId).trim(),
@@ -119,6 +114,42 @@ function num_(v) {
     const n = Number(String(v).replace(/,/g, '.').replace(/[^\d.\-]/g, ''));
     return isNaN(n) ? null : n;
 }
+
+// Парсер дат: ISO / DD.MM.YYYY [HH:mm[:ss]] / DD/MM/YYYY / Date.
+// JavaScript із коробки не парсить '08.07.2026' — видає Invalid Date.
+function parseDateMs_(val) {
+    if (val === '' || val === null || val === undefined) return null;
+    if (val instanceof Date) {
+        return isNaN(val.getTime()) ? null : val.getTime();
+    }
+    const s = String(val).trim();
+    if (!s) return null;
+
+    let d = new Date(s);
+    if (!isNaN(d.getTime())) return d.getTime();
+
+    let m = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
+    if (m) {
+        d = new Date(
+            Number(m[3]),
+            Number(m[2]) - 1,
+            Number(m[1]),
+            Number(m[4] || 0),
+            Number(m[5] || 0),
+            Number(m[6] || 0)
+        );
+        if (!isNaN(d.getTime())) return d.getTime();
+    }
+
+    m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (m) {
+        d = new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]));
+        if (!isNaN(d.getTime())) return d.getTime();
+    }
+
+    return null;
+}
+
 
 function normPhone_(v) {
     if (v === null || v === undefined) return null;
