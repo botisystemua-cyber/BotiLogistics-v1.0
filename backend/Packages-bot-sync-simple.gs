@@ -40,11 +40,23 @@ function processTail_(sheet, direction, prefix) {
         const smartId = row[9];  // колонка J — Ід (SmartSender)
         if (!smartId) continue;
 
+        // bot_created_at — реальна дата оформлення (колонка O),
+        // а не момент синку. Щоб у CRM було видно коли саме заявка прийшла.
+        const regDate = row[14];  // O Дата Оформлення
+        let botCreatedAt = null;
+        if (regDate instanceof Date && !isNaN(regDate.getTime())) {
+            botCreatedAt = regDate.toISOString();
+        } else if (regDate) {
+            const d = new Date(regDate);
+            if (!isNaN(d.getTime())) botCreatedAt = d.toISOString();
+        }
+
         const payload = {
             pkg_id:            prefix + String(smartId).trim(),
             smart_id:          String(smartId).trim(),
             direction:         direction,
             source_sheet:      sheet.getName(),
+            bot_created_at:    botCreatedAt,                  // ← реальна дата з колонки O
             sender_name:       s_(row[10]),                   // K Імʼя
             sender_phone:      normPhone_(row[11]),           // L Тел відправника
             registrar_phone:   normPhone_(row[11]),
