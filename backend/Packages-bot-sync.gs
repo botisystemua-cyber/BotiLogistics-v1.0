@@ -159,9 +159,55 @@ function onOpen() {
         .addItem('Ігнорувати ІСТОРІЮ (обидва аркуші)',     'menuSkipAllHistory_')
         .addItem('Ігнорувати історію ЗАЇЗДИ (окремо)',     'menuSkipZaizdyHistory_')
         .addSeparator()
+        .addItem('🫥 Приховати _sync колонки',             'menuHideSyncColumns_')
+        .addItem('👁 Показати _sync колонки',               'menuShowSyncColumns_')
+        .addSeparator()
         .addItem('Встановити тригери',                    'setupTriggers')
         .addItem('Скинути _sync (УВАГА: все наново)',     'menuResetSync_')
         .addToUi();
+}
+
+
+/** Приховує службову колонку _sync у обох аркушах, щоб не заважала
+ *  менеджерам. Скрипт все одно нею користується, просто вона не видна. */
+function menuHideSyncColumns_() {
+    const ss = SpreadsheetApp.openById(SHEET_ID);
+    const hidden = [];
+    for (const cfg of SHEETS) {
+        const sheet = ss.getSheetByName(cfg.name);
+        if (!sheet) continue;
+        const syncCol = ensureSyncColumn_(sheet);
+        sheet.hideColumns(syncCol);
+        hidden.push(cfg.name + ' (кол. ' + columnToLetter_(syncCol) + ')');
+    }
+    safeAlert_('Колонку _sync приховано у:\n • ' + hidden.join('\n • ') +
+               '\n\nСкрипт усе одно нею користується — просто не видно.\n' +
+               'Щоб знову показати — меню «👁 Показати _sync колонки».');
+}
+
+
+/** Показує службову колонку _sync назад (якщо треба подивитись стан синку). */
+function menuShowSyncColumns_() {
+    const ss = SpreadsheetApp.openById(SHEET_ID);
+    for (const cfg of SHEETS) {
+        const sheet = ss.getSheetByName(cfg.name);
+        if (!sheet) continue;
+        const syncCol = ensureSyncColumn_(sheet);
+        sheet.showColumns(syncCol);
+    }
+    safeAlert_('Колонки _sync знову видно.');
+}
+
+
+/** 1→A, 27→AA — для читабельних повідомлень. */
+function columnToLetter_(col) {
+    let letter = '';
+    while (col > 0) {
+        const mod = (col - 1) % 26;
+        letter = String.fromCharCode(65 + mod) + letter;
+        col = Math.floor((col - mod - 1) / 26);
+    }
+    return letter;
 }
 
 
