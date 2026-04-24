@@ -157,9 +157,9 @@ const OTHER_SECTIONS = [
     { key:'route', title:'🗺️ Маршрут', fields:['from','to','timing','vehicle','seatInCar','calId'] },
     { key:'finance', title:'💰 Фінанси', fields:['price','currency','deposit','currencyDeposit','weight','weightPrice','currencyWeight','debt'] },
     { key:'payments', title:'💳 Платежі', fields:[], readonly:true, async:true },
-    { key:'statuses', title:'📊 Статуси', fields:['payStatus','leadStatus','crmStatus','tag','messenger','smartId'] },
+    { key:'statuses', title:'📊 Статуси', fields:['payStatus','leadStatus','crmStatus','tag','messenger'] },
     { key:'notes', title:'📝 Примітки', fields:['note','noteSms'] },
-    { key:'system', title:'🔧 Системні', fields:['pax_id','dateCreated','sourceSheet','cliId','bookingId'], readonly:true }
+    { key:'system', title:'🔧 Системні', fields:['pax_id','smartId','dateCreated','sourceSheet','cliId','bookingId'], readonly:true }
 ];
 function getManagerColsKey() {
     var name = getManagerName() || 'default';
@@ -201,6 +201,10 @@ function getDetailSections() {
     ];
 }
 const READONLY_FIELDS = ['pax_id','dateCreated','sourceSheet','cliId','bookingId','rteId','debt','dateArchive','archivedBy','archiveReason','archiveId'];
+// Поля, які залишаються редагованими навіть у readonly-категорії (наприклад
+// «🔧 Системні»). Зараз — тільки SmartSender ID, щоб можна було вручну
+// виправити переплутані значення без розблокування pax_id та інших.
+const EDITABLE_OVERRIDE_FIELDS = ['smartId'];
 
 // Валюти — дефолт, живий список керується з owner-crm через system_settings
 const CURR_MASTER = ['UAH','EUR','USD','CHF','PLN','CZK','GBP','SEK','NOK','DKK','HUF','RON'];
@@ -3356,7 +3360,7 @@ function renderDetailFields(p, fields, isReadonly) {
     fields.forEach(key => {
         const colName = COL_MAP[key] || key;
         const val = p[colName] || '';
-        const isRO = READONLY_FIELDS.includes(key) || isReadonly;
+        const isRO = (READONLY_FIELDS.includes(key) || isReadonly) && !EDITABLE_OVERRIDE_FIELDS.includes(key);
         const DATE_KEYS = ['date','dateCreated','dateArchive'];
         const safeVal = String(val).replace(/'/g,"\\'");
         let displayVal = val || '—';
@@ -5584,9 +5588,24 @@ let seatPickerSelected = new Set();
 // Розпарсити рядок "Місце в авто" у масив назв місць. Приймає '1', '1,2',
 // '1, 2', 'A1,A2'. Порожнє → []. Викор. і при завантаженні пікера, і при
 // розрахунку occupied-мапи, і при відображенні.
+// Плюс: транслітерує кирилиці-омографи (А→A, В→B, С→C тощо) — у БД
+// історично зберігаються «А1», «В3» кирилицею, а в layout-схемах — латиниця.
+// Плюс: розділювач «і» (типу «А1 і А2») так само перетворюється на кому.
+// Плюс: фільтрує вільнотекстові маркери (напр. «Вільна розсадка») — вони
+// не є конкретним місцем, тому в occupied-мапі їм нема що робити.
+const CYR_TO_LAT_LOOKALIKE = { А:'A', В:'B', С:'C', Е:'E', Н:'H', К:'K', М:'M', О:'O', Р:'P', Т:'T', Х:'X', а:'a', в:'b', с:'c', е:'e', н:'h', к:'k', м:'m', о:'o', р:'p', т:'t', х:'x' };
+function normalizeSeatName(s) {
+    if (!s) return '';
+    let out = '';
+    for (const ch of String(s)) out += CYR_TO_LAT_LOOKALIKE[ch] || ch;
+    return out.trim().toUpperCase();
+}
+const SEAT_NAME_RE = /^[A-Z]?\d{1,2}$|^[DRC]$/;
 function parseSeats(str) {
     if (!str) return [];
-    return String(str).split(',').map(s => s.trim()).filter(Boolean);
+    // "А1 і А2" → "А1, А2"; "А1 та А2" теж → "А1, А2"
+    const split = String(str).replace(/\s+(?:і|та|and)\s+/gi, ',').split(',');
+    return split.map(normalizeSeatName).filter(s => SEAT_NAME_RE.test(s));
 }
 
 function detectLayout(trip) {
@@ -5763,11 +5782,17 @@ function renderSeatPickerModal(trip, occupiedMap) {
     const maxSeats = parseInt(trip.max_seats) || 7;
     const autoName = cleanAutoName(trip.auto_name) || 'Авто';
     const hasReserve = trip.reserve === true || trip.reserve === 'true';
+    // Реальну к-сть пасажирських місць беремо з layout-схеми — в БД
+    // `calendar.total_seats` може бути неузгодженим (напр. layout='1-3-3'
+    // на 7 місць, а total_seats=6). У шапці пікера показуємо фактичне.
+    const layoutPositions = getSeatLayout(layout, maxSeats, hasReserve);
+    const layoutSeatCount = layoutPositions.filter(s => s.type === 'seat' || s.type === 'reserve').length;
+    const effectiveMax = layoutSeatCount > 0 ? layoutSeatCount : maxSeats;
     const vanHtml = renderVan({ layout, maxSeats, hasReserve, occupiedMap, selected: seatPickerSelected, interactive: true });
     const tripDate = formatTripDate(trip.date);
     const tripCity = trip.city || '';
     const occ = Object.keys(occupiedMap).length;
-    const free = maxSeats - occ;
+    const free = Math.max(0, effectiveMax - occ);
     const modalCls = layout === 'bus' ? 'seat-picker-modal has-bus' : 'seat-picker-modal';
 
     const html = `<div class="seat-picker-overlay" id="seatPickerOverlay" onclick="if(event.target===this)closeSeatPicker()">
@@ -5781,7 +5806,7 @@ function renderSeatPickerModal(trip, occupiedMap) {
                     <span class="sp-auto-icon">🚐</span>
                     <div class="sp-auto-details">
                         <div class="sp-auto-name">${autoName}</div>
-                        <div>${tripDate} · ${tripCity} · <span style="color:#16a34a;font-weight:700;">${free} вільн.</span> / ${maxSeats} місць · Обрано: <span id="seatPickerCount" style="font-weight:700;color:var(--primary);">${seatPickerSelected.size}</span></div>
+                        <div>${tripDate} · ${tripCity} · <span style="color:#16a34a;font-weight:700;">${free} вільн.</span> / ${effectiveMax} місць · Обрано: <span id="seatPickerCount" style="font-weight:700;color:var(--primary);">${seatPickerSelected.size}</span></div>
                     </div>
                 </div>
                 <div id="seatPickerGrid">${vanHtml}</div>
