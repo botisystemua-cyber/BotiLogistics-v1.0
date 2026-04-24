@@ -134,7 +134,15 @@ function highlightMatch(text) {
   const safe = escapeHtml(text == null ? '' : text);
   if (!searchQuery) return safe;
   const re = new RegExp('(' + escapeRegExp(searchQuery) + ')', 'gi');
-  return safe.replace(re, '<mark class="search-hl">$1</mark>');
+  const subst = safe.replace(re, '<mark class="search-hl">$1</mark>');
+  if (subst !== safe) return subst;
+  // Digit-only fallback для телефонів: '067 123' → знаходить '+38 067 123 45 67'
+  const qDigits = String(searchQuery).replace(/\D/g, '');
+  const sDigits = String(text || '').replace(/\D/g, '');
+  if (qDigits.length >= 3 && sDigits.includes(qDigits)) {
+    return '<mark class="search-hl">' + safe + '</mark>';
+  }
+  return safe;
 }
 let openCardId = null;
 let stats = {};
@@ -144,6 +152,44 @@ let expenses = [];
 let routeSummary = null;
 let activeRouteIdx = null;
 let currentView = 'parcels'; // 'parcels' | 'route' | 'dispatch' | 'expenses' | 'summary'
+
+// Валюти — дефолт, живий список керується з owner-crm через system_settings
+const CURR_MASTER = ['UAH','EUR','USD','CHF','PLN','CZK','GBP','SEK','NOK','DKK','HUF','RON'];
+let CURR_ENABLED = ['UAH','EUR','USD','CHF','PLN','CZK'];
+let CURR_DEFAULT = 'EUR';
+
+async function loadCurrencySettings() {
+  try {
+    if (typeof sb === 'undefined' || !sb) return;
+    const { data, error } = await sb
+      .from('system_settings')
+      .select('setting_name, setting_value')
+      .eq('tenant_id', TENANT_ID)
+      .in('setting_name', ['default_currency', 'supported_currencies']);
+    if (error) throw error;
+    const rows = data || [];
+    const sup = rows.find(r => r.setting_name === 'supported_currencies');
+    const def = rows.find(r => r.setting_name === 'default_currency');
+    if (sup && sup.setting_value) {
+      const codes = String(sup.setting_value).split(',').map(s => s.trim()).filter(c => CURR_MASTER.includes(c));
+      if (codes.length > 0) CURR_ENABLED = codes;
+    }
+    const defCode = def && def.setting_value ? String(def.setting_value).trim() : '';
+    CURR_DEFAULT = CURR_ENABLED.includes(defCode) ? defCode : CURR_ENABLED[0];
+  } catch (e) {
+    console.warn('[currency] load failed, using defaults:', e);
+  }
+}
+
+function applyCurrencyOptionsToSelects() {
+  ['fCurrency', 'fill_currency'].forEach(id => {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    const prev = sel.value;
+    sel.innerHTML = CURR_ENABLED.map(c => `<option value="${c}">${c}</option>`).join('');
+    sel.value = CURR_ENABLED.includes(prev) ? prev : CURR_DEFAULT;
+  });
+}
 let routeData = []; // current route sheet data
 let routeFilterType = 'all'; // all | pax | parcel
 let routeFilterStatus = 'all';
@@ -822,7 +868,8 @@ document.addEventListener('DOMContentLoaded', async function() {
     showInstallBanner();
   }
 
-  await loadData();
+  await Promise.all([loadData(), loadCurrencySettings()]);
+  applyCurrencyOptionsToSelects();
   loadUnreadCounts().then(() => renderCards());
 
   // Якщо сторінка відкрита через сканер (index.html?scan=<ТТН>[&pkg=…][&unknown=1])
@@ -1040,13 +1087,19 @@ function filterData() {
     data = data.filter(p => p['Статус оплати'] === currentPayFilter);
   }
 
-  // Search — шукаємо по всіх корисних полях посилки
+  // Search — шукаємо по всіх корисних полях посилки.
+  // Для телефонів окрема digit-only перевірка (щоб «067 123» знаходив «+38 067 123…»)
   if (searchQuery) {
     const q = searchQuery.toLowerCase();
+    const qDigits = q.replace(/\D/g, '');
+    const PHONE_FIELDS_PKG = ['Телефон відправника', 'Телефон реєстратора', 'Телефон отримувача'];
     data = data.filter(p => SEARCHABLE_PKG_FIELDS.some(f => {
       const v = p[f];
       if (v === undefined || v === null || v === '') return false;
-      return String(v).toLowerCase().includes(q);
+      const sv = String(v);
+      if (sv.toLowerCase().includes(q)) return true;
+      if (PHONE_FIELDS_PKG.includes(f) && qDigits.length >= 3 && sv.replace(/\D/g, '').includes(qDigits)) return true;
+      return false;
     }));
   }
 
@@ -1254,7 +1307,7 @@ function renderCard(p, routeCtx) {
     'estValue':       ['Оціночна вартість', p['Оціночна вартість'] || ''],
     'ttn':            ['Номер ТТН', ttn],
     'innerNum':       ['Внутрішній №', p['Внутрішній №'] || ''],
-    'smartId':        ['Ід_смарт', p['Ід_смарт'] || '', {readonly: true}],
+    'smartId':        ['Ід_смарт', p['Ід_смарт'] || ''],
     'statusPkg':      ['Статус посилки', statusPkg],
     'sum':            ['Сума', price],
     'currency':       ['Валюта оплати', currency],
@@ -1329,7 +1382,7 @@ function renderCard(p, routeCtx) {
   // ⚙ Системні
   const tabSystem = renderDetailGrid([
     ['PKG_ID', pkgId, {readonly: true}],
-    ['Ід_смарт', p['Ід_смарт'] || '', {readonly: true}],
+    ['Ід_смарт', p['Ід_смарт'] || ''],
     ['Дата створення', dateCreated, {readonly: true}],
     ['Дата створення накладної', p['Дата створення накладної'] || ''],
     ['Дата відправки', p['Дата відправки'] || ''],
@@ -1505,9 +1558,9 @@ function getFieldOptions(col) {
     'Статус оплати':    ['Не оплачено', 'Частково', 'Оплачено'],
     'Статус посилки':   ['Зареєстровано', 'Оформлення', 'Доставка', 'Доставлено', 'Невідомо'],
     'Статус CRM':       ['Активний', 'Архів'],
-    'Валюта оплати':    ['UAH', 'EUR', 'CHF', 'USD', 'PLN', 'CZK'],
-    'Валюта завдатку':  ['UAH', 'EUR', 'CHF', 'USD', 'PLN', 'CZK'],
-    'Валюта НП':        ['UAH', 'EUR', 'CHF', 'USD'],
+    'Валюта оплати':    CURR_ENABLED,
+    'Валюта завдатку':  CURR_ENABLED,
+    'Валюта НП':        CURR_ENABLED,
     'Форма НП':         ['Готівка', 'Картка', 'Частково'],
     'Статус НП':        ['Ми оплатили', 'Відправник оплатив', 'Наложний платіж'],
     'Форма оплати':     ['Готівка', 'Картка', 'Частково'],
@@ -2249,10 +2302,13 @@ function openFillModal(pkgId) {
     if (cur != null && cur !== '') {
       el.value = cur;
     } else if (inputId === 'fill_currency') {
-      // Валюта за замовчуванням — з owner currency_defaults (fallback EUR).
+      // Валюта за замовчуванням. Пріоритет:
+      //   1. Гранулярні currency_defaults з owner-panel (cargo.payment) — моя реалізація.
+      //   2. Глобальний CURR_DEFAULT з main (system_settings.default_currency).
+      //   3. Fallback 'EUR'.
       var defCur = (typeof window.sbGetCurrencyDefault === 'function')
-        ? window.sbGetCurrencyDefault('cargo', 'payment', 'EUR') : 'EUR';
-      el.value = defCur || 'EUR';
+        ? window.sbGetCurrencyDefault('cargo', 'payment', '') : '';
+      el.value = defCur || (typeof CURR_DEFAULT !== 'undefined' ? CURR_DEFAULT : 'EUR');
     } else if (el.tagName === 'SELECT') {
       // select: лишаємо <option selected>, що стоїть у HTML
     } else {
@@ -6138,8 +6194,6 @@ async function archiveMassDelete() {
     showToast(res.error || 'Помилка видалення', 'error');
   }
 }
-
-function createRoute() { alert('Створення нового маршруту'); }
 
 // ===== [SECT-ADDFORM] ADD PARCEL FORM =====
 function openAddForm() {

@@ -127,3 +127,46 @@ export async function authenticate(
     logoUrl: (client.logo_url as string) ?? '',
   };
 }
+
+/**
+ * Role-agnostic auth. Used by the public "Scanner" entry in config-crm:
+ * any user with valid login+password+is_active — regardless of role — can
+ * enter the TTN scanner. The user's actual primary role is returned so the
+ * session still reflects who they are.
+ */
+export async function authenticateAny(
+  login: string,
+  password: string,
+): Promise<AuthSuccess> {
+  const { data: user, error } = await supabase
+    .from('users')
+    .select('*')
+    .eq('login', login)
+    .eq('password', password)
+    .eq('is_active', true)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!user) throw new Error('Невірний логін або пароль');
+
+  void supabase
+    .from('users')
+    .update({ last_login: new Date().toISOString() })
+    .eq('id', user.id);
+
+  const { data: client, error: cErr } = await supabase
+    .from('clients')
+    .select('name, modules, logo_url')
+    .eq('tenant_id', user.tenant_id)
+    .maybeSingle();
+
+  if (cErr) throw cErr;
+  if (!client) throw new Error('Компанію не знайдено');
+
+  return {
+    user: user as User,
+    tenantName: client.name,
+    modules: (client.modules as string[]) ?? [],
+    logoUrl: (client.logo_url as string) ?? '',
+  };
+}

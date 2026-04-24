@@ -200,21 +200,114 @@ function getDetailSections() {
         ...OTHER_SECTIONS
     ];
 }
-const READONLY_FIELDS = ['pax_id','smartId','dateCreated','sourceSheet','cliId','bookingId','rteId','debt','dateArchive','archivedBy','archiveReason','archiveId'];
+const READONLY_FIELDS = ['pax_id','dateCreated','sourceSheet','cliId','bookingId','rteId','debt','dateArchive','archivedBy','archiveReason','archiveId'];
+// Поля, які залишаються редагованими навіть у readonly-категорії (наприклад
+// «🔧 Системні»). Зараз — тільки SmartSender ID, щоб можна було вручну
+// виправити переплутані значення без розблокування pax_id та інших.
+const EDITABLE_OVERRIDE_FIELDS = ['smartId'];
+
+// Валюти — дефолт, живий список керується з owner-crm через system_settings
+const CURR_MASTER = ['UAH','EUR','USD','CHF','PLN','CZK','GBP','SEK','NOK','DKK','HUF','RON'];
+let CURR_ENABLED = ['UAH','EUR','USD','CHF','PLN','CZK'];
+let CURR_DEFAULT = 'EUR';
+
 const SELECT_OPTIONS = {
     leadStatus: ['Новий','В роботі','Підтверджено','Відмова'],
     payStatus: ['Не оплачено','Частково','Оплачено'],
     crmStatus: ['Активний','Архів'],
-    currency: ['UAH','EUR','CHF','USD','PLN','CZK'],
-    currencyDeposit: ['UAH','EUR','CHF','USD','PLN','CZK'],
-    currencyWeight: ['UAH','EUR','CHF','USD','PLN','CZK'],
+    get currency()        { return CURR_ENABLED; },
+    get currencyDeposit() { return CURR_ENABLED; },
+    get currencyWeight()  { return CURR_ENABLED; },
     direction: ['Україна-ЄВ','Європа-УК']
 };
+
+async function loadCurrencySettings() {
+    try {
+        if (typeof sb === 'undefined' || !sb) return;
+        const { data, error } = await sb
+            .from('system_settings')
+            .select('setting_name, setting_value')
+            .eq('tenant_id', TENANT_ID)
+            .in('setting_name', ['default_currency', 'supported_currencies']);
+        if (error) throw error;
+        const rows = data || [];
+        const sup = rows.find(r => r.setting_name === 'supported_currencies');
+        const def = rows.find(r => r.setting_name === 'default_currency');
+        if (sup && sup.setting_value) {
+            const codes = String(sup.setting_value).split(',').map(s => s.trim()).filter(c => CURR_MASTER.includes(c));
+            if (codes.length > 0) CURR_ENABLED = codes;
+        }
+        const defCode = def && def.setting_value ? String(def.setting_value).trim() : '';
+        CURR_DEFAULT = CURR_ENABLED.includes(defCode) ? defCode : CURR_ENABLED[0];
+    } catch (e) {
+        console.warn('[currency] load failed, using defaults:', e);
+    }
+}
+
+function applyCurrencyOptionsToSelects() {
+    ['fCurrency', 'fCurrencyDeposit', 'fCurrencyWeight'].forEach(id => {
+        const sel = document.getElementById(id);
+        if (!sel) return;
+        const prev = sel.value;
+        sel.innerHTML = CURR_ENABLED.map(c => `<option value="${c}">${c}</option>`).join('');
+        sel.value = CURR_ENABLED.includes(prev) ? prev : CURR_DEFAULT;
+    });
+}
 const LAYOUTS = {
     '1-3-3': ['D','1','2','3','4','5','6','7'],
     '2-2-3': ['D','1','2','3','4','5','6','7'],
     '2-2-2': ['D','1','2','3','4','5','6']
 };
+
+// ================================================================
+// SEARCH — uniform matching across multiple fields + phone normalization
+// ================================================================
+const SEARCHABLE_PAX_FIELDS = [
+    'PAX_ID', 'Ід_смарт',
+    'Піб',
+    'Телефон пасажира', 'Телефон реєстратора',
+    'Тег'
+];
+const PHONE_FIELDS_PAX = ['Телефон пасажира', 'Телефон реєстратора'];
+
+function digitsOnly(s) { return String(s || '').replace(/\D/g, ''); }
+
+// Match passenger against lowercased query. Phones match on digits-only,
+// other fields on case-insensitive substring.
+function passengerMatchesQuery(p, qLower) {
+    if (!qLower) return true;
+    const qDigits = digitsOnly(qLower);
+    for (const f of SEARCHABLE_PAX_FIELDS) {
+        const raw = p[f];
+        if (raw === undefined || raw === null || raw === '') continue;
+        const sv = String(raw);
+        if (sv.toLowerCase().includes(qLower)) return true;
+        if (PHONE_FIELDS_PAX.includes(f) && qDigits.length >= 3 && digitsOnly(sv).includes(qDigits)) return true;
+    }
+    return false;
+}
+
+// Wrap matches inside a text value with <span class="search-hl">. Accepts
+// the current query (already lowercased) — callers pass the active search.
+function hlMatch(text, qLower) {
+    if (!qLower || text === undefined || text === null || text === '') return text == null ? '' : String(text);
+    const str = String(text);
+    const low = str.toLowerCase();
+    const idx = low.indexOf(qLower);
+    if (idx >= 0) {
+        return str.slice(0, idx) + '<mark class="search-hl">' + str.slice(idx, idx + qLower.length) + '</mark>' + str.slice(idx + qLower.length);
+    }
+    // Phone: query is digits-only and string has matching digit sequence
+    const qDigits = digitsOnly(qLower);
+    if (qDigits.length >= 3 && digitsOnly(str).includes(qDigits)) {
+        return '<mark class="search-hl">' + str + '</mark>';
+    }
+    return str;
+}
+
+function currentSearchLower() {
+    return (document.getElementById('globalSearch')?.value || '').toLowerCase().trim();
+}
 
 // ================================================================
 // STATE
@@ -515,7 +608,7 @@ async function suggestPriceFromRoute() {
     if (!fromPoint || !toPoint) return;
     if (fromPoint.id === toPoint.id) return;
 
-    const currency = (currSel && currSel.value) || 'EUR';
+    const currency = (currSel && currSel.value) || CURR_DEFAULT;
     try {
         const res = await apiPost('getRoutePrice', {
             from_point_id: fromPoint.id,
@@ -856,11 +949,13 @@ document.addEventListener('DOMContentLoaded', () => {
     Promise.all([
         apiPost('getAll', { sheet: 'all' }),
         apiPost('getTrips', { filter: {} }),
-        loadRoutePointsCatalog()
+        loadRoutePointsCatalog(),
+        loadCurrencySettings()
     ]).then(([paxRes, tripRes]) => {
         hideLoader();
         if (paxRes.ok) passengers = paxRes.data;
         if (tripRes.ok) trips = tripRes.data;
+        applyCurrencyOptionsToSelects();
         updateAllCounts();
         updateTripFilterDropdown();
         updateTripAutoFilterDropdown();
@@ -2401,9 +2496,9 @@ function startRouteInlineEdit(rteId, colName, sheetName) {
     const selectOpts = {
         'Статус': ['Новий','В роботі','Підтверджено','Відмова'],
         'Статус оплати': ['Не оплачено','Частково','Оплачено'],
-        'Валюта': ['UAH','EUR','CHF','USD','CZK','PLN'],
-        'Валюта завдатку': ['UAH','EUR','CHF','USD','CZK','PLN'],
-        'Валюта багажу': ['UAH','EUR','CHF','USD','CZK','PLN']
+        'Валюта': CURR_ENABLED,
+        'Валюта завдатку': CURR_ENABLED,
+        'Валюта багажу': CURR_ENABLED
     };
 
     if (selectOpts[colName]) {
@@ -2508,12 +2603,15 @@ function openRouteEditModal(rteId, sheetName) {
     const _defPaxCur = (fld, fallback) => (typeof window.sbGetCurrencyDefault === 'function')
         ? (window.sbGetCurrencyDefault('passenger', fld, fallback) || fallback)
         : fallback;
+    // Пріоритет: гранулярні currency_defaults (passenger.*) → CURR_DEFAULT (main) → EUR.
+    const _ccur = (fld) => _defPaxCur(fld, '')
+      || (typeof CURR_DEFAULT !== 'undefined' ? CURR_DEFAULT : 'EUR');
     const currEl = document.getElementById('fCurrency');
-    if (currEl) currEl.value = r['Валюта'] || _defPaxCur('ticket', 'EUR');
+    if (currEl) currEl.value = r['Валюта'] || _ccur('ticket');
     const currDepEl = document.getElementById('fCurrencyDeposit');
-    if (currDepEl) currDepEl.value = r['Валюта завдатку'] || _defPaxCur('deposit', 'EUR');
+    if (currDepEl) currDepEl.value = r['Валюта завдатку'] || _ccur('deposit');
     const currWtEl = document.getElementById('fCurrencyWeight');
-    if (currWtEl) currWtEl.value = r['Валюта багажу'] || _defPaxCur('tips', 'EUR');
+    if (currWtEl) currWtEl.value = r['Валюта багажу'] || _ccur('tips');
 
     const saveBtn = document.getElementById('paxSaveBtn');
     if (saveBtn) {
@@ -3080,11 +3178,7 @@ function getFilteredPassengers() {
         if (tripFilter === 'none' && p['CAL_ID']) return false;
         if (tripFilter === 'none' && !p['CAL_ID']) { /* pass */ }
         else if (tripFilter !== 'all' && tripFilter !== 'none' && p['CAL_ID'] !== tripFilter) return false;
-        if (search) {
-            const name = String(p['Піб'] || '').toLowerCase();
-            const phone = String(p['Телефон пасажира'] || '');
-            if (!name.includes(search) && !phone.includes(search)) return false;
-        }
+        if (search && !passengerMatchesQuery(p, search)) return false;
         return true;
     });
 }
@@ -3122,6 +3216,7 @@ function render() {
 
 function renderCard(p) {
     const id = p['PAX_ID'] || '';
+    const _hlQ = currentSearchLower();
     const dir = String(p['Напрям'] || '');
     const dirCode = getDirectionCode(dir);
     const isUaEu = dirCode === 'ua-eu';
@@ -3226,7 +3321,7 @@ function renderCard(p) {
                 <div class="card-body">
                     <div class="card-top-row">
                         ${cf.includes('direction') ? `<span class="card-direction ${dirColorClass}">${dirLabel}</span>` : ''}
-                        ${cf.includes('phone') ? `<span class="card-phone">${phone}</span>` : ''}
+                        ${cf.includes('phone') ? `<span class="card-phone">${hlMatch(phone, _hlQ)}</span>` : ''}
                         ${cf.includes('seats') ? `<span class="card-seats">${seats}м</span>` : ''}
                         ${cf.includes('date') ? `<span class="card-date">${date || '—'}</span>` : ''}
                         ${cf.includes('price') || cf.includes('deposit') ? `<div class="card-price-wrap">
@@ -3236,9 +3331,9 @@ function renderCard(p) {
                     </div>
                     <div class="card-row2-wrap">
                         <div class="card-info-row">
-                            ${cf.includes('pax_id') ? `<span class="card-id">${id}</span>` : ''}
-                            ${cf.includes('smartId') ? `<span class="card-smart-id" onclick="event.stopPropagation(); copyToClipboard('${smartId || ''}'); this.style.background='#d8b4fe'; setTimeout(()=>this.style.background='',400);" title="Натисни щоб скопіювати">SS: ${smartId || '—'}</span>` : ''}
-                            ${cf.includes('name') ? `<span class="card-name">${name}</span>` : ''}
+                            ${cf.includes('pax_id') ? `<span class="card-id">${hlMatch(id, _hlQ)}</span>` : ''}
+                            ${cf.includes('smartId') ? `<span class="card-smart-id" onclick="event.stopPropagation(); copyToClipboard('${smartId || ''}'); this.style.background='#d8b4fe'; setTimeout(()=>this.style.background='',400);" title="Натисни щоб скопіювати">SS: ${smartId ? hlMatch(smartId, _hlQ) : '—'}</span>` : ''}
+                            ${cf.includes('name') ? `<span class="card-name">${hlMatch(name, _hlQ)}</span>` : ''}
                             ${isRecent24h ? '<span class="badge badge-new24">🆕 NEW</span>' : ''}
                             ${cf.includes('leadStatus') ? lsBadge : ''} ${cf.includes('payStatus') ? payBadge : ''}
                             ${cf.includes('debt') && debt > 0 ? '<span class="badge badge-debt">Борг: '+debt+'</span>' : ''}
@@ -3258,11 +3353,10 @@ function renderCard(p) {
             ${tripStrip}
         </div>
         <div class="card-details ${isOpen?'show':''}" id="details-${id}">${isOpen ? renderDetails(p) : ''}</div>
-        <!-- === ПАНЕЛЬ ДІЙ ЛІДА: 4 кнопки в ряд (flex). Показується при ▼ === -->
+        <!-- === ПАНЕЛЬ ДІЙ ЛІДА: показується при ▼. Редагування полів — через олівчики прямо в картці === -->
         <div class="card-actions ${isActionsOpen?'show':''}" id="actions-${id}">
             <button class="btn-card-action btn-call" onclick="window.open('tel:${cleanPhone}')">📞 Дзвінок</button>
             <button class="btn-card-action btn-write" onclick="event.stopPropagation(); openMessengerPopup('${cleanPhone}','${smartId}')">✉️ Писати</button>
-            <button class="btn-card-action btn-edit" onclick="event.stopPropagation(); openEditPax('${id}')">✏️ Редагувати</button>
             <button class="btn-card-action" style="background:#ede9fe;color:#7c3aed;" onclick="event.stopPropagation(); toggleTripAssignDD('${id}')">🚐 Рейс</button>
             <button class="btn-card-action" style="background:#f3f4f6;color:#6b7280;" onclick="event.stopPropagation(); archivePax('${id}','${name}')">📦 Архів</button>
             <button class="btn-card-action btn-delete" onclick="deletePax('${id}','${p._sheet||''}','${name}')">🗑️ Видалити</button>
@@ -3279,7 +3373,7 @@ function renderDetailFields(p, fields, isReadonly) {
     fields.forEach(key => {
         const colName = COL_MAP[key] || key;
         const val = p[colName] || '';
-        const isRO = READONLY_FIELDS.includes(key) || isReadonly;
+        const isRO = (READONLY_FIELDS.includes(key) || isReadonly) && !EDITABLE_OVERRIDE_FIELDS.includes(key);
         const DATE_KEYS = ['date','dateCreated','dateArchive'];
         const safeVal = String(val).replace(/'/g,"\\'");
         let displayVal = val || '—';
@@ -3670,11 +3764,11 @@ function openEditPax(id) {
 
     // Currency
     const currEl = document.getElementById('fCurrency');
-    if (currEl) currEl.value = p['Валюта квитка'] || 'UAH';
+    if (currEl) currEl.value = p['Валюта квитка'] || CURR_DEFAULT;
     const currDepEl = document.getElementById('fCurrencyDeposit');
-    if (currDepEl) currDepEl.value = p['Валюта завдатку'] || 'UAH';
+    if (currDepEl) currDepEl.value = p['Валюта завдатку'] || CURR_DEFAULT;
     const currWtEl = document.getElementById('fCurrencyWeight');
-    if (currWtEl) currWtEl.value = p['Валюта багажу'] || 'UAH';
+    if (currWtEl) currWtEl.value = p['Валюта багажу'] || CURR_DEFAULT;
 
     const saveBtn = document.getElementById('paxSaveBtn');
     if (saveBtn) saveBtn.textContent = '💾 Оновити';
@@ -3800,9 +3894,9 @@ function openAddModal() {
     document.getElementById('fSeats').value = '1';
     document.getElementById('fDate').value = '';
     document.getElementById('fDirection').value = currentDir === 'eu-ua' ? 'eu-ua' : 'ua-eu';
-    document.getElementById('fCurrency').value = 'EUR';
-    document.getElementById('fCurrencyDeposit').value = 'EUR';
-    document.getElementById('fCurrencyWeight').value = 'EUR';
+    document.getElementById('fCurrency').value = CURR_DEFAULT;
+    document.getElementById('fCurrencyDeposit').value = CURR_DEFAULT;
+    document.getElementById('fCurrencyWeight').value = CURR_DEFAULT;
     // Route points: нічого попередньо рендерити не треба — dropdown
     // будується на open. Якщо каталог не готовий — фоново підтягнемо,
     // щоб при натиску ▼ одразу показати список.
@@ -5427,7 +5521,12 @@ function renderVan(opts) {
     const maxSeats = parseInt(opts.maxSeats) || 7;
     const hasReserve = !!opts.hasReserve;
     const occupiedMap = opts.occupiedMap || {};
-    const selected = opts.selected || '';
+    const selectedRaw = opts.selected || '';
+    // Нормалізуємо вибір в Set — підтримка і рядка (legacy, тільки-перегляд),
+    // і Set (пікер з мультивибором). Порожнє значення → порожній Set.
+    const selected = selectedRaw instanceof Set
+        ? selectedRaw
+        : new Set(parseSeats(selectedRaw));
     const interactive = opts.interactive !== false;
 
     const positions = getSeatLayout(layout, maxSeats, hasReserve);
@@ -5451,7 +5550,7 @@ function renderVan(opts) {
             if (occName) {
                 return `<div class="seat-pin seat-occupied" style="${style}" title="Зайнято: ${occName}">${s.name}<div class="seat-occ-name">${occName}</div></div>`;
             }
-            if (selected && selected === s.name) {
+            if (selected.has(s.name)) {
                 const handler = interactive ? `onclick="seatPickerSelect('${s.name}')"` : '';
                 return `<div class="seat-pin seat-selected" style="${style}" ${handler}>${s.name}<div class="seat-check">✓</div></div>`;
             }
@@ -5472,7 +5571,7 @@ function renderVan(opts) {
                 <div class="seat-occ-name">${occName}</div>
             </div>`;
         }
-        if (selected && selected === s.name) {
+        if (selected.has(s.name)) {
             const handler = interactive ? `onclick="seatPickerSelect('${s.name}')"` : '';
             return `<div class="seat seat-selected" style="${style}" ${handler}>
                 ${chairImg}
@@ -5496,7 +5595,31 @@ function renderVan(opts) {
 // ================================================================
 let seatPickerPaxId = null;
 let seatPickerSheet = null;
-let seatPickerSelected = '';
+// Тепер мультивибір: Set з назвами місць ('1','2','A3'). Збереження — '1,2'.
+let seatPickerSelected = new Set();
+
+// Розпарсити рядок "Місце в авто" у масив назв місць. Приймає '1', '1,2',
+// '1, 2', 'A1,A2'. Порожнє → []. Викор. і при завантаженні пікера, і при
+// розрахунку occupied-мапи, і при відображенні.
+// Плюс: транслітерує кирилиці-омографи (А→A, В→B, С→C тощо) — у БД
+// історично зберігаються «А1», «В3» кирилицею, а в layout-схемах — латиниця.
+// Плюс: розділювач «і» (типу «А1 і А2») так само перетворюється на кому.
+// Плюс: фільтрує вільнотекстові маркери (напр. «Вільна розсадка») — вони
+// не є конкретним місцем, тому в occupied-мапі їм нема що робити.
+const CYR_TO_LAT_LOOKALIKE = { А:'A', В:'B', С:'C', Е:'E', Н:'H', К:'K', М:'M', О:'O', Р:'P', Т:'T', Х:'X', а:'a', в:'b', с:'c', е:'e', н:'h', к:'k', м:'m', о:'o', р:'p', т:'t', х:'x' };
+function normalizeSeatName(s) {
+    if (!s) return '';
+    let out = '';
+    for (const ch of String(s)) out += CYR_TO_LAT_LOOKALIKE[ch] || ch;
+    return out.trim().toUpperCase();
+}
+const SEAT_NAME_RE = /^[A-Z]?\d{1,2}$|^[DRC]$/;
+function parseSeats(str) {
+    if (!str) return [];
+    // "А1 і А2" → "А1, А2"; "А1 та А2" теж → "А1, А2"
+    const split = String(str).replace(/\s+(?:і|та|and)\s+/gi, ',').split(',');
+    return split.map(normalizeSeatName).filter(s => SEAT_NAME_RE.test(s));
+}
 
 function detectLayout(trip) {
     // Try trip.layout first — but only if it's a valid layout name
@@ -5517,7 +5640,7 @@ function openSeatPicker(paxId, sheet) {
     if (!p) return;
     seatPickerPaxId = paxId;
     seatPickerSheet = sheet;
-    seatPickerSelected = p['Місце в авто'] || '';
+    seatPickerSelected = new Set(parseSeats(p['Місце в авто']));
 
     const calId = p['CAL_ID'] || '';
     if (!calId) { renderSeatPickerNoTrip(); return; }
@@ -5533,12 +5656,12 @@ function getOccupiedSeats(calId, excludePaxId) {
     const map = {};
     passengers.forEach(p => {
         if (p['CAL_ID'] === calId && p['PAX_ID'] !== excludePaxId) {
-            const seat = (p['Місце в авто'] || '').trim();
-            if (seat) {
-                const name = p['Піб'] || 'Пасажир';
-                const parts = name.split(' ');
-                map[seat] = parts.length > 1 ? parts[0] + ' ' + parts[1].charAt(0) + '.' : parts[0];
-            }
+            const seats = parseSeats(p['Місце в авто']);
+            if (seats.length === 0) return;
+            const name = p['Піб'] || 'Пасажир';
+            const parts = name.split(' ');
+            const label = parts.length > 1 ? parts[0] + ' ' + parts[1].charAt(0) + '.' : parts[0];
+            seats.forEach(s => { map[s] = label; });
         }
     });
     return map;
@@ -5616,7 +5739,9 @@ function buildSeatHtml(seatObj, occupiedMap) {
         return `<div class="sp-seat sp-driver" title="Водій"><div class="sp-wheel"></div><div class="sp-seat-num">${s.name}</div></div>`;
     }
     const isOcc = occupiedMap[s.name];
-    const isSel = seatPickerSelected === s.name;
+    const isSel = seatPickerSelected instanceof Set
+        ? seatPickerSelected.has(s.name)
+        : (seatPickerSelected === s.name);
     if (isOcc) {
         return `<div class="sp-seat sp-occupied"><div class="sp-seat-num">${s.name}</div><div class="sp-occ-name">${isOcc}</div></div>`;
     }
@@ -5670,11 +5795,17 @@ function renderSeatPickerModal(trip, occupiedMap) {
     const maxSeats = parseInt(trip.max_seats) || 7;
     const autoName = cleanAutoName(trip.auto_name) || 'Авто';
     const hasReserve = trip.reserve === true || trip.reserve === 'true';
+    // Реальну к-сть пасажирських місць беремо з layout-схеми — в БД
+    // `calendar.total_seats` може бути неузгодженим (напр. layout='1-3-3'
+    // на 7 місць, а total_seats=6). У шапці пікера показуємо фактичне.
+    const layoutPositions = getSeatLayout(layout, maxSeats, hasReserve);
+    const layoutSeatCount = layoutPositions.filter(s => s.type === 'seat' || s.type === 'reserve').length;
+    const effectiveMax = layoutSeatCount > 0 ? layoutSeatCount : maxSeats;
     const vanHtml = renderVan({ layout, maxSeats, hasReserve, occupiedMap, selected: seatPickerSelected, interactive: true });
     const tripDate = formatTripDate(trip.date);
     const tripCity = trip.city || '';
     const occ = Object.keys(occupiedMap).length;
-    const free = maxSeats - occ;
+    const free = Math.max(0, effectiveMax - occ);
     const modalCls = layout === 'bus' ? 'seat-picker-modal has-bus' : 'seat-picker-modal';
 
     const html = `<div class="seat-picker-overlay" id="seatPickerOverlay" onclick="if(event.target===this)closeSeatPicker()">
@@ -5688,7 +5819,7 @@ function renderSeatPickerModal(trip, occupiedMap) {
                     <span class="sp-auto-icon">🚐</span>
                     <div class="sp-auto-details">
                         <div class="sp-auto-name">${autoName}</div>
-                        <div>${tripDate} · ${tripCity} · <span style="color:#16a34a;font-weight:700;">${free} вільн.</span> / ${maxSeats} місць</div>
+                        <div>${tripDate} · ${tripCity} · <span style="color:#16a34a;font-weight:700;">${free} вільн.</span> / ${effectiveMax} місць · Обрано: <span id="seatPickerCount" style="font-weight:700;color:var(--primary);">${seatPickerSelected.size}</span></div>
                     </div>
                 </div>
                 <div id="seatPickerGrid">${vanHtml}</div>
@@ -5710,7 +5841,14 @@ function renderSeatPickerModal(trip, occupiedMap) {
 }
 
 function seatPickerSelect(seatName) {
-    seatPickerSelected = (seatPickerSelected === seatName) ? '' : seatName;
+    // Порожній рядок → повне скидання (кнопка «Скинути»).
+    if (!seatName) {
+        seatPickerSelected = new Set();
+    } else if (seatPickerSelected.has(seatName)) {
+        seatPickerSelected.delete(seatName);
+    } else {
+        seatPickerSelected.add(seatName);
+    }
     const p = passengers.find(x => x['PAX_ID'] === seatPickerPaxId);
     if (!p) return;
     const calId = p['CAL_ID'] || '';
@@ -5722,6 +5860,9 @@ function seatPickerSelect(seatName) {
     const maxSeats = parseInt(trip.max_seats) || 7;
     const grid = document.getElementById('seatPickerGrid');
     if (grid) grid.innerHTML = renderVan({ layout, maxSeats, hasReserve, occupiedMap, selected: seatPickerSelected, interactive: true });
+    // Оновлюємо лічильник «Обрано: N»
+    const counter = document.getElementById('seatPickerCount');
+    if (counter) counter.textContent = seatPickerSelected.size;
 }
 
 async function saveSeatPicker() {
@@ -5733,25 +5874,52 @@ async function saveSeatPicker() {
 
     const colName = 'Місце в авто';
     const oldVal = p[colName] || '';
-    const newVal = seatPickerSelected;
-    if (newVal === oldVal) { closeSeatPicker(); return; }
+    // Сортуємо числа природно: "2" перед "10". Якщо всі числа — numeric sort,
+    // якщо хоч одне не число — localeCompare (для 'A1','B2',...).
+    const picked = [...seatPickerSelected];
+    const allNumeric = picked.every(s => /^\d+$/.test(s));
+    picked.sort(allNumeric
+        ? (a, b) => parseInt(a) - parseInt(b)
+        : (a, b) => String(a).localeCompare(String(b), undefined, { numeric: true }));
+    const newVal = picked.join(',');
+
+    const oldSeatsCount = parseInt(p['Кількість місць']) || 0;
+    const newSeatsCount = Math.max(1, picked.length); // мінімум 1 (нульове — недоречно)
+    const seatsChanged = newSeatsCount !== oldSeatsCount;
+
+    if (newVal === oldVal && !seatsChanged) { closeSeatPicker(); return; }
 
     p[colName] = newVal;
+    if (seatsChanged && picked.length > 0) p['Кількість місць'] = newSeatsCount;
     closeSeatPicker();
 
     const el = document.getElementById('dv-' + paxId + '-seatInCar');
     if (el) el.textContent = newVal || '—';
+    const seatsEl = document.getElementById('dv-' + paxId + '-seats');
+    if (seatsEl && seatsChanged && picked.length > 0) seatsEl.textContent = String(newSeatsCount);
 
     const sheet = shName || p._sheet || '';
     const res = await apiPost('updateField', { sheet: sheet, pax_id: paxId, col: colName, value: newVal });
-    if (res.ok) {
-        showToast('✅ Місце збережено: ' + (newVal || 'скинуто'));
-        render();
-    } else {
+    if (!res.ok) {
         showToast('❌ ' + (res.error || 'Помилка'));
         p[colName] = oldVal;
         if (el) el.textContent = oldVal || '—';
+        return;
     }
+    // Друга відправка — тільки коли кількість місць справді змінилась.
+    if (seatsChanged && picked.length > 0) {
+        const res2 = await apiPost('updateField', { sheet: sheet, pax_id: paxId, col: 'Кількість місць', value: String(newSeatsCount) });
+        if (!res2.ok) {
+            showToast('⚠️ Місце збережено, але кількість не оновилась: ' + (res2.error || ''));
+            p['Кількість місць'] = oldSeatsCount;
+            if (seatsEl) seatsEl.textContent = String(oldSeatsCount);
+            render();
+            return;
+        }
+    }
+    showToast('✅ Місце збережено: ' + (newVal || 'скинуто')
+        + (seatsChanged && picked.length > 0 ? ' (місць: ' + newSeatsCount + ')' : ''));
+    render();
 }
 
 function closeSeatPicker() {
@@ -5759,6 +5927,7 @@ function closeSeatPicker() {
     if (ov) ov.remove();
     seatPickerPaxId = null;
     seatPickerSheet = null;
+    seatPickerSelected = new Set();
 }
 
 // Trip calendar
@@ -8013,11 +8182,7 @@ function showArchiveView() {
 function getArchivedPassengers() {
     const search = (document.getElementById('archiveSearch')?.value || '').toLowerCase().trim();
     return archivedPassengers.filter(p => {
-        if (search) {
-            const name = String(p['Піб'] || '').toLowerCase();
-            const phone = String(p['Телефон пасажира'] || '');
-            if (!name.includes(search) && !phone.includes(search)) return false;
-        }
+        if (search && !passengerMatchesQuery(p, search)) return false;
         return true;
     });
 }
@@ -8605,16 +8770,16 @@ const OB_CATS = [
         steps: [
             { t: '#navPax', title: '👥 Пасажири', desc: 'Показати список всіх пасажирів' },
             { t: '#navParcels', title: '📦 Посилки', desc: 'Модуль посилок (окреме підключення)' },
-            { t: '.nav-item[onclick*="silentSync"]', title: '🔄 Синхронізація', desc: 'Вручну оновити дані з Google Sheets' },
-            { t: '.nav-item[onclick*="openColumnConfigurator"]', title: '⚙️ Колонки', desc: 'Налаштувати які поля показувати на картках' },
-            { t: '.nav-item[onclick*="openAddModal"]', title: '➕ Додати', desc: 'Створити нового пасажира (є SMS-парсер!)' }
+            { t: '.bottom-nav-item[onclick*="silentSync"]', title: '🔄 Синхронізація', desc: 'Вручну оновити дані з Google Sheets' },
+            { t: '.bottom-nav-item[onclick*="openColumnConfigurator"]', title: '⚙️ Колонки', desc: 'Налаштувати які поля показувати на картках' },
+            { t: '.bottom-nav-item[onclick*="openAddModal"]', title: '➕ Додати', desc: 'Створити нового пасажира (є SMS-парсер!)' }
         ]
     },
     {
         id: 'passengers', icon: '👥', name: 'Робота з пасажирами', color: '#d1fae5',
         desc: 'Картки, редагування, месенджери',
         steps: [
-            { t: '.nav-item[onclick*="openAddModal"]', title: '➕ Додати пасажира', desc: 'Заповніть ПІБ і телефон. Є SMS-парсер — вставте текст і дані заповняться автоматично!' },
+            { t: '.bottom-nav-item[onclick*="openAddModal"]', title: '➕ Додати пасажира', desc: 'Заповніть ПІБ і телефон. Є SMS-парсер — вставте текст і дані заповняться автоматично!' },
             { t: '.search-box', title: '🔍 Пошук', desc: 'Введіть ПІБ або телефон — список фільтрується на льоту' },
             { t: '.lead-card', title: '📋 Натисніть на картку', desc: 'Картка розгорнеться і покаже деталі: ПІБ, адреси, дати, примітки. Кожне поле можна редагувати на місці!', act: 'expand' },
             { t: '.card-actions-toggle', title: '▼ Стрілка справа', desc: 'Натисніть ▼ — з\'являться кнопки: 📞 Дзвінок, ✉️ Писати, ✏️ Редагувати, 🚐 Рейс, 📦 Архів, 🗑️ Видалити', act: 'actions' },
