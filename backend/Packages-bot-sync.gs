@@ -483,9 +483,21 @@ function ensureSyncColumn_(sheet) {
     const lastCol = sheet.getLastColumn();
     const headers = lastCol ? sheet.getRange(1, 1, 1, lastCol).getValues()[0] : [];
     for (let i = 0; i < headers.length; i++) {
-        if (String(headers[i] || '').trim() === SYNC_COL_NAME) return i + 1;
+        if (String(headers[i] || '').trim() === SYNC_COL_NAME) {
+            // Ще раз страхуємось: знімаємо валідацію (раптом хтось налаштував)
+            sheet.getRange(1, i + 1, sheet.getMaxRows(), 1).clearDataValidations();
+            return i + 1;
+        }
     }
-    const newCol = lastCol + 1;
+    // Потрібно НОВУ колонку за межами існуючих даних
+    let newCol = lastCol + 1;
+    // Якщо такої колонки фізично ще нема — додаємо
+    if (newCol > sheet.getMaxColumns()) {
+        sheet.insertColumnsAfter(sheet.getMaxColumns(), newCol - sheet.getMaxColumns());
+    }
+    // КРИТИЧНО: знімаємо data validation з усього стовпця, інакше валідація
+    // (напр. випадні списки «Сергій/Роман/...») блокує запис 'ok PKG_...'.
+    sheet.getRange(1, newCol, sheet.getMaxRows(), 1).clearDataValidations();
     sheet.getRange(1, newCol).setValue(SYNC_COL_NAME).setFontWeight('bold').setBackground('#eeeeee');
     return newCol;
 }
