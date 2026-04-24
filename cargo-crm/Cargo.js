@@ -144,6 +144,44 @@ let expenses = [];
 let routeSummary = null;
 let activeRouteIdx = null;
 let currentView = 'parcels'; // 'parcels' | 'route' | 'dispatch' | 'expenses' | 'summary'
+
+// Валюти — дефолт, живий список керується з owner-crm через system_settings
+const CURR_MASTER = ['UAH','EUR','USD','CHF','PLN','CZK','GBP','SEK','NOK','DKK','HUF','RON'];
+let CURR_ENABLED = ['UAH','EUR','USD','CHF','PLN','CZK'];
+let CURR_DEFAULT = 'EUR';
+
+async function loadCurrencySettings() {
+  try {
+    if (typeof sb === 'undefined' || !sb) return;
+    const { data, error } = await sb
+      .from('system_settings')
+      .select('setting_name, setting_value')
+      .eq('tenant_id', TENANT_ID)
+      .in('setting_name', ['default_currency', 'supported_currencies']);
+    if (error) throw error;
+    const rows = data || [];
+    const sup = rows.find(r => r.setting_name === 'supported_currencies');
+    const def = rows.find(r => r.setting_name === 'default_currency');
+    if (sup && sup.setting_value) {
+      const codes = String(sup.setting_value).split(',').map(s => s.trim()).filter(c => CURR_MASTER.includes(c));
+      if (codes.length > 0) CURR_ENABLED = codes;
+    }
+    const defCode = def && def.setting_value ? String(def.setting_value).trim() : '';
+    CURR_DEFAULT = CURR_ENABLED.includes(defCode) ? defCode : CURR_ENABLED[0];
+  } catch (e) {
+    console.warn('[currency] load failed, using defaults:', e);
+  }
+}
+
+function applyCurrencyOptionsToSelects() {
+  ['fCurrency', 'fill_currency'].forEach(id => {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    const prev = sel.value;
+    sel.innerHTML = CURR_ENABLED.map(c => `<option value="${c}">${c}</option>`).join('');
+    sel.value = CURR_ENABLED.includes(prev) ? prev : CURR_DEFAULT;
+  });
+}
 let routeData = []; // current route sheet data
 let routeFilterType = 'all'; // all | pax | parcel
 let routeFilterStatus = 'all';
@@ -815,7 +853,8 @@ document.addEventListener('DOMContentLoaded', async function() {
     showInstallBanner();
   }
 
-  await loadData();
+  await Promise.all([loadData(), loadCurrencySettings()]);
+  applyCurrencyOptionsToSelects();
   loadUnreadCounts().then(() => renderCards());
 
   // Якщо сторінка відкрита через сканер (index.html?scan=<ТТН>[&pkg=…][&unknown=1])
@@ -1496,9 +1535,9 @@ function getFieldOptions(col) {
     'Статус оплати':    ['Не оплачено', 'Частково', 'Оплачено'],
     'Статус посилки':   ['Зареєстровано', 'Оформлення', 'Доставка', 'Доставлено', 'Невідомо'],
     'Статус CRM':       ['Активний', 'Архів'],
-    'Валюта оплати':    ['UAH', 'EUR', 'CHF', 'USD', 'PLN', 'CZK'],
-    'Валюта завдатку':  ['UAH', 'EUR', 'CHF', 'USD', 'PLN', 'CZK'],
-    'Валюта НП':        ['UAH', 'EUR', 'CHF', 'USD'],
+    'Валюта оплати':    CURR_ENABLED,
+    'Валюта завдатку':  CURR_ENABLED,
+    'Валюта НП':        CURR_ENABLED,
     'Форма НП':         ['Готівка', 'Картка', 'Частково'],
     'Статус НП':        ['Ми оплатили', 'Відправник оплатив', 'Наложний платіж'],
     'Форма оплати':     ['Готівка', 'Картка', 'Частково'],
@@ -2240,8 +2279,8 @@ function openFillModal(pkgId) {
     if (cur != null && cur !== '') {
       el.value = cur;
     } else if (inputId === 'fill_currency') {
-      // Валюта за замовчуванням — EUR (основний напрямок UA↔EU).
-      el.value = 'EUR';
+      // Валюта за замовчуванням — з налаштувань власника (system_settings.default_currency)
+      el.value = CURR_DEFAULT;
     } else if (el.tagName === 'SELECT') {
       // select: лишаємо <option selected>, що стоїть у HTML
     } else {
