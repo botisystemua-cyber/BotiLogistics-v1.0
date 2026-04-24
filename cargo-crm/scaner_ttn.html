@@ -1628,13 +1628,20 @@
             try {
                 var tenantId = (SESSION && SESSION.tenant_id) || '';
                 if (!tenantId) return;
+                // Зберігається як setting_name='currency_defaults', setting_value = JSON.
                 sb.from('system_settings')
-                    .select('currency_defaults')
+                    .select('setting_value')
                     .eq('tenant_id', tenantId)
+                    .eq('setting_name', 'currency_defaults')
                     .maybeSingle()
                     .then(function(res) {
-                        if (res && res.data && typeof res.data.currency_defaults === 'object') {
-                            _SCANNER_CURRENCY_DEFAULTS = res.data.currency_defaults || {};
+                        if (res && res.data && res.data.setting_value) {
+                            try {
+                                var parsed = JSON.parse(res.data.setting_value);
+                                if (parsed && typeof parsed === 'object') {
+                                    _SCANNER_CURRENCY_DEFAULTS = parsed;
+                                }
+                            } catch (_) { /* corrupt */ }
                         }
                     });
             } catch (_) {}
