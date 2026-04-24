@@ -846,6 +846,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }).catch(function() { /* БД недоступна — живемо на localStorage */ });
     }
 
+    // Currency defaults з owner-panel (system_settings.currency_defaults).
+    // Паралельно, не блокуємо init.
+    if (typeof window.sbLoadCurrencyDefaults === 'function') {
+        window.sbLoadCurrencyDefaults().catch(function() {});
+    }
+
     showLoader('Завантаження...');
     Promise.all([
         apiPost('getAll', { sheet: 'all' }),
@@ -2498,12 +2504,16 @@ function openRouteEditModal(rteId, sheetName) {
     }
     document.getElementById('fDate').value = dateVal;
 
+    // Валюти за замовчуванням — з owner-panel (currency_defaults), fallback EUR.
+    const _defPaxCur = (fld, fallback) => (typeof window.sbGetCurrencyDefault === 'function')
+        ? (window.sbGetCurrencyDefault('passenger', fld, fallback) || fallback)
+        : fallback;
     const currEl = document.getElementById('fCurrency');
-    if (currEl) currEl.value = r['Валюта'] || 'EUR';
+    if (currEl) currEl.value = r['Валюта'] || _defPaxCur('ticket', 'EUR');
     const currDepEl = document.getElementById('fCurrencyDeposit');
-    if (currDepEl) currDepEl.value = r['Валюта завдатку'] || 'EUR';
+    if (currDepEl) currDepEl.value = r['Валюта завдатку'] || _defPaxCur('deposit', 'EUR');
     const currWtEl = document.getElementById('fCurrencyWeight');
-    if (currWtEl) currWtEl.value = r['Валюта багажу'] || 'EUR';
+    if (currWtEl) currWtEl.value = r['Валюта багажу'] || _defPaxCur('tips', 'EUR');
 
     const saveBtn = document.getElementById('paxSaveBtn');
     if (saveBtn) {

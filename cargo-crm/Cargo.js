@@ -810,6 +810,13 @@ document.addEventListener('DOMContentLoaded', async function() {
     }).catch(function() { /* не падаємо навіть якщо БД недоступна */ });
   }
 
+  // Currency defaults з owner-panel (system_settings.currency_defaults).
+  // Завантажуємо паралельно, не блокуємо. Використовуються у openFillModal
+  // та inline-editor для нових лідів як fallback замість hardcoded 'EUR'.
+  if (typeof window.sbLoadCurrencyDefaults === 'function') {
+    window.sbLoadCurrencyDefaults().catch(function() {});
+  }
+
   // Show install banner unless already running as installed PWA
   if (!window.matchMedia('(display-mode: standalone)').matches && !navigator.standalone) {
     showInstallBanner();
@@ -2242,8 +2249,10 @@ function openFillModal(pkgId) {
     if (cur != null && cur !== '') {
       el.value = cur;
     } else if (inputId === 'fill_currency') {
-      // Валюта за замовчуванням — EUR (основний напрямок UA↔EU).
-      el.value = 'EUR';
+      // Валюта за замовчуванням — з owner currency_defaults (fallback EUR).
+      var defCur = (typeof window.sbGetCurrencyDefault === 'function')
+        ? window.sbGetCurrencyDefault('cargo', 'payment', 'EUR') : 'EUR';
+      el.value = defCur || 'EUR';
     } else if (el.tagName === 'SELECT') {
       // select: лишаємо <option selected>, що стоїть у HTML
     } else {
