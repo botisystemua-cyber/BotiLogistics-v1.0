@@ -201,15 +201,54 @@ function getDetailSections() {
     ];
 }
 const READONLY_FIELDS = ['pax_id','smartId','dateCreated','sourceSheet','cliId','bookingId','rteId','debt','dateArchive','archivedBy','archiveReason','archiveId'];
+
+// Валюти — дефолт, живий список керується з owner-crm через system_settings
+const CURR_MASTER = ['UAH','EUR','USD','CHF','PLN','CZK','GBP','SEK','NOK','DKK','HUF','RON'];
+let CURR_ENABLED = ['UAH','EUR','USD','CHF','PLN','CZK'];
+let CURR_DEFAULT = 'EUR';
+
 const SELECT_OPTIONS = {
     leadStatus: ['Новий','В роботі','Підтверджено','Відмова'],
     payStatus: ['Не оплачено','Частково','Оплачено'],
     crmStatus: ['Активний','Архів'],
-    currency: ['UAH','EUR','CHF','USD','PLN','CZK'],
-    currencyDeposit: ['UAH','EUR','CHF','USD','PLN','CZK'],
-    currencyWeight: ['UAH','EUR','CHF','USD','PLN','CZK'],
+    get currency()        { return CURR_ENABLED; },
+    get currencyDeposit() { return CURR_ENABLED; },
+    get currencyWeight()  { return CURR_ENABLED; },
     direction: ['Україна-ЄВ','Європа-УК']
 };
+
+async function loadCurrencySettings() {
+    try {
+        if (typeof sb === 'undefined' || !sb) return;
+        const { data, error } = await sb
+            .from('system_settings')
+            .select('setting_name, setting_value')
+            .eq('tenant_id', TENANT_ID)
+            .in('setting_name', ['default_currency', 'supported_currencies']);
+        if (error) throw error;
+        const rows = data || [];
+        const sup = rows.find(r => r.setting_name === 'supported_currencies');
+        const def = rows.find(r => r.setting_name === 'default_currency');
+        if (sup && sup.setting_value) {
+            const codes = String(sup.setting_value).split(',').map(s => s.trim()).filter(c => CURR_MASTER.includes(c));
+            if (codes.length > 0) CURR_ENABLED = codes;
+        }
+        const defCode = def && def.setting_value ? String(def.setting_value).trim() : '';
+        CURR_DEFAULT = CURR_ENABLED.includes(defCode) ? defCode : CURR_ENABLED[0];
+    } catch (e) {
+        console.warn('[currency] load failed, using defaults:', e);
+    }
+}
+
+function applyCurrencyOptionsToSelects() {
+    ['fCurrency', 'fCurrencyDeposit', 'fCurrencyWeight'].forEach(id => {
+        const sel = document.getElementById(id);
+        if (!sel) return;
+        const prev = sel.value;
+        sel.innerHTML = CURR_ENABLED.map(c => `<option value="${c}">${c}</option>`).join('');
+        sel.value = CURR_ENABLED.includes(prev) ? prev : CURR_DEFAULT;
+    });
+}
 const LAYOUTS = {
     '1-3-3': ['D','1','2','3','4','5','6','7'],
     '2-2-3': ['D','1','2','3','4','5','6','7'],
@@ -515,7 +554,7 @@ async function suggestPriceFromRoute() {
     if (!fromPoint || !toPoint) return;
     if (fromPoint.id === toPoint.id) return;
 
-    const currency = (currSel && currSel.value) || 'EUR';
+    const currency = (currSel && currSel.value) || CURR_DEFAULT;
     try {
         const res = await apiPost('getRoutePrice', {
             from_point_id: fromPoint.id,
@@ -850,11 +889,13 @@ document.addEventListener('DOMContentLoaded', () => {
     Promise.all([
         apiPost('getAll', { sheet: 'all' }),
         apiPost('getTrips', { filter: {} }),
-        loadRoutePointsCatalog()
+        loadRoutePointsCatalog(),
+        loadCurrencySettings()
     ]).then(([paxRes, tripRes]) => {
         hideLoader();
         if (paxRes.ok) passengers = paxRes.data;
         if (tripRes.ok) trips = tripRes.data;
+        applyCurrencyOptionsToSelects();
         updateAllCounts();
         updateTripFilterDropdown();
         updateTripAutoFilterDropdown();
@@ -2395,9 +2436,9 @@ function startRouteInlineEdit(rteId, colName, sheetName) {
     const selectOpts = {
         'Статус': ['Новий','В роботі','Підтверджено','Відмова'],
         'Статус оплати': ['Не оплачено','Частково','Оплачено'],
-        'Валюта': ['UAH','EUR','CHF','USD','CZK','PLN'],
-        'Валюта завдатку': ['UAH','EUR','CHF','USD','CZK','PLN'],
-        'Валюта багажу': ['UAH','EUR','CHF','USD','CZK','PLN']
+        'Валюта': CURR_ENABLED,
+        'Валюта завдатку': CURR_ENABLED,
+        'Валюта багажу': CURR_ENABLED
     };
 
     if (selectOpts[colName]) {
@@ -2499,11 +2540,11 @@ function openRouteEditModal(rteId, sheetName) {
     document.getElementById('fDate').value = dateVal;
 
     const currEl = document.getElementById('fCurrency');
-    if (currEl) currEl.value = r['Валюта'] || 'EUR';
+    if (currEl) currEl.value = r['Валюта'] || CURR_DEFAULT;
     const currDepEl = document.getElementById('fCurrencyDeposit');
-    if (currDepEl) currDepEl.value = r['Валюта завдатку'] || 'EUR';
+    if (currDepEl) currDepEl.value = r['Валюта завдатку'] || CURR_DEFAULT;
     const currWtEl = document.getElementById('fCurrencyWeight');
-    if (currWtEl) currWtEl.value = r['Валюта багажу'] || 'EUR';
+    if (currWtEl) currWtEl.value = r['Валюта багажу'] || CURR_DEFAULT;
 
     const saveBtn = document.getElementById('paxSaveBtn');
     if (saveBtn) {
@@ -3660,11 +3701,11 @@ function openEditPax(id) {
 
     // Currency
     const currEl = document.getElementById('fCurrency');
-    if (currEl) currEl.value = p['Валюта квитка'] || 'UAH';
+    if (currEl) currEl.value = p['Валюта квитка'] || CURR_DEFAULT;
     const currDepEl = document.getElementById('fCurrencyDeposit');
-    if (currDepEl) currDepEl.value = p['Валюта завдатку'] || 'UAH';
+    if (currDepEl) currDepEl.value = p['Валюта завдатку'] || CURR_DEFAULT;
     const currWtEl = document.getElementById('fCurrencyWeight');
-    if (currWtEl) currWtEl.value = p['Валюта багажу'] || 'UAH';
+    if (currWtEl) currWtEl.value = p['Валюта багажу'] || CURR_DEFAULT;
 
     const saveBtn = document.getElementById('paxSaveBtn');
     if (saveBtn) saveBtn.textContent = '💾 Оновити';
@@ -3790,9 +3831,9 @@ function openAddModal() {
     document.getElementById('fSeats').value = '1';
     document.getElementById('fDate').value = '';
     document.getElementById('fDirection').value = currentDir === 'eu-ua' ? 'eu-ua' : 'ua-eu';
-    document.getElementById('fCurrency').value = 'EUR';
-    document.getElementById('fCurrencyDeposit').value = 'EUR';
-    document.getElementById('fCurrencyWeight').value = 'EUR';
+    document.getElementById('fCurrency').value = CURR_DEFAULT;
+    document.getElementById('fCurrencyDeposit').value = CURR_DEFAULT;
+    document.getElementById('fCurrencyWeight').value = CURR_DEFAULT;
     // Route points: нічого попередньо рендерити не треба — dropdown
     // будується на open. Якщо каталог не готовий — фоново підтягнемо,
     // щоб при натиску ▼ одразу показати список.
