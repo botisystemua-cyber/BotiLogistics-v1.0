@@ -1300,7 +1300,7 @@ function renderCard(p, routeCtx) {
     'estValue':       ['Оціночна вартість', p['Оціночна вартість'] || ''],
     'ttn':            ['Номер ТТН', ttn],
     'innerNum':       ['Внутрішній №', p['Внутрішній №'] || ''],
-    'smartId':        ['Ід_смарт', p['Ід_смарт'] || '', {readonly: true}],
+    'smartId':        ['Ід_смарт', p['Ід_смарт'] || ''],
     'statusPkg':      ['Статус посилки', statusPkg],
     'sum':            ['Сума', price],
     'currency':       ['Валюта оплати', currency],
@@ -1375,7 +1375,7 @@ function renderCard(p, routeCtx) {
   // ⚙ Системні
   const tabSystem = renderDetailGrid([
     ['PKG_ID', pkgId, {readonly: true}],
-    ['Ід_смарт', p['Ід_смарт'] || '', {readonly: true}],
+    ['Ід_смарт', p['Ід_смарт'] || ''],
     ['Дата створення', dateCreated, {readonly: true}],
     ['Дата створення накладної', p['Дата створення накладної'] || ''],
     ['Дата відправки', p['Дата відправки'] || ''],

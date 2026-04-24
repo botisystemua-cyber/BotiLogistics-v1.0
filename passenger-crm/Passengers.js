@@ -157,9 +157,9 @@ const OTHER_SECTIONS = [
     { key:'route', title:'🗺️ Маршрут', fields:['from','to','timing','vehicle','seatInCar','calId'] },
     { key:'finance', title:'💰 Фінанси', fields:['price','currency','deposit','currencyDeposit','weight','weightPrice','currencyWeight','debt'] },
     { key:'payments', title:'💳 Платежі', fields:[], readonly:true, async:true },
-    { key:'statuses', title:'📊 Статуси', fields:['payStatus','leadStatus','crmStatus','tag','messenger'] },
+    { key:'statuses', title:'📊 Статуси', fields:['payStatus','leadStatus','crmStatus','tag','messenger','smartId'] },
     { key:'notes', title:'📝 Примітки', fields:['note','noteSms'] },
-    { key:'system', title:'🔧 Системні', fields:['pax_id','smartId','dateCreated','sourceSheet','cliId','bookingId'], readonly:true }
+    { key:'system', title:'🔧 Системні', fields:['pax_id','dateCreated','sourceSheet','cliId','bookingId'], readonly:true }
 ];
 function getManagerColsKey() {
     var name = getManagerName() || 'default';
@@ -200,7 +200,7 @@ function getDetailSections() {
         ...OTHER_SECTIONS
     ];
 }
-const READONLY_FIELDS = ['pax_id','smartId','dateCreated','sourceSheet','cliId','bookingId','rteId','debt','dateArchive','archivedBy','archiveReason','archiveId'];
+const READONLY_FIELDS = ['pax_id','dateCreated','sourceSheet','cliId','bookingId','rteId','debt','dateArchive','archivedBy','archiveReason','archiveId'];
 
 // Валюти — дефолт, живий список керується з owner-crm через system_settings
 const CURR_MASTER = ['UAH','EUR','USD','CHF','PLN','CZK','GBP','SEK','NOK','DKK','HUF','RON'];
@@ -5504,7 +5504,12 @@ function renderVan(opts) {
     const maxSeats = parseInt(opts.maxSeats) || 7;
     const hasReserve = !!opts.hasReserve;
     const occupiedMap = opts.occupiedMap || {};
-    const selected = opts.selected || '';
+    const selectedRaw = opts.selected || '';
+    // Нормалізуємо вибір в Set — підтримка і рядка (legacy, тільки-перегляд),
+    // і Set (пікер з мультивибором). Порожнє значення → порожній Set.
+    const selected = selectedRaw instanceof Set
+        ? selectedRaw
+        : new Set(parseSeats(selectedRaw));
     const interactive = opts.interactive !== false;
 
     const positions = getSeatLayout(layout, maxSeats, hasReserve);
@@ -5528,7 +5533,7 @@ function renderVan(opts) {
             if (occName) {
                 return `<div class="seat-pin seat-occupied" style="${style}" title="Зайнято: ${occName}">${s.name}<div class="seat-occ-name">${occName}</div></div>`;
             }
-            if (selected && selected === s.name) {
+            if (selected.has(s.name)) {
                 const handler = interactive ? `onclick="seatPickerSelect('${s.name}')"` : '';
                 return `<div class="seat-pin seat-selected" style="${style}" ${handler}>${s.name}<div class="seat-check">✓</div></div>`;
             }
@@ -5549,7 +5554,7 @@ function renderVan(opts) {
                 <div class="seat-occ-name">${occName}</div>
             </div>`;
         }
-        if (selected && selected === s.name) {
+        if (selected.has(s.name)) {
             const handler = interactive ? `onclick="seatPickerSelect('${s.name}')"` : '';
             return `<div class="seat seat-selected" style="${style}" ${handler}>
                 ${chairImg}
@@ -5573,7 +5578,16 @@ function renderVan(opts) {
 // ================================================================
 let seatPickerPaxId = null;
 let seatPickerSheet = null;
-let seatPickerSelected = '';
+// Тепер мультивибір: Set з назвами місць ('1','2','A3'). Збереження — '1,2'.
+let seatPickerSelected = new Set();
+
+// Розпарсити рядок "Місце в авто" у масив назв місць. Приймає '1', '1,2',
+// '1, 2', 'A1,A2'. Порожнє → []. Викор. і при завантаженні пікера, і при
+// розрахунку occupied-мапи, і при відображенні.
+function parseSeats(str) {
+    if (!str) return [];
+    return String(str).split(',').map(s => s.trim()).filter(Boolean);
+}
 
 function detectLayout(trip) {
     // Try trip.layout first — but only if it's a valid layout name
@@ -5594,7 +5608,7 @@ function openSeatPicker(paxId, sheet) {
     if (!p) return;
     seatPickerPaxId = paxId;
     seatPickerSheet = sheet;
-    seatPickerSelected = p['Місце в авто'] || '';
+    seatPickerSelected = new Set(parseSeats(p['Місце в авто']));
 
     const calId = p['CAL_ID'] || '';
     if (!calId) { renderSeatPickerNoTrip(); return; }
@@ -5610,12 +5624,12 @@ function getOccupiedSeats(calId, excludePaxId) {
     const map = {};
     passengers.forEach(p => {
         if (p['CAL_ID'] === calId && p['PAX_ID'] !== excludePaxId) {
-            const seat = (p['Місце в авто'] || '').trim();
-            if (seat) {
-                const name = p['Піб'] || 'Пасажир';
-                const parts = name.split(' ');
-                map[seat] = parts.length > 1 ? parts[0] + ' ' + parts[1].charAt(0) + '.' : parts[0];
-            }
+            const seats = parseSeats(p['Місце в авто']);
+            if (seats.length === 0) return;
+            const name = p['Піб'] || 'Пасажир';
+            const parts = name.split(' ');
+            const label = parts.length > 1 ? parts[0] + ' ' + parts[1].charAt(0) + '.' : parts[0];
+            seats.forEach(s => { map[s] = label; });
         }
     });
     return map;
@@ -5693,7 +5707,9 @@ function buildSeatHtml(seatObj, occupiedMap) {
         return `<div class="sp-seat sp-driver" title="Водій"><div class="sp-wheel"></div><div class="sp-seat-num">${s.name}</div></div>`;
     }
     const isOcc = occupiedMap[s.name];
-    const isSel = seatPickerSelected === s.name;
+    const isSel = seatPickerSelected instanceof Set
+        ? seatPickerSelected.has(s.name)
+        : (seatPickerSelected === s.name);
     if (isOcc) {
         return `<div class="sp-seat sp-occupied"><div class="sp-seat-num">${s.name}</div><div class="sp-occ-name">${isOcc}</div></div>`;
     }
@@ -5765,7 +5781,7 @@ function renderSeatPickerModal(trip, occupiedMap) {
                     <span class="sp-auto-icon">🚐</span>
                     <div class="sp-auto-details">
                         <div class="sp-auto-name">${autoName}</div>
-                        <div>${tripDate} · ${tripCity} · <span style="color:#16a34a;font-weight:700;">${free} вільн.</span> / ${maxSeats} місць</div>
+                        <div>${tripDate} · ${tripCity} · <span style="color:#16a34a;font-weight:700;">${free} вільн.</span> / ${maxSeats} місць · Обрано: <span id="seatPickerCount" style="font-weight:700;color:var(--primary);">${seatPickerSelected.size}</span></div>
                     </div>
                 </div>
                 <div id="seatPickerGrid">${vanHtml}</div>
@@ -5787,7 +5803,14 @@ function renderSeatPickerModal(trip, occupiedMap) {
 }
 
 function seatPickerSelect(seatName) {
-    seatPickerSelected = (seatPickerSelected === seatName) ? '' : seatName;
+    // Порожній рядок → повне скидання (кнопка «Скинути»).
+    if (!seatName) {
+        seatPickerSelected = new Set();
+    } else if (seatPickerSelected.has(seatName)) {
+        seatPickerSelected.delete(seatName);
+    } else {
+        seatPickerSelected.add(seatName);
+    }
     const p = passengers.find(x => x['PAX_ID'] === seatPickerPaxId);
     if (!p) return;
     const calId = p['CAL_ID'] || '';
@@ -5799,6 +5822,9 @@ function seatPickerSelect(seatName) {
     const maxSeats = parseInt(trip.max_seats) || 7;
     const grid = document.getElementById('seatPickerGrid');
     if (grid) grid.innerHTML = renderVan({ layout, maxSeats, hasReserve, occupiedMap, selected: seatPickerSelected, interactive: true });
+    // Оновлюємо лічильник «Обрано: N»
+    const counter = document.getElementById('seatPickerCount');
+    if (counter) counter.textContent = seatPickerSelected.size;
 }
 
 async function saveSeatPicker() {
@@ -5810,25 +5836,52 @@ async function saveSeatPicker() {
 
     const colName = 'Місце в авто';
     const oldVal = p[colName] || '';
-    const newVal = seatPickerSelected;
-    if (newVal === oldVal) { closeSeatPicker(); return; }
+    // Сортуємо числа природно: "2" перед "10". Якщо всі числа — numeric sort,
+    // якщо хоч одне не число — localeCompare (для 'A1','B2',...).
+    const picked = [...seatPickerSelected];
+    const allNumeric = picked.every(s => /^\d+$/.test(s));
+    picked.sort(allNumeric
+        ? (a, b) => parseInt(a) - parseInt(b)
+        : (a, b) => String(a).localeCompare(String(b), undefined, { numeric: true }));
+    const newVal = picked.join(',');
+
+    const oldSeatsCount = parseInt(p['Кількість місць']) || 0;
+    const newSeatsCount = Math.max(1, picked.length); // мінімум 1 (нульове — недоречно)
+    const seatsChanged = newSeatsCount !== oldSeatsCount;
+
+    if (newVal === oldVal && !seatsChanged) { closeSeatPicker(); return; }
 
     p[colName] = newVal;
+    if (seatsChanged && picked.length > 0) p['Кількість місць'] = newSeatsCount;
     closeSeatPicker();
 
     const el = document.getElementById('dv-' + paxId + '-seatInCar');
     if (el) el.textContent = newVal || '—';
+    const seatsEl = document.getElementById('dv-' + paxId + '-seats');
+    if (seatsEl && seatsChanged && picked.length > 0) seatsEl.textContent = String(newSeatsCount);
 
     const sheet = shName || p._sheet || '';
     const res = await apiPost('updateField', { sheet: sheet, pax_id: paxId, col: colName, value: newVal });
-    if (res.ok) {
-        showToast('✅ Місце збережено: ' + (newVal || 'скинуто'));
-        render();
-    } else {
+    if (!res.ok) {
         showToast('❌ ' + (res.error || 'Помилка'));
         p[colName] = oldVal;
         if (el) el.textContent = oldVal || '—';
+        return;
     }
+    // Друга відправка — тільки коли кількість місць справді змінилась.
+    if (seatsChanged && picked.length > 0) {
+        const res2 = await apiPost('updateField', { sheet: sheet, pax_id: paxId, col: 'Кількість місць', value: String(newSeatsCount) });
+        if (!res2.ok) {
+            showToast('⚠️ Місце збережено, але кількість не оновилась: ' + (res2.error || ''));
+            p['Кількість місць'] = oldSeatsCount;
+            if (seatsEl) seatsEl.textContent = String(oldSeatsCount);
+            render();
+            return;
+        }
+    }
+    showToast('✅ Місце збережено: ' + (newVal || 'скинуто')
+        + (seatsChanged && picked.length > 0 ? ' (місць: ' + newSeatsCount + ')' : ''));
+    render();
 }
 
 function closeSeatPicker() {
@@ -5836,6 +5889,7 @@ function closeSeatPicker() {
     if (ov) ov.remove();
     seatPickerPaxId = null;
     seatPickerSheet = null;
+    seatPickerSelected = new Set();
 }
 
 // Trip calendar
