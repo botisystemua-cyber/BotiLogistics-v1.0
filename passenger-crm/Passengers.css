@@ -1808,10 +1808,56 @@ body.route-sort-active #rteTogglePay {
 .loader-text { font-weight: 600; color: var(--primary); font-size: 14px; }
 
 /* BOTTOM NAV (Mobile) */
-.bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; background: white; border-top: 1px solid var(--border); padding: 6px 10px; z-index: 100; display: flex; justify-content: space-around; }
-.nav-item { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 5px 12px; border: none; background: none; font-family: inherit; font-size: 9px; color: var(--text-secondary); cursor: pointer; }
-.nav-item.active { color: var(--accent); }
-.nav-item span:first-child { font-size: 18px; }
+.bottom-nav {
+    display: block;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 400;
+    background: #fff;
+    border-top: 1px solid var(--border);
+    padding: 6px 0;
+    padding-bottom: max(6px, env(safe-area-inset-bottom));
+    box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.06);
+}
+.bottom-nav-items {
+    display: flex;
+    justify-content: space-around;
+}
+.bottom-nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 4px 10px;
+    background: none;
+    border: none;
+    font-family: inherit;
+    font-size: 10px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    border-radius: 8px;
+    transition: all 0.15s;
+    position: relative;
+}
+.bottom-nav-item:active { transform: scale(0.92); }
+.bottom-nav-item .nav-icon { font-size: 20px; }
+.bottom-nav-item.active {
+    color: var(--primary);
+    font-weight: 600;
+}
+.bottom-nav-item.active::after {
+    content: '';
+    position: absolute;
+    top: -6px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 20px;
+    height: 3px;
+    border-radius: 2px;
+    background: var(--primary);
+}
 
 /* TRIP ASSIGN DROPDOWN (on lead card) */
 .trip-assign-wrap { position: relative; width: 100%; }

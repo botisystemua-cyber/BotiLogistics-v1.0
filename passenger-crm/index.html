@@ -477,11 +477,23 @@ $manifest = '../manifest.php' . ($t ? '?name=' . rawurlencode($t) . ($l ? '&logo
 
 <!-- BOTTOM NAV (Mobile) -->
 <nav class="bottom-nav">
-    <button class="nav-item active" id="navPax" onclick="showPaxView('all')"><span>👥</span>Пасажири</button>
-    <button class="nav-item" id="navParcels" onclick="goToCargoModule()"><span>📦</span>Посилки</button>
-    <button class="nav-item" onclick="silentSync(true)"><span>🔄</span>Синхр.</button>
-    <button class="nav-item" onclick="openColumnConfigurator()"><span>⚙️</span>Колонки</button>
-    <button class="nav-item" onclick="openAddModal()"><span>➕</span>Додати</button>
+    <div class="bottom-nav-items">
+        <button class="bottom-nav-item active" id="navPax" onclick="showPaxView('all')">
+            <span class="nav-icon">👥</span> Пасажири
+        </button>
+        <button class="bottom-nav-item" id="navParcels" onclick="goToCargoModule()">
+            <span class="nav-icon">📦</span> Посилки
+        </button>
+        <button class="bottom-nav-item" onclick="silentSync(true)">
+            <span class="nav-icon">🔄</span> Оновити
+        </button>
+        <button class="bottom-nav-item" onclick="openAddModal()">
+            <span class="nav-icon">➕</span> Додати
+        </button>
+        <button class="bottom-nav-item" onclick="openColumnConfigurator()">
+            <span class="nav-icon">⚙️</span> Поля
+        </button>
+    </div>
 </nav>
 
 <!-- COLUMN CONFIGURATOR MODAL -->
