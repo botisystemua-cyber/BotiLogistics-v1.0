@@ -6252,7 +6252,13 @@ function clearAddForm() {
     if (el) el.value = '';
   });
   document.getElementById('fQty').value = '1';
-  document.getElementById('fCurrency').value = 'UAH';
+  // Валюта за замовчуванням: owner currency_defaults (cargo.payment) →
+  // fallback CURR_DEFAULT (main's default_currency) → 'EUR'.
+  var defAddCur = (typeof window.sbGetCurrencyDefault === 'function')
+    ? window.sbGetCurrencyDefault('cargo', 'payment', '') : '';
+  var addCurrencyVal = defAddCur
+    || (typeof CURR_DEFAULT !== 'undefined' ? CURR_DEFAULT : 'EUR');
+  document.getElementById('fCurrency').value = addCurrencyVal;
   document.getElementById('duplicateWarning').classList.remove('visible');
   document.getElementById('duplicateWarning').textContent = '';
   setDeliveryType('np');
