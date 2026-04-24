@@ -18,21 +18,26 @@
 //   ttn_number (колонка M) — див. sql/2026-04-esco-package-rpc-ttn-dedup.sql.
 //
 // РЕЖИМИ
-//   - syncNewPackages() — синк нових рядків (лайв режим).
+//   - syncNewPackages() — live-синк: бере рядки після LAST_ROW_<sheet>.
 //   - importUkrEuRange(28194, 28242) — одноразовий імпорт діапазону УК→ЄВ.
-//     Рядки 28194-28242 уже готові для імпорту за умовою user.
-//   - skipZaizdyHistory() — у всі наявні рядки ЗАЇЗДИ ставить _sync='skipped',
-//     щоб історія не імпортувалась (тільки нові від моменту запуску).
+//     Прогрес НЕ чіпає, дублі відсікає RPC.
+//   - menuStartFromNow_ — ставить LAST_ROW = поточний кінець таблиці,
+//     щоб історію пропустити і синкати лише нові.
 //
 // ТРИГЕРИ (setupTriggers)
 //   - time-driven 5хв → syncNewPackages
 //   - installable onChange → onBotSpreadsheetChange_
 //
+// ПРОГРЕС
+//   Зберігається у PropertiesService як LAST_ROW_<sheetName>.
+//   У таблиці НЕМАЄ службової колонки _sync — щоб не заважала
+//   менеджерам при копіюванні рядків у свою таблицю.
+//
 // ІДЕМПОТЕНТНІСТЬ
-//   3 шари захисту від дублів:
-//    1) GAS: службова колонка _sync у кожному аркуші ('ok PKG_...', 'skipped', 'fail XXX')
-//    2) RPC: UNIQUE (tenant_id, pkg_id) + ON CONFLICT DO NOTHING
-//    3) RPC: додатковий EXISTS-чек по ttn_number для УК→ЄВ
+//   1) GAS: LAST_ROW — не повертаємось до вже оброблених рядків.
+//   2) RPC: UNIQUE (tenant_id, pkg_id) + ON CONFLICT DO NOTHING.
+//      pkg_id = PKG_UK_<smartId> або PKG_EU_<smartId> — унікальний
+//      у межах напрямку.
 //
 // УСТАНОВКА
 //   1. Відкрити «Бот накладні ТТН» → Extensions → Apps Script.
@@ -56,7 +61,10 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const RPC_URL = SUPABASE_URL + '/rest/v1/rpc/create_package_from_sheet';
 const LOG_SHEET_NAME = '_SYNC_LOG';
 const LOG_MAX_ROWS = 5000;
-const SYNC_COL_NAME = '_sync';  // службова колонка в кожному джерельному аркуші
+const MAX_ROWS_PER_RUN = 300;   // захист від 6-хв timeout'а Apps Script
+// Прогрес зберігаємо у ScriptProperties під ключем LAST_ROW_<sheetName>.
+// У таблиці НЕМАЄ службової колонки _sync (щоб не заважати менеджерам
+// при копіюванні рядків у свою таблицю).
 
 // Колонки бот-таблиці (0-based індекси в масиві, 1-based у Sheets API).
 // A=Кг B=Сума C=№ D=Шт E=Адреса отримувача F=Телефон отримувача G=Опис
@@ -153,14 +161,125 @@ function onOpen() {
         .createMenu('📦 Supabase')
         .addItem('Синкнути нові зараз',                   'menuSyncNow_')
         .addItem('Показати лог',                          'menuShowLog_')
+        .addItem('Показати прогрес (LAST_ROW)',           'menuShowProgress_')
         .addSeparator()
         .addItem('Імпорт УК→ЄВ рядки 28194..28242',        'menuImportUkrEuRange_')
-        .addItem('Ігнорувати історію ЗАЇЗДИ (пропустити все наявне)', 'menuSkipZaizdyHistory_')
+        .addItem('Старт з поточного моменту (ігнорувати історію)', 'menuStartFromNow_')
+        .addSeparator()
+        .addItem('🗑 Прибрати старі колонки _sync з таблиці', 'menuDropLegacySyncCols_')
         .addSeparator()
         .addItem('Встановити тригери',                    'setupTriggers')
-        .addItem('Скинути _sync (УВАГА: все наново)',     'menuResetSync_')
+        .addItem('Скинути прогрес (УВАГА: все наново)',    'menuResetProgress_')
         .addToUi();
 }
+
+
+/** Показує у алерті поточний LAST_ROW для обох аркушів. */
+function menuShowProgress_() {
+    const props = PropertiesService.getScriptProperties();
+    const ss = SpreadsheetApp.openById(SHEET_ID);
+    const lines = [];
+    for (const cfg of SHEETS) {
+        const sheet = ss.getSheetByName(cfg.name);
+        const lastRow = sheet ? sheet.getLastRow() : 0;
+        const progress = Number(props.getProperty('LAST_ROW_' + cfg.name) || 1);
+        const pending = Math.max(0, lastRow - progress);
+        lines.push(cfg.name + ': останній оброблений рядок ' + progress +
+                   ' / у таблиці ' + lastRow + ' (чекає: ' + pending + ')');
+    }
+    safeAlert_(lines.join('\n'));
+}
+
+
+/** Встановлює LAST_ROW на поточний кінець таблиці — скрипт ігноруватиме
+ *  всю історію, синкатиме тільки нові рядки, які з'являться далі. */
+function menuStartFromNow_() {
+    let ui = null;
+    try { ui = SpreadsheetApp.getUi(); } catch (e) { }
+    if (ui) {
+        const ans = ui.alert(
+            'Старт з поточного моменту?',
+            'Усі рядки, що ЗАРАЗ є в аркушах, будуть проігноровані.\n' +
+            'У Supabase потраплять тільки нові заявки, додані після цього.\n\nПродовжити?',
+            ui.ButtonSet.YES_NO
+        );
+        if (ans !== ui.Button.YES) return;
+    }
+    const props = PropertiesService.getScriptProperties();
+    const ss = SpreadsheetApp.openById(SHEET_ID);
+    const lines = [];
+    for (const cfg of SHEETS) {
+        const sheet = ss.getSheetByName(cfg.name);
+        if (!sheet) continue;
+        const lastRow = sheet.getLastRow();
+        props.setProperty('LAST_ROW_' + cfg.name, String(lastRow));
+        lines.push(cfg.name + ': LAST_ROW=' + lastRow);
+    }
+    safeAlert_('Готово:\n • ' + lines.join('\n • ') +
+               '\n\nТільки нові рядки після цього моменту підуть у Supabase.');
+}
+
+
+/** Скидає прогрес → скрипт піде по всій таблиці заново (обережно). */
+function menuResetProgress_() {
+    let ui = null;
+    try { ui = SpreadsheetApp.getUi(); } catch (e) { }
+    if (ui) {
+        const ans = ui.alert(
+            'Скинути прогрес для обох аркушів?',
+            'Скрипт пройде по ВСІХ рядках заново (по MAX_ROWS_PER_RUN=300 за виклик).\n' +
+            'Дублі все одно відсікне RPC, але це велике навантаження.\n\nПродовжити?',
+            ui.ButtonSet.YES_NO
+        );
+        if (ans !== ui.Button.YES) return;
+    }
+    const props = PropertiesService.getScriptProperties();
+    for (const cfg of SHEETS) {
+        props.deleteProperty('LAST_ROW_' + cfg.name);
+    }
+    safeAlert_('Прогрес скинуто. Натисни «Синкнути нові зараз» для перезаливу.');
+}
+
+
+/** Видаляє фізично стару колонку _sync з обох аркушів (якщо вона була
+ *  створена попередньою версією скрипта). */
+function menuDropLegacySyncCols_() {
+    let ui = null;
+    try { ui = SpreadsheetApp.getUi(); } catch (e) { }
+    if (ui) {
+        const ans = ui.alert(
+            'Видалити колонку _sync з обох аркушів?',
+            'Колонка _sync більше не потрібна (прогрес тепер у пам\'яті скрипта).\n' +
+            'Видалити її щоб не заважала менеджерам при копіюванні рядків?\n\nПродовжити?',
+            ui.ButtonSet.YES_NO
+        );
+        if (ans !== ui.Button.YES) return;
+    }
+    const ss = SpreadsheetApp.openById(SHEET_ID);
+    const removed = [];
+    for (const cfg of SHEETS) {
+        const sheet = ss.getSheetByName(cfg.name);
+        if (!sheet) continue;
+        const lastCol = sheet.getLastColumn();
+        const headers = lastCol ? sheet.getRange(1, 1, 1, lastCol).getValues()[0] : [];
+        for (let i = 0; i < headers.length; i++) {
+            if (String(headers[i] || '').trim() === '_sync') {
+                sheet.deleteColumn(i + 1);
+                removed.push(cfg.name + ' — кол. ' + (i + 1));
+                break;
+            }
+        }
+    }
+    safeAlert_(removed.length
+        ? 'Видалено:\n • ' + removed.join('\n • ')
+        : 'Колонки _sync не знайдено — вже чисто.');
+}
+
+
+// (застарілі функції з колонкою _sync прибрані.
+//  Тепер прогрес зберігається у PropertiesService. Див. menuStartFromNow_
+//  та menuShowProgress_. Колонка _sync більше не створюється. Якщо стара
+//  є — її можна видалити через меню «🗑 Прибрати старі колонки _sync».)
 
 
 function menuSyncNow_() {
@@ -201,68 +320,10 @@ function importUkrEuRange(rowFrom, rowTo) {
 }
 
 
-function menuSkipZaizdyHistory_() {
-    let ui = null;
-    try { ui = SpreadsheetApp.getUi(); } catch (e) { }
-    if (ui) {
-        const ans = ui.alert(
-            'Ігнорувати історію ЗАЇЗДИ?',
-            'У всі існуючі рядки «ЗАЇЗДИ» буде проставлено _sync="skipped".\n' +
-            'Історію не заливаємо — тільки нові рядки після цього моменту.\n\nПродовжити?',
-            ui.ButtonSet.YES_NO
-        );
-        if (ans !== ui.Button.YES) return;
-    }
-    const ss = SpreadsheetApp.openById(SHEET_ID);
-    const sheet = ss.getSheetByName('ЗАЇЗДИ');
-    if (!sheet) { safeAlert_('Не знайдено аркуш "ЗАЇЗДИ"'); return; }
-
-    const syncCol = ensureSyncColumn_(sheet);
-    const lastRow = sheet.getLastRow();
-    if (lastRow < 2) { safeAlert_('ЗАЇЗДИ порожній — нічого пропускати.'); return; }
-
-    const values = sheet.getRange(2, syncCol, lastRow - 1, 1).getValues();
-    let marked = 0;
-    for (let i = 0; i < values.length; i++) {
-        if (!values[i][0]) {
-            values[i][0] = 'skipped-before-sync';
-            marked++;
-        }
-    }
-    sheet.getRange(2, syncCol, values.length, 1).setValues(values);
-    safeAlert_('Готово: проставлено "skipped-before-sync" у ' + marked + ' рядках.\n' +
-               'Тепер тільки нові заявки потраплять у Supabase.');
-}
-
-
 function menuShowLog_() {
     const ss = SpreadsheetApp.openById(SHEET_ID);
     let sh = ss.getSheetByName(LOG_SHEET_NAME) || ensureLogSheet_(ss);
     try { ss.setActiveSheet(sh); } catch (e) { }
-}
-
-
-function menuResetSync_() {
-    let ui = null;
-    try { ui = SpreadsheetApp.getUi(); } catch (e) { }
-    if (ui) {
-        const ans = ui.alert(
-            'ПОВНИЙ СКИДАННЯ _sync?',
-            'Усі рядки в обох аркушах буде перечитано з нуля.\n' +
-            'Дублі в БД все одно відсіче RPC, але це велике навантаження.\n\nПродовжити?',
-            ui.ButtonSet.YES_NO
-        );
-        if (ans !== ui.Button.YES) return;
-    }
-    const ss = SpreadsheetApp.openById(SHEET_ID);
-    for (const cfg of SHEETS) {
-        const sheet = ss.getSheetByName(cfg.name);
-        if (!sheet) continue;
-        const syncCol = ensureSyncColumn_(sheet);
-        const lastRow = sheet.getLastRow();
-        if (lastRow >= 2) sheet.getRange(2, syncCol, lastRow - 1, 1).clearContent();
-    }
-    safeAlert_('_sync очищений в обох аркушах.');
 }
 
 
@@ -271,31 +332,49 @@ function menuResetSync_() {
 function processSheet_(sheet, cfg, rowFrom, rowTo) {
     const summary = { total: 0, success: 0, duplicate: 0, invalid: 0, failed: 0, skipped: 0 };
 
-    const syncCol = ensureSyncColumn_(sheet);
     const sheetLastRow = sheet.getLastRow();
     if (sheetLastRow < 2) return summary;
 
-    // Діапазон рядків для обробки
-    const startRow = rowFrom ? Math.max(2, rowFrom) : 2;
-    const endRow   = rowTo   ? Math.min(sheetLastRow, rowTo) : sheetLastRow;
-    if (startRow > endRow) return summary;
+    const props = PropertiesService.getScriptProperties();
+    const progressKey = 'LAST_ROW_' + cfg.name;
 
-    // Зчитуємо до колонки _sync (щоб бачити її значення поточне)
-    const numColsToRead = Math.max(cfg.colsToRead, syncCol);
-    const data = sheet.getRange(startRow, 1, endRow - startRow + 1, numColsToRead).getValues();
+    // Режим BULK (явний діапазон rowFrom..rowTo): обробляємо тільки цей діапазон,
+    // прогрес НЕ чіпаємо. Корисно для «Імпорт УК→ЄВ 28194..28242».
+    // Режим LIVE (rowFrom/rowTo=null): беремо все що після LAST_ROW.
+    let startRow, endRow, updateProgress;
+    if (rowFrom || rowTo) {
+        startRow = rowFrom ? Math.max(2, rowFrom) : 2;
+        endRow   = rowTo   ? Math.min(sheetLastRow, rowTo) : sheetLastRow;
+        updateProgress = false;
+    } else {
+        const lastProcessedRow = Number(props.getProperty(progressKey) || 1);
+        startRow = lastProcessedRow + 1;
+        endRow   = sheetLastRow;
+        updateProgress = true;
+    }
+    if (startRow > endRow) {
+        summary.skipped = sheetLastRow - 1;  // все вже синкнуто
+        return summary;
+    }
 
-    const writes = [];  // { rowNum, col, value }
+    // Live-режим: обмежуємо за виклик (захист від 6-хв timeout).
+    const maxToProcess = (rowFrom || rowTo) ? Infinity : MAX_ROWS_PER_RUN;
+    if (updateProgress && (endRow - startRow + 1) > maxToProcess) {
+        endRow = startRow + maxToProcess - 1;
+    }
+
+    const data = sheet.getRange(startRow, 1, endRow - startRow + 1, cfg.colsToRead).getValues();
+
+    let maxProcessedRow = startRow - 1;
 
     for (let i = 0; i < data.length; i++) {
         const row = data[i];
         const rowNum = startRow + i;
 
         const smartId = row[BOT.smart_id];
-        if (!smartId) continue;  // нема ID — пропуск (навіть не лог)
-
-        const syncVal = row[syncCol - 1];
-        if (syncVal && (String(syncVal).indexOf('ok ') === 0 || String(syncVal).indexOf('skip') === 0 || String(syncVal).indexOf('skipped') === 0)) {
-            summary.skipped++;
+        if (!smartId) {
+            // Порожній рядок — просто рухаємось далі, але зарахуємо в прогрес.
+            maxProcessedRow = Math.max(maxProcessedRow, rowNum);
             continue;
         }
 
@@ -305,7 +384,7 @@ function processSheet_(sheet, cfg, rowFrom, rowTo) {
         if (!payload._valid) {
             summary.invalid++;
             logRow_(cfg.name, payload.pkg_id || String(smartId), 'INVALID', 0, payload._invalidReason);
-            writes.push({ rowNum: rowNum, col: syncCol, value: 'invalid: ' + payload._invalidReason });
+            maxProcessedRow = Math.max(maxProcessedRow, rowNum);
             continue;
         }
         delete payload._valid;
@@ -316,23 +395,24 @@ function processSheet_(sheet, cfg, rowFrom, rowTo) {
         if (res.ok && res.duplicate) {
             summary.duplicate++;
             logRow_(cfg.name, payload.pkg_id, 'SKIPPED_DUPLICATE', res.http, 'already in DB');
-            writes.push({ rowNum: rowNum, col: syncCol, value: 'skip_dup ' + payload.pkg_id });
+            maxProcessedRow = Math.max(maxProcessedRow, rowNum);
         } else if (res.ok) {
             summary.success++;
             logRow_(cfg.name, payload.pkg_id, 'SUCCESS', res.http, res.body);
-            writes.push({ rowNum: rowNum, col: syncCol, value: 'ok ' + payload.pkg_id });
+            maxProcessedRow = Math.max(maxProcessedRow, rowNum);
         } else {
             summary.failed++;
             logRow_(cfg.name, payload.pkg_id, 'FAILED', res.http, res.body);
-            writes.push({ rowNum: rowNum, col: syncCol, value: 'fail ' + res.http });
+            // НЕ оновлюємо maxProcessedRow — цей рядок наступний запуск перепробує.
+            break;
         }
 
         Utilities.sleep(120);
     }
 
-    // Bulk-write _sync
-    for (const w of writes) {
-        sheet.getRange(w.rowNum, w.col).setValue(w.value);
+    // Оновити прогрес (тільки у LIVE-режимі)
+    if (updateProgress && maxProcessedRow > (Number(props.getProperty(progressKey) || 1))) {
+        props.setProperty(progressKey, String(maxProcessedRow));
     }
 
     return summary;
@@ -343,7 +423,10 @@ function processSheet_(sheet, cfg, rowFrom, rowTo) {
 
 function buildPayload_(row, cfg) {
     const smartId = row[BOT.smart_id];
-    const pkg_id = 'PKG_' + String(smartId).trim();
+    // pkg_id містить префікс напрямку, щоб той самий SmartSender-ID
+    // міг бути і в УК→ЄВ, і в ЄВ→УК без конфлікту UNIQUE(tenant, pkg_id).
+    const prefix = cfg.direction === 'Україна-ЄВ' ? 'PKG_UK_' : 'PKG_EU_';
+    const pkg_id = prefix + String(smartId).trim();
 
     const payload = {
         pkg_id:            pkg_id,
@@ -385,7 +468,7 @@ function buildPayload_(row, cfg) {
     }
 
     // Валідація
-    if (!payload.pkg_id || payload.pkg_id === 'PKG_' || payload.pkg_id === 'PKG_undefined') {
+    if (!payload.pkg_id || /^PKG_(UK|EU)_$/.test(payload.pkg_id) || /PKG_(UK|EU)_undefined$/.test(payload.pkg_id)) {
         return Object.assign(payload, { _valid: false, _invalidReason: 'немає Ід (SmartSender)' });
     }
 
@@ -474,32 +557,6 @@ function callRpc_(payload) {
 
 function safeParse_(body) {
     try { return JSON.parse(body); } catch (e) { return body; }
-}
-
-
-// ─── _sync COLUMN ─────────────────────────────────────────────────────────
-
-function ensureSyncColumn_(sheet) {
-    const lastCol = sheet.getLastColumn();
-    const headers = lastCol ? sheet.getRange(1, 1, 1, lastCol).getValues()[0] : [];
-    for (let i = 0; i < headers.length; i++) {
-        if (String(headers[i] || '').trim() === SYNC_COL_NAME) {
-            // Ще раз страхуємось: знімаємо валідацію (раптом хтось налаштував)
-            sheet.getRange(1, i + 1, sheet.getMaxRows(), 1).clearDataValidations();
-            return i + 1;
-        }
-    }
-    // Потрібно НОВУ колонку за межами існуючих даних
-    let newCol = lastCol + 1;
-    // Якщо такої колонки фізично ще нема — додаємо
-    if (newCol > sheet.getMaxColumns()) {
-        sheet.insertColumnsAfter(sheet.getMaxColumns(), newCol - sheet.getMaxColumns());
-    }
-    // КРИТИЧНО: знімаємо data validation з усього стовпця, інакше валідація
-    // (напр. випадні списки «Сергій/Роман/...») блокує запис 'ok PKG_...'.
-    sheet.getRange(1, newCol, sheet.getMaxRows(), 1).clearDataValidations();
-    sheet.getRange(1, newCol).setValue(SYNC_COL_NAME).setFontWeight('bold').setBackground('#eeeeee');
-    return newCol;
 }
 
 

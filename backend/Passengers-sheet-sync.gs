@@ -65,8 +65,13 @@ const SHEETS = [
 // у різних регістрах («місце» / «Місце»), тому без нормалізації не зійдеться.
 // Колонки, яких тут немає (Дата ШВ, Заброньовано, Вільні УК, Вільні ШВ,
 // заброньовано [нижній регістр]) — свідомо ігноруємо.
+//
+// ВАЖЛИВО: колонка «Id» у Google Sheets — це SmartSender ID (наприклад
+// 163051858), а НЕ PAX-ID. Тож мапимо її у smart_id. pax_id генерується
+// окремо у buildPayload_() як 'PAX_' + smart_id — це стабільний natural
+// key для ідемпотентності (UNIQUE (tenant_id, pax_id)).
 const HEADER_TO_PAYLOAD = {
-    'id':                  'pax_id',
+    'id':                  'smart_id',          // SmartSender ID → smart_id
     'піп':                 'full_name',
     'телефон пасажира':    'phone',
     'телефон юзера':       'registrar_phone',
@@ -390,9 +395,16 @@ function buildPayload_(row, headerIdx, cfg) {
         payload[key] = String(raw).trim();
     }
 
+    // Генеруємо pax_id з smart_id (SmartSender ID).
+    // Це дає стабільний natural key — повторна вставка того ж Id ловиться
+    // UNIQUE (tenant_id, pax_id) + ON CONFLICT DO NOTHING у RPC.
+    if (payload.smart_id) {
+        payload.pax_id = 'PAX_' + String(payload.smart_id).trim();
+    }
+
     // Валідація.
     if (!payload.pax_id) {
-        return Object.assign(payload, { _valid: false, _invalidReason: 'немає pax_id' });
+        return Object.assign(payload, { _valid: false, _invalidReason: 'немає Id/smart_id' });
     }
     if (!payload.full_name && !payload.phone) {
         return Object.assign(payload, {
@@ -418,9 +430,35 @@ function normalizePhone_(raw) {
 function toDateMs_(val) {
     if (val === '' || val === null || val === undefined) return null;
     if (val instanceof Date) return val.getTime();
-    const d = new Date(val);
-    const ms = d.getTime();
-    return isNaN(ms) ? null : ms;
+    const s = String(val).trim();
+    if (!s) return null;
+
+    // Спроба 1: ISO / стандартний формат (2026-04-24 або 2026-04-24 18:50:21).
+    let d = new Date(s);
+    if (!isNaN(d.getTime())) return d.getTime();
+
+    // Спроба 2: DD.MM.YYYY [HH:mm[:ss]]
+    let m = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
+    if (m) {
+        d = new Date(
+            Number(m[3]),
+            Number(m[2]) - 1,
+            Number(m[1]),
+            Number(m[4] || 0),
+            Number(m[5] || 0),
+            Number(m[6] || 0)
+        );
+        if (!isNaN(d.getTime())) return d.getTime();
+    }
+
+    // Спроба 3: DD/MM/YYYY
+    m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (m) {
+        d = new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]));
+        if (!isNaN(d.getTime())) return d.getTime();
+    }
+
+    return null;
 }
 
 
