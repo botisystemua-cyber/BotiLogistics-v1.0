@@ -1034,6 +1034,10 @@ body {
 .dir-badge-ua-eu { background: #dbeafe; color: #1d4ed8; }
 .dir-badge-eu-ua { background: #d1fae5; color: #047857; }
 .card-ttn { font-size: 11px; color: var(--text-secondary); font-weight: 600; }
+/* Клац по ТТН / телефону → копіює значення. Курсор + легкий hover-підсвіт. */
+.copyable { cursor: copy; transition: background 0.12s, transform 0.08s; }
+.copyable:hover { background: rgba(146, 64, 14, 0.08); }
+.copyable:active { transform: scale(0.97); }
 .badge-weight {
   background: #e0e7ff; color: #3730a3;
   padding: 2px 8px; border-radius: 12px;

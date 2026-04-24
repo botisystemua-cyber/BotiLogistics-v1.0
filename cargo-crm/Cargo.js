@@ -481,6 +481,34 @@ async function apiPost(action, params = {}) {
 }
 
 // ===== [SECT-TOAST] TOAST NOTIFICATIONS =====
+// Copy-to-clipboard helper: використовується клік по ТТН / телефону на
+// картці ліда. Працює через navigator.clipboard (сучасні браузери) із
+// fallback на document.execCommand для iOS Safari у PWA. Показує toast.
+function copyToClipboard(text, successMsg) {
+  const value = String(text || '');
+  if (!value) return;
+  const ok = () => showToast('📋 ' + (successMsg || 'Скопійовано') + ': ' + value, 'success');
+  const fail = () => showToast('Не вдалось скопіювати', 'error');
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(value).then(ok).catch(() => _fallbackCopy(value, ok, fail));
+  } else {
+    _fallbackCopy(value, ok, fail);
+  }
+}
+function _fallbackCopy(value, ok, fail) {
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = value;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.focus(); ta.select();
+    const done = document.execCommand('copy');
+    document.body.removeChild(ta);
+    done ? ok() : fail();
+  } catch (e) { fail(); }
+}
+
 function showToast(message, type = 'info') {
   const toast = document.createElement('div');
   toast.style.cssText = `
@@ -1150,7 +1178,7 @@ function renderCard(p, routeCtx) {
     : '';
 
   // TTN display
-  const ttnHtml = (isUE && ttn) ? `<span class="card-ttn">TTH: ${highlightMatch(ttn)}</span>` : '';
+  const ttnHtml = (isUE && ttn) ? `<span class="card-ttn copyable" onclick="event.stopPropagation(); copyToClipboard('${String(ttn).replace(/'/g, "\\'")}', 'ТТН скопійовано')" title="Клац — скопіювати ТТН">TTH: ${highlightMatch(ttn)}</span>` : '';
 
   // Route strip — завжди видимий. Зелений «✅ В маршруті» якщо призначено,
   // жовтий «⚠️ Без маршруту» якщо ще ні. Клік — відкриває модалку призначення
@@ -1177,8 +1205,14 @@ function renderCard(p, routeCtx) {
   if (visCols.includes('statusPkg') && statusPkg) metaHtml += `<span class="meta-tag">${escapeHtml(statusPkg)}</span>`;
   if (visCols.includes('smartId') && p['Ід_смарт']) metaHtml += `<span class="meta-tag">🆔 ${highlightMatch(String(p['Ід_смарт']))}</span>`;
   if (visCols.includes('innerNum') && p['Внутрішній №']) metaHtml += `<span class="meta-tag">🔢 №${highlightMatch(String(p['Внутрішній №']))}</span>`;
-  if (visCols.includes('phone') && phone) metaHtml += `<span class="meta-tag">📞 ${highlightMatch(phone)}</span>`;
-  if (visCols.includes('phoneRecv') && receiverPhone) metaHtml += `<span class="meta-tag">📱 ${highlightMatch(receiverPhone)}</span>`;
+  if (visCols.includes('phone') && phone) {
+    const _sp = String(phone).replace(/'/g, "\\'");
+    metaHtml += `<span class="meta-tag copyable" onclick="event.stopPropagation(); copyToClipboard('${_sp}', 'Номер скопійовано')" title="Клац — скопіювати номер">📞 ${highlightMatch(phone)}</span>`;
+  }
+  if (visCols.includes('phoneRecv') && receiverPhone) {
+    const _sr = String(receiverPhone).replace(/'/g, "\\'");
+    metaHtml += `<span class="meta-tag copyable" onclick="event.stopPropagation(); copyToClipboard('${_sr}', 'Номер скопійовано')" title="Клац — скопіювати номер">📱 ${highlightMatch(receiverPhone)}</span>`;
+  }
   if (visCols.includes('tag') && tag) metaHtml += `<span class="meta-tag ${tag === 'VIP' || tag === 'срочна' ? 'tag-vip' : ''}">#${highlightMatch(tag)}</span>`;
   if (visCols.includes('note') && note) {
     const noteShort = note.substring(0, 30) + (note.length > 30 ? '…' : '');
