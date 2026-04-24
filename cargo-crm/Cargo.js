@@ -6163,8 +6163,6 @@ async function archiveMassDelete() {
   }
 }
 
-function createRoute() { alert('Створення нового маршруту'); }
-
 // ===== [SECT-ADDFORM] ADD PARCEL FORM =====
 function openAddForm() {
   // 'new24' — це віртуальна вкладка (фільтр за свіжістю), не реальний напрям.

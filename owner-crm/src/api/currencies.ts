@@ -57,9 +57,8 @@ export async function getCurrencySettings(tenantId: string): Promise<CurrencySet
   const rows = data ?? [];
   const enabled = parseEnabled(rows.find(r => r.setting_name === SN_SUPPORTED)?.setting_value);
   const rawDefault = rows.find(r => r.setting_name === SN_DEFAULT)?.setting_value?.trim() ?? '';
-  const def: CurrencyCode = isCurrencyCode(rawDefault) && enabled.includes(rawDefault)
-    ? rawDefault
-    : (enabled[0] ?? DEFAULT_DEFAULT);
+  // Default та enabled — незалежні. EUR — фолбек якщо нічого не збережено.
+  const def: CurrencyCode = isCurrencyCode(rawDefault) ? rawDefault : DEFAULT_DEFAULT;
   return { default: def, enabled };
 }
 
@@ -69,9 +68,6 @@ export async function saveCurrencySettings(
 ): Promise<void> {
   if (settings.enabled.length === 0) {
     throw new Error('Має бути увімкнена хоча б одна валюта');
-  }
-  if (!settings.enabled.includes(settings.default)) {
-    throw new Error('Валюта за замовчуванням має бути серед увімкнених');
   }
   await upsertSetting(tenantId, SN_DEFAULT, settings.default, 'Система', 'Валюта за замовчуванням');
   await upsertSetting(tenantId, SN_SUPPORTED, settings.enabled.join(','), 'Система', 'Підтримувані валюти');
