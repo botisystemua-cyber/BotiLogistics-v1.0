@@ -3289,11 +3289,10 @@ function renderCard(p) {
             ${tripStrip}
         </div>
         <div class="card-details ${isOpen?'show':''}" id="details-${id}">${isOpen ? renderDetails(p) : ''}</div>
-        <!-- === ПАНЕЛЬ ДІЙ ЛІДА: 4 кнопки в ряд (flex). Показується при ▼ === -->
+        <!-- === ПАНЕЛЬ ДІЙ ЛІДА: показується при ▼. Редагування полів — через олівчики прямо в картці === -->
         <div class="card-actions ${isActionsOpen?'show':''}" id="actions-${id}">
             <button class="btn-card-action btn-call" onclick="window.open('tel:${cleanPhone}')">📞 Дзвінок</button>
             <button class="btn-card-action btn-write" onclick="event.stopPropagation(); openMessengerPopup('${cleanPhone}','${smartId}')">✉️ Писати</button>
-            <button class="btn-card-action btn-edit" onclick="event.stopPropagation(); openEditPax('${id}')">✏️ Редагувати</button>
             <button class="btn-card-action" style="background:#ede9fe;color:#7c3aed;" onclick="event.stopPropagation(); toggleTripAssignDD('${id}')">🚐 Рейс</button>
             <button class="btn-card-action" style="background:#f3f4f6;color:#6b7280;" onclick="event.stopPropagation(); archivePax('${id}','${name}')">📦 Архів</button>
             <button class="btn-card-action btn-delete" onclick="deletePax('${id}','${p._sheet||''}','${name}')">🗑️ Видалити</button>
