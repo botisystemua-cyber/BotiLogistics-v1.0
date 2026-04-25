@@ -6362,7 +6362,24 @@ function closeSideMenu() {
 var _ACCORDION_SECTIONS = ['pax', 'paxCal', 'trips', 'routes'];
 function _capSection(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 
+// Тимчасово прибирає скрол з desktop sidebar на час акордеон-анімації, щоб
+// він не з'являвся-зникав при кожному перемиканні секцій (max-height двох
+// секцій ненадовго розпирає висоту). Тривалість має >= тривалості transition
+// у CSS (.pc-sidebar-content max-height — 0.4s).
+var _pcSidebarToggleTimer = null;
+function _flashPcSidebarNoScroll() {
+    var sb = document.querySelector('.pc-sidebar');
+    if (!sb) return;
+    sb.classList.add('is-toggling');
+    if (_pcSidebarToggleTimer) clearTimeout(_pcSidebarToggleTimer);
+    _pcSidebarToggleTimer = setTimeout(function() {
+        sb.classList.remove('is-toggling');
+        _pcSidebarToggleTimer = null;
+    }, 450);
+}
+
 function setActiveAccordion(section) {
+    _flashPcSidebarNoScroll();
     // Desktop sidebar
     _ACCORDION_SECTIONS.forEach(function(s) {
         var c = document.getElementById('pcSection' + _capSection(s));
@@ -6418,6 +6435,7 @@ function togglePcSection(section) {
         setActiveAccordion(section);
     } else {
         // Вже відкрита — згортаємо лише її.
+        _flashPcSidebarNoScroll();
         c.classList.add('collapsed');
         var h = c.previousElementSibling;
         if (h) h.classList.add('collapsed');

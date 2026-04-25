@@ -130,6 +130,10 @@ body {
   flex-shrink: 0;
 }
 .sidebar.collapsed { width: 0; overflow: hidden; padding: 0; }
+/* Під час анімації акордеону (max-height у sidebar-section-body) обидві секції
+   на коротку мить мають ненульову висоту, контент розпирає sidebar і
+   overflow-y:auto показує скрол → знімаємо його на час transition. */
+.sidebar.is-toggling { overflow-y: hidden; }
 
 /* Sidebar toggle button */
 .sidebar-toggle-btn {

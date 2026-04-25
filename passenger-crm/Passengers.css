@@ -67,6 +67,10 @@ body { font-family: 'Montserrat', sans-serif; background: var(--bg-main); color:
     min-width: 300px;
 }
 .pc-sidebar.collapsed-sidebar { width: 0; min-width: 0; overflow: hidden; padding: 0; box-shadow: none; }
+/* Під час акордеон-анімації обидві секції мають ненульову висоту → контент
+   sidebar коротко перевищує висоту вікна, з'являється скрол справа
+   («ефект кліку»). Прибираємо overflow на час transition. */
+.pc-sidebar.is-toggling { overflow-y: hidden; }
 .pc-sidebar-collapse-btn {
     display: none; position: fixed; top: 60px; left: 300px; z-index: 150;
     width: 24px; height: 48px; background: white; border: 1px solid var(--border); border-left: none;

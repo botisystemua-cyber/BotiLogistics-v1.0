@@ -3310,6 +3310,22 @@ function _exitArchiveView() {
   }
 }
 
+// Тимчасово прибирає скрол з desktop-sidebar на час акордеон-анімації, щоб
+// він не з'являвся-зникав на кожному перемиканні секцій (max-height двох
+// секцій ненадовго розпирає висоту сайдбара). Тривалість має >= тривалості
+// transition у CSS (.sidebar-section-body — 0.32s).
+var _sidebarToggleTimer = null;
+function _flashSidebarNoScroll() {
+  var sb = document.querySelector('.sidebar');
+  if (!sb) return;
+  sb.classList.add('is-toggling');
+  if (_sidebarToggleTimer) clearTimeout(_sidebarToggleTimer);
+  _sidebarToggleTimer = setTimeout(function() {
+    sb.classList.remove('is-toggling');
+    _sidebarToggleTimer = null;
+  }, 360);
+}
+
 // Відкриває одну секцію і згортає решту. Якщо попередня секція існувала і
 // відрізнялась — скидаємо її фільтри. name=null → згорнути всі (режим архів/зведення).
 function setActiveSidebarSection(name) {
@@ -3317,6 +3333,7 @@ function setActiveSidebarSection(name) {
   // вивести з архіву. name=null використовує сам toggleArchiveView для
   // згортання меню — там виходити не треба.
   if (name) _exitArchiveView();
+  _flashSidebarNoScroll();
   var prev = _activeSidebarSection;
   if (prev && prev !== name) {
     _resetSidebarSectionFilter(prev);
@@ -3376,6 +3393,7 @@ function toggleSection(header) {
   var name = sec && sec.getAttribute('data-section');
   if (!name) {
     // Fallback для секцій без data-section
+    _flashSidebarNoScroll();
     var body0 = header.nextElementSibling;
     var tg0 = header.querySelector('.toggle');
     if (body0) body0.classList.toggle('hidden');
@@ -3387,6 +3405,7 @@ function toggleSection(header) {
   if (isCollapsed) {
     setActiveSidebarSection(name);
   } else {
+    _flashSidebarNoScroll();
     if (body) body.classList.add('hidden');
     var tg = header.querySelector('.toggle');
     if (tg) tg.classList.remove('open');
