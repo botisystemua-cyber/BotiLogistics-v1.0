@@ -6611,8 +6611,74 @@ function openAddForm() {
   clearAddForm();
   setAddDirection(addFormDirection);
   initSwissPoints();
+  // Застосовуємо owner-конфіг (system_settings.fill_form_cargo): ховаємо
+  // [data-field-key=…] і блок SMS-парсера якщо власник їх вимкнув.
+  applyFillFormConfig();
   document.getElementById('addFormOverlay').classList.add('open');
   document.body.style.overflow = 'hidden';
+}
+
+// ===== [SECT-FILL-FORM-CONFIG] OWNER-CONFIGURED FIELDS =====
+// Власник у owner-crm обирає, які поля показувати у формі «Додати посилку».
+// Зберігається як JSON у system_settings.setting_value (key='fill_form_cargo').
+// Якщо рядка немає або кеш порожній — поводимось як «все увімкнено»,
+// зберігаючи ту саму поведінку, що була до інтеграції.
+let _fillFormCargoCfg = null;            // { smsParser, fields } | null
+let _fillFormCargoCfgLoaded = false;     // чи був хоч один успішний load
+
+async function loadFillFormConfig() {
+  // Запит лише раз за сесію; якщо власник зміняв — менеджер натисне F5.
+  if (_fillFormCargoCfgLoaded) return _fillFormCargoCfg;
+  try {
+    const TENANT = (typeof TENANT_ID !== 'undefined') ? TENANT_ID
+                 : (typeof window !== 'undefined' ? window.TENANT_ID : null);
+    if (!TENANT || typeof sb === 'undefined' || !sb || !sb.from) {
+      _fillFormCargoCfgLoaded = true;
+      return null;
+    }
+    const { data, error } = await sb
+      .from('system_settings')
+      .select('setting_value')
+      .eq('tenant_id', TENANT)
+      .eq('setting_name', 'fill_form_cargo')
+      .limit(1);
+    if (error) throw error;
+    const raw = data && data[0] && data[0].setting_value;
+    _fillFormCargoCfg = raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    console.warn('[fillFormCfg] load failed, using defaults:', e);
+    _fillFormCargoCfg = null;
+  }
+  _fillFormCargoCfgLoaded = true;
+  return _fillFormCargoCfg;
+}
+
+// Синхронно застосовує конфіг. Якщо ще не завантажений — стартує load
+// у фоні, наступне відкриття форми вже з ним. До цього — нічого не ховаємо
+// (форма виглядає рівно як без фічі).
+function applyFillFormConfig() {
+  const cfg = _fillFormCargoCfg;
+  if (!_fillFormCargoCfgLoaded) {
+    loadFillFormConfig().then(() => {
+      // Якщо форма ще відкрита — застосуємо одразу.
+      const overlay = document.getElementById('addFormOverlay');
+      if (overlay && overlay.classList.contains('open')) applyFillFormConfig();
+    });
+    return;
+  }
+  // Кожне поле: data-field-key="X" → показуємо якщо cfg.fields[X] !== false
+  // (тобто ввімкнено або просто немає в конфігу). Без cfg — все видиме.
+  document.querySelectorAll('[data-field-key]').forEach(el => {
+    const key = el.getAttribute('data-field-key');
+    const enabled = !cfg || !cfg.fields || cfg.fields[key] !== false;
+    el.style.display = enabled ? '' : 'none';
+  });
+  // SMS-парсер: ховаємо ВСЮ секцію (не лишаємо порожнє місце).
+  const smsSec = document.querySelector('[data-section-key="smsParser"]');
+  if (smsSec) {
+    const smsEnabled = !cfg || cfg.smsParser !== false;
+    smsSec.style.display = smsEnabled ? '' : 'none';
+  }
 }
 
 function closeAddForm() {
@@ -6855,32 +6921,31 @@ async function saveParcel() {
 
   if (dir === 'eu') {
     // EU → UA
+    // Обов'язкові: телефон отримувача + адреса доставки. Решта (ПІБ, адреса
+    // відправника, телефон відправника тощо) — опціональні; власник може
+    // їх ховати у формі через owner-crm налаштування.
     const sender = document.getElementById('fSender').value.trim();
     const phone = document.getElementById('fPhone').value.trim();
     const addressFrom = document.getElementById('fAddressFrom').value.trim();
     const receiver = document.getElementById('fReceiver').value.trim();
     const phoneReceiver = document.getElementById('fPhoneReceiver').value.trim();
 
-    if (!sender) errors.push('Піб відправника');
-    if (!phone) errors.push('Телефон відправника');
-    if (!addressFrom) errors.push('Адреса відправника');
-    if (!receiver) errors.push('ПІБ отримувача');
     if (!phoneReceiver) errors.push('Телефон отримувача');
 
     let addressTo = '';
     if (deliveryType === 'np') {
       const cityNP = document.getElementById('fCityNP').value.trim();
-      if (!cityNP) errors.push('Нова Пошта (місто + відділення)');
+      if (!cityNP) errors.push('Адреса доставки (Нова Пошта)');
       addressTo = 'НП: ' + cityNP;
     } else {
       const addrCity = document.getElementById('fAddrCity').value.trim();
       const addrStreet = document.getElementById('fAddrStreet').value.trim();
       const addrHouse = document.getElementById('fAddrHouse').value.trim();
       const addrApt = document.getElementById('fAddrApt').value.trim();
-      if (!addrCity) errors.push('Місто');
-      if (!addrStreet) errors.push('Вулиця');
-      if (!addrHouse) errors.push('Будинок');
-      addressTo = [addrCity, addrStreet, 'буд.' + addrHouse, addrApt ? 'кв.' + addrApt : ''].filter(Boolean).join(', ');
+      // Адресну доставку вимагаємо мінімум місто+вулицю+будинок як «повну
+      // адресу», бо без них кур'єр не довезе. Це і є «адреса доставки».
+      if (!addrCity || !addrStreet || !addrHouse) errors.push('Адреса доставки (місто, вулиця, будинок)');
+      addressTo = [addrCity, addrStreet, addrHouse ? 'буд.' + addrHouse : '', addrApt ? 'кв.' + addrApt : ''].filter(Boolean).join(', ');
     }
 
     if (errors.length > 0) {
@@ -6901,11 +6966,12 @@ async function saveParcel() {
     };
   } else {
     // UA → EU
+    // Обов'язкові: телефон отримувача + адреса доставки в Європі.
+    // ПІБ опціональне (може бути сховане owner-конфігом).
     const receiverUE = document.getElementById('fReceiverUE').value.trim();
     const phoneReceiverUE = document.getElementById('fPhoneReceiverUE').value.trim();
     const addressTo = document.getElementById('fAddressTo').value.trim();
 
-    if (!receiverUE) errors.push('Піб отримувача');
     if (!phoneReceiverUE) errors.push('Телефон отримувача');
     if (!addressTo) errors.push('Адреса в Європі');
 
