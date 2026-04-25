@@ -153,18 +153,10 @@ let routeSummary = null;
 let activeRouteIdx = null;
 let currentView = 'parcels'; // 'parcels' | 'route' | 'dispatch' | 'expenses' | 'summary'
 
-// Валюти — дефолт, живий список керується з owner-crm через system_settings.
-// CURR_OVERRIDES — per-field перевизначення (напр. НП у UAH коли основна CHF).
+// Валюти — дефолт, живий список керується з owner-crm через system_settings
 const CURR_MASTER = ['UAH','EUR','USD','CHF','PLN','CZK','GBP','SEK','NOK','DKK','HUF','RON'];
 let CURR_ENABLED = ['UAH','EUR','USD','CHF','PLN','CZK'];
 let CURR_DEFAULT = 'EUR';
-let CURR_OVERRIDES = {}; // { package_payment: 'UAH', package_np: 'UAH', ... }
-
-function curDefaultFor(fieldKey) {
-  const ov = CURR_OVERRIDES[fieldKey];
-  if (ov && CURR_ENABLED.includes(ov)) return ov;
-  return CURR_DEFAULT;
-}
 
 async function loadCurrencySettings() {
   try {
@@ -173,48 +165,29 @@ async function loadCurrencySettings() {
       .from('system_settings')
       .select('setting_name, setting_value')
       .eq('tenant_id', TENANT_ID)
-      .in('setting_name', ['default_currency', 'supported_currencies', 'currency_overrides']);
+      .in('setting_name', ['default_currency', 'supported_currencies']);
     if (error) throw error;
     const rows = data || [];
     const sup = rows.find(r => r.setting_name === 'supported_currencies');
     const def = rows.find(r => r.setting_name === 'default_currency');
-    const ovr = rows.find(r => r.setting_name === 'currency_overrides');
     if (sup && sup.setting_value) {
       const codes = String(sup.setting_value).split(',').map(s => s.trim()).filter(c => CURR_MASTER.includes(c));
       if (codes.length > 0) CURR_ENABLED = codes;
     }
     const defCode = def && def.setting_value ? String(def.setting_value).trim() : '';
     CURR_DEFAULT = CURR_ENABLED.includes(defCode) ? defCode : CURR_ENABLED[0];
-    if (ovr && ovr.setting_value) {
-      try {
-        const obj = JSON.parse(ovr.setting_value);
-        if (obj && typeof obj === 'object') {
-          const clean = {};
-          for (const [k, v] of Object.entries(obj)) {
-            if (typeof v === 'string' && CURR_MASTER.includes(v)) clean[k] = v;
-          }
-          CURR_OVERRIDES = clean;
-        }
-      } catch (_) { CURR_OVERRIDES = {}; }
-    }
   } catch (e) {
     console.warn('[currency] load failed, using defaults:', e);
   }
 }
 
-// Мапа: DOM id → ключ поля (для per-field overrides).
-const PKG_CURRENCY_FIELD_KEYS = {
-  fCurrency: 'package_payment',
-  fill_currency: 'package_payment',
-};
-
 function applyCurrencyOptionsToSelects() {
-  Object.entries(PKG_CURRENCY_FIELD_KEYS).forEach(([id, fieldKey]) => {
+  ['fCurrency', 'fill_currency'].forEach(id => {
     const sel = document.getElementById(id);
     if (!sel) return;
     const prev = sel.value;
     sel.innerHTML = CURR_ENABLED.map(c => `<option value="${c}">${c}</option>`).join('');
-    sel.value = CURR_ENABLED.includes(prev) ? prev : curDefaultFor(fieldKey);
+    sel.value = CURR_ENABLED.includes(prev) ? prev : CURR_DEFAULT;
   });
 }
 let routeData = []; // current route sheet data
@@ -2320,8 +2293,8 @@ function openFillModal(pkgId) {
     if (cur != null && cur !== '') {
       el.value = cur;
     } else if (inputId === 'fill_currency') {
-      // Валюта за замовчуванням — з налаштувань власника (з урахуванням per-field overrides)
-      el.value = curDefaultFor('package_payment');
+      // Валюта за замовчуванням — з налаштувань власника (system_settings.default_currency)
+      el.value = CURR_DEFAULT;
     } else if (el.tagName === 'SELECT') {
       // select: лишаємо <option selected>, що стоїть у HTML
     } else {
@@ -6261,7 +6234,7 @@ function clearAddForm() {
     if (el) el.value = '';
   });
   document.getElementById('fQty').value = '1';
-  document.getElementById('fCurrency').value = curDefaultFor('package_payment');
+  document.getElementById('fCurrency').value = 'UAH';
   document.getElementById('duplicateWarning').classList.remove('visible');
   document.getElementById('duplicateWarning').textContent = '';
   setDeliveryType('np');
@@ -6521,7 +6494,7 @@ async function saveParcel() {
       'Опис': document.getElementById('fDescription').value || '',
       'Кількість позицій': document.getElementById('fQty').value || '1',
       'Сума': document.getElementById('fSum').value || '',
-      'Валюта оплати': document.getElementById('fCurrency').value || curDefaultFor('package_payment'),
+      'Валюта оплати': document.getElementById('fCurrency').value || 'UAH',
       'Примітка': document.getElementById('fNote').value || ''
     };
   }

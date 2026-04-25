@@ -206,20 +206,10 @@ const READONLY_FIELDS = ['pax_id','dateCreated','sourceSheet','cliId','bookingId
 // виправити переплутані значення без розблокування pax_id та інших.
 const EDITABLE_OVERRIDE_FIELDS = ['smartId'];
 
-// Валюти — дефолт, живий список керується з owner-crm через system_settings.
-// CURR_OVERRIDES — per-field перевизначення (наприклад завдаток у UAH навіть коли основна EUR).
+// Валюти — дефолт, живий список керується з owner-crm через system_settings
 const CURR_MASTER = ['UAH','EUR','USD','CHF','PLN','CZK','GBP','SEK','NOK','DKK','HUF','RON'];
 let CURR_ENABLED = ['UAH','EUR','USD','CHF','PLN','CZK'];
 let CURR_DEFAULT = 'EUR';
-let CURR_OVERRIDES = {}; // { passenger_ticket: 'UAH', ... }
-
-// Повертає валюту за замовчуванням для конкретного поля.
-// Якщо є override і він у списку увімкнених — бере його; інакше глобальний CURR_DEFAULT.
-function curDefaultFor(fieldKey) {
-    const ov = CURR_OVERRIDES[fieldKey];
-    if (ov && CURR_ENABLED.includes(ov)) return ov;
-    return CURR_DEFAULT;
-}
 
 const SELECT_OPTIONS = {
     leadStatus: ['Новий','В роботі','Підтверджено','Відмова'],
@@ -238,49 +228,29 @@ async function loadCurrencySettings() {
             .from('system_settings')
             .select('setting_name, setting_value')
             .eq('tenant_id', TENANT_ID)
-            .in('setting_name', ['default_currency', 'supported_currencies', 'currency_overrides']);
+            .in('setting_name', ['default_currency', 'supported_currencies']);
         if (error) throw error;
         const rows = data || [];
         const sup = rows.find(r => r.setting_name === 'supported_currencies');
         const def = rows.find(r => r.setting_name === 'default_currency');
-        const ovr = rows.find(r => r.setting_name === 'currency_overrides');
         if (sup && sup.setting_value) {
             const codes = String(sup.setting_value).split(',').map(s => s.trim()).filter(c => CURR_MASTER.includes(c));
             if (codes.length > 0) CURR_ENABLED = codes;
         }
         const defCode = def && def.setting_value ? String(def.setting_value).trim() : '';
         CURR_DEFAULT = CURR_ENABLED.includes(defCode) ? defCode : CURR_ENABLED[0];
-        if (ovr && ovr.setting_value) {
-            try {
-                const obj = JSON.parse(ovr.setting_value);
-                if (obj && typeof obj === 'object') {
-                    const clean = {};
-                    for (const [k, v] of Object.entries(obj)) {
-                        if (typeof v === 'string' && CURR_MASTER.includes(v)) clean[k] = v;
-                    }
-                    CURR_OVERRIDES = clean;
-                }
-            } catch (_) { CURR_OVERRIDES = {}; }
-        }
     } catch (e) {
         console.warn('[currency] load failed, using defaults:', e);
     }
 }
 
-// Мапа: DOM id <select> → ключ поля для per-field overrides.
-const PAX_CURRENCY_FIELD_KEYS = {
-    fCurrency: 'passenger_ticket',
-    fCurrencyDeposit: 'passenger_deposit',
-    fCurrencyWeight: 'passenger_baggage',
-};
-
 function applyCurrencyOptionsToSelects() {
-    Object.entries(PAX_CURRENCY_FIELD_KEYS).forEach(([id, fieldKey]) => {
+    ['fCurrency', 'fCurrencyDeposit', 'fCurrencyWeight'].forEach(id => {
         const sel = document.getElementById(id);
         if (!sel) return;
         const prev = sel.value;
         sel.innerHTML = CURR_ENABLED.map(c => `<option value="${c}">${c}</option>`).join('');
-        sel.value = CURR_ENABLED.includes(prev) ? prev : curDefaultFor(fieldKey);
+        sel.value = CURR_ENABLED.includes(prev) ? prev : CURR_DEFAULT;
     });
 }
 const LAYOUTS = {
@@ -638,7 +608,7 @@ async function suggestPriceFromRoute() {
     if (!fromPoint || !toPoint) return;
     if (fromPoint.id === toPoint.id) return;
 
-    const currency = (currSel && currSel.value) || curDefaultFor('passenger_ticket');
+    const currency = (currSel && currSel.value) || CURR_DEFAULT;
     try {
         const res = await apiPost('getRoutePrice', {
             from_point_id: fromPoint.id,
@@ -2624,11 +2594,11 @@ function openRouteEditModal(rteId, sheetName) {
     document.getElementById('fDate').value = dateVal;
 
     const currEl = document.getElementById('fCurrency');
-    if (currEl) currEl.value = r['Валюта'] || curDefaultFor('passenger_ticket');
+    if (currEl) currEl.value = r['Валюта'] || CURR_DEFAULT;
     const currDepEl = document.getElementById('fCurrencyDeposit');
-    if (currDepEl) currDepEl.value = r['Валюта завдатку'] || curDefaultFor('passenger_deposit');
+    if (currDepEl) currDepEl.value = r['Валюта завдатку'] || CURR_DEFAULT;
     const currWtEl = document.getElementById('fCurrencyWeight');
-    if (currWtEl) currWtEl.value = r['Валюта багажу'] || curDefaultFor('passenger_baggage');
+    if (currWtEl) currWtEl.value = r['Валюта багажу'] || CURR_DEFAULT;
 
     const saveBtn = document.getElementById('paxSaveBtn');
     if (saveBtn) {
@@ -3781,11 +3751,11 @@ function openEditPax(id) {
 
     // Currency
     const currEl = document.getElementById('fCurrency');
-    if (currEl) currEl.value = p['Валюта квитка'] || curDefaultFor('passenger_ticket');
+    if (currEl) currEl.value = p['Валюта квитка'] || CURR_DEFAULT;
     const currDepEl = document.getElementById('fCurrencyDeposit');
-    if (currDepEl) currDepEl.value = p['Валюта завдатку'] || curDefaultFor('passenger_deposit');
+    if (currDepEl) currDepEl.value = p['Валюта завдатку'] || CURR_DEFAULT;
     const currWtEl = document.getElementById('fCurrencyWeight');
-    if (currWtEl) currWtEl.value = p['Валюта багажу'] || curDefaultFor('passenger_baggage');
+    if (currWtEl) currWtEl.value = p['Валюта багажу'] || CURR_DEFAULT;
 
     const saveBtn = document.getElementById('paxSaveBtn');
     if (saveBtn) saveBtn.textContent = '💾 Оновити';
@@ -3911,9 +3881,9 @@ function openAddModal() {
     document.getElementById('fSeats').value = '1';
     document.getElementById('fDate').value = '';
     document.getElementById('fDirection').value = currentDir === 'eu-ua' ? 'eu-ua' : 'ua-eu';
-    document.getElementById('fCurrency').value = curDefaultFor('passenger_ticket');
-    document.getElementById('fCurrencyDeposit').value = curDefaultFor('passenger_deposit');
-    document.getElementById('fCurrencyWeight').value = curDefaultFor('passenger_baggage');
+    document.getElementById('fCurrency').value = CURR_DEFAULT;
+    document.getElementById('fCurrencyDeposit').value = CURR_DEFAULT;
+    document.getElementById('fCurrencyWeight').value = CURR_DEFAULT;
     // Route points: нічого попередньо рендерити не треба — dropdown
     // будується на open. Якщо каталог не готовий — фоново підтягнемо,
     // щоб при натиску ▼ одразу показати список.
