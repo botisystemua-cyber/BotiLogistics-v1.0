@@ -29,13 +29,33 @@ export const CURRENCIES: readonly CurrencyInfo[] = [
 export const DEFAULT_ENABLED: CurrencyCode[] = ['UAH', 'EUR', 'USD', 'CHF', 'PLN', 'CZK'];
 export const DEFAULT_DEFAULT: CurrencyCode = 'EUR';
 
+// Ключі per-field overrides. Для кожного поля, де вводять валюту,
+// можна задати окрему валюту за замовчуванням, яка перекриває глобальну.
+// Лейбли у UI нетехнічні — їх підставляє CurrenciesPanel.
+export type CurrencyFieldKey =
+  | 'passenger_ticket'     // Ціна квитка
+  | 'passenger_deposit'    // Завдаток за квиток
+  | 'passenger_baggage'    // Оплата багажу
+  | 'package_payment'      // Оплата посилки
+  | 'package_deposit'      // Завдаток за посилку
+  | 'package_np';          // Накладений платіж
+
+export const CURRENCY_FIELD_KEYS: CurrencyFieldKey[] = [
+  'passenger_ticket', 'passenger_deposit', 'passenger_baggage',
+  'package_payment', 'package_deposit', 'package_np',
+];
+
+export type CurrencyOverrides = Partial<Record<CurrencyFieldKey, CurrencyCode>>;
+
 export interface CurrencySettings {
   default: CurrencyCode;
   enabled: CurrencyCode[];
+  overrides: CurrencyOverrides;
 }
 
 const SN_DEFAULT = 'default_currency';
 const SN_SUPPORTED = 'supported_currencies';
+const SN_OVERRIDES = 'currency_overrides';
 
 function isCurrencyCode(v: string): v is CurrencyCode {
   return CURRENCIES.some(c => c.code === v);
@@ -47,19 +67,40 @@ function parseEnabled(raw: string | null | undefined): CurrencyCode[] {
   return codes.length > 0 ? codes : [...DEFAULT_ENABLED];
 }
 
+function isFieldKey(v: string): v is CurrencyFieldKey {
+  return (CURRENCY_FIELD_KEYS as string[]).includes(v);
+}
+
+function parseOverrides(raw: string | null | undefined): CurrencyOverrides {
+  if (!raw) return {};
+  try {
+    const obj = JSON.parse(raw);
+    if (!obj || typeof obj !== 'object') return {};
+    const out: CurrencyOverrides = {};
+    for (const [k, v] of Object.entries(obj)) {
+      if (isFieldKey(k) && typeof v === 'string' && isCurrencyCode(v)) {
+        out[k] = v;
+      }
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
 export async function getCurrencySettings(tenantId: string): Promise<CurrencySettings> {
   const { data, error } = await supabase
     .from('system_settings')
     .select('setting_name, setting_value')
     .eq('tenant_id', tenantId)
-    .in('setting_name', [SN_DEFAULT, SN_SUPPORTED]);
+    .in('setting_name', [SN_DEFAULT, SN_SUPPORTED, SN_OVERRIDES]);
   if (error) throw error;
   const rows = data ?? [];
   const enabled = parseEnabled(rows.find(r => r.setting_name === SN_SUPPORTED)?.setting_value);
   const rawDefault = rows.find(r => r.setting_name === SN_DEFAULT)?.setting_value?.trim() ?? '';
-  // Default та enabled — незалежні. EUR — фолбек якщо нічого не збережено.
   const def: CurrencyCode = isCurrencyCode(rawDefault) ? rawDefault : DEFAULT_DEFAULT;
-  return { default: def, enabled };
+  const overrides = parseOverrides(rows.find(r => r.setting_name === SN_OVERRIDES)?.setting_value);
+  return { default: def, enabled, overrides };
 }
 
 export async function saveCurrencySettings(
@@ -69,8 +110,16 @@ export async function saveCurrencySettings(
   if (settings.enabled.length === 0) {
     throw new Error('Має бути увімкнена хоча б одна валюта');
   }
+  // Перезбираємо overrides: виключаємо поля зі значенням, що збігається з дефолтом.
+  // Так JSON у БД менший і при зміні глобальної валюти не «прилипає» до старих полів.
+  const cleanOverrides: CurrencyOverrides = {};
+  for (const k of CURRENCY_FIELD_KEYS) {
+    const v = settings.overrides[k];
+    if (v && v !== settings.default) cleanOverrides[k] = v;
+  }
   await upsertSetting(tenantId, SN_DEFAULT, settings.default, 'Система', 'Валюта за замовчуванням');
   await upsertSetting(tenantId, SN_SUPPORTED, settings.enabled.join(','), 'Система', 'Підтримувані валюти');
+  await upsertSetting(tenantId, SN_OVERRIDES, JSON.stringify(cleanOverrides), 'Система', 'Окремі валюти для різних полів');
 }
 
 async function upsertSetting(

@@ -14,6 +14,7 @@ export function SettingsTab({ tenantId }: { tenantId: string }) {
   const [currencies, setCurrencies] = useState<CurrencySettings>({
     default: DEFAULT_DEFAULT,
     enabled: [...DEFAULT_ENABLED],
+    overrides: {},
   });
   const [loading, setLoading] = useState(true);
 
