@@ -5143,13 +5143,18 @@ function renderPaxPopup(tripPax, title, maxSeats) {
             const seats = parseInt(p['Кількість місць']) || 1;
             const status = p['Статус ліда'] || '';
             const statusCls = status === 'Підтверджено' ? 'color:#059669' : status === 'Відмова' ? 'color:#dc2626' : status === 'В роботі' ? 'color:#d97706' : 'color:#6b7280';
+            const seat = p['Місце в авто'] || '';
+            const isFlex = p['Гнучке'] === true || p['Гнучке'] === 'true';
+            const flexBadge = isFlex ? '<span title="Вільна розсадка (можна посунути)" style="margin-left:4px;font-size:10px;">🔀</span>' : '';
+            const seatInfo = seat ? `<span class="pax-seats" style="background:#eff6ff;color:#1e40af;font-size:10px;">${seat}</span>` : '';
             paxHtml += `<div class="pax-item">
                 <div>
-                    <div style="font-weight:600;">${name}</div>
+                    <div style="font-weight:600;">${name}${flexBadge}</div>
                     <div style="font-size:11px;color:#6b7280;">${phone}</div>
                 </div>
                 <div style="display:flex;align-items:center;gap:6px;">
                     <span style="${statusCls};font-size:11px;font-weight:600;">${status}</span>
+                    ${seatInfo}
                     <span class="pax-seats">${seats} м.</span>
                 </div>
             </div>`;
@@ -5290,7 +5295,10 @@ function addVehicleBuilder() {
         </div>
         <div class="bs-row" style="align-items:center;">
             <div class="bs-field"><label class="bs-label">Кількість місць</label>
-                <div class="seat-counter locked">
+                <!-- Для мінівенів (1-3-3, 2-2-3, 2-2-2) розкладка диктує число — показуємо статичний лейбл.
+                     Для буса — повноцінний лічильник +/-, бо буси різного розміру (15, 20, 30, 50). -->
+                <div class="vb-seats-static" id="vbSeatsStatic-${idx}" style="font-size:14px;font-weight:700;color:var(--primary);padding:4px 0;">7 місць</div>
+                <div class="seat-counter" id="vbSeatsCounter-${idx}" style="display:none;">
                     <button onclick="changeSeatCount(${idx},-1)">−</button>
                     <span class="vb-seats-num" id="vbSeats-${idx}">7</span>
                     <button onclick="changeSeatCount(${idx},1)">+</button>
@@ -5319,17 +5327,21 @@ function selectLayout(el, idx) {
     el.classList.add('active');
     const layout = el.dataset.layout;
     const seatsEl = document.getElementById('vbSeats-' + idx);
-    const vb = document.getElementById('vb-' + idx);
-    const counter = vb?.querySelector('.seat-counter');
+    const staticEl = document.getElementById('vbSeatsStatic-' + idx);
+    const counterEl = document.getElementById('vbSeatsCounter-' + idx);
 
     if (FIXED_COUNT_LAYOUTS[layout]) {
-        seatsEl.textContent = FIXED_COUNT_LAYOUTS[layout];
-        counter?.classList.add('locked');
+        // Мінівен — фіксована к-сть. Показуємо статичний лейбл, ховаємо +/-.
+        const n = FIXED_COUNT_LAYOUTS[layout];
+        seatsEl.textContent = n;
+        if (staticEl) { staticEl.textContent = n + ' місць'; staticEl.style.display = ''; }
+        if (counterEl) counterEl.style.display = 'none';
     } else {
-        // bus — allow custom seat count
+        // bus — показуємо +/-, ховаємо статичний лейбл.
         const cur = parseInt(seatsEl.textContent) || 20;
         if (cur < 8) seatsEl.textContent = 20;
-        counter?.classList.remove('locked');
+        if (staticEl) staticEl.style.display = 'none';
+        if (counterEl) counterEl.style.display = '';
     }
     updateSeatPreview(idx);
 }
@@ -5534,6 +5546,9 @@ function renderVan(opts) {
         ? selectedRaw
         : new Set(parseSeats(selectedRaw));
     const interactive = opts.interactive !== false;
+    // clickHandler — імʼя глобальної функції яка викликається при кліку. За замовч.
+    // seatPickerSelect (multi-select Set), для trip-assign модалки — tmSelectAssignSeat (single).
+    const clickHandler = opts.clickHandler || 'seatPickerSelect';
 
     const positions = getSeatLayout(layout, maxSeats, hasReserve);
     const vanCls = layout === 'bus'   ? 'van van-bus'
@@ -5552,16 +5567,23 @@ function renderVan(opts) {
             if (s.type === 'driver') {
                 return `<div class="seat-pin seat-driver" style="${style}" title="Водій"></div>`;
             }
-            const occName = occupiedMap[s.name];
-            if (occName) {
-                return `<div class="seat-pin seat-occupied" style="${style}" title="Зайнято: ${occName}">${s.name}<div class="seat-occ-name">${occName}</div></div>`;
+            const occ = occupiedMap[s.name];
+            if (occ) {
+                const occLabel = (typeof occ === 'object') ? occ.label : occ;
+                const isFlex = typeof occ === 'object' && occ.flexible;
+                const flexCls = isFlex ? ' seat-flex' : '';
+                const flexIco = isFlex ? '<span class="seat-flex-ico">🔀</span>' : '';
+                // Flexible-occupied: clickable — shuffle логіка спрацює на save (Phase 2).
+                const occHandler = (interactive && isFlex) ? `onclick="${clickHandler}('${s.name}')"` : '';
+                const occTitle = isFlex ? `Гнучке: ${occLabel}. Можна обрати — пасажир переміститься.` : `Зайнято: ${occLabel}`;
+                return `<div class="seat-pin seat-occupied${flexCls}" style="${style}" ${occHandler} title="${occTitle}">${s.name}${flexIco}<div class="seat-occ-name">${occLabel}</div></div>`;
             }
             if (selected.has(s.name)) {
-                const handler = interactive ? `onclick="seatPickerSelect('${s.name}')"` : '';
+                const handler = interactive ? `onclick="${clickHandler}('${s.name}')"` : '';
                 return `<div class="seat-pin seat-selected" style="${style}" ${handler}>${s.name}<div class="seat-check">✓</div></div>`;
             }
             const stateCls = s.type === 'reserve' ? 'seat-reserve' : 'seat-free';
-            const handler = interactive ? `onclick="seatPickerSelect('${s.name}')"` : '';
+            const handler = interactive ? `onclick="${clickHandler}('${s.name}')"` : '';
             return `<div class="seat-pin ${stateCls}" style="${style}" ${handler}>${s.name}</div>`;
         }
         // Legacy point-style seat (chair-top.png icon) — used for layouts without a dedicated van PNG yet:
@@ -5569,16 +5591,22 @@ function renderVan(opts) {
         if (s.type === 'driver') {
             return `<div class="seat seat-driver" style="${style}" title="Водій">${chairImg}</div>`;
         }
-        const occName = occupiedMap[s.name];
-        if (occName) {
-            return `<div class="seat seat-occupied" style="${style}" title="Зайнято: ${occName}">
+        const occ2 = occupiedMap[s.name];
+        if (occ2) {
+            const occLabel2 = (typeof occ2 === 'object') ? occ2.label : occ2;
+            const isFlex2 = typeof occ2 === 'object' && occ2.flexible;
+            const flexCls2 = isFlex2 ? ' seat-flex' : '';
+            const flexIco2 = isFlex2 ? '<span class="seat-flex-ico">🔀</span>' : '';
+            const occHandler2 = (interactive && isFlex2) ? `onclick="${clickHandler}('${s.name}')"` : '';
+            const occTitle2 = isFlex2 ? `Гнучке: ${occLabel2}. Можна обрати — пасажир переміститься.` : `Зайнято: ${occLabel2}`;
+            return `<div class="seat seat-occupied${flexCls2}" style="${style}" ${occHandler2} title="${occTitle2}">
                 ${chairImg}
-                <div class="seat-num">${s.name}</div>
-                <div class="seat-occ-name">${occName}</div>
+                <div class="seat-num">${s.name}${flexIco2}</div>
+                <div class="seat-occ-name">${occLabel2}</div>
             </div>`;
         }
         if (selected.has(s.name)) {
-            const handler = interactive ? `onclick="seatPickerSelect('${s.name}')"` : '';
+            const handler = interactive ? `onclick="${clickHandler}('${s.name}')"` : '';
             return `<div class="seat seat-selected" style="${style}" ${handler}>
                 ${chairImg}
                 <div class="seat-num">${s.name}</div>
@@ -5586,7 +5614,7 @@ function renderVan(opts) {
             </div>`;
         }
         const stateCls = s.type === 'reserve' ? 'seat-reserve' : 'seat-free';
-        const handler = interactive ? `onclick="seatPickerSelect('${s.name}')"` : '';
+        const handler = interactive ? `onclick="${clickHandler}('${s.name}')"` : '';
         return `<div class="seat ${stateCls}" style="${style}" ${handler}>
             ${chairImg}
             <div class="seat-num">${s.name}</div>
@@ -5667,10 +5695,37 @@ function getOccupiedSeats(calId, excludePaxId) {
             const name = p['Піб'] || 'Пасажир';
             const parts = name.split(' ');
             const label = parts.length > 1 ? parts[0] + ' ' + parts[1].charAt(0) + '.' : parts[0];
-            seats.forEach(s => { map[s] = label; });
+            const isFlex = p['Гнучке'] === true || p['Гнучке'] === 'true';
+            seats.forEach(s => { map[s] = { label: label, flexible: isFlex, paxId: p['PAX_ID'] }; });
         }
     });
     return map;
+}
+
+// Знайти перше вільне місце на рейсі (числові за зростанням, потім R1..RN).
+// excludePaxId — ігноруємо рядок з цим pax_id у мапі зайнятих.
+// extraExcluded (опц.) — додатково забороняємо ці місця (напр. ті що тільки
+// що були звільнені shuffle і одразу зайняті іншим).
+// Повертає назву ('1', '4', 'R2', ...) або '' якщо всіх зайняли.
+function findFirstFreeSeat(trip, excludePaxId, extraExcluded) {
+    if (!trip) return '';
+    extraExcluded = extraExcluded || new Set();
+    const layout = detectLayout(trip);
+    const maxSeats = parseInt(trip.max_seats) || 7;
+    const reserveCount = Math.max(0, parseInt(trip.reserve_seats) || 0);
+    const occupied = getOccupiedSeats(trip.cal_id, excludePaxId);
+    const positions = getSeatLayout(layout, maxSeats, false);
+    // Спочатку числові seat-позиції (з layout) — за порядком як вони в layout-схемі
+    const numericNames = positions.filter(p => p.type === 'seat').map(p => p.name);
+    for (const name of numericNames) {
+        if (!occupied[name] && !extraExcluded.has(name)) return name;
+    }
+    // Потім резерв R1..RN
+    for (let i = 1; i <= reserveCount; i++) {
+        const r = 'R' + i;
+        if (!occupied[r] && !extraExcluded.has(r)) return r;
+    }
+    return ''; // все зайняте
 }
 
 function getSeatRows(layout, maxSeats, hasReserve) {
@@ -5749,7 +5804,9 @@ function buildSeatHtml(seatObj, occupiedMap) {
         ? seatPickerSelected.has(s.name)
         : (seatPickerSelected === s.name);
     if (isOcc) {
-        return `<div class="sp-seat sp-occupied"><div class="sp-seat-num">${s.name}</div><div class="sp-occ-name">${isOcc}</div></div>`;
+        const occLbl = (typeof isOcc === 'object') ? isOcc.label : isOcc;
+        const flexC = (typeof isOcc === 'object' && isOcc.flexible) ? ' sp-flex' : '';
+        return `<div class="sp-seat sp-occupied${flexC}"><div class="sp-seat-num">${s.name}</div><div class="sp-occ-name">${occLbl}</div></div>`;
     }
     if (isSel) {
         return `<div class="sp-seat sp-selected" onclick="seatPickerSelect('${s.name}')"><div class="sp-seat-check">✓</div><div class="sp-seat-num">${s.name}</div></div>`;
@@ -5853,19 +5910,31 @@ function renderSeatPickerModal(trip, occupiedMap) {
 // Окремий блок «+ Додаткові місця» з кнопками R1..RN під схемою авто.
 // Це місця поза layout-картинкою (спальник/підлога/коліна). Поведінка
 // як у звичайних seat-кнопок — клік toggle, зайнято — затемнюється.
-function buildReserveBlockHtml(count, occupiedMap) {
+function buildReserveBlockHtml(count, occupiedMap, opts) {
     if (!count || count <= 0) return '';
+    opts = opts || {};
+    const clickHandler = opts.clickHandler || 'seatPickerSelect';
+    // selectedCheck: функція що каже чи seat обраний. За замовч — seatPickerSelected.has().
+    // Для trip-assign модалки передається інша функція що звіряє з tmSelectedSeat.
+    const isSelected = opts.isSelected || ((name) => seatPickerSelected.has(name));
     let buttons = '';
     for (let i = 1; i <= count; i++) {
         const name = 'R' + i;
         const isOcc = occupiedMap[name];
-        const isSel = seatPickerSelected.has(name);
+        const isSel = isSelected(name);
         if (isOcc) {
-            buttons += `<button type="button" class="rseat rseat-occupied" disabled title="Зайнято: ${isOcc}">${name}<span class="rseat-name">${isOcc}</span></button>`;
+            const occLabel = (typeof isOcc === 'object') ? isOcc.label : isOcc;
+            const isFx = typeof isOcc === 'object' && isOcc.flexible;
+            const flexC = isFx ? ' rseat-flex' : '';
+            const flexI = isFx ? ' 🔀' : '';
+            // Flexible — clickable, hard — disabled
+            const btnAttr = isFx ? `onclick="${clickHandler}('${name}')"` : 'disabled';
+            const btnTitle = isFx ? `Гнучке: ${occLabel}. Можна обрати — пасажир переміститься.` : `Зайнято: ${occLabel}`;
+            buttons += `<button type="button" class="rseat rseat-occupied${flexC}" ${btnAttr} title="${btnTitle}">${name}${flexI}<span class="rseat-name">${occLabel}</span></button>`;
         } else if (isSel) {
-            buttons += `<button type="button" class="rseat rseat-selected" onclick="seatPickerSelect('${name}')">${name}<span class="rseat-check">✓</span></button>`;
+            buttons += `<button type="button" class="rseat rseat-selected" onclick="${clickHandler}('${name}')">${name}<span class="rseat-check">✓</span></button>`;
         } else {
-            buttons += `<button type="button" class="rseat rseat-free" onclick="seatPickerSelect('${name}')">${name}</button>`;
+            buttons += `<button type="button" class="rseat rseat-free" onclick="${clickHandler}('${name}')">${name}</button>`;
         }
     }
     return `<div class="reserve-block">
@@ -5933,9 +6002,48 @@ async function saveSeatPicker() {
 
     if (newVal === oldVal && !seatsChanged) { closeSeatPicker(); return; }
 
+    // Phase 2 shuffle: для кожного picked seat, який сидить flexible — посунути його.
+    // Йдемо послідовно щоб кожне переміщення враховувало вже зайняті/звільнені.
+    const calId = p['CAL_ID'] || '';
+    const trip = trips.find(t => t.cal_id === calId);
+    const shuffles = [];
+    if (trip && picked.length > 0) {
+        const occMap = getOccupiedSeats(calId, paxId);
+        const reserved = new Set(picked); // мої майбутні місця — не можна туди пересаджувати
+        for (const pickedSeat of picked) {
+            const o = occMap[pickedSeat];
+            if (o && typeof o === 'object' && o.flexible && o.paxId) {
+                const nextFree = findFirstFreeSeat(trip, o.paxId, reserved);
+                if (!nextFree) {
+                    showToast('❌ Немає куди посунути ' + o.label + ' з ' + pickedSeat);
+                    return; // НЕ закриваємо пікер, щоб юзер змінив вибір
+                }
+                shuffles.push({ paxId: o.paxId, oldSeat: pickedSeat, newSeat: nextFree, label: o.label });
+                reserved.add(nextFree);
+            }
+        }
+    }
+
     p[colName] = newVal;
     if (seatsChanged && picked.length > 0) p['Кількість місць'] = newSeatsCount;
     closeSeatPicker();
+
+    // Виконуємо shuffles ДО запису власного — щоб місця реально звільнились
+    for (const sh of shuffles) {
+        const movedPax = passengers.find(x => x['PAX_ID'] === sh.paxId);
+        if (!movedPax) continue;
+        const movedSheet = movedPax._sheet || '';
+        const moveRes = await apiPost('updateField', {
+            sheet: movedSheet, pax_id: sh.paxId, col: 'Місце в авто', value: sh.newSeat
+        });
+        if (moveRes && moveRes.ok) {
+            movedPax['Місце в авто'] = sh.newSeat;
+            showToast('🔀 ' + sh.label + ': ' + sh.oldSeat + ' → ' + sh.newSeat);
+        } else {
+            showToast('❌ Не зміг посунути ' + sh.label);
+            return;
+        }
+    }
 
     const el = document.getElementById('dv-' + paxId + '-seatInCar');
     if (el) el.textContent = newVal || '—';
@@ -6127,9 +6235,16 @@ function editTrip(calId) {
         const activeLayout = ['1-3-3','2-2-3','2-2-2','bus'].includes(t.layout) ? t.layout : '1-3-3';
         layoutBtns.forEach(b => b.classList.toggle('active', b.dataset.layout === activeLayout));
         const seatsEl = vb.querySelector('.vb-seats-num');
-        if (seatsEl) seatsEl.textContent = FIXED_COUNT_LAYOUTS[activeLayout] || (t.max_seats || 20);
-        const counter = vb.querySelector('.seat-counter');
-        if (counter) counter.classList.toggle('locked', !!FIXED_COUNT_LAYOUTS[activeLayout]);
+        const finalCount = FIXED_COUNT_LAYOUTS[activeLayout] || (t.max_seats || 20);
+        if (seatsEl) seatsEl.textContent = finalCount;
+        const staticEl = vb.querySelector('.vb-seats-static');
+        const counterEl = vb.querySelector('.seat-counter');
+        const isFixed = !!FIXED_COUNT_LAYOUTS[activeLayout];
+        if (staticEl) {
+            staticEl.textContent = finalCount + ' місць';
+            staticEl.style.display = isFixed ? '' : 'none';
+        }
+        if (counterEl) counterEl.style.display = isFixed ? 'none' : '';
         const reserveEl = vb.querySelector('.vb-reserve-num');
         if (reserveEl) reserveEl.textContent = String(Math.max(0, Math.min(5, parseInt(t.reserve_seats) || 0)));
     }
@@ -6727,6 +6842,7 @@ function toggleTripAssignDD(paxId) {
 let tmPaxIds = [];        // Для кого призначаємо
 let tmSelectedCalId = ''; // Обраний рейс
 let tmSelectedDate = '';  // Обрана дата
+let tmSelectedSeat = '';  // Обране місце для пасажира ('' = вільна розсадка)
 let tmMode = 'assign';    // 'assign' | 'form' (з форми додавання)
 let tmFormCallback = null; // Callback для форми
 let tmCalMonth = new Date().getMonth();
@@ -6864,6 +6980,7 @@ function getUniqueDates(tripsList) {
 function openTripModal(paxIds, mode, callback) {
     tmPaxIds = paxIds || [];
     tmSelectedCalId = '';
+    tmSelectedSeat = '';
     tmSelectedDate = '';
     tmMode = mode || 'assign';
     tmFormCallback = callback || null;
@@ -6911,6 +7028,7 @@ function closeTripModal() {
     passengers = passengers.filter(p => p['PAX_ID'] !== '__form__');
     tmPaxIds = [];
     tmSelectedCalId = '';
+    tmSelectedSeat = '';
     tmSelectedDate = '';
 }
 
@@ -6920,6 +7038,7 @@ function renderTripModalStep1() {
     var saveBtn = document.getElementById('tmSaveBtn');
     if (saveBtn) saveBtn.disabled = true;
     tmSelectedCalId = '';
+    tmSelectedSeat = '';
     tmSelectedDate = '';
 
     var matchTrips = getMatchingTrips(tmPaxIds);
@@ -7040,7 +7159,8 @@ function renderTripModalCalendar() {
                 '</div>' +
             '</div>' +
         '</div>' +
-        '<div id="tmVehiclesWrap"></div>';
+        '<div id="tmVehiclesWrap"></div>' +
+        '<div id="tmSeatPickerWrap"></div>';
 }
 
 // Показ попапа з деталями дня (мобільний long-press, або клік по "повній" клітинці)
@@ -7227,6 +7347,7 @@ function tmCalToday() {
 function tmCalClear() {
     tmSelectedDate = '';
     tmSelectedCalId = '';
+    tmSelectedSeat = '';
     var saveBtn = document.getElementById('tmSaveBtn');
     if (saveBtn) saveBtn.disabled = true;
     var vehWrap = document.getElementById('tmVehiclesWrap');
@@ -7240,8 +7361,12 @@ function tmCalClear() {
 function selectTripDate(dateFormatted) {
     tmSelectedDate = dateFormatted;
     tmSelectedCalId = '';
+    tmSelectedSeat = '';
     var saveBtn = document.getElementById('tmSaveBtn');
     if (saveBtn) saveBtn.disabled = true;
+    // Чистимо пікер місця (з'явиться після вибору авто)
+    var spw = document.getElementById('tmSeatPickerWrap');
+    if (spw) spw.innerHTML = '';
 
     document.getElementById('tmStep').textContent = 'Крок 2 — оберіть авто';
 
@@ -7300,16 +7425,76 @@ function selectTripDate(dateFormatted) {
         '</div>';
     });
     vehiclesDiv.innerHTML = html;
+
+    // Автоскрол вниз — щоб менеджер бачив авто (на телефоні часто за екраном)
+    setTimeout(function() {
+        var wrap = document.getElementById('tmVehiclesWrap');
+        if (wrap) wrap.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 50);
 }
 
-// Вибрано авто → активуємо кнопку "Призначити"
+// Вибрано авто → активуємо кнопку "Призначити" + рендеримо пікер місця (якщо 1 пасажир)
 function selectTripVehicle(calId) {
     tmSelectedCalId = calId;
+    tmSelectedSeat = ''; // скидаємо при зміні авто
     document.querySelectorAll('.tm-vehicle-card').forEach(function(el) { el.classList.remove('active'); });
     var el = document.getElementById('tm-veh-' + calId);
     if (el) el.classList.add('active');
     var saveBtn = document.getElementById('tmSaveBtn');
     if (saveBtn) saveBtn.disabled = false;
+
+    // Пікер місця рендеримо лише для одного пасажира і коли це не «з форми додавання»
+    var wrap = document.getElementById('tmSeatPickerWrap');
+    if (!wrap) return;
+    var singlePax = tmPaxIds.length === 1 && tmPaxIds[0] !== '__form__';
+    if (!singlePax) { wrap.innerHTML = ''; return; }
+    var trip = trips.find(function(t) { return t.cal_id === calId; });
+    if (!trip) { wrap.innerHTML = ''; return; }
+    renderTmSeatPicker(trip);
+    // Скрол вниз щоб пікер було видно
+    setTimeout(function() {
+        wrap.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }, 50);
+}
+
+// Рендер інлайн-пікера місця в trip-assign модалці.
+// Single-select: можна обрати або "Без місця" (вільна розсадка), або конкретне.
+function renderTmSeatPicker(trip) {
+    var wrap = document.getElementById('tmSeatPickerWrap');
+    if (!wrap) return;
+    var paxId = tmPaxIds[0];
+    var occupiedMap = getOccupiedSeats(trip.cal_id, paxId);
+    var layout = detectLayout(trip);
+    var maxSeats = parseInt(trip.max_seats) || 7;
+    var reserveCount = Math.max(0, parseInt(trip.reserve_seats) || 0);
+    // Селект з custom click handler — той самий visual van + R block, але single-select
+    var vanHtml = renderVan({
+        layout: layout, maxSeats: maxSeats, hasReserve: false,
+        occupiedMap: occupiedMap,
+        selected: tmSelectedSeat ? new Set([tmSelectedSeat]) : new Set(),
+        interactive: true,
+        clickHandler: 'tmSelectAssignSeat'
+    });
+    var reserveHtml = buildReserveBlockHtml(reserveCount, occupiedMap, {
+        clickHandler: 'tmSelectAssignSeat',
+        isSelected: function(name) { return tmSelectedSeat === name; }
+    });
+    var freeBtnCls = tmSelectedSeat === '' ? 'tm-free-btn active' : 'tm-free-btn';
+    wrap.innerHTML =
+        '<div class="tm-section-label">Розсадка</div>' +
+        '<button type="button" class="' + freeBtnCls + '" onclick="tmSelectAssignSeat(\'\')">' +
+            '🆓 Без місця (вільна розсадка)' +
+        '</button>' +
+        '<div class="tm-or-label">або обрати конкретне місце:</div>' +
+        vanHtml + reserveHtml;
+}
+
+// Single-select: клік по місцю встановлює tmSelectedSeat.
+// Клік по тому ж місцю або по "Без місця" — повертає "вільну розсадку".
+function tmSelectAssignSeat(seatName) {
+    tmSelectedSeat = (tmSelectedSeat === seatName) ? '' : seatName;
+    var trip = trips.find(function(t) { return t.cal_id === tmSelectedCalId; });
+    if (trip) renderTmSeatPicker(trip);
 }
 
 // Підтвердження — надсилаємо API
@@ -7321,6 +7506,7 @@ async function confirmTripAssign() {
     var paxIds = tmPaxIds.slice();
     var mode = tmMode;
     var callback = tmFormCallback;
+    var seatChoice = tmSelectedSeat; // '' = вільна розсадка
 
     // Якщо з форми додавання — callback і закриваємо
     if (mode === 'form' && callback) {
@@ -7342,19 +7528,51 @@ async function confirmTripAssign() {
         if (free < newSeats && max > 0) {
             var shortage = newSeats - free;
             showConfirm('⚠️ Не вистачає ' + shortage + ' місць! (Вільних: ' + free + ', потрібно: ' + newSeats + '). Все одно призначити?', function(yes) {
-                if (yes) doAssignTrip(calId, paxIds);
+                if (yes) doAssignTrip(calId, paxIds, seatChoice);
             });
             return;
         }
     }
 
-    doAssignTrip(calId, paxIds);
+    doAssignTrip(calId, paxIds, seatChoice);
 }
 
-async function doAssignTrip(calId, paxIds) {
+async function doAssignTrip(calId, paxIds, seatChoice) {
     // Показуємо лоадер ДО закриття модалки
     showLoader('Призначаю рейс...');
     closeTripModal();
+
+    // Якщо обрано місце де сидить flexible — спершу його посунути.
+    // Phase 2 shuffle: атомарно (якщо не зміг — блокуємо повний save).
+    if (seatChoice && paxIds.length === 1) {
+        var trip0 = trips.find(function(t) { return t.cal_id === calId; });
+        if (trip0) {
+            var occMap = getOccupiedSeats(calId, paxIds[0]);
+            var occ = occMap[seatChoice];
+            if (occ && typeof occ === 'object' && occ.flexible && occ.paxId) {
+                var newSeat = findFirstFreeSeat(trip0, occ.paxId, new Set([seatChoice]));
+                if (!newSeat) {
+                    hideLoader();
+                    showToast('❌ Немає куди посунути ' + occ.label + ' з місця ' + seatChoice);
+                    return;
+                }
+                var movedPax = passengers.find(function(x) { return x['PAX_ID'] === occ.paxId; });
+                if (movedPax) {
+                    var movedSheet = movedPax._sheet || '';
+                    var moveRes = await apiPost('updateField', {
+                        sheet: movedSheet, pax_id: occ.paxId, col: 'Місце в авто', value: newSeat
+                    });
+                    if (!moveRes || !moveRes.ok) {
+                        hideLoader();
+                        showToast('❌ Не зміг посунути ' + occ.label + ': ' + (moveRes && moveRes.error || ''));
+                        return;
+                    }
+                    movedPax['Місце в авто'] = newSeat;
+                    showToast('🔀 ' + occ.label + ': ' + seatChoice + ' → ' + newSeat);
+                }
+            }
+        }
+    }
 
     var res = await apiPost('assignTrip', { cal_id: calId, pax_ids: paxIds });
 
@@ -7367,6 +7585,40 @@ async function doAssignTrip(calId, paxIds) {
                 if (p['Статус ліда'] === 'Новий') p['Статус ліда'] = 'В роботі';
             }
         });
+
+        // Розсадка для одного пасажира (мульти-pax flow ховає блок розсадки взагалі).
+        // Two paths:
+        //   • seatChoice — конкретне місце → seat_flexible=false
+        //   • '' (Без місця) — auto-assign першого вільного → seat_flexible=true
+        if (paxIds.length === 1) {
+            var px = passengers.find(function(x) { return x['PAX_ID'] === paxIds[0]; });
+            var trip0 = trips.find(function(t) { return t.cal_id === calId; });
+            if (px && trip0) {
+                var sheet = px._sheet || '';
+                var finalSeat = seatChoice;
+                var isFlex = false;
+                if (!finalSeat) {
+                    // «Без місця» → знайти перше вільне і призначити з flag
+                    finalSeat = findFirstFreeSeat(trip0, paxIds[0]);
+                    isFlex = true;
+                }
+                if (finalSeat) {
+                    var [seatRes, flexRes] = await Promise.all([
+                        apiPost('updateField', { sheet: sheet, pax_id: paxIds[0], col: 'Місце в авто', value: finalSeat }),
+                        apiPost('updateField', { sheet: sheet, pax_id: paxIds[0], col: 'Гнучке', value: isFlex }),
+                    ]);
+                    if (seatRes && seatRes.ok && flexRes && flexRes.ok) {
+                        px['Місце в авто'] = finalSeat;
+                        px['Гнучке'] = isFlex;
+                    } else {
+                        showToast('⚠️ Рейс призначено, місце «' + finalSeat + '» збереглось не повністю');
+                    }
+                } else if (isFlex) {
+                    // Авто-flexible не знайшов вільного — пасажир без місця, прапор не ставимо
+                    showToast('ℹ️ Рейс призначено. Вільних місць немає — пасажир без місця.');
+                }
+            }
+        }
         // Оновлюємо free_seats та occupied в рейсі
         var trip = trips.find(function(t) { return t.cal_id === calId; });
         if (trip) {
