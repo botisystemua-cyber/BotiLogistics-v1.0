@@ -642,37 +642,41 @@
               <label>ПІБ отримувача</label>
               <input type="text" id="fReceiver" placeholder="Прізвище Ім'я По-батькові">
             </div>
-            <div class="add-row">
+            <div class="add-row" data-field-key="receiverPhoneEu">
               <label>Телефон отримувача</label>
               <input type="tel" id="fPhoneReceiver" placeholder="+380...">
             </div>
-            <div class="add-delivery-toggle">
-              <button class="add-delivery-btn active" onclick="setDeliveryType('np')">📦 Нова Пошта</button>
-              <button class="add-delivery-btn" onclick="setDeliveryType('address')">🏠 Адресна</button>
-            </div>
-            <div id="fNpBlock">
-              <div class="add-row">
-                <label>Нова Пошта (місто + відділення)</label>
-                <input type="text" id="fCityNP" placeholder="Київ 174">
+            <!-- Адреса доставки (НП або адресна) — togglable одним блоком,
+                 щоб власник міг сховати весь delivery-розділ для ЄВ→УК. -->
+            <div data-field-key="receiverAddressEu">
+              <div class="add-delivery-toggle">
+                <button class="add-delivery-btn active" onclick="setDeliveryType('np')">📦 Нова Пошта</button>
+                <button class="add-delivery-btn" onclick="setDeliveryType('address')">🏠 Адресна</button>
               </div>
-            </div>
-            <div id="fAddrBlock" style="display:none;">
-              <div class="add-row">
-                <label>Місто / Село</label>
-                <input type="text" id="fAddrCity" placeholder="Київ">
-              </div>
-              <div class="add-row">
-                <label>Вулиця</label>
-                <input type="text" id="fAddrStreet" placeholder="вул. Хрещатик">
-              </div>
-              <div class="add-row-grid">
+              <div id="fNpBlock">
                 <div class="add-row">
-                  <label>Будинок</label>
-                  <input type="text" id="fAddrHouse" placeholder="12">
+                  <label>Нова Пошта (місто + відділення)</label>
+                  <input type="text" id="fCityNP" placeholder="Київ 174">
+                </div>
+              </div>
+              <div id="fAddrBlock" style="display:none;">
+                <div class="add-row">
+                  <label>Місто / Село</label>
+                  <input type="text" id="fAddrCity" placeholder="Київ">
                 </div>
                 <div class="add-row">
-                  <label>Квартира</label>
-                  <input type="text" id="fAddrApt" placeholder="34">
+                  <label>Вулиця</label>
+                  <input type="text" id="fAddrStreet" placeholder="вул. Хрещатик">
+                </div>
+                <div class="add-row-grid">
+                  <div class="add-row">
+                    <label>Будинок</label>
+                    <input type="text" id="fAddrHouse" placeholder="12">
+                  </div>
+                  <div class="add-row">
+                    <label>Квартира</label>
+                    <input type="text" id="fAddrApt" placeholder="34">
+                  </div>
                 </div>
               </div>
             </div>
