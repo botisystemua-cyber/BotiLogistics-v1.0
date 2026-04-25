@@ -2173,12 +2173,12 @@ function renderVerifySearchResults(q) {
     const recvPhone = p['Телефон отримувача'] || '';
     const addressTo = cleanAddress(p['Адреса в Європі'] || p['Місто Нова Пошта'] || p['Адреса отримувача'] || '');
     const st = verifyHitStatus(p);
-    // Термінальні стани (у маршруті / відхилено / невідомий) → ховаємо меню
-    // дій, лишаємо тільки клікабельний бейдж-статус. «Готова до маршруту»
-    // має окремий рендер нижче — там видно бейдж посередині + кнопку
-    // «↩️ Повернути в перевірку», щоб оператор не додав випадково в перевірку.
-    const isTerminal = ['in-route','rejected','unknown'].includes(st.cls);
+    // Термінальні стани без власного UI (відхилено / невідомий) → ховаємо
+    // меню дій, лишаємо тільки клікабельний бейдж-статус. Для «Готова» і
+    // «В маршруті» нижче окремий рендер з кнопками.
+    const isTerminal = ['rejected','unknown'].includes(st.cls);
     const isReady    = st.cls === 'ready';
+    const isInRoute  = st.cls === 'in-route';
     const pkgEsc = escapeHtmlVerify(pkgId);
     const actions = isTerminal
       ? '<div class="verify-search-hit-terminal ' + st.cls + '" onclick="openCardById(\'' + pkgEsc + '\')">' +
@@ -2192,6 +2192,18 @@ function renderVerifySearchResults(q) {
           '<span class="verify-search-hit-ready-badge">✅ Вже готова</span>' +
           '<button class="verify-act-btn back" onclick="verifyBackToCheck(\'' + pkgEsc + '\', this)">↩️ Повернути в перевірку</button>' +
           '<button class="verify-act-btn edit" onclick="verifyOpenEdit(\'' + pkgEsc + '\')">✏️ Редагувати</button>' +
+        '</div>'
+      : isInRoute
+      ? // Уже в маршруті: лід виконується. «↩️ Повернути в перевірку» —
+        // знімає з маршруту і повертає у QC-чергу (use-case: клієнт переніс
+        // дату). «❌ Відхилити» — знімає з маршруту і ставить «Відхилено» +
+        // «Відмова» (use-case: клієнт скасував зовсім). Розрізняємо їх
+        // явно — щоб «перенесення» не плутати з «відмовою» в звітності.
+        '<div class="verify-search-hit-ready">' +
+          '<span class="verify-search-hit-inroute-badge">' + escapeHtmlVerify(st.label) + '</span>' +
+          '<button class="verify-act-btn back" onclick="verifyInRouteBackToCheck(\'' + pkgEsc + '\', this)">↩️ Повернути в перевірку</button>' +
+          '<button class="verify-act-btn del"  onclick="verifyInRouteReject(\''      + pkgEsc + '\', this)">❌ Відхилити</button>' +
+          '<button class="verify-act-btn edit" onclick="verifyOpenEdit(\''           + pkgEsc + '\')">✏️ Редагувати</button>' +
         '</div>'
       : '<div class="verify-search-hit-actions">' +
           '<button class="verify-act-btn add" onclick="verifyAddToCheck(\'' + pkgEsc + '\', this)">➕ В перевірку</button>' +
@@ -2212,7 +2224,7 @@ function renderVerifySearchResults(q) {
                  escapeHtmlVerify(sender) + ' → ' + escapeHtmlVerify(recipient) +
                '</div>' +
                extraHtml +
-               (st.label && !isTerminal && !isReady
+               (st.label && !isTerminal && !isReady && !isInRoute
                  ? '<div class="verify-search-hit-status ' + st.cls + '">' + st.label + '</div>'
                  : '') +
              '</div>' +
@@ -2307,6 +2319,89 @@ async function verifyBackToCheck(pkgId, btn) {
 
   // Перерендеримо результат пошуку, щоб бейдж «✅ Вже готова» зник і
   // з'явились звичайні кнопки (вже з статусом «Вже в перевірці»).
+  const inp = document.getElementById('verifySearchInput');
+  if (inp && inp.value.trim()) renderVerifySearchResults(inp.value.trim());
+}
+
+// Зняти з маршруту і повернути назад у перевірку. Use-case: клієнт переніс
+// дату/маршрут, тому лід має знов потрапити в QC-чергу до призначення в
+// інший рейс. Відхилення тут НЕ ставимо — лід досі активний.
+async function verifyInRouteBackToCheck(pkgId, btn) {
+  if (!pkgId) return;
+  const row = (allData || []).find(p => p['PKG_ID'] === pkgId);
+  if (!row) return;
+  const rteId = row['RTE_ID'] || '';
+  if (!rteId) {
+    // Захист від рідкісної гонки: якщо RTE_ID уже знятий поки був відкритий
+    // dropdown — поводимось як звичайне «Повернути в перевірку».
+    return verifyBackToCheck(pkgId, btn);
+  }
+  if (!confirm('Зняти «' + pkgId + '» з маршруту ' + rteId + ' і повернути в перевірку?')) return;
+  if (btn) { btn.disabled = true; btn.textContent = '⏳…'; }
+
+  // 1) Знімаємо з маршруту.
+  const rmRes = await apiPost('removeFromRoute', { pkg_id: pkgId, rte_id: rteId });
+  if (!rmRes || !rmRes.ok) {
+    if (btn) { btn.disabled = false; btn.textContent = '↩️ Повернути в перевірку'; }
+    showToast((rmRes && rmRes.error) || 'Помилка зняття з маршруту', 'error');
+    return;
+  }
+  row['RTE_ID'] = '';
+
+  // 2) Ставимо «В перевірці».
+  const setRes = await apiPost('updateField', {
+    pkg_id: pkgId, col: 'Контроль перевірки', value: 'В перевірці'
+  });
+  if (!setRes || !setRes.ok) {
+    showToast((setRes && setRes.error) || 'Помилка зміни статусу', 'error');
+    return;
+  }
+  row['Контроль перевірки'] = 'В перевірці';
+
+  renderCards();
+  updateCounters();
+  showToast('Знято з маршруту, в перевірці', 'success');
+
+  const inp = document.getElementById('verifySearchInput');
+  if (inp && inp.value.trim()) renderVerifySearchResults(inp.value.trim());
+}
+
+// Зняти з маршруту і відхилити (клієнт скасував зовсім). Причина обов'язкова —
+// без неї відхилення не виконується (та сама логіка, що і в deleteRecord).
+async function verifyInRouteReject(pkgId, btn) {
+  if (!pkgId) return;
+  const row = (allData || []).find(p => p['PKG_ID'] === pkgId);
+  if (!row) return;
+  const rteId = row['RTE_ID'] || '';
+  const reason = prompt('Причина відхилення «' + pkgId + '» (обов\'язково):', '');
+  if (reason === null) return;
+  if (!reason.trim()) {
+    showToast('Відхилення скасовано: причина обов\'язкова', 'warning');
+    return;
+  }
+  if (btn) { btn.disabled = true; btn.textContent = '⏳…'; }
+
+  // 1) Знімаємо з маршруту, якщо є.
+  if (rteId) {
+    const rmRes = await apiPost('removeFromRoute', { pkg_id: pkgId, rte_id: rteId });
+    if (!rmRes || !rmRes.ok) {
+      if (btn) { btn.disabled = false; btn.textContent = '❌ Відхилити'; }
+      showToast((rmRes && rmRes.error) || 'Помилка зняття з маршруту', 'error');
+      return;
+    }
+    row['RTE_ID'] = '';
+  }
+
+  // 2) Ставимо термінальний стан «Відхилено» + причину в Примітку.
+  row['Контроль перевірки'] = 'Відхилено';
+  row['Статус ліда'] = 'Відмова';
+  row['Примітка'] = reason;
+  await apiPost('rejectVerification', { pkg_id: pkgId, reason: reason });
+
+  renderCards();
+  updateCounters();
+  showToast('Знято з маршруту, відхилено', 'success');
+
   const inp = document.getElementById('verifySearchInput');
   if (inp && inp.value.trim()) renderVerifySearchResults(inp.value.trim());
 }
