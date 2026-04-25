@@ -5407,27 +5407,29 @@ function getSeatLayout(layout, maxSeats, hasReserve) {
     // Driver position = steering wheel center in the PNG:
     //   minivan-top.png → (19, 50)   bus-top.png → (15, 51)
     // Seat height (aspect 1/1): 8.5% × 3.02 ≈ 25.7% for van. Rows touch when Δy ≈ 25.
-    // 1-3-3 uses per-seat mask PNGs extracted from van-1-3-3.png (image 771×324).
-    // Each seat's bbox is defined in %-coords of the van container; `mask` is the
-    // pre-rendered alpha stencil — CSS background-color paints through it.
+    // 1-3-3 layout: фото Mercedes Sprinter Ultra Long top-down (1408×768).
+    // Layout: D (front-left) + 1 (середній пасажир, поряд з D) + 3 у середньому ряду + 3 у задньому.
+    // Координати — приблизні, вирівняти точно при потребі за зворотнім зв'язком.
     if (layout === '1-3-3') {
-        const s = (name, type, px0, py0, px1, py1, mask) => ({
-            name, type, mask,
+        const s = (name, type, px0, py0, px1, py1) => ({
+            name, type,
             boxed: true,
-            x: px0 / 771 * 100,
-            y: py0 / 324 * 100,
-            w: (px1 - px0) / 771 * 100,
-            h: (py1 - py0) / 324 * 100,
+            x: px0 / 1408 * 100,
+            y: py0 / 768 * 100,
+            w: (px1 - px0) / 1408 * 100,
+            h: (py1 - py0) / 768 * 100,
         });
-        seats.push(s('1', 'seat',   180, 75,  320, 170, 'seat-masks/van-1-3-3-D.png'));
-        seats.push(s('D', 'driver', 180, 172, 320, 260, 'seat-masks/van-1-3-3-1.png'));
-        seats.push(s('2', 'seat',   310, 70,  460, 135, 'seat-masks/van-1-3-3-2.png'));
-        seats.push(s('3', 'seat',   310, 138, 460, 205, 'seat-masks/van-1-3-3-3.png'));
-        seats.push(s('4', 'seat',   310, 208, 460, 270, 'seat-masks/van-1-3-3-4.png'));
-        seats.push(s('5', 'seat',   430, 70,  590, 135, 'seat-masks/van-1-3-3-5.png'));
-        seats.push(s('6', 'seat',   430, 138, 590, 205, 'seat-masks/van-1-3-3-6.png'));
-        seats.push(s('7', 'seat',   430, 208, 590, 270, 'seat-masks/van-1-3-3-7.png'));
-        if (hasReserve) seats.push(s('R', 'reserve', 235, 150, 265, 190, 'seat-masks/van-1-3-3-D.png'));
+        // Front column (driver area on the left)
+        seats.push(s('D', 'driver',  60, 110,  240, 290));   // driver, top-left with steering wheel
+        seats.push(s('1', 'seat',   260, 110,  430, 290));   // front passenger / co-driver
+        // Middle row — 3 seats stacked top→bottom
+        seats.push(s('2', 'seat',   480, 110,  680, 290));
+        seats.push(s('3', 'seat',   480, 305,  680, 480));
+        seats.push(s('4', 'seat',   480, 495,  680, 660));
+        // Rear row — 3 seats stacked
+        seats.push(s('5', 'seat',   810, 110, 1010, 290));
+        seats.push(s('6', 'seat',   810, 305, 1010, 480));
+        seats.push(s('7', 'seat',   810, 495, 1010, 660));
         return seats;
     }
 
