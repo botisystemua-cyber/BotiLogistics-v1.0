@@ -45,9 +45,10 @@ export const CARGO_FILL_GROUPS: FieldGroup[] = [
   {
     key: 'receiver',
     title: '📥 Отримувач',
-    description: 'ПІБ можна знімати. Телефон отримувача та адреса доставки — обов\'язкові, прибрати не можна.',
+    description: 'ПІБ можна знімати окремо для кожного напрямку. Телефон отримувача та адреса доставки — обов\'язкові, прибрати не можна.',
     fields: [
-      { key: 'receiverName', label: 'ПІБ отримувача' },
+      { key: 'receiverNameUe', label: 'ПІБ отримувача (УК → ЄВ)' },
+      { key: 'receiverNameEu', label: 'ПІБ отримувача (ЄВ → УК)' },
     ],
   },
   {
@@ -141,8 +142,16 @@ function mergeWithDefaults(parsed: unknown): FillFormConfig {
     fields: { ...def.fields },
   };
   if (p.fields && typeof p.fields === 'object') {
+    const src = p.fields as Record<string, unknown>;
+    // Backward-compat: legacy `receiverName` (одна галочка для обох напрямків)
+    // конвертуємо у дві нові — receiverNameUe / receiverNameEu з тим самим значенням.
+    // Якщо нові ключі вже є в БД — вони перекриють legacy нижче.
+    if (typeof src.receiverName === 'boolean') {
+      merged.fields.receiverNameUe = src.receiverName;
+      merged.fields.receiverNameEu = src.receiverName;
+    }
     for (const k of Object.keys(merged.fields)) {
-      const v = (p.fields as Record<string, unknown>)[k];
+      const v = src[k];
       if (typeof v === 'boolean') merged.fields[k] = v;
     }
   }

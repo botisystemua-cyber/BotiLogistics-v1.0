@@ -289,8 +289,8 @@ function CargoFillFormPreview({ cfg }: { cfg: FillFormConfig }) {
           </PreviewSection>
         )}
 
-        {/* Receiver name (toggle) */}
-        {isOn('receiverName') && (
+        {/* Receiver name (toggle, per-direction) */}
+        {((isUe && isOn('receiverNameUe')) || (!isUe && isOn('receiverNameEu'))) && (
           <PreviewSection title="📥 Отримувач (додатково)">
             <PreviewField label="ПІБ отримувача" placeholder="Прізвище Ім'я По-батькові" />
           </PreviewSection>
