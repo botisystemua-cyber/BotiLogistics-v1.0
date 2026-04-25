@@ -584,7 +584,7 @@
 
     <div class="add-form-body">
       <!-- SMS Parser -->
-      <div class="add-section">
+      <div class="add-section" data-section-key="smsParser">
         <div class="add-section-title sec-sms" onclick="toggleAddSection(this)">
           📋 SMS-парсер <span style="margin-left:auto;font-size:10px;">▲ Згорнути</span>
         </div>
@@ -603,16 +603,16 @@
         <div class="add-section">
           <div class="add-section-title sec-sender">📤 Відправник (Європа)</div>
           <div class="add-section-body">
-            <div class="add-row">
-              <label>Піб відправника <span class="req">*</span></label>
+            <div class="add-row" data-field-key="senderName">
+              <label>Піб відправника</label>
               <input type="text" id="fSender" placeholder="Прізвище Ім'я">
             </div>
-            <div class="add-row">
-              <label>Телефон відправника <span class="req">*</span></label>
+            <div class="add-row" data-field-key="senderPhone">
+              <label>Телефон відправника</label>
               <input type="tel" id="fPhone" placeholder="+41... / +49... / +48..." oninput="checkDuplicatePhone(this.value)">
             </div>
-            <div class="add-row">
-              <label>Адреса відправника <span class="req">*</span></label>
+            <div class="add-row" data-field-key="senderAddress">
+              <label>Адреса відправника</label>
               <input type="text" id="fAddressFrom" placeholder="Введіть адресу вручну" autocomplete="off">
               <div class="add-swiss-dropdown" id="swissDropdownSender">
                 <button type="button" class="add-swiss-btn" onclick="toggleSwissList('sender')">📍 Або оберіть нашу точку ▼</button>
@@ -620,11 +620,11 @@
               </div>
             </div>
             <div class="add-row-grid">
-              <div class="add-row">
+              <div class="add-row" data-field-key="senderEstValue">
                 <label>Оціночна вартість (€) ±</label>
                 <input type="number" id="fEstValue" placeholder="0" min="0">
               </div>
-              <div class="add-row">
+              <div class="add-row" data-field-key="senderWeight">
                 <label>Приблизна вага (кг)</label>
                 <input type="number" id="fWeight" placeholder="0" min="0" step="0.1">
               </div>
@@ -638,8 +638,8 @@
             📍 Дані отримувача в Україні <span style="margin-left:auto;font-size:10px;">▼ Розгорнути</span>
           </div>
           <div class="add-section-body" style="display:none;" id="fReceiverSection">
-            <div class="add-row">
-              <label>ПІБ отримувача <span class="req">*</span></label>
+            <div class="add-row" data-field-key="receiverName">
+              <label>ПІБ отримувача</label>
               <input type="text" id="fReceiver" placeholder="Прізвище Ім'я По-батькові">
             </div>
             <div class="add-row">
@@ -685,8 +685,8 @@
         <div class="add-section">
           <div class="add-section-title sec-ue">📦 Дані посилки (УК → Європа)</div>
           <div class="add-section-body">
-            <div class="add-row">
-              <label>Піб отримувача <span class="req">*</span></label>
+            <div class="add-row" data-field-key="receiverName">
+              <label>Піб отримувача</label>
               <input type="text" id="fReceiverUE" placeholder="Прізвище Ім'я">
             </div>
             <div class="add-row">
@@ -701,36 +701,36 @@
                 <div class="add-swiss-list" id="swissListReceiver"></div>
               </div>
             </div>
-            <div class="add-row">
+            <div class="add-row" data-field-key="parcelTtn">
               <label>Номер ТТН</label>
               <input type="text" id="fTTN" placeholder="Номер ТТН">
             </div>
             <div class="add-row-grid">
-              <div class="add-row">
+              <div class="add-row" data-field-key="parcelWeightUE">
                 <label>Приблизна вага (кг)</label>
                 <input type="number" id="fWeightUE" placeholder="0" min="0" step="0.1">
               </div>
-              <div class="add-row">
+              <div class="add-row" data-field-key="parcelEstValueUE">
                 <label>Оціночна вартість (€) ±</label>
                 <input type="number" id="fEstValueUE" placeholder="0" min="0">
               </div>
             </div>
             <div class="add-row-grid">
-              <div class="add-row">
+              <div class="add-row" data-field-key="parcelDescription">
                 <label>Опис</label>
                 <input type="text" id="fDescription" placeholder="Опис вмісту">
               </div>
-              <div class="add-row">
+              <div class="add-row" data-field-key="parcelQty">
                 <label>Кількість позицій</label>
                 <input type="number" id="fQty" placeholder="1" min="1" value="1">
               </div>
             </div>
             <div class="add-row-grid">
-              <div class="add-row">
+              <div class="add-row" data-field-key="parcelSum">
                 <label>Сума</label>
                 <input type="number" id="fSum" placeholder="0" min="0">
               </div>
-              <div class="add-row">
+              <div class="add-row" data-field-key="parcelCurrency">
                 <label>Валюта</label>
                 <select id="fCurrency">
                   <option value="UAH">UAH</option>
@@ -746,7 +746,7 @@
               <label>Місто</label>
               <input type="text" id="fCity" placeholder="Місто">
             </div>
-            <div class="add-row">
+            <div class="add-row" data-field-key="parcelPayStatus">
               <label>Статус оплати</label>
               <select id="fPayStatus">
                 <option value="">—</option>

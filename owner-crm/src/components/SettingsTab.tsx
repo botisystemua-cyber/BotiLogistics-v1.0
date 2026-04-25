@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { RoutePointsPanel } from './RoutePointsPanel';
 import { CurrencyDefaultsPanel } from './CurrencyDefaultsPanel';
+import { FillFormConfigPanel } from './FillFormConfigPanel';
 import { listRoutePointsByTenant, type RoutePoint } from '../api/routes';
 
 export function SettingsTab({ tenantId }: { tenantId: string }) {
@@ -25,6 +26,7 @@ export function SettingsTab({ tenantId }: { tenantId: string }) {
     <>
       <RoutePointsPanel points={points} tenantId={tenantId} onReload={reload} />
       <CurrencyDefaultsPanel tenantId={tenantId} />
+      <FillFormConfigPanel tenantId={tenantId} />
     </>
   );
 }
