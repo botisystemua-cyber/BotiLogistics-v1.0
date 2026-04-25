@@ -545,6 +545,21 @@ body {
   letter-spacing: 0.2px;
   white-space: nowrap;
 }
+/* Фіолетовий бейдж для статусу «В маршруті» — попередження «лід уже
+   виконується». Той самий .verify-search-hit-ready row, але інший центр-pill. */
+.verify-search-hit-inroute-badge {
+  flex: 1 1 auto;
+  text-align: center;
+  padding: 6px 12px;
+  background: #ede9fe;
+  color: #5b21b6;
+  border: 1px solid #ddd6fe;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+}
 .verify-act-btn:disabled { background: #cbd5e1; cursor: not-allowed; }
 
 /* ============ FILL CTA — червона випукла кнопка «Заповнити» ============ */
