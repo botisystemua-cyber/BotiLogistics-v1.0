@@ -1476,7 +1476,6 @@ function renderCard(p, routeCtx) {
           ${itemCount > 1 ? `<span class="badge-item-count" title="Кількість позицій: ${itemCount} речей всередині">🧾 ${itemCount}</span>` : ''}
           ${weight ? `<span class="badge-weight" title="Вага">⚖️ ${weight} кг</span>` : ''}
           ${photoUrl ? `<a href="${escapeHtml(photoUrl)}" target="_blank" onclick="event.stopPropagation();" class="badge-photo" title="Відкрити фото посилки">📷</a>` : ''}
-          ${visCols.includes('innerNum') && p['Внутрішній №'] ? `<span class="badge-inner-num" title="Внутрішній номер">🔢 №<span class="num">${highlightMatch(String(p['Внутрішній №']))}</span></span>` : ''}
           <div class="card-finance">
             ${visCols.includes('sum') && price ? `<span class="card-price ${priceColorClass}">${price} ${currency}</span>` : ''}
             ${visCols.includes('deposit') && deposit > 0 ? `<span class="card-deposit">завд:${deposit}</span>` : ''}
@@ -1490,6 +1489,7 @@ function renderCard(p, routeCtx) {
               return `<span class="card-np-debt" title="Ми оплатили Нову Пошту — клієнт має повернути">🚚 НП: ${npAmt} ${npCur}</span>`;
             })()}
           </div>
+          ${visCols.includes('innerNum') && p['Внутрішній №'] ? `<span class="badge-inner-num" title="Внутрішній номер">🔢 №<span class="num">${highlightMatch(String(p['Внутрішній №']))}</span></span>` : ''}
           <button class="card-actions-toggle" onclick="event.stopPropagation(); toggleActions('${pkgId}', this)" title="Дії">▼</button>
         </div>
         <div class="card-row2-wrap">
