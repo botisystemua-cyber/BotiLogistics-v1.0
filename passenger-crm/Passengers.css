@@ -124,6 +124,111 @@ body { font-family: 'Montserrat', sans-serif; background: var(--bg-main); color:
 .pc-sidebar-item.archive:hover { border-color: #6b7280; }
 .pc-sidebar-item.archive.active { background: #6b7280; color: white; border-color: #6b7280; }
 
+/* Standalone-кнопка «Архів» унизу sidebar (як 🗄️ Архів у cargo). Не входить
+   в акордеон-секції — клац одразу відкриває archiveView. */
+.pc-sidebar-archive-btn {
+    margin: 4px 8px;
+    padding: 11px 14px;
+    border-radius: 8px;
+    text-align: center;
+    font-weight: 700;
+    font-size: 13px;
+    color: #6b7280;
+    background: white;
+    border: 1px solid var(--border);
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.15s;
+}
+.pc-sidebar-archive-btn:hover { background: #f3f4f6; color: #374151; border-color: #6b7280; }
+.pc-sidebar-archive-btn.active { background: #6b7280; color: white; border-color: #6b7280; }
+.pc-sidebar-archive-btn .badge-count {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 1px 8px;
+    border-radius: 10px;
+    background: #e5e7eb;
+    color: #374151;
+    font-size: 11px;
+    font-weight: 700;
+}
+.pc-sidebar-archive-btn.active .badge-count { background: rgba(255,255,255,0.25); color: white; }
+
+/* ===== ARCHIVE FILTER BAR (port from cargo) ===== */
+.arch-filter-bar {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+}
+.arch-filter-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+.arch-search {
+    flex: 1 1 240px;
+    min-width: 0;
+    padding: 8px 12px;
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 13px;
+    outline: none;
+    transition: border-color 0.15s;
+}
+.arch-search:focus { border-color: var(--primary); }
+.arch-search-clear {
+    padding: 4px 10px;
+    border: 1px solid var(--border);
+    background: #fff;
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 12px;
+    cursor: pointer;
+    color: #6b7280;
+    transition: all 0.15s;
+}
+.arch-search-clear:hover { background: #f3f4f6; color: #111; }
+.arch-date-chip {
+    padding: 6px 12px;
+    border-radius: 16px;
+    border: 1px solid var(--border);
+    background: #fff;
+    font-family: inherit;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+    color: #475569;
+}
+.arch-date-chip:hover { background: #f3f4f6; }
+.arch-date-chip.active {
+    background: #6b7280;
+    color: #fff;
+    border-color: #6b7280;
+}
+.arch-date-range label {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #475569;
+}
+.arch-date-range input[type="date"] {
+    padding: 5px 8px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 12px;
+}
+
 /* SIDE MENU (Mobile) */
 .side-menu-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 200; }
 .side-menu-overlay.show { display: block; }
