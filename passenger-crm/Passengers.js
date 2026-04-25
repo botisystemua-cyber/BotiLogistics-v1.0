@@ -4478,14 +4478,12 @@ function renderTrips() {
     const today = new Date(); today.setHours(0,0,0,0);
     const todayTs = today.getTime();
 
-    // У списку показуємо ТІЛЬКИ майбутні рейси (включно з сьогодні).
-    // Минулі — взагалі не показуємо, навіть як «fallback щоб не було пусто».
-    // Напрям/авто/дата — поважаємо.
+    // У списку: всі активні рейси у DOM (включно з минулими). Напрям/авто/дата
+    // фільтри поважаємо. Минулі лишаються доступні скролом вліво — НЕ ховаємо
+    // їх з DOM, бо хочемо щоб юзер міг до них дотягнутися.
     const base = trips.filter(t => {
         if (t.status === 'Архів' || t.status === 'Виконано' || t.status === 'Видалено') return false;
-        const d = parseTripDateObj(t);
-        if (d === null) return false;
-        if (d.getTime() < todayTs) return false; // минулі — геть зі списку
+        if (parseTripDateObj(t) === null) return false;
         if (tripDirFilter !== 'all' && getTripDirection(t) !== tripDirFilter) return false;
         if (tripAutoFilter !== 'all' && cleanAutoName(t.auto_name) !== tripAutoFilter) return false;
         if (tripDateFilter) {
@@ -4497,17 +4495,7 @@ function renderTrips() {
         return true;
     });
 
-    if (base.length === 0) {
-        grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;">
-            <div class="empty-state-icon">🚐</div>
-            <div class="empty-state-text">Немає наступних рейсів</div>
-            <div class="empty-state-sub">Створіть новий або підкоригуйте фільтри</div>
-            <button class="bs-btn primary" style="margin-top:12px;" onclick="openNewTripForm()">➕ Створити рейс</button>
-        </div>`;
-        return;
-    }
-
-    // Групуємо по «Місто + напрям» — різні напрями → різні рядки
+    // Групуємо по «Місто + напрям»
     const groups = {};
     base.forEach(t => {
         const city = String(t.city || '—').trim();
@@ -4517,19 +4505,34 @@ function renderTrips() {
         groups[key].trips.push(t);
     });
 
-    // Сортуємо рейси в рядку по даті ASC, ранг групи = час до найближчого рейсу
-    const groupList = Object.values(groups).map(g => {
-        g.trips.sort((a, b) => parseTripDateObj(a) - parseTripDateObj(b));
-        const firstTs = parseTripDateObj(g.trips[0]).getTime();
-        g.rank = firstTs - todayTs;
-        return g;
-    });
+    // Залишаємо тільки ті групи, де є хоч один майбутній рейс. Якщо лише минулі —
+    // рядок ховаємо повністю. Минулі В ІСНУЮЧИХ групах залишаємо в DOM (скрол вліво).
+    const groupList = Object.values(groups)
+        .map(g => {
+            g.trips.sort((a, b) => parseTripDateObj(a) - parseTripDateObj(b));
+            const tsList = g.trips.map(t => parseTripDateObj(t).getTime());
+            const firstFutureTs = tsList.find(ts => ts >= todayTs);
+            if (firstFutureTs === undefined) return null; // тільки минулі — ховаємо рядок
+            g.rank = firstFutureTs - todayTs; // менше = раніший майбутній рейс зверху
+            return g;
+        })
+        .filter(Boolean);
     groupList.sort((a, b) => a.rank - b.rank);
+
+    if (groupList.length === 0) {
+        grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;">
+            <div class="empty-state-icon">🚐</div>
+            <div class="empty-state-text">Немає наступних рейсів</div>
+            <div class="empty-state-sub">Створіть новий або підкоригуйте фільтри</div>
+            <button class="bs-btn primary" style="margin-top:12px;" onclick="openNewTripForm()">➕ Створити рейс</button>
+        </div>`;
+        return;
+    }
 
     grid.innerHTML = groupList.map(g => renderTripRow(g, todayTs)).join('');
 
-    // Авто-скрол на сьогоднішній/найближчий — лишаємо для коректності,
-    // хоча минулих більше нема, цей блок безпечний.
+    // Авто-скрол: сьогоднішній/найближчий майбутній — на лівому краю.
+    // Минулі картки існують ліворуч і доступні скролом, але видимий старт — сьогодні.
     requestAnimationFrame(() => {
         document.querySelectorAll('.trow-scroll').forEach(row => {
             const cards = row.querySelectorAll('.trow-card');
