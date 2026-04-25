@@ -2167,6 +2167,11 @@ function renderVerifySearchResults(q) {
     const ttn   = p['Номер ТТН'] || '(без ТТН)';
     const sender    = p['Піб відправника'] || '—';
     const recipient = p['Піб отримувача']  || '—';
+    // Додаткові поля для оператора: телефон отримувача + адреса доставки.
+    // Адресу беремо в порядку пріоритету як на картці ліда (Європа → НП → отримувача)
+    // і чистимо плейсхолдери на кшталт «(не вказано)» через cleanAddress.
+    const recvPhone = p['Телефон отримувача'] || '';
+    const addressTo = cleanAddress(p['Адреса в Європі'] || p['Місто Нова Пошта'] || p['Адреса отримувача'] || '');
     const st = verifyHitStatus(p);
     // Термінальні стани (готова до маршруту / у маршруті / відхилено / невідомий)
     // → ховаємо меню дій, лишаємо лише клікабельний бейдж-статус, щоб оператор
@@ -2182,12 +2187,20 @@ function renderVerifySearchResults(q) {
           '<button class="verify-act-btn edit" onclick="verifyOpenEdit(\'' + pkgEsc + '\')">✏️ Редагувати</button>' +
           '<button class="verify-act-btn del" onclick="verifyRemoveFromCheck(\'' + pkgEsc + '\', this)">🗑️ Видалити з перевірки</button>' +
         '</div>';
+    // Додатковий рядок з телефоном/адресою — показуємо лише якщо є хоч одне з полів.
+    const extraParts = [];
+    if (recvPhone) extraParts.push('📞 ' + escapeHtmlVerify(recvPhone));
+    if (addressTo) extraParts.push('📍 ' + escapeHtmlVerify(addressTo));
+    const extraHtml = extraParts.length
+      ? '<div class="verify-search-hit-extra">' + extraParts.join(' &nbsp;·&nbsp; ') + '</div>'
+      : '';
     return '<div class="verify-search-hit" data-pkg="' + pkgEsc + '">' +
              '<div class="verify-search-hit-info">' +
                '<div class="verify-search-hit-ttn">' + escapeHtmlVerify(ttn) + '</div>' +
                '<div class="verify-search-hit-meta">' +
                  escapeHtmlVerify(sender) + ' → ' + escapeHtmlVerify(recipient) +
                '</div>' +
+               extraHtml +
                (st.label && !isTerminal
                  ? '<div class="verify-search-hit-status ' + st.cls + '">' + st.label + '</div>'
                  : '') +

@@ -467,6 +467,15 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* Додатковий рядок з телефоном отримувача + адресою доставки. Дрібніший
+   шрифт, перенос рядків дозволено (адреса може бути довгою). */
+.verify-search-hit-extra {
+  font-size: 11px;
+  color: #475569;
+  line-height: 1.35;
+  white-space: normal;
+  word-break: break-word;
+}
 .verify-search-hit-status {
   font-size: 10px;
   color: #64748b;
