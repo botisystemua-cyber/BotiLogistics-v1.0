@@ -1540,6 +1540,14 @@ body.route-sort-active #rteTogglePay {
 .rseat-selected .rseat-check { position: absolute; top: 4px; right: 6px; font-size: 11px; }
 .rseat-occupied { background: #f3f4f6; border-style: solid; border-color: #cbd5e1; color: #64748b; cursor: not-allowed; opacity: 0.7; }
 .rseat-occupied .rseat-name { position: absolute; bottom: -16px; left: 0; right: 0; font-size: 9px; font-weight: 600; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 2px; }
+/* Flexible (вільна розсадка) — бліде, пунктир, можна посунути */
+.rseat-occupied.rseat-flex { background: #eff6ff; border-style: dashed; border-color: #93c5fd; color: #1e40af; opacity: 0.85; }
+.rseat-occupied.rseat-flex .rseat-name { color: #1e40af; }
+.seat-occupied.seat-flex { opacity: 0.6; filter: saturate(0.5); }
+.seat-occupied.seat-flex .seat-occ-name { color: #1e40af; font-style: italic; }
+.seat-pin.seat-occupied.seat-flex { background: rgba(147,197,253,0.4) !important; border: 1.5px dashed #2563eb !important; }
+.seat-flex-ico { font-size: 9px; opacity: 0.7; margin-left: 2px; }
+.sp-seat.sp-occupied.sp-flex { opacity: 0.55; border-style: dashed; }
 /* Прев'ю в формі рейсу */
 .reserve-preview { margin-top: 6px; font-size: 11px; font-weight: 700; color: #9a3412; text-align: center; padding: 4px 8px; background: #fff7ed; border-radius: 6px; display: inline-block; }
 

@@ -21,6 +21,7 @@ const SB_TO_GAS = {
     departure_time:    'Таймінг',
     vehicle_name:      'Номер авто',
     seat_number:       'Місце в авто',
+    seat_flexible:     'Гнучке',
     rte_id:            'RTE_ID',
     ticket_price:      'Ціна квитка',
     ticket_currency:   'Валюта квитка',
@@ -392,7 +393,12 @@ async function sbUpdateField(params) {
         }
 
         const updateObj = {};
-        updateObj[sbCol] = value === '' ? null : value;
+        // Boolean coercion for known boolean columns (Supabase strict).
+        if (sbCol === 'seat_flexible' || sbCol === 'is_archived') {
+            updateObj[sbCol] = (value === true || value === 'true' || value === 1);
+        } else {
+            updateObj[sbCol] = value === '' ? null : value;
+        }
         updateObj.updated_at = new Date().toISOString();
 
         // Recalculate debt if price/deposit changed
