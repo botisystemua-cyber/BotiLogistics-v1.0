@@ -2173,14 +2173,25 @@ function renderVerifySearchResults(q) {
     const recvPhone = p['Телефон отримувача'] || '';
     const addressTo = cleanAddress(p['Адреса в Європі'] || p['Місто Нова Пошта'] || p['Адреса отримувача'] || '');
     const st = verifyHitStatus(p);
-    // Термінальні стани (готова до маршруту / у маршруті / відхилено / невідомий)
-    // → ховаємо меню дій, лишаємо лише клікабельний бейдж-статус, щоб оператор
-    // бачив, що лід уже закрито для перевірки.
-    const isTerminal = ['ready','in-route','rejected','unknown'].includes(st.cls);
+    // Термінальні стани (у маршруті / відхилено / невідомий) → ховаємо меню
+    // дій, лишаємо тільки клікабельний бейдж-статус. «Готова до маршруту»
+    // має окремий рендер нижче — там видно бейдж посередині + кнопку
+    // «↩️ Повернути в перевірку», щоб оператор не додав випадково в перевірку.
+    const isTerminal = ['in-route','rejected','unknown'].includes(st.cls);
+    const isReady    = st.cls === 'ready';
     const pkgEsc = escapeHtmlVerify(pkgId);
     const actions = isTerminal
       ? '<div class="verify-search-hit-terminal ' + st.cls + '" onclick="openCardById(\'' + pkgEsc + '\')">' +
           escapeHtmlVerify(st.label) +
+        '</div>'
+      : isReady
+      ? // Готова до маршруту: посередині — підсвічена «✅ Готова» (щоб
+        // оператор бачив що лід уже пройшов перевірку), праворуч — кнопка
+        // повернути назад. Без «➕ В перевірку», щоб не доданути випадково.
+        '<div class="verify-search-hit-ready">' +
+          '<span class="verify-search-hit-ready-badge">✅ Вже готова</span>' +
+          '<button class="verify-act-btn back" onclick="verifyBackToCheck(\'' + pkgEsc + '\', this)">↩️ Повернути в перевірку</button>' +
+          '<button class="verify-act-btn edit" onclick="verifyOpenEdit(\'' + pkgEsc + '\')">✏️ Редагувати</button>' +
         '</div>'
       : '<div class="verify-search-hit-actions">' +
           '<button class="verify-act-btn add" onclick="verifyAddToCheck(\'' + pkgEsc + '\', this)">➕ В перевірку</button>' +
@@ -2201,7 +2212,7 @@ function renderVerifySearchResults(q) {
                  escapeHtmlVerify(sender) + ' → ' + escapeHtmlVerify(recipient) +
                '</div>' +
                extraHtml +
-               (st.label && !isTerminal
+               (st.label && !isTerminal && !isReady
                  ? '<div class="verify-search-hit-status ' + st.cls + '">' + st.label + '</div>'
                  : '') +
              '</div>' +
@@ -2266,6 +2277,38 @@ async function verifyAddToCheck(pkgId, btn) {
   if (hasScanReturn()) {
     setTimeout(() => backToScanner(), 400);
   }
+}
+
+// Повернути «Готова до маршруту» назад у «В перевірці» — для випадку, коли
+// оператор у пошуку перевірки знайшов уже готовий лід і вирішив його ще раз
+// перевірити (наприклад, помилка в адресі помічена постфактум). Захист від
+// випадкового кліка — confirm().
+async function verifyBackToCheck(pkgId, btn) {
+  if (!pkgId) return;
+  if (!confirm('Повернути «' + pkgId + '» з «Готова» назад у «В перевірці»?')) return;
+  if (btn) { btn.disabled = true; btn.textContent = '⏳…'; }
+
+  const res = await apiPost('updateField', {
+    pkg_id: pkgId, col: 'Контроль перевірки', value: 'В перевірці'
+  });
+
+  if (!res || !res.ok) {
+    if (btn) { btn.disabled = false; btn.textContent = '↩️ Повернути в перевірку'; }
+    showToast((res && res.error) || 'Помилка повернення', 'error');
+    return;
+  }
+
+  const row = (allData || []).find(p => p['PKG_ID'] === pkgId);
+  if (row) row['Контроль перевірки'] = 'В перевірці';
+
+  renderCards();
+  updateCounters();
+  showToast('Повернено в перевірку', 'success');
+
+  // Перерендеримо результат пошуку, щоб бейдж «✅ Вже готова» зник і
+  // з'явились звичайні кнопки (вже з статусом «Вже в перевірці»).
+  const inp = document.getElementById('verifySearchInput');
+  if (inp && inp.value.trim()) renderVerifySearchResults(inp.value.trim());
 }
 
 // Видалити з перевірки (скидає scan_status до 'received' через api-мапінг

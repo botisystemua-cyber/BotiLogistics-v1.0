@@ -522,6 +522,29 @@ body {
 .verify-act-btn.add  { background: var(--primary, #2563eb); color: #fff; }
 .verify-act-btn.edit { background: #f59e0b;                 color: #fff; }
 .verify-act-btn.del  { background: #ef4444;                 color: #fff; }
+.verify-act-btn.back { background: #10b981;                 color: #fff; }
+.verify-act-btn.back:hover { background: #059669; }
+
+/* Спеціальний рядок дій для статусу «Готова до маршруту»: посередині —
+   ніжно-зелений бейдж-нагадування «✅ Вже готова», праворуч — кнопки
+   «↩️ Повернути в перевірку» і «✏️ Редагувати». Без «➕ В перевірку»,
+   щоб оператор не дублював лід випадково. */
+.verify-search-hit-ready {
+  display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+}
+.verify-search-hit-ready-badge {
+  flex: 1 1 auto;
+  text-align: center;
+  padding: 6px 12px;
+  background: #dcfce7;
+  color: #166534;
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+}
 .verify-act-btn:disabled { background: #cbd5e1; cursor: not-allowed; }
 
 /* ============ FILL CTA — червона випукла кнопка «Заповнити» ============ */
