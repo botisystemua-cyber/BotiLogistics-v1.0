@@ -8262,9 +8262,9 @@ function showArchiveView() {
     archiveSelectedIds.clear();
     updatePcSidebarActive();
     updateMobileSidebarActive();
-    // Архів тепер standalone-кнопка, а не пункт «Пасажири» — згортаємо
-    // акордеон-секції, як це роблять інші standalone-кнопки в посилковій CRM.
-    if (typeof setActiveAccordion === 'function') setActiveAccordion(null);
+    // Архів — пункт всередині секції «Пасажири», тримаємо її розгорнутою щоб
+    // активний клас «📦 Архів» був видимим.
+    if (typeof setActiveAccordion === 'function') setActiveAccordion('pax');
     showLoader('📦 Завантаження архіву...');
     loadArchive().then(function() { hideLoader(); }).catch(function() { hideLoader(); });
 }

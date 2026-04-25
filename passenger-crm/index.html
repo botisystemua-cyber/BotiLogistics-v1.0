@@ -230,6 +230,11 @@ $manifest = '../manifest.php' . ($t ? '?name=' . rawurlencode($t) . ($l ? '&logo
                     </div>
                 </div>
 
+                <div class="pc-sidebar-item archive" id="pcArchive" onclick="showArchiveView()">
+                    <span><span class="item-icon">📦</span><span class="item-text">Архів</span></span>
+                    <span class="item-count" id="pcCountArchive"></span>
+                </div>
+
             </div>
         </div>
 
@@ -278,13 +283,6 @@ $manifest = '../manifest.php' . ($t ? '?name=' . rawurlencode($t) . ($l ? '&logo
             </div>
         </div>
 
-
-        <!-- Архів — standalone-кнопка під «Маршрути» (як 🗄️ Архів у cargo-crm) -->
-        <div class="pc-sidebar-section">
-            <div class="pc-sidebar-archive-btn" id="pcArchive" onclick="showArchiveView()">
-                📦 Архів <span class="badge-count" id="pcCountArchive"></span>
-            </div>
-        </div>
 
         <!-- Дії -->
         <div class="pc-sidebar-section">

@@ -51,6 +51,7 @@
       <div class="mob-item" data-dir="new24" onclick="setDirection('new24')">🆕 Нові (24 год) <span class="badge-count" id="mobCountNew24" style="background:#fef3c7;color:#d97706;">0</span></div>
       <div class="mob-item active" data-dir="ue" onclick="setDirection('ue')">🇺🇦 УК → Європа <span class="badge-count" id="mobCountUe">0</span></div>
       <div class="mob-item" data-dir="eu" onclick="setDirection('eu')">🇪🇺 Європа → УК <span class="badge-count" id="mobCountEu">0</span></div>
+      <div class="mob-item mob-item-muted" onclick="toggleArchiveView();closeMobileSidebar();">🗄️ Архів <span class="badge-count" id="mobCountArchive"></span></div>
     </div>
   </div>
 
@@ -99,10 +100,7 @@
     </div>
   </div>
 
-  <!-- Архів -->
-  <div class="mob-section mob-section-single">
-    <div class="mob-item mob-item-muted" onclick="toggleArchiveView();closeMobileSidebar();">🗄️ Архів <span class="badge-count" id="mobCountArchive"></span></div>
-  </div>
+  <!-- Архів — тепер всередині секції «Напрямок» вище -->
 </nav>
 
 <!-- ===== BULK ACTION MENU ===== -->
@@ -196,6 +194,9 @@
         <div class="sidebar-item" data-dir="eu" onclick="setDirection('eu')">
           🇪🇺 Європа → УК <span class="badge-count" id="countEu">0</span>
         </div>
+        <div class="sidebar-item archive-item" id="archiveToggleBtn" onclick="toggleArchiveView()">
+          🗄️ Архів <span class="badge-count" id="countArchive"></span>
+        </div>
       </div>
     </div>
 
@@ -264,12 +265,6 @@
       </div>
     </div>
 
-    <!-- Archive Toggle -->
-    <div class="sidebar-section">
-      <div class="sidebar-item" id="archiveToggleBtn" onclick="toggleArchiveView()" style="margin:4px 8px;border-radius:8px;text-align:center;font-weight:600;cursor:pointer;">
-        🗄️ Архів <span class="badge-count" id="countArchive"></span>
-      </div>
-    </div>
   </aside>
   <button class="sidebar-toggle-btn" id="sidebarToggleBtn" onclick="toggleSidebar()" title="Згорнути/розгорнути меню">◀</button>
 
