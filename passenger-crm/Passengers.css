@@ -1840,10 +1840,14 @@ body.route-sort-active #rteTogglePay {
 @keyframes paxSlideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
 
 .modal.pax-add-sheet .modal-header {
-    position: sticky; top: 0; z-index: 2;
+    position: sticky; top: 0; z-index: 5;
     background: linear-gradient(135deg, var(--primary), #0f2849);
     padding: 14px 18px;
     border-radius: 0;
+    /* Фіксована висота — щоб SMS-парсер міг стікати під заголовок з
+       прогнозованим offset (top: 52px у пра sticky-правилі нижче). */
+    height: 52px;
+    box-sizing: border-box;
 }
 .modal.pax-add-sheet .modal-title { font-size: 15px; font-weight: 800; }
 .modal.pax-add-sheet .modal-close {
@@ -1955,6 +1959,70 @@ body.route-sort-active #rteTogglePay {
     border-color: #047857;
     color: #047857;
     box-shadow: 0 2px 8px rgba(4,120,87,0.15);
+}
+
+/* SMS-парсер прилипає під шапкою модалки — щоб оператор бачив
+   текст SMS під час прокрутки полів нижче. Якщо власник вимкнув
+   SMS-парсер — секції просто немає в DOM. */
+.modal.pax-add-sheet .pax-add-section[data-section-key="smsParser"] {
+    position: sticky;
+    top: 52px;
+    z-index: 4;
+    background: #fff;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+}
+
+/* ===== МОБІЛЬНА АДАПТАЦІЯ ===== */
+/* На малих екранах робимо кути дрібніші, секції щільніші. На ПК
+   (>600px) усе як було. */
+@media (max-width: 600px) {
+    .modal.pax-add-sheet {
+        max-height: 95vh;
+        border-radius: 14px 14px 0 0;
+    }
+    .modal.pax-add-sheet .modal-header {
+        padding: 12px 14px;
+        height: 48px;
+    }
+    .modal.pax-add-sheet .modal-title { font-size: 14px; }
+    .modal.pax-add-sheet .modal-close { width: 28px; height: 28px; font-size: 15px; }
+    .modal.pax-add-sheet .modal-footer {
+        padding: 10px 14px;
+        gap: 8px;
+    }
+    .modal.pax-add-sheet .modal-footer .btn-cancel,
+    .modal.pax-add-sheet .modal-footer .btn-save {
+        padding: 11px;
+        font-size: 13px;
+        border-radius: 9px;
+    }
+    /* Sticky SMS: підлаштувати offset під меншу шапку. */
+    .modal.pax-add-sheet .pax-add-section[data-section-key="smsParser"] {
+        top: 48px;
+    }
+    /* Секції-картки: менші margin/радіус, щільніше відступи всередині. */
+    .pax-add-section {
+        margin: 8px;
+        border-radius: 10px;
+    }
+    .pax-add-section-title {
+        padding: 8px 12px;
+        font-size: 11px;
+        letter-spacing: 0.4px;
+    }
+    .pax-add-section-body { padding: 12px; }
+    .pax-add-section .form-group { margin-bottom: 10px; }
+    .pax-add-section .form-row {
+        gap: 8px;
+        margin-bottom: 10px;
+    }
+    /* Кнопки напрямку: можуть переходити на 2 рядки якщо текст довгий. */
+    .pax-dir-toggle { gap: 6px; }
+    .pax-dir-btn {
+        padding: 9px 6px;
+        font-size: 11px;
+        border-radius: 9px;
+    }
 }
 
 /* Column configurator */

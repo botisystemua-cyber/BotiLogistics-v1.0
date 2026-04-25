@@ -1932,10 +1932,13 @@ body {
 @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
 
 .add-sheet-header {
-  position: sticky; top: 0; z-index: 2;
+  position: sticky; top: 0; z-index: 5;
   padding: 16px 20px 12px;
   border-bottom: 1px solid var(--border);
   display: flex; align-items: center; justify-content: space-between;
+  /* Фіксована висота — щоб SMS-парсер під ним мав прогнозований offset. */
+  height: 56px;
+  box-sizing: border-box;
 }
 .add-sheet-header.dir-ue { background: linear-gradient(135deg, #fef3c7, #fff7ed); }
 .add-sheet-header.dir-eu { background: linear-gradient(135deg, #dbeafe, #ede9fe); }
@@ -2080,6 +2083,64 @@ body {
 .add-btn-save:hover { filter: brightness(1.1); }
 .add-btn-save.dir-ue { background: linear-gradient(135deg, #f59e0b, #f97316); }
 .add-btn-save.dir-eu { background: linear-gradient(135deg, #3b82f6, #6366f1); }
+
+/* SMS-парсер прилипає під шапкою — щоб оператор бачив текст SMS під час
+   прокрутки полів. Якщо власник вимкнув SMS — секції просто немає в DOM. */
+.add-sheet .add-section[data-section-key="smsParser"] {
+  position: sticky;
+  top: 56px; /* = .add-sheet-header height */
+  z-index: 4;
+  background: #fff;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+}
+
+/* ===== МОБІЛЬНА АДАПТАЦІЯ для «Нова посилка» ===== */
+@media (max-width: 600px) {
+  .add-sheet {
+    max-height: 95vh;
+    border-radius: 14px 14px 0 0;
+  }
+  .add-sheet-header {
+    padding: 12px 14px;
+    height: 50px;
+  }
+  .add-sheet-header h3 { font-size: 14px; }
+  .add-sheet-close { width: 28px; height: 28px; font-size: 15px; }
+  .add-dir-toggle { padding: 10px 14px 6px; gap: 6px; }
+  .add-dir-btn {
+    padding: 9px 6px;
+    font-size: 11px;
+    border-radius: 9px;
+  }
+  .add-form-body { padding: 0 14px 14px; }
+  .add-section {
+    margin-top: 12px;
+    border-radius: 10px;
+  }
+  .add-section-title {
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+  .add-section-body { padding: 12px; }
+  .add-row { margin-bottom: 10px; }
+  .add-row input, .add-row textarea, .add-row select {
+    padding: 9px 10px;
+    font-size: 12px;
+    border-radius: 7px;
+  }
+  .add-row-grid { gap: 8px; }
+  .add-form-footer {
+    padding: 10px 14px;
+    gap: 8px;
+  }
+  .add-form-footer button {
+    padding: 11px;
+    font-size: 12px;
+    border-radius: 9px;
+  }
+  /* Sticky SMS: підлаштувати offset під меншу шапку. */
+  .add-sheet .add-section[data-section-key="smsParser"] { top: 50px; }
+}
 
 /* ===== FAB (Add button) ===== */
 .fab {
