@@ -6980,6 +6980,14 @@ async function saveParcel() {
       return;
     }
 
+    // НП-оплата (Україна) — клієнт відправив гроші через Нову Пошту.
+    // Опціональні поля (можуть бути сховані owner-конфігом). Захищаємось
+    // від null-елементів, бо власник міг сховати весь блок з форми.
+    const npSumEl = document.getElementById('fNpSum');
+    const npCurrencyEl = document.getElementById('fNpCurrency');
+    const npSumVal = npSumEl ? (npSumEl.value || '') : '';
+    const npCurrencyVal = npCurrencyEl ? (npCurrencyEl.value || 'UAH') : 'UAH';
+
     data = {
       'Напрям': 'УК→ЄВ',
       'Піб отримувача': receiverUE,
@@ -6992,6 +7000,8 @@ async function saveParcel() {
       'Кількість позицій': document.getElementById('fQty').value || '1',
       'Сума': document.getElementById('fSum').value || '',
       'Валюта оплати': document.getElementById('fCurrency').value || 'UAH',
+      'Сума НП': npSumVal,
+      'Валюта НП': npCurrencyVal,
       'Примітка': document.getElementById('fNote').value || ''
     };
   }

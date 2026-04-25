@@ -66,9 +66,11 @@ export const CARGO_FILL_GROUPS: FieldGroup[] = [
     key: 'finance',
     title: '💰 Фінанси',
     fields: [
-      { key: 'parcelSum',       label: 'Сума' },
-      { key: 'parcelCurrency',  label: 'Валюта' },
-      { key: 'parcelPayStatus', label: 'Статус оплати' },
+      { key: 'parcelSum',        label: 'Сума' },
+      { key: 'parcelCurrency',   label: 'Валюта' },
+      { key: 'parcelPayStatus',  label: 'Статус оплати' },
+      { key: 'parcelNpSum',      label: 'Сума НП', hint: 'оплата Нової Пошти (УК→ЄВ)' },
+      { key: 'parcelNpCurrency', label: 'Валюта НП', hint: 'зазвичай UAH' },
     ],
   },
 ];
