@@ -1304,7 +1304,7 @@ function renderCard(p, routeCtx) {
   }
   if (visCols.includes('statusPkg') && statusPkg) metaHtml += `<span class="meta-tag">${escapeHtml(statusPkg)}</span>`;
   if (visCols.includes('smartId') && p['Ід_смарт']) metaHtml += `<span class="meta-tag">🆔 ${highlightMatch(String(p['Ід_смарт']))}</span>`;
-  if (visCols.includes('innerNum') && p['Внутрішній №']) metaHtml += `<span class="meta-tag tag-inner-num">🔢 №<span class="num">${highlightMatch(String(p['Внутрішній №']))}</span></span>`;
+  // Внутрішній № винесено у card-top-row як .badge-inner-num — у meta-row не дублюємо.
   if (visCols.includes('phone') && phone) {
     const _sp = String(phone).replace(/'/g, "\\'");
     metaHtml += `<span class="meta-tag copyable" onclick="event.stopPropagation(); copyToClipboard('${_sp}', 'Номер скопійовано')" title="Клац — скопіювати номер">📞 ${highlightMatch(phone)}</span>`;
@@ -1476,6 +1476,7 @@ function renderCard(p, routeCtx) {
           ${itemCount > 1 ? `<span class="badge-item-count" title="Кількість позицій: ${itemCount} речей всередині">🧾 ${itemCount}</span>` : ''}
           ${weight ? `<span class="badge-weight" title="Вага">⚖️ ${weight} кг</span>` : ''}
           ${photoUrl ? `<a href="${escapeHtml(photoUrl)}" target="_blank" onclick="event.stopPropagation();" class="badge-photo" title="Відкрити фото посилки">📷</a>` : ''}
+          ${visCols.includes('innerNum') && p['Внутрішній №'] ? `<span class="badge-inner-num" title="Внутрішній номер">🔢 №<span class="num">${highlightMatch(String(p['Внутрішній №']))}</span></span>` : ''}
           <div class="card-finance">
             ${visCols.includes('sum') && price ? `<span class="card-price ${priceColorClass}">${price} ${currency}</span>` : ''}
             ${visCols.includes('deposit') && deposit > 0 ? `<span class="card-deposit">завд:${deposit}</span>` : ''}

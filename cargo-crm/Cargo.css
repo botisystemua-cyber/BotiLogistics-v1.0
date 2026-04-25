@@ -1216,6 +1216,24 @@ body {
   text-decoration: none; cursor: pointer;
 }
 .badge-photo:hover { background: #a7f3d0; }
+/* Внутрішній № — на верхньому ряді поряд з 📷-іконкою. Помаранчевий
+   акцент (бренд cargo) + жирна моноширинна цифра, щоб номер було видно
+   з відстані під час сортування на складі. */
+.badge-inner-num {
+  display: inline-flex; align-items: center; gap: 2px;
+  background: #fff7ed; color: #9a3412;
+  border: 1px solid #fed7aa;
+  padding: 2px 8px; border-radius: 12px;
+  font-size: 11px; font-weight: 700;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+.badge-inner-num .num {
+  font-family: "SF Mono", Monaco, Consolas, monospace;
+  font-size: 13px; font-weight: 800;
+  color: #7c2d12;
+  letter-spacing: 0.5px;
+}
 
 /* Підказки клієнта (Phase A: пошук адрес по номеру телефону) */
 .client-suggestions { display: none; flex-direction: column; gap: 4px; margin-top: 6px; }
@@ -1342,25 +1360,6 @@ body {
 }
 .meta-tag.tag-debt { background: #fef2f2; color: var(--danger); font-weight: 600; }
 .meta-tag.tag-vip { background: #fef3c7; color: #92400e; font-weight: 600; }
-/* Внутрішній № — критична інфа для оператора (по ньому посилка маркується
-   на сортуванні), тому акцентний візуал: помаранчевий тло, темне обрамлення,
-   більший шрифт і жирна моноширинна цифра. */
-.meta-tag.tag-inner-num {
-  background: #fff7ed;
-  color: #9a3412;
-  border: 1px solid #fed7aa;
-  font-weight: 700;
-  padding: 2px 8px;
-  font-size: 12px;
-  letter-spacing: 0.3px;
-}
-.meta-tag.tag-inner-num .num {
-  font-family: "SF Mono", Monaco, Consolas, monospace;
-  font-size: 13px;
-  font-weight: 800;
-  color: #7c2d12;
-  letter-spacing: 0.5px;
-}
 
 /* Badges */
 .badge {
