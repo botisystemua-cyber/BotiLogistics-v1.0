@@ -549,6 +549,27 @@ async function sbRestorePassenger(params) {
     }
 }
 
+// Незворотне видалення архівованих пасажирів (для CRM-кнопки «🗑️ Видалити
+// назавжди»). Як в cargo (sbPkgPermanentDelete): DELETE FROM passengers WHERE
+// pax_id IN (…) AND is_archived = true. Захист `is_archived = true` —
+// щоб випадково не видалити активного пасажира якщо хтось підкрутить запит.
+async function sbDeleteFromArchive(params) {
+    try {
+        const paxIds = params.pax_ids || (params.pax_id ? [params.pax_id] : []);
+        if (!paxIds.length) return { ok: false, error: 'pax_ids не вказано' };
+        const { error, count } = await sb.from('passengers')
+            .delete({ count: 'exact' })
+            .eq('tenant_id', TENANT_ID)
+            .in('pax_id', paxIds)
+            .eq('is_archived', true);
+        if (error) throw error;
+        return { ok: true, deleted: count != null ? count : paxIds.length };
+    } catch (e) {
+        console.error('sbDeleteFromArchive error:', e);
+        return { ok: false, error: e.message };
+    }
+}
+
 async function sbGetArchive(params) {
     try {
         const offset = params.offset || 0;
@@ -1519,7 +1540,7 @@ async function apiPostSupabase(action, data) {
         deletePassenger:    sbDeletePassenger,
         restorePassenger:   sbRestorePassenger,
         getArchive:         sbGetArchive,
-        deleteFromArchive:  async () => ({ ok: false, error: 'Видалення з архіву заблоковано' }),
+        deleteFromArchive:  sbDeleteFromArchive,
 
         // Trips
         getTrips:           sbGetTrips,
