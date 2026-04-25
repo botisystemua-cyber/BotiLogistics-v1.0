@@ -90,16 +90,28 @@ export function FillFormConfigPanel({ tenantId }: { tenantId: string }) {
                 Зніміть галочки з полів, які не потрібні менеджерам.
               </p>
 
-              {/* Заблоковані поля — інформативно */}
+              {/* Заблоковані поля — інформативно. Кожне має «directions» —
+                  у яких напрямках воно обов'язкове (lock-required). */}
               <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 mb-4">
                 <div className="text-xs font-bold text-amber-900 mb-2 uppercase tracking-wide">
-                  Завжди вгорі форми (прибрати не можна)
+                  Обов'язкові поля (прибрати не можна)
                 </div>
                 <ul className="space-y-1.5">
                   {CARGO_LOCKED_FIELDS.map(f => (
-                    <li key={f.key} className="flex items-center gap-2 text-sm text-amber-900">
-                      <Lock className="w-3.5 h-3.5 flex-shrink-0" />
-                      <span className="font-semibold">{f.label.replace(/^🔒\s*/, '')}</span>
+                    <li key={f.key} className="flex items-start gap-2 text-sm text-amber-900">
+                      <Lock className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                      <div className="flex-1 min-w-0">
+                        <span className="font-semibold">{f.label.replace(/^🔒\s*/, '')}</span>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          {f.directions.includes('ue') && (
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-200 text-amber-900">УК → ЄВ</span>
+                          )}
+                          {f.directions.includes('eu') && (
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-200 text-amber-900">ЄВ → УК</span>
+                          )}
+                          {f.hint && <span className="text-[11px] text-amber-700">{f.hint.replace(/^тільки\s+(УК → ЄВ|ЄВ → УК)\s*\(?/, '').replace(/\)$/, '')}</span>}
+                        </div>
+                      </div>
                     </li>
                   ))}
                 </ul>
@@ -267,19 +279,23 @@ function CargoFillFormPreview({ cfg }: { cfg: FillFormConfig }) {
           </PreviewSection>
         )}
 
-        {/* Locked fields — first, always */}
-        <PreviewSection title="🔒 Обов'язкові поля" locked>
-          <PreviewField label="Телефон отримувача *" placeholder={recvPhonePlaceholder} locked />
-          <PreviewField label="Адреса доставки *"    placeholder={recvAddrPlaceholder}  locked />
-        </PreviewSection>
+        {/* Locked fields — лише для УК→ЄВ показуємо receiver-блок,
+            бо саме в цьому напрямку ці поля обов'язкові. У ЄВ→УК
+            обов'язковими стає sender-блок (нижче). */}
+        {isUe && (
+          <PreviewSection title="🔒 Обов'язкові поля" locked>
+            <PreviewField label="Телефон отримувача *" placeholder={recvPhonePlaceholder} locked />
+            <PreviewField label="Адреса доставки *"    placeholder={recvAddrPlaceholder}  locked />
+          </PreviewSection>
+        )}
 
         {/* Sender section — лише для ЄВ→УК. Телефон + адреса locked
             (контакт людини, у якої забираємо посилку — обов'язкові). */}
         {showSenderSection && (
-          <PreviewSection title="📤 Відправник (Європа)">
-            {isOn('senderName') && <PreviewField label="ПІБ відправника" placeholder="Прізвище Ім'я" />}
+          <PreviewSection title="🔒 Відправник (Європа) — обов'язкові" locked>
             <PreviewField label="Телефон відправника *" placeholder="+41… / +49…" locked />
             <PreviewField label="Адреса відправника *"  placeholder="Введіть адресу…" locked />
+            {isOn('senderName') && <PreviewField label="ПІБ відправника" placeholder="Прізвище Ім'я" />}
             <div className="grid grid-cols-2 gap-2">
               {isOn('senderEstValue') && <PreviewField label="Оцін. вартість (€)" placeholder="0" />}
               {isOn('senderWeight')   && <PreviewField label="Вага (кг)"         placeholder="0" />}
@@ -287,8 +303,19 @@ function CargoFillFormPreview({ cfg }: { cfg: FillFormConfig }) {
           </PreviewSection>
         )}
 
-        {/* Receiver name (toggle, per-direction) */}
-        {((isUe && isOn('receiverNameUe')) || (!isUe && isOn('receiverNameEu'))) && (
+        {/* Для ЄВ→УК: телефон+адреса отримувача (Україна) — НЕ обов'язкові,
+            тож показуємо їх як звичайні (опціональні) поля під отримувачем. */}
+        {!isUe && (
+          <PreviewSection title="📥 Отримувач (Україна)">
+            {isOn('receiverNameEu') && <PreviewField label="ПІБ отримувача" placeholder="Прізвище Ім'я По-батькові" />}
+            <PreviewField label="Телефон отримувача" placeholder="+380…" />
+            <PreviewField label="Адреса доставки (НП або вулиця)" placeholder="НП: Київ 174 / вул. …" />
+          </PreviewSection>
+        )}
+
+        {/* Receiver name (toggle) — для УК→ЄВ окремим блоком, для ЄВ→УК
+            ПІБ вже включений у «📥 Отримувач (Україна)» вище. */}
+        {isUe && isOn('receiverNameUe') && (
           <PreviewSection title="📥 Отримувач (додатково)">
             <PreviewField label="ПІБ отримувача" placeholder="Прізвище Ім'я По-батькові" />
           </PreviewSection>

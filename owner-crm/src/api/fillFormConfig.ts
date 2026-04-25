@@ -74,13 +74,19 @@ export const CARGO_FILL_GROUPS: FieldGroup[] = [
   },
 ];
 
-// Поля що ЗАВЖДИ обов'язкові — для UI показу (🔒 lock-icon у списку),
-// у JSON конфігу не зберігаються.
-export const CARGO_LOCKED_FIELDS: FieldDef[] = [
-  { key: 'receiverPhone',   label: '🔒 Телефон отримувача',  hint: 'обидва напрямки' },
-  { key: 'receiverAddress', label: '🔒 Адреса доставки',     hint: 'обидва напрямки' },
-  { key: 'senderPhone',     label: '🔒 Телефон відправника', hint: 'тільки ЄВ → УК (контакт для забору посилки)' },
-  { key: 'senderAddress',   label: '🔒 Адреса відправника',  hint: 'тільки ЄВ → УК (куди їдемо за посилкою)' },
+// Поля що ОБОВ'ЯЗКОВІ у певному напрямку (locked, прибрати не можна).
+// directions — у яких напрямках це поле обов'язкове ('ue' = УК→ЄВ, 'eu' = ЄВ→УК).
+// У формі іншого напрямку поле не показується або є опціональним.
+export interface LockedFieldDef extends FieldDef {
+  directions: Array<'ue' | 'eu'>;
+}
+export const CARGO_LOCKED_FIELDS: LockedFieldDef[] = [
+  // УК→ЄВ: посилка летить у Європу — потрібен контакт того, кому довезти.
+  { key: 'receiverPhone',   label: '🔒 Телефон отримувача',  hint: 'тільки УК → ЄВ (кому довезти посилку)', directions: ['ue'] },
+  { key: 'receiverAddress', label: '🔒 Адреса доставки',     hint: 'тільки УК → ЄВ (куди довезти посилку)', directions: ['ue'] },
+  // ЄВ→УК: посилка забирається з Європи — потрібен контакт того, у кого забрати.
+  { key: 'senderPhone',     label: '🔒 Телефон відправника', hint: 'тільки ЄВ → УК (у кого забрати посилку)', directions: ['eu'] },
+  { key: 'senderAddress',   label: '🔒 Адреса відправника',  hint: 'тільки ЄВ → УК (куди їдемо за посилкою)', directions: ['eu'] },
 ];
 
 // ---------- Модель конфігу ----------

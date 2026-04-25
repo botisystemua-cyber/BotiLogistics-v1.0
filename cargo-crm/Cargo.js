@@ -6920,11 +6920,11 @@ async function saveParcel() {
   let data = {};
 
   if (dir === 'eu') {
-    // EU → UA
-    // Обов'язкові поля: телефон+адреса відправника (це людина, у якої
-    // забираємо посилку — без них кур'єр не виїде), плюс телефон отримувача
-    // і адреса доставки. ПІБ + оцін.вартість + вага — опціональні
-    // (власник може ховати через owner-crm налаштування).
+    // EU → UA: посилку забираємо з Європи, веземо в Україну.
+    // Обов'язкові поля для лід-формування: телефон+адреса ВІДПРАВНИКА
+    // (контакт людини, у якої забираємо — без них кур'єр не виїде).
+    // Все, що стосується отримувача в Україні (телефон, адреса, НП), —
+    // опціональне на цьому етапі (доводять пізніше у «Заповнити»).
     const sender = document.getElementById('fSender').value.trim();
     const phone = document.getElementById('fPhone').value.trim();
     const addressFrom = document.getElementById('fAddressFrom').value.trim();
@@ -6933,21 +6933,18 @@ async function saveParcel() {
 
     if (!phone) errors.push('Телефон відправника');
     if (!addressFrom) errors.push('Адреса відправника');
-    if (!phoneReceiver) errors.push('Телефон отримувача');
 
+    // Адреса доставки збирається з ввeденого, навіть якщо порожня —
+    // не валідуємо як обов'язкову. Якщо щось є, складаємо в один рядок.
     let addressTo = '';
     if (deliveryType === 'np') {
       const cityNP = document.getElementById('fCityNP').value.trim();
-      if (!cityNP) errors.push('Адреса доставки (Нова Пошта)');
-      addressTo = 'НП: ' + cityNP;
+      addressTo = cityNP ? ('НП: ' + cityNP) : '';
     } else {
       const addrCity = document.getElementById('fAddrCity').value.trim();
       const addrStreet = document.getElementById('fAddrStreet').value.trim();
       const addrHouse = document.getElementById('fAddrHouse').value.trim();
       const addrApt = document.getElementById('fAddrApt').value.trim();
-      // Адресну доставку вимагаємо мінімум місто+вулицю+будинок як «повну
-      // адресу», бо без них кур'єр не довезе. Це і є «адреса доставки».
-      if (!addrCity || !addrStreet || !addrHouse) errors.push('Адреса доставки (місто, вулиця, будинок)');
       addressTo = [addrCity, addrStreet, addrHouse ? 'буд.' + addrHouse : '', addrApt ? 'кв.' + addrApt : ''].filter(Boolean).join(', ');
     }
 
