@@ -3152,6 +3152,7 @@ function setDirection(dir) {
 }
 
 function setView(view) {
+  _exitArchiveView();
   // Update bottom nav
   document.querySelectorAll('.bottom-nav-item').forEach((el, i) => {
     el.classList.toggle('active', (view === 'parcels' && i === 0) || (view === 'passengers' && i === 1));
@@ -3162,6 +3163,7 @@ function setView(view) {
 }
 
 function setStatusFilter(status) {
+  _exitArchiveView();
   currentFilter = status;
   document.querySelectorAll('#filterBar .filter-chip').forEach(el => {
     el.classList.toggle('active', el.dataset.status === status);
@@ -3170,6 +3172,7 @@ function setStatusFilter(status) {
 }
 
 function setPayFilter(pay) {
+  _exitArchiveView();
   currentPayFilter = pay;
   document.querySelectorAll('#payFilterBar .filter-chip').forEach(el => {
     el.classList.toggle('active', el.dataset.pay === pay);
@@ -3269,9 +3272,30 @@ function _resetSidebarSectionFilter(name) {
   // скидається в backToParcels, не тут.
 }
 
+// Силою виходимо з режиму «Архів» (showArchive=true) — викликати з кожної
+// навігації, що повинна показати звичайний список посилок (Напрямок, Перевірка,
+// Маршрути, фільтри статусу/оплати, повернення до посилок). Без цього
+// renderCards() рано виходить у renderArchiveCards() і архівні картки лишаються
+// на табло, навіть якщо юзер вже клацнув іншу рубрику.
+function _exitArchiveView() {
+  if (!showArchive) return;
+  showArchive = false;
+  archiveData = [];
+  var btn = document.getElementById('archiveToggleBtn');
+  if (btn) {
+    btn.style.background = '';
+    btn.style.color = '';
+    btn.innerHTML = '🗄️ Архів <span class="badge-count" id="countArchive"></span>';
+  }
+}
+
 // Відкриває одну секцію і згортає решту. Якщо попередня секція існувала і
 // відрізнялась — скидаємо її фільтри. name=null → згорнути всі (режим архів/зведення).
 function setActiveSidebarSection(name) {
+  // Перехід у будь-яку нову секцію меню (Напрямок/Перевірка/Маршрути) має
+  // вивести з архіву. name=null використовує сам toggleArchiveView для
+  // згортання меню — там виходити не треба.
+  if (name) _exitArchiveView();
   var prev = _activeSidebarSection;
   if (prev && prev !== name) {
     _resetSidebarSectionFilter(prev);
@@ -3455,6 +3479,7 @@ function switchMainView(view) {
 }
 
 function backToParcels() {
+  _exitArchiveView();
   activeRouteIdx = null;
   switchMainView('parcels');
   // Повернення у список посилок → меню згорнуте повністю (як при першому

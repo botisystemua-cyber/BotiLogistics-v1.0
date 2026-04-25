@@ -1245,13 +1245,15 @@ function goToCargoModule() {
     }
 }
 
-function showPaxView(dir) {
+function showPaxView(dir, keepDate) {
     currentView = 'pax';
     currentDir = dir || 'all';
     // Клац таб напрямку Пасажирів = вихід з «Календар-режиму»:
     // скидаємо дату, щоб список показав усіх за цим напрямком, а не
     // «цей напрямок на цю дату» (найчастіша причина порожнього списку).
-    if (paxCalSelectedDate) {
+    // keepDate=true — зайшли через клік на дату в календарі sidebar,
+    // тоді дату навмисне зберігаємо.
+    if (!keepDate && paxCalSelectedDate) {
         paxCalSelectedDate = null;
         renderPaxCalendar();
     }
@@ -6538,7 +6540,15 @@ function selectPaxCalDate(dateStr) {
         if (window.innerWidth <= 900) closeSideMenu();
     }
     renderPaxCalendar();
-    render();
+    // Календар у sidebar активний у будь-якій секції (Архів/Рейси/Маршрути).
+    // Сам по собі render() рано виходить, якщо currentView !== 'pax', тож
+    // архівні/маршрутні дані лишались на табло. Переключаємось у
+    // пасажирський список, зберігаючи обрану дату.
+    if (currentView !== 'pax') {
+        showPaxView(currentDir || 'all', true);
+    } else {
+        render();
+    }
 }
 
 // Чіпи активних фільтрів над списком — показуються ЛИШЕ у «Календар-режимі»
