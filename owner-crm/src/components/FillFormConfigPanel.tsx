@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
+import type { ReactNode } from 'react';
 import { ChevronRight, Lock, RotateCcw } from 'lucide-react';
 import {
   CARGO_FILL_GROUPS,
@@ -191,9 +192,43 @@ export function FillFormConfigPanel({ tenantId }: { tenantId: string }) {
 // Це не функціональна форма, лише візуалізація: оператор бачить, як буде
 // виглядати реальна форма в cargo-crm після збереження. Стилізовано близько до
 // справжнього cargo (бренд amber #92400e), але без логіки.
+//
+// Прев'ю має DIRECTION-перемикач, бо реальна cargo-форма показує різні
+// блоки в УК→ЄВ і ЄВ→УК. У ЄВ→УК — окремий «📤 Відправник (Європа)» зі
+// своїми полями (ПІБ/телефон/адреса). У УК→ЄВ цього блоку взагалі немає,
+// бо відправник — клієнт з України, його дані не вводяться окремо.
+// Плейсхолдери телефонів теж залежать від напрямку.
 // ============================================================================
+type Dir = 'ue' | 'eu'; // 'ue' = УК→ЄВ, 'eu' = ЄВ→УК (узгоджено з cargo-crm/Cargo.js)
+
 function CargoFillFormPreview({ cfg }: { cfg: FillFormConfig }) {
+  const [dir, setDir] = useState<Dir>('ue');
   const isOn = (k: string) => cfg.fields[k] !== false;
+
+  const isUe = dir === 'ue';
+  // Плейсхолдери залежно від напрямку:
+  // - УК→ЄВ: відправник (UA, +380), отримувач (EU, +41/+49)
+  // - ЄВ→УК: відправник (EU), отримувач (UA, +380)
+  const recvPhonePlaceholder = isUe ? '+41… / +49…' : '+380…';
+  const recvAddrPlaceholder  = isUe ? 'Цюрих, Bahnhofstrasse 12' : 'Київ, вул. Хрещатик, буд. 5 / НП…';
+
+  // У реальній cargo-формі sender-блок (з полями fSender/fPhone/fAddressFrom)
+  // існує лише для напрямку ЄВ→УК. У УК→ЄВ його немає — тому в прев'ю теж
+  // ховаємо, щоб картина точно збігалась з тим, що бачитиме менеджер.
+  const showSenderSection = !isUe && (
+    isOn('senderName') || isOn('senderPhone') || isOn('senderAddress') ||
+    isOn('senderEstValue') || isOn('senderWeight')
+  );
+  // Деталі посилки і НП-фінанси активні лише в УК→ЄВ.
+  const showParcelDetails = isUe && (
+    isOn('parcelTtn') || isOn('parcelDescription') || isOn('parcelQty') ||
+    isOn('parcelWeightUE') || isOn('parcelEstValueUE')
+  );
+  const showFinance = isUe && (
+    isOn('parcelSum') || isOn('parcelCurrency') || isOn('parcelPayStatus') ||
+    isOn('parcelNpSum') || isOn('parcelNpCurrency')
+  );
+
   return (
     <div className="rounded-xl border-2 border-amber-200 bg-white shadow-sm overflow-hidden">
       <div className="bg-gradient-to-r from-amber-700 to-amber-800 text-white px-4 py-3 flex items-center justify-between">
@@ -201,14 +236,28 @@ function CargoFillFormPreview({ cfg }: { cfg: FillFormConfig }) {
         <span className="text-xs opacity-80">прев'ю</span>
       </div>
       <div className="p-4 space-y-3 max-h-[680px] overflow-y-auto">
-        {/* Direction toggle (as in real form) */}
+        {/* Direction toggle — клікабельний, превʼю перебудовується */}
         <div className="flex gap-1 text-xs font-bold">
-          <div className="flex-1 px-3 py-2 rounded-lg bg-amber-100 text-amber-900 text-center">
+          <button
+            type="button"
+            onClick={() => setDir('ue')}
+            className={`flex-1 px-3 py-2 rounded-lg text-center transition-colors ${
+              isUe ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                   : 'bg-gray-100 text-gray-500 border border-transparent hover:bg-gray-200'
+            }`}
+          >
             🇺🇦 → 🇪🇺 УК → Європа
-          </div>
-          <div className="flex-1 px-3 py-2 rounded-lg bg-gray-100 text-gray-500 text-center">
-            🇪🇺 → 🇺🇦
-          </div>
+          </button>
+          <button
+            type="button"
+            onClick={() => setDir('eu')}
+            className={`flex-1 px-3 py-2 rounded-lg text-center transition-colors ${
+              !isUe ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                    : 'bg-gray-100 text-gray-500 border border-transparent hover:bg-gray-200'
+            }`}
+          >
+            🇪🇺 → 🇺🇦 Європа → УК
+          </button>
         </div>
 
         {/* SMS-парсер */}
@@ -223,20 +272,19 @@ function CargoFillFormPreview({ cfg }: { cfg: FillFormConfig }) {
 
         {/* Locked fields — first, always */}
         <PreviewSection title="🔒 Обов'язкові поля" locked>
-          <PreviewField label="Телефон отримувача *" placeholder="+380…" locked />
-          <PreviewField label="Адреса доставки *" placeholder="Місто, вулиця, № / НП…" locked />
+          <PreviewField label="Телефон отримувача *" placeholder={recvPhonePlaceholder} locked />
+          <PreviewField label="Адреса доставки *"    placeholder={recvAddrPlaceholder}  locked />
         </PreviewSection>
 
-        {/* Sender (showed in EU→UA direction; we render for context) */}
-        {(isOn('senderName') || isOn('senderPhone') || isOn('senderAddress') ||
-          isOn('senderEstValue') || isOn('senderWeight')) && (
+        {/* Sender section — лише для ЄВ→УК (як у реальній формі) */}
+        {showSenderSection && (
           <PreviewSection title="📤 Відправник (Європа)">
-            {isOn('senderName')     && <PreviewField label="ПІБ відправника"    placeholder="Прізвище Ім'я" />}
-            {isOn('senderPhone')    && <PreviewField label="Телефон відправника" placeholder="+41…" />}
-            {isOn('senderAddress')  && <PreviewField label="Адреса відправника" placeholder="Введіть адресу…" />}
+            {isOn('senderName')    && <PreviewField label="ПІБ відправника"     placeholder="Прізвище Ім'я" />}
+            {isOn('senderPhone')   && <PreviewField label="Телефон відправника" placeholder="+41… / +49…" />}
+            {isOn('senderAddress') && <PreviewField label="Адреса відправника"  placeholder="Введіть адресу…" />}
             <div className="grid grid-cols-2 gap-2">
               {isOn('senderEstValue') && <PreviewField label="Оцін. вартість (€)" placeholder="0" />}
-              {isOn('senderWeight')   && <PreviewField label="Вага (кг)" placeholder="0" />}
+              {isOn('senderWeight')   && <PreviewField label="Вага (кг)"         placeholder="0" />}
             </div>
           </PreviewSection>
         )}
@@ -248,30 +296,35 @@ function CargoFillFormPreview({ cfg }: { cfg: FillFormConfig }) {
           </PreviewSection>
         )}
 
-        {/* Parcel details */}
-        {(isOn('parcelTtn') || isOn('parcelDescription') || isOn('parcelQty') ||
-          isOn('parcelWeightUE') || isOn('parcelEstValueUE')) && (
+        {/* Parcel details — лише для УК→ЄВ */}
+        {showParcelDetails && (
           <PreviewSection title="📦 Деталі посилки">
             {isOn('parcelTtn') && <PreviewField label="Номер ТТН" placeholder="59001…" />}
             <div className="grid grid-cols-2 gap-2">
-              {isOn('parcelWeightUE')   && <PreviewField label="Вага (кг)" placeholder="0" />}
+              {isOn('parcelWeightUE')   && <PreviewField label="Вага (кг)"          placeholder="0" />}
               {isOn('parcelEstValueUE') && <PreviewField label="Оцін. вартість (€)" placeholder="0" />}
             </div>
             <div className="grid grid-cols-2 gap-2">
               {isOn('parcelDescription') && <PreviewField label="Опис вмісту" placeholder="Що всередині…" />}
-              {isOn('parcelQty')         && <PreviewField label="Кількість" placeholder="1" />}
+              {isOn('parcelQty')         && <PreviewField label="Кількість"   placeholder="1" />}
             </div>
           </PreviewSection>
         )}
 
-        {/* Finance */}
-        {(isOn('parcelSum') || isOn('parcelCurrency') || isOn('parcelPayStatus')) && (
+        {/* Finance — лише для УК→ЄВ */}
+        {showFinance && (
           <PreviewSection title="💰 Фінанси">
             <div className="grid grid-cols-2 gap-2">
-              {isOn('parcelSum')      && <PreviewField label="Сума" placeholder="0" />}
+              {isOn('parcelSum')      && <PreviewField label="Сума"   placeholder="0" />}
               {isOn('parcelCurrency') && <PreviewField label="Валюта" placeholder="EUR" />}
             </div>
             {isOn('parcelPayStatus') && <PreviewField label="Статус оплати" placeholder="Не оплачено" />}
+            {(isOn('parcelNpSum') || isOn('parcelNpCurrency')) && (
+              <div className="grid grid-cols-2 gap-2">
+                {isOn('parcelNpSum')      && <PreviewField label="Сума НП (₴)" placeholder="0" />}
+                {isOn('parcelNpCurrency') && <PreviewField label="Валюта НП"   placeholder="UAH" />}
+              </div>
+            )}
           </PreviewSection>
         )}
 
@@ -287,7 +340,7 @@ function CargoFillFormPreview({ cfg }: { cfg: FillFormConfig }) {
 
 function PreviewSection(
   { title, children, amber, locked }:
-  { title: string; children: React.ReactNode; amber?: boolean; locked?: boolean },
+  { title: string; children: ReactNode; amber?: boolean; locked?: boolean },
 ) {
   const bg = locked ? 'bg-amber-50 border-amber-200'
            : amber  ? 'bg-amber-50/40 border-amber-100'
