@@ -1304,7 +1304,7 @@ function renderCard(p, routeCtx) {
   }
   if (visCols.includes('statusPkg') && statusPkg) metaHtml += `<span class="meta-tag">${escapeHtml(statusPkg)}</span>`;
   if (visCols.includes('smartId') && p['Ід_смарт']) metaHtml += `<span class="meta-tag">🆔 ${highlightMatch(String(p['Ід_смарт']))}</span>`;
-  if (visCols.includes('innerNum') && p['Внутрішній №']) metaHtml += `<span class="meta-tag">🔢 №${highlightMatch(String(p['Внутрішній №']))}</span>`;
+  if (visCols.includes('innerNum') && p['Внутрішній №']) metaHtml += `<span class="meta-tag tag-inner-num">🔢 №<span class="num">${highlightMatch(String(p['Внутрішній №']))}</span></span>`;
   if (visCols.includes('phone') && phone) {
     const _sp = String(phone).replace(/'/g, "\\'");
     metaHtml += `<span class="meta-tag copyable" onclick="event.stopPropagation(); copyToClipboard('${_sp}', 'Номер скопійовано')" title="Клац — скопіювати номер">📞 ${highlightMatch(phone)}</span>`;

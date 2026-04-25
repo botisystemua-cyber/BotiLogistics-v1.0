@@ -1342,6 +1342,25 @@ body {
 }
 .meta-tag.tag-debt { background: #fef2f2; color: var(--danger); font-weight: 600; }
 .meta-tag.tag-vip { background: #fef3c7; color: #92400e; font-weight: 600; }
+/* Внутрішній № — критична інфа для оператора (по ньому посилка маркується
+   на сортуванні), тому акцентний візуал: помаранчевий тло, темне обрамлення,
+   більший шрифт і жирна моноширинна цифра. */
+.meta-tag.tag-inner-num {
+  background: #fff7ed;
+  color: #9a3412;
+  border: 1px solid #fed7aa;
+  font-weight: 700;
+  padding: 2px 8px;
+  font-size: 12px;
+  letter-spacing: 0.3px;
+}
+.meta-tag.tag-inner-num .num {
+  font-family: "SF Mono", Monaco, Consolas, monospace;
+  font-size: 13px;
+  font-weight: 800;
+  color: #7c2d12;
+  letter-spacing: 0.5px;
+}
 
 /* Badges */
 .badge {
