@@ -607,12 +607,12 @@
               <label>Піб відправника</label>
               <input type="text" id="fSender" placeholder="Прізвище Ім'я">
             </div>
-            <div class="add-row" data-field-key="senderPhone">
-              <label>Телефон відправника</label>
+            <div class="add-row">
+              <label>Телефон відправника <span class="req">*</span></label>
               <input type="tel" id="fPhone" placeholder="+41... / +49... / +48..." oninput="checkDuplicatePhone(this.value)">
             </div>
-            <div class="add-row" data-field-key="senderAddress">
-              <label>Адреса відправника</label>
+            <div class="add-row">
+              <label>Адреса відправника <span class="req">*</span></label>
               <input type="text" id="fAddressFrom" placeholder="Введіть адресу вручну" autocomplete="off">
               <div class="add-swiss-dropdown" id="swissDropdownSender">
                 <button type="button" class="add-swiss-btn" onclick="toggleSwissList('sender')">📍 Або оберіть нашу точку ▼</button>
@@ -643,7 +643,7 @@
               <input type="text" id="fReceiver" placeholder="Прізвище Ім'я По-батькові">
             </div>
             <div class="add-row">
-              <label>Телефон отримувача <span class="req">*</span></label>
+              <label>Телефон отримувача</label>
               <input type="tel" id="fPhoneReceiver" placeholder="+380...">
             </div>
             <div class="add-delivery-toggle">
@@ -652,22 +652,22 @@
             </div>
             <div id="fNpBlock">
               <div class="add-row">
-                <label>Нова Пошта (місто + відділення) <span class="req">*</span></label>
+                <label>Нова Пошта (місто + відділення)</label>
                 <input type="text" id="fCityNP" placeholder="Київ 174">
               </div>
             </div>
             <div id="fAddrBlock" style="display:none;">
               <div class="add-row">
-                <label>Місто / Село <span class="req">*</span></label>
+                <label>Місто / Село</label>
                 <input type="text" id="fAddrCity" placeholder="Київ">
               </div>
               <div class="add-row">
-                <label>Вулиця <span class="req">*</span></label>
+                <label>Вулиця</label>
                 <input type="text" id="fAddrStreet" placeholder="вул. Хрещатик">
               </div>
               <div class="add-row-grid">
                 <div class="add-row">
-                  <label>Будинок <span class="req">*</span></label>
+                  <label>Будинок</label>
                   <input type="text" id="fAddrHouse" placeholder="12">
                 </div>
                 <div class="add-row">
@@ -700,6 +700,13 @@
                 <button type="button" class="add-swiss-btn" onclick="toggleSwissList('receiver')">📍 Або оберіть нашу точку ▼</button>
                 <div class="add-swiss-list" id="swissListReceiver"></div>
               </div>
+            </div>
+            <!-- Опціональне поле: телефон українського відправника. Активує
+                 перевірку дублів (checkDuplicatePhone) — якщо клієнт уже
+                 відправляв посилку, оператор побачить попередження. -->
+            <div class="add-row" data-field-key="senderPhoneUe">
+              <label>Телефон відправника (UA)</label>
+              <input type="tel" id="fSenderPhoneUe" placeholder="+380..." oninput="checkDuplicatePhone(this.value)">
             </div>
             <div class="add-row" data-field-key="parcelTtn">
               <label>Номер ТТН</label>

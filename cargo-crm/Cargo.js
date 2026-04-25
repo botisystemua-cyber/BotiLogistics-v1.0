@@ -6920,31 +6920,31 @@ async function saveParcel() {
   let data = {};
 
   if (dir === 'eu') {
-    // EU → UA
-    // Обов'язкові: телефон отримувача + адреса доставки. Решта (ПІБ, адреса
-    // відправника, телефон відправника тощо) — опціональні; власник може
-    // їх ховати у формі через owner-crm налаштування.
+    // EU → UA: посилку забираємо з Європи, веземо в Україну.
+    // Обов'язкові поля для лід-формування: телефон+адреса ВІДПРАВНИКА
+    // (контакт людини, у якої забираємо — без них кур'єр не виїде).
+    // Все, що стосується отримувача в Україні (телефон, адреса, НП), —
+    // опціональне на цьому етапі (доводять пізніше у «Заповнити»).
     const sender = document.getElementById('fSender').value.trim();
     const phone = document.getElementById('fPhone').value.trim();
     const addressFrom = document.getElementById('fAddressFrom').value.trim();
     const receiver = document.getElementById('fReceiver').value.trim();
     const phoneReceiver = document.getElementById('fPhoneReceiver').value.trim();
 
-    if (!phoneReceiver) errors.push('Телефон отримувача');
+    if (!phone) errors.push('Телефон відправника');
+    if (!addressFrom) errors.push('Адреса відправника');
 
+    // Адреса доставки збирається з ввeденого, навіть якщо порожня —
+    // не валідуємо як обов'язкову. Якщо щось є, складаємо в один рядок.
     let addressTo = '';
     if (deliveryType === 'np') {
       const cityNP = document.getElementById('fCityNP').value.trim();
-      if (!cityNP) errors.push('Адреса доставки (Нова Пошта)');
-      addressTo = 'НП: ' + cityNP;
+      addressTo = cityNP ? ('НП: ' + cityNP) : '';
     } else {
       const addrCity = document.getElementById('fAddrCity').value.trim();
       const addrStreet = document.getElementById('fAddrStreet').value.trim();
       const addrHouse = document.getElementById('fAddrHouse').value.trim();
       const addrApt = document.getElementById('fAddrApt').value.trim();
-      // Адресну доставку вимагаємо мінімум місто+вулицю+будинок як «повну
-      // адресу», бо без них кур'єр не довезе. Це і є «адреса доставки».
-      if (!addrCity || !addrStreet || !addrHouse) errors.push('Адреса доставки (місто, вулиця, будинок)');
       addressTo = [addrCity, addrStreet, addrHouse ? 'буд.' + addrHouse : '', addrApt ? 'кв.' + addrApt : ''].filter(Boolean).join(', ');
     }
 
@@ -6987,12 +6987,18 @@ async function saveParcel() {
     const npCurrencyEl = document.getElementById('fNpCurrency');
     const npSumVal = npSumEl ? (npSumEl.value || '') : '';
     const npCurrencyVal = npCurrencyEl ? (npCurrencyEl.value || 'UAH') : 'UAH';
+    // Телефон українського відправника — опціональне поле для УК→ЄВ.
+    // Зберігаємо в ту ж колонку, що й у ЄВ→УК ('Телефон реєстратора'),
+    // щоб duplicate-чек і єдина модель даних працювали для обох напрямків.
+    const senderPhoneUeEl = document.getElementById('fSenderPhoneUe');
+    const senderPhoneUe = senderPhoneUeEl ? (senderPhoneUeEl.value.trim() || '') : '';
 
     data = {
       'Напрям': 'УК→ЄВ',
       'Піб отримувача': receiverUE,
       'Телефон отримувача': phoneReceiverUE,
       'Адреса в Європі': addressTo,
+      'Телефон реєстратора': senderPhoneUe,
       'Номер ТТН': document.getElementById('fTTN').value || '',
       'Кг': document.getElementById('fWeightUE').value || '',
       'Оціночна вартість': document.getElementById('fEstValueUE').value || '',
