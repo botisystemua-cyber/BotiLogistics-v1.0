@@ -3,12 +3,22 @@ import type { ReactNode } from 'react';
 import { ChevronRight, Lock, RotateCcw } from 'lucide-react';
 import {
   CARGO_FILL_GROUPS,
-  CARGO_LOCKED_FIELDS,
   defaultCargoConfig,
   getCargoFillConfig,
   saveCargoFillConfig,
   type FillFormConfig,
+  type FieldDef,
 } from '../api/fillFormConfig';
+
+// Напрямок: 'ue' = УК→ЄВ, 'eu' = ЄВ→УК — той самий код, що в cargo-crm/Cargo.js.
+type Dir = 'ue' | 'eu';
+
+// Чи поле належить активному напрямку. Якщо у field.directions нічого не
+// вказано — поле належить ОБОМ напрямкам (універсальне на кшталт SMS-парсера).
+function fieldInDir(f: FieldDef, dir: Dir): boolean {
+  if (!f.directions || f.directions.length === 0) return true;
+  return f.directions.includes(dir);
+}
 
 // Панель «📋 Колонки форми заповнення». Поки що тільки cargo-вкладка.
 // Passenger додам після того, як cargo стабілізуємо.
@@ -18,6 +28,9 @@ export function FillFormConfigPanel({ tenantId }: { tenantId: string }) {
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [cfg, setCfg] = useState<FillFormConfig>(defaultCargoConfig());
+  // Активний напрямок (таб). Один state ділиться між списком чекбоксів і
+  // прев'ю — клац на табі і ліва, і права частина перемикаються синхронно.
+  const [dir, setDir] = useState<Dir>('ue');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -86,38 +99,39 @@ export function FillFormConfigPanel({ tenantId }: { tenantId: string }) {
           <div className="space-y-5">
             <div className="rounded-xl border border-border p-4 lg:p-5 bg-bg">
               <h3 className="text-sm lg:text-base font-extrabold text-text mb-1">📦 Посилкова CRM</h3>
-              <p className="text-xs text-muted mb-4">
-                Зніміть галочки з полів, які не потрібні менеджерам.
+              <p className="text-xs text-muted mb-3">
+                Оберіть напрямок і налаштуйте, які поля показувати у формі.
+                Поля з <span className="font-bold text-amber-700">*</span> — обов'язкові
+                (locked, прибрати не можна). Зберігання — спільне для обох напрямків.
               </p>
 
-              {/* Заблоковані поля — інформативно. Кожне має «directions» —
-                  у яких напрямках воно обов'язкове (lock-required). */}
-              <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 mb-4">
-                <div className="text-xs font-bold text-amber-900 mb-2 uppercase tracking-wide">
-                  Обов'язкові поля (прибрати не можна)
-                </div>
-                <ul className="space-y-1.5">
-                  {CARGO_LOCKED_FIELDS.map(f => (
-                    <li key={f.key} className="flex items-start gap-2 text-sm text-amber-900">
-                      <Lock className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
-                      <div className="flex-1 min-w-0">
-                        <span className="font-semibold">{f.label.replace(/^🔒\s*/, '')}</span>
-                        <div className="flex items-center gap-1.5 mt-0.5">
-                          {f.directions.includes('ue') && (
-                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-200 text-amber-900">УК → ЄВ</span>
-                          )}
-                          {f.directions.includes('eu') && (
-                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-200 text-amber-900">ЄВ → УК</span>
-                          )}
-                          {f.hint && <span className="text-[11px] text-amber-700">{f.hint.replace(/^тільки\s+(УК → ЄВ|ЄВ → УК)\s*\(?/, '').replace(/\)$/, '')}</span>}
-                        </div>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
+              {/* Direction tabs — фільтрують і список нижче, і прев'ю справа. */}
+              <div className="flex gap-1 mb-4 p-1 rounded-xl bg-bg-light border border-border">
+                <button
+                  type="button"
+                  onClick={() => setDir('ue')}
+                  className={`flex-1 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${
+                    dir === 'ue'
+                      ? 'bg-amber-700 text-white shadow'
+                      : 'text-muted hover:bg-bg'
+                  }`}
+                >
+                  🇺🇦 → 🇪🇺 УК → Європа
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDir('eu')}
+                  className={`flex-1 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${
+                    dir === 'eu'
+                      ? 'bg-amber-700 text-white shadow'
+                      : 'text-muted hover:bg-bg'
+                  }`}
+                >
+                  🇪🇺 → 🇺🇦 Європа → УК
+                </button>
               </div>
 
-              {/* SMS-парсер toggle */}
+              {/* SMS-парсер toggle — універсальне поле, не залежить від напрямку. */}
               <label className="flex items-start gap-3 mb-5 p-3 rounded-lg border border-border bg-white cursor-pointer hover:bg-bg-light transition-colors">
                 <input
                   type="checkbox"
@@ -134,14 +148,18 @@ export function FillFormConfigPanel({ tenantId }: { tenantId: string }) {
                 </div>
               </label>
 
-              {/* Групи полів */}
+              {/* Групи полів — фільтрюємо за активним напрямком. Якщо у групі
+                  не залишилось жодного поля — приховуємо всю групу. */}
               <div className="space-y-4">
-                {CARGO_FILL_GROUPS.map(g => (
+                {CARGO_FILL_GROUPS.map(g => {
+                  const visibleFields = g.fields.filter(f => fieldInDir(f, dir));
+                  if (visibleFields.length === 0) return null;
+                  return (
                   <div key={g.key} className="rounded-lg border border-border bg-white p-3 lg:p-4">
                     <div className="font-bold text-sm text-text mb-1">{g.title}</div>
                     {g.description && <div className="text-xs text-muted mb-3">{g.description}</div>}
                     <div className="space-y-2">
-                      {g.fields.map(f => {
+                      {visibleFields.map(f => {
                         const checked = cfg.fields[f.key] !== false;
                         return (
                           <label
@@ -155,12 +173,14 @@ export function FillFormConfigPanel({ tenantId }: { tenantId: string }) {
                               className="w-4 h-4 cursor-pointer accent-brand"
                             />
                             <span className="text-sm text-text">{f.label}</span>
+                            {f.hint && <span className="text-[11px] text-muted ml-auto">{f.hint}</span>}
                           </label>
                         );
                       })}
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
@@ -191,7 +211,7 @@ export function FillFormConfigPanel({ tenantId }: { tenantId: string }) {
 
           {/* ===== ПРАВА КОЛОНКА: live preview ===== */}
           <div className="lg:sticky lg:top-4 lg:self-start">
-            <CargoFillFormPreview cfg={cfg} />
+            <CargoFillFormPreview cfg={cfg} dir={dir} />
           </div>
         </div>
       )}
@@ -211,10 +231,9 @@ export function FillFormConfigPanel({ tenantId }: { tenantId: string }) {
 // бо відправник — клієнт з України, його дані не вводяться окремо.
 // Плейсхолдери телефонів теж залежать від напрямку.
 // ============================================================================
-type Dir = 'ue' | 'eu'; // 'ue' = УК→ЄВ, 'eu' = ЄВ→УК (узгоджено з cargo-crm/Cargo.js)
+// Type Dir вже оголошений вище як union 'ue' | 'eu' (повторно не визначаємо).
 
-function CargoFillFormPreview({ cfg }: { cfg: FillFormConfig }) {
-  const [dir, setDir] = useState<Dir>('ue');
+function CargoFillFormPreview({ cfg, dir }: { cfg: FillFormConfig; dir: Dir }) {
   const isOn = (k: string) => cfg.fields[k] !== false;
 
   const isUe = dir === 'ue';
@@ -241,33 +260,13 @@ function CargoFillFormPreview({ cfg }: { cfg: FillFormConfig }) {
   return (
     <div className="rounded-xl border-2 border-amber-200 bg-white shadow-sm overflow-hidden">
       <div className="bg-gradient-to-r from-amber-700 to-amber-800 text-white px-4 py-3 flex items-center justify-between">
-        <span className="font-extrabold text-sm">➕ Додати посилку</span>
+        <span className="font-extrabold text-sm">
+          ➕ Додати посилку — {isUe ? '🇺🇦 → 🇪🇺' : '🇪🇺 → 🇺🇦'}
+        </span>
         <span className="text-xs opacity-80">прев'ю</span>
       </div>
       <div className="p-4 space-y-3 max-h-[680px] overflow-y-auto">
-        {/* Direction toggle — клікабельний, превʼю перебудовується */}
-        <div className="flex gap-1 text-xs font-bold">
-          <button
-            type="button"
-            onClick={() => setDir('ue')}
-            className={`flex-1 px-3 py-2 rounded-lg text-center transition-colors ${
-              isUe ? 'bg-amber-100 text-amber-900 border border-amber-300'
-                   : 'bg-gray-100 text-gray-500 border border-transparent hover:bg-gray-200'
-            }`}
-          >
-            🇺🇦 → 🇪🇺 УК → Європа
-          </button>
-          <button
-            type="button"
-            onClick={() => setDir('eu')}
-            className={`flex-1 px-3 py-2 rounded-lg text-center transition-colors ${
-              !isUe ? 'bg-amber-100 text-amber-900 border border-amber-300'
-                    : 'bg-gray-100 text-gray-500 border border-transparent hover:bg-gray-200'
-            }`}
-          >
-            🇪🇺 → 🇺🇦 Європа → УК
-          </button>
-        </div>
+        {/* Напрямок керується табом ліворуч — у прев'ю окремої кнопки нема. */}
 
         {/* SMS-парсер */}
         {cfg.smsParser && (
@@ -303,13 +302,13 @@ function CargoFillFormPreview({ cfg }: { cfg: FillFormConfig }) {
           </PreviewSection>
         )}
 
-        {/* Для ЄВ→УК: телефон+адреса отримувача (Україна) — НЕ обов'язкові,
-            тож показуємо їх як звичайні (опціональні) поля під отримувачем. */}
-        {!isUe && (
+        {/* Для ЄВ→УК: всі поля отримувача (Україна) — опціональні,
+            кожне окремо вмикається/вимикається через owner-конфіг. */}
+        {!isUe && (isOn('receiverNameEu') || isOn('receiverPhoneEu') || isOn('receiverAddressEu')) && (
           <PreviewSection title="📥 Отримувач (Україна)">
-            {isOn('receiverNameEu') && <PreviewField label="ПІБ отримувача" placeholder="Прізвище Ім'я По-батькові" />}
-            <PreviewField label="Телефон отримувача" placeholder="+380…" />
-            <PreviewField label="Адреса доставки (НП або вулиця)" placeholder="НП: Київ 174 / вул. …" />
+            {isOn('receiverNameEu')    && <PreviewField label="ПІБ отримувача"    placeholder="Прізвище Ім'я По-батькові" />}
+            {isOn('receiverPhoneEu')   && <PreviewField label="Телефон отримувача" placeholder="+380…" />}
+            {isOn('receiverAddressEu') && <PreviewField label="Адреса доставки"   placeholder="НП: Київ 174 / вул. …" />}
           </PreviewSection>
         )}
 

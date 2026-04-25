@@ -18,6 +18,8 @@ export interface FieldDef {
   key: string;
   label: string;
   hint?: string; // невелика підказка (для якого напрямку, тощо)
+  /** У яких напрямках це поле має сенс. Якщо не вказано — обидва. */
+  directions?: Array<'ue' | 'eu'>;
 }
 
 export interface FieldGroup {
@@ -33,21 +35,23 @@ export const CARGO_FILL_GROUPS: FieldGroup[] = [
   {
     key: 'sender',
     title: '📤 Відправник',
-    description: 'Для ЄВ→УК телефон і адреса відправника обов\'язкові (контакт для забору посилки). Інші поля — опціональні. Для УК→ЄВ телефон українського відправника опціональний (потрібен для перевірки дублів).',
+    description: 'Дані відправника. ЄВ→УК — людина у Європі, у якої забираємо посилку. УК→ЄВ — клієнт в Україні (телефон опціональний для перевірки дублів).',
     fields: [
-      { key: 'senderName',     label: 'ПІБ відправника', hint: 'тільки ЄВ → УК' },
-      { key: 'senderEstValue', label: 'Оціночна вартість (€)', hint: 'тільки ЄВ → УК' },
-      { key: 'senderWeight',   label: 'Приблизна вага (кг)', hint: 'тільки ЄВ → УК' },
-      { key: 'senderPhoneUe',  label: 'Телефон відправника', hint: 'тільки УК → ЄВ' },
+      { key: 'senderName',     label: 'ПІБ відправника',       directions: ['eu'] },
+      { key: 'senderEstValue', label: 'Оціночна вартість (€)', directions: ['eu'] },
+      { key: 'senderWeight',   label: 'Приблизна вага (кг)',   directions: ['eu'] },
+      { key: 'senderPhoneUe',  label: 'Телефон відправника',   directions: ['ue'] },
     ],
   },
   {
     key: 'receiver',
     title: '📥 Отримувач',
-    description: 'ПІБ можна знімати окремо для кожного напрямку. Телефон отримувача та адреса доставки — обов\'язкові, прибрати не можна.',
+    description: 'Поля отримувача. У УК→ЄВ телефон і адреса доставки обов\'язкові. У ЄВ→УК отримувач в Україні — поля опціональні (можуть заповнюватись пізніше).',
     fields: [
-      { key: 'receiverNameUe', label: 'ПІБ отримувача (УК → ЄВ)' },
-      { key: 'receiverNameEu', label: 'ПІБ отримувача (ЄВ → УК)' },
+      { key: 'receiverNameUe',    label: 'ПІБ отримувача',     directions: ['ue'] },
+      { key: 'receiverNameEu',    label: 'ПІБ отримувача',     directions: ['eu'] },
+      { key: 'receiverPhoneEu',   label: 'Телефон отримувача', directions: ['eu'], hint: 'український, опціональний' },
+      { key: 'receiverAddressEu', label: 'Адреса доставки',    directions: ['eu'], hint: 'НП або вулиця, опціональна' },
     ],
   },
   {
@@ -55,22 +59,22 @@ export const CARGO_FILL_GROUPS: FieldGroup[] = [
     title: '📦 Деталі посилки',
     description: 'Активне у напрямку УК → Європа.',
     fields: [
-      { key: 'parcelTtn',         label: 'Номер ТТН' },
-      { key: 'parcelDescription', label: 'Опис вмісту' },
-      { key: 'parcelQty',         label: 'Кількість позицій' },
-      { key: 'parcelWeightUE',    label: 'Вага (кг)' },
-      { key: 'parcelEstValueUE',  label: 'Оціночна вартість (€)' },
+      { key: 'parcelTtn',         label: 'Номер ТТН',             directions: ['ue'] },
+      { key: 'parcelDescription', label: 'Опис вмісту',           directions: ['ue'] },
+      { key: 'parcelQty',         label: 'Кількість позицій',     directions: ['ue'] },
+      { key: 'parcelWeightUE',    label: 'Вага (кг)',             directions: ['ue'] },
+      { key: 'parcelEstValueUE',  label: 'Оціночна вартість (€)', directions: ['ue'] },
     ],
   },
   {
     key: 'finance',
     title: '💰 Фінанси',
     fields: [
-      { key: 'parcelSum',        label: 'Сума' },
-      { key: 'parcelCurrency',   label: 'Валюта' },
-      { key: 'parcelPayStatus',  label: 'Статус оплати' },
-      { key: 'parcelNpSum',      label: 'Сума НП', hint: 'оплата Нової Пошти (УК→ЄВ)' },
-      { key: 'parcelNpCurrency', label: 'Валюта НП', hint: 'зазвичай UAH' },
+      { key: 'parcelSum',        label: 'Сума',           directions: ['ue'] },
+      { key: 'parcelCurrency',   label: 'Валюта',         directions: ['ue'] },
+      { key: 'parcelPayStatus',  label: 'Статус оплати',  directions: ['ue'] },
+      { key: 'parcelNpSum',      label: 'Сума НП',        directions: ['ue'], hint: 'оплата Нової Пошти' },
+      { key: 'parcelNpCurrency', label: 'Валюта НП',      directions: ['ue'], hint: 'зазвичай UAH' },
     ],
   },
 ];
