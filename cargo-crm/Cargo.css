@@ -982,6 +982,81 @@ body {
   margin-left: 3px;
 }
 
+/* ===== ARCHIVE FILTER BAR ===== */
+.arch-filter-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.arch-filter-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.arch-search {
+  flex: 1 1 240px;
+  min-width: 0;
+  padding: 8px 12px;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.arch-search:focus { border-color: var(--primary); }
+.arch-search-clear {
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  background: #fff;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  color: #6b7280;
+  transition: all 0.15s;
+}
+.arch-search-clear:hover { background: #f3f4f6; color: #111; }
+.arch-date-chip {
+  padding: 6px 12px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: #fff;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  color: #475569;
+}
+.arch-date-chip:hover { background: #f3f4f6; }
+.arch-date-chip.active {
+  background: #92400e;
+  color: #fff;
+  border-color: #92400e;
+}
+.arch-date-range label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #475569;
+}
+.arch-date-range input[type="date"] {
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 12px;
+}
+
 /* ===== CARDS CONTAINER ===== */
 .cards-list {
   display: flex;
