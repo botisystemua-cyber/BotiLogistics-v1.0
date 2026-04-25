@@ -292,6 +292,32 @@ body {
 .sidebar-item.active-ue .badge-count { background: rgba(29,78,216,0.15); color: #1d4ed8; }
 .sidebar-item.active-eu .badge-count { background: rgba(4,120,87,0.15); color: #047857; }
 
+/* «🗄️ Архів» — пункт всередині секції «Напрямок». Сірий за замовчуванням
+   (нейтральний, бо це не напрямок, а перемикач режиму), у активному стані —
+   темно-сірий з білим текстом. Зверху відступ + dashed-роздільник, щоб
+   візуально віддалити від UE/EU. */
+.sidebar-item.archive-item {
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 1px dashed rgba(0,0,0,0.08);
+  color: #475569;
+}
+.sidebar-item.archive-item:hover {
+  border-color: #6b7280;
+  color: #1e293b;
+}
+.sidebar-item.archive-item.active {
+  background: #6b7280;
+  color: #fff;
+  border-color: #6b7280;
+  box-shadow: 0 3px 12px rgba(107,114,128,0.25);
+}
+.sidebar-item.archive-item .badge-count {
+  background: rgba(107,114,128,0.15);
+  color: #475569;
+}
+.sidebar-item.archive-item.active .badge-count { background: rgba(255,255,255,0.25); color: #fff; }
+
 /* Підсекції всередині «Маршрути» (Відправка / Витрати) — менші, з відступом
    від лівого краю, щоб було видно що це дочірні пункти. */
 .sidebar-sub-section {

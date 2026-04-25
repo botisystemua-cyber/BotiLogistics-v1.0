@@ -120,39 +120,17 @@ body { font-family: 'Montserrat', sans-serif; background: var(--bg-main); color:
 .pc-sidebar-item.trips-btn:hover { border-color: var(--orange); }
 .pc-sidebar-item.trips-btn.active { background: var(--orange); color: white; border-color: var(--orange); }
 .pc-sidebar-item.trips-btn.active .item-count { background: rgba(255,255,255,0.25); color: white; }
-.pc-sidebar-item.archive { color: #6b7280; }
+/* «📦 Архів» — пункт всередині секції «Пасажири». Розділник відмежовує
+   від UE/EU/Нові24 щоб візуально позначити що це не напрямок, а режим. */
+.pc-sidebar-item.archive {
+    margin-top: 8px;
+    padding-top: 12px;
+    border-top: 1px dashed rgba(0,0,0,0.08);
+    color: #6b7280;
+}
 .pc-sidebar-item.archive:hover { border-color: #6b7280; }
 .pc-sidebar-item.archive.active { background: #6b7280; color: white; border-color: #6b7280; }
-
-/* Standalone-кнопка «Архів» унизу sidebar (як 🗄️ Архів у cargo). Не входить
-   в акордеон-секції — клац одразу відкриває archiveView. */
-.pc-sidebar-archive-btn {
-    margin: 4px 8px;
-    padding: 11px 14px;
-    border-radius: 8px;
-    text-align: center;
-    font-weight: 700;
-    font-size: 13px;
-    color: #6b7280;
-    background: white;
-    border: 1px solid var(--border);
-    cursor: pointer;
-    user-select: none;
-    transition: all 0.15s;
-}
-.pc-sidebar-archive-btn:hover { background: #f3f4f6; color: #374151; border-color: #6b7280; }
-.pc-sidebar-archive-btn.active { background: #6b7280; color: white; border-color: #6b7280; }
-.pc-sidebar-archive-btn .badge-count {
-    display: inline-block;
-    margin-left: 6px;
-    padding: 1px 8px;
-    border-radius: 10px;
-    background: #e5e7eb;
-    color: #374151;
-    font-size: 11px;
-    font-weight: 700;
-}
-.pc-sidebar-archive-btn.active .badge-count { background: rgba(255,255,255,0.25); color: white; }
+.pc-sidebar-item.archive.active .item-count { background: rgba(255,255,255,0.25); color: white; }
 
 /* ===== ARCHIVE FILTER BAR (port from cargo) ===== */
 .arch-filter-bar {
@@ -209,9 +187,9 @@ body { font-family: 'Montserrat', sans-serif; background: var(--bg-main); color:
 }
 .arch-date-chip:hover { background: #f3f4f6; }
 .arch-date-chip.active {
-    background: #6b7280;
+    background: var(--primary);
     color: #fff;
-    border-color: #6b7280;
+    border-color: var(--primary);
 }
 .arch-date-range label {
     display: inline-flex;

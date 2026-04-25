@@ -2024,8 +2024,13 @@ function afterBulkAction() {
 async function bulkDelete() {
   const ids = getSelectedIds();
   if (ids.length === 0) return;
-  const reason = prompt('Причина архівування ' + ids.length + ' посилок (або залиште порожнім):', '');
+  // Причина — обов'язкова, слугує підтвердженням масової архівації.
+  const reason = prompt('Причина архівування ' + ids.length + ' посилок (обов\'язково):', '');
   if (reason === null) return;
+  if (!reason.trim()) {
+    showToast('Архівацію скасовано: причина обов\'язкова', 'warning');
+    return;
+  }
   // Оновити локально
   ids.forEach(function(pkgId) {
     var item = allData.find(function(p) { return p['PKG_ID'] === pkgId; });
@@ -3303,11 +3308,7 @@ function _exitArchiveView() {
   archiveDateFrom = '';
   archiveDateTo = '';
   var btn = document.getElementById('archiveToggleBtn');
-  if (btn) {
-    btn.style.background = '';
-    btn.style.color = '';
-    btn.innerHTML = '🗄️ Архів <span class="badge-count" id="countArchive"></span>';
-  }
+  if (btn) btn.classList.remove('active');
 }
 
 // Тимчасово прибирає скрол з desktop-sidebar на час акордеон-анімації, щоб
@@ -5983,10 +5984,15 @@ async function loadUnreadCounts() {
 
 // ===== [SECT-ARCHIVE] ARCHIVE SYSTEM =====
 
-// Архівувати посилку з причиною
+// Архівувати посилку з причиною. Причина обов'язкова — слугує підтвердженням
+// дії: якщо користувач не ввів текст, архівація НЕ виконується.
 async function deleteRecord(pkgId) {
-  const reason = prompt('Причина архівування (або залиште порожнім):', '');
+  const reason = prompt('Причина архівування посилки ' + pkgId + ' (обов\'язково):', '');
   if (reason === null) return; // Натиснув Cancel
+  if (!reason.trim()) {
+    showToast('Архівацію скасовано: причина обов\'язкова', 'warning');
+    return;
+  }
 
   const item = allData.find(p => p['PKG_ID'] === pkgId);
   if (item) {
@@ -6004,24 +6010,27 @@ async function deleteRecord(pkgId) {
 // Перемкнути вид Архів / Активні
 async function toggleArchiveView() {
   showArchive = !showArchive;
-  // Архів — одноразова дія без своєї акордеон-секції. Згортаємо все меню
-  // і на вході в архів, і на виході — щоб повернення у CRM завжди давало
-  // чистий згорнутий стан.
-  if (typeof setActiveSidebarSection === 'function') {
-    setActiveSidebarSection(null);
-  }
-  var btn = document.getElementById('archiveToggleBtn');
-  if (btn) {
-    if (showArchive) {
-      btn.style.background = 'var(--primary)';
-      btn.style.color = '#fff';
-      btn.innerHTML = '🗄️ Архів (активний) <span class="badge-count" id="countArchive" style="background:#fff;color:var(--primary);"></span>';
-    } else {
-      btn.style.background = '';
-      btn.style.color = '';
-      btn.innerHTML = '🗄️ Архів <span class="badge-count" id="countArchive"></span>';
+  // Архів тепер пункт всередині секції «Напрямок». При вході — розгортаємо її
+  // (без виклику setActiveSidebarSection, бо той кличе _exitArchiveView і
+  // одразу зніме showArchive=true). При виході — лишаємо як було.
+  if (showArchive) {
+    _flashSidebarNoScroll();
+    var dirSec = document.querySelector('.sidebar .sidebar-section[data-section="direction"]');
+    if (dirSec) {
+      var body = dirSec.querySelector('.sidebar-section-body');
+      var tgl  = dirSec.querySelector('.toggle');
+      if (body) body.classList.remove('hidden');
+      if (tgl)  tgl.classList.add('open');
     }
+    _activeSidebarSection = 'direction';
   }
+  // Активний клас + бейдж — рендеримо через CSS (.archive-item.active),
+  // інлайн-стилі більше не потрібні (sidebar-item має свій active-стейт).
+  document.querySelectorAll('.sidebar [data-dir]').forEach(function(el) {
+    el.classList.remove('active', 'active-ue', 'active-eu');
+  });
+  var btn = document.getElementById('archiveToggleBtn');
+  if (btn) btn.classList.toggle('active', showArchive);
 
   if (showArchive) {
     showToast('Завантаження архіву...', 'info');
@@ -6035,7 +6044,7 @@ async function toggleArchiveView() {
     } else {
       showToast('Помилка завантаження архіву', 'error');
       showArchive = false;
-      if (btn) { btn.style.background = ''; btn.style.color = ''; btn.innerHTML = '🗄️ Архів <span class="badge-count" id="countArchive"></span>'; }
+      if (btn) btn.classList.remove('active');
     }
   } else {
     archiveData = [];
