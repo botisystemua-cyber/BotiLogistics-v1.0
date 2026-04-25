@@ -1530,6 +1530,21 @@ body.route-sort-active #rteTogglePay {
 .seat-counter.locked { opacity: 0.55; }
 .seat-counter.locked button { cursor: not-allowed; pointer-events: none; }
 
+/* Окремий блок «+ Додаткові місця» (R1..RN) — поза схемою авто */
+.reserve-block { margin-top: 14px; padding: 12px 14px; background: #fff7ed; border: 1px dashed #fdba74; border-radius: 12px; }
+.reserve-block-title { font-size: 12px; font-weight: 800; color: #9a3412; letter-spacing: 0.3px; text-transform: uppercase; margin-bottom: 8px; }
+.reserve-block-hint { font-size: 10px; font-weight: 600; color: #9a3412; opacity: 0.65; text-transform: none; letter-spacing: 0; }
+.reserve-block-buttons { display: flex; gap: 8px; flex-wrap: wrap; }
+.rseat { position: relative; min-width: 56px; height: 56px; border-radius: 10px; border: 2px solid #fdba74; background: #fff; color: #9a3412; font-size: 14px; font-weight: 800; font-family: inherit; cursor: pointer; transition: all 0.15s; display: inline-flex; align-items: center; justify-content: center; }
+.rseat-free:hover { background: #fff7ed; border-color: #f97316; }
+.rseat-selected { background: linear-gradient(135deg, #f97316, #ea580c); color: #fff; border-color: #ea580c; box-shadow: 0 2px 8px rgba(249,115,22,0.3); }
+.rseat-selected .rseat-check { position: absolute; top: 4px; right: 6px; font-size: 11px; }
+.rseat-occupied { background: #f3f4f6; border-style: solid; border-color: #cbd5e1; color: #64748b; cursor: not-allowed; opacity: 0.7; }
+.rseat-occupied .rseat-name { position: absolute; bottom: -16px; left: 0; right: 0; font-size: 9px; font-weight: 600; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 2px; }
+.reserve-block-buttons { padding-bottom: 18px; } /* room for occupied-name labels */
+/* Прев'ю в формі рейсу */
+.reserve-preview { margin-top: 6px; font-size: 11px; font-weight: 700; color: #9a3412; text-align: center; padding: 4px 8px; background: #fff7ed; border-radius: 6px; display: inline-block; }
+
 .sp-legend { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 16px; justify-content: center; }
 .sp-legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: #64748b; font-weight: 600; }
 .sp-legend-dot { width: 14px; height: 14px; border-radius: 4px 8px 8px 4px; border: 1.5px solid; }

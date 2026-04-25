@@ -4890,10 +4890,13 @@ function getAutoColor(name) {
 
 function renderTripCard(t) {
     const maxS = parseInt(t.max_seats) || 0;
+    const reserveS = Math.max(0, parseInt(t.reserve_seats) || 0);
+    const totalCap = maxS + reserveS;
     const occ = parseInt(t.occupied) || 0;
-    const isOverbooked = occ > maxS && maxS > 0;
-    const pct = maxS > 0 ? Math.round(occ / maxS * 100) : 0;
+    const isOverbooked = occ > totalCap && totalCap > 0;
+    const pct = totalCap > 0 ? Math.round(occ / totalCap * 100) : 0;
     const barPct = Math.min(pct, 100);
+    const seatsLabel = reserveS > 0 ? `${maxS} + ${reserveS} рез.` : `${maxS} місць`;
     const dir = getTripDirection(t);
     const isUaEu = dir === 'ua-eu';
     const isEuUa = dir === 'eu-ua';
@@ -4928,7 +4931,7 @@ function renderTripCard(t) {
         </div>
         <div class="trip-card-body">
             <div class="trip-progress">
-                <div class="trip-progress-text" style="${progressColor}" onclick="showTripPassengers('${safeCalId}')" title="Натисніть щоб побачити пасажирів">${occ} з ${maxS} місць зайнято${overbookBadge}</div>
+                <div class="trip-progress-text" style="${progressColor}" onclick="showTripPassengers('${safeCalId}')" title="Натисніть щоб побачити пасажирів">${occ} з ${seatsLabel} зайнято${overbookBadge}</div>
                 <div class="trip-progress-bar"><div class="trip-progress-fill ${fillClass}" style="width:${barPct}%"></div></div>
             </div>
             <div class="trip-card-actions">
@@ -5292,10 +5295,15 @@ function addVehicleBuilder() {
                     <button onclick="changeSeatCount(${idx},1)">+</button>
                 </div>
             </div>
-            <div class="bs-field"><label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
-                <input type="checkbox" class="vb-reserve" onchange="updateSeatPreview(${idx})" style="width:16px;height:16px;">
-                <span class="bs-label" style="margin:0;">+ Резервне R1</span>
-            </label></div>
+            <div class="bs-field">
+                <label class="bs-label" style="margin-bottom:4px;">+ Додаткові місця (спальник, підлога)</label>
+                <div class="vb-reserve-row" style="display:flex;align-items:center;gap:10px;">
+                    <button type="button" onclick="changeReserveCount(${idx},-1)" class="vb-reserve-btn">−</button>
+                    <span class="vb-reserve-num" id="vbReserve-${idx}">0</span>
+                    <button type="button" onclick="changeReserveCount(${idx},1)" class="vb-reserve-btn">+</button>
+                    <span style="font-size:11px;color:var(--text-secondary);">макс. 5</span>
+                </div>
+            </div>
         </div>
         <div class="seat-preview" id="seatPreview-${idx}"></div>
     </div>`;
@@ -5337,6 +5345,15 @@ function changeSeatCount(idx, delta) {
     updateSeatPreview(idx);
 }
 
+function changeReserveCount(idx, delta) {
+    const el = document.getElementById('vbReserve-' + idx);
+    if (!el) return;
+    const cur = parseInt(el.textContent) || 0;
+    const nv = Math.max(0, Math.min(5, cur + delta));
+    el.textContent = nv;
+    updateSeatPreview(idx);
+}
+
 function updateSeatPreview(idx) {
     const container = document.getElementById('seatPreview-' + idx);
     if (!container) return;
@@ -5344,13 +5361,17 @@ function updateSeatPreview(idx) {
     const layoutEl = vb.querySelector('.vb-layouts .layout-option.active');
     const layout = layoutEl ? layoutEl.dataset.layout : '1-3-3';
     const maxSeats = parseInt(document.getElementById('vbSeats-' + idx).textContent) || 7;
-    const hasReserve = !!vb.querySelector('.vb-reserve')?.checked;
+    const reserveCount = parseInt(document.getElementById('vbReserve-' + idx)?.textContent) || 0;
 
-    container.innerHTML = renderVan({
-        layout, maxSeats, hasReserve,
+    let html = renderVan({
+        layout, maxSeats, hasReserve: false,
         occupiedMap: {}, selected: '',
         interactive: false,
     });
+    if (reserveCount > 0) {
+        html += '<div class="reserve-preview">+ ' + reserveCount + ' додатк.</div>';
+    }
+    container.innerHTML = html;
 
     // Widen the trip-form bottom sheet when bus layout is selected
     const sheet = vb.closest('.bottom-sheet');
@@ -5778,19 +5799,21 @@ function renderSeatPickerNoTrip() {
 function renderSeatPickerModal(trip, occupiedMap) {
     const layout = detectLayout(trip);
     const maxSeats = parseInt(trip.max_seats) || 7;
+    const reserveCount = Math.max(0, parseInt(trip.reserve_seats) || 0);
     const autoName = cleanAutoName(trip.auto_name) || 'Авто';
-    const hasReserve = trip.reserve === true || trip.reserve === 'true';
-    // Реальну к-сть пасажирських місць беремо з layout-схеми — в БД
-    // `calendar.total_seats` може бути неузгодженим (напр. layout='1-3-3'
-    // на 7 місць, а total_seats=6). У шапці пікера показуємо фактичне.
-    const layoutPositions = getSeatLayout(layout, maxSeats, hasReserve);
-    const layoutSeatCount = layoutPositions.filter(s => s.type === 'seat' || s.type === 'reserve').length;
+    // Реальну к-сть пасажирських місць беремо з layout-схеми (без вбудованого R).
+    const layoutPositions = getSeatLayout(layout, maxSeats, false);
+    const layoutSeatCount = layoutPositions.filter(s => s.type === 'seat').length;
     const effectiveMax = layoutSeatCount > 0 ? layoutSeatCount : maxSeats;
-    const vanHtml = renderVan({ layout, maxSeats, hasReserve, occupiedMap, selected: seatPickerSelected, interactive: true });
+    const vanHtml = renderVan({ layout, maxSeats, hasReserve: false, occupiedMap, selected: seatPickerSelected, interactive: true });
+    const reserveHtml = buildReserveBlockHtml(reserveCount, occupiedMap);
     const tripDate = formatTripDate(trip.date);
     const tripCity = trip.city || '';
     const occ = Object.keys(occupiedMap).length;
-    const free = Math.max(0, effectiveMax - occ);
+    const free = Math.max(0, effectiveMax + reserveCount - occ);
+    const totalLabel = reserveCount > 0
+        ? `${effectiveMax} + ${reserveCount} додатк.`
+        : `${effectiveMax} місць`;
     const modalCls = layout === 'bus' ? 'seat-picker-modal has-bus' : 'seat-picker-modal';
 
     const html = `<div class="seat-picker-overlay" id="seatPickerOverlay" onclick="if(event.target===this)closeSeatPicker()">
@@ -5804,10 +5827,11 @@ function renderSeatPickerModal(trip, occupiedMap) {
                     <span class="sp-auto-icon">🚐</span>
                     <div class="sp-auto-details">
                         <div class="sp-auto-name">${autoName}</div>
-                        <div>${tripDate} · ${tripCity} · <span style="color:#16a34a;font-weight:700;">${free} вільн.</span> / ${effectiveMax} місць · Обрано: <span id="seatPickerCount" style="font-weight:700;color:var(--primary);">${seatPickerSelected.size}</span></div>
+                        <div>${tripDate} · ${tripCity} · <span style="color:#16a34a;font-weight:700;">${free} вільн.</span> / ${totalLabel} · Обрано: <span id="seatPickerCount" style="font-weight:700;color:var(--primary);">${seatPickerSelected.size}</span></div>
                     </div>
                 </div>
                 <div id="seatPickerGrid">${vanHtml}</div>
+                <div id="seatPickerReserve">${reserveHtml}</div>
                 <div class="sp-legend">
                     <div class="sp-legend-item"><div class="sp-legend-dot l-free"></div>Вільне</div>
                     <div class="sp-legend-item"><div class="sp-legend-dot l-sel"></div>Обрано</div>
@@ -5823,6 +5847,30 @@ function renderSeatPickerModal(trip, occupiedMap) {
         </div>
     </div>`;
     document.body.insertAdjacentHTML('beforeend', html);
+}
+
+// Окремий блок «+ Додаткові місця» з кнопками R1..RN під схемою авто.
+// Це місця поза layout-картинкою (спальник/підлога/коліна). Поведінка
+// як у звичайних seat-кнопок — клік toggle, зайнято — затемнюється.
+function buildReserveBlockHtml(count, occupiedMap) {
+    if (!count || count <= 0) return '';
+    let buttons = '';
+    for (let i = 1; i <= count; i++) {
+        const name = 'R' + i;
+        const isOcc = occupiedMap[name];
+        const isSel = seatPickerSelected.has(name);
+        if (isOcc) {
+            buttons += `<button type="button" class="rseat rseat-occupied" disabled title="Зайнято: ${isOcc}">${name}<span class="rseat-name">${isOcc}</span></button>`;
+        } else if (isSel) {
+            buttons += `<button type="button" class="rseat rseat-selected" onclick="seatPickerSelect('${name}')">${name}<span class="rseat-check">✓</span></button>`;
+        } else {
+            buttons += `<button type="button" class="rseat rseat-free" onclick="seatPickerSelect('${name}')">${name}</button>`;
+        }
+    }
+    return `<div class="reserve-block">
+        <div class="reserve-block-title">+ Додаткові місця <span class="reserve-block-hint">(спальник, підлога, коліна)</span></div>
+        <div class="reserve-block-buttons">${buttons}</div>
+    </div>`;
 }
 
 function seatPickerSelect(seatName) {
@@ -5841,11 +5889,12 @@ function seatPickerSelect(seatName) {
     if (!trip) return;
     const occupiedMap = getOccupiedSeats(calId, seatPickerPaxId);
     const layout = detectLayout(trip);
-    const hasReserve = trip.reserve === true || trip.reserve === 'true';
+    const reserveCount = Math.max(0, parseInt(trip.reserve_seats) || 0);
     const maxSeats = parseInt(trip.max_seats) || 7;
     const grid = document.getElementById('seatPickerGrid');
-    if (grid) grid.innerHTML = renderVan({ layout, maxSeats, hasReserve, occupiedMap, selected: seatPickerSelected, interactive: true });
-    // Оновлюємо лічильник «Обрано: N»
+    if (grid) grid.innerHTML = renderVan({ layout, maxSeats, hasReserve: false, occupiedMap, selected: seatPickerSelected, interactive: true });
+    const reserveEl = document.getElementById('seatPickerReserve');
+    if (reserveEl) reserveEl.innerHTML = buildReserveBlockHtml(reserveCount, occupiedMap);
     const counter = document.getElementById('seatPickerCount');
     if (counter) counter.textContent = seatPickerSelected.size;
 }
@@ -5999,8 +6048,9 @@ async function saveTrip() {
         const layout = layoutEl ? layoutEl.dataset.layout : '1-3-3';
         const seatsEl = vb.querySelector('.vb-seats-num');
         const seats = seatsEl ? parseInt(seatsEl.textContent) : 7;
-        const reserve = vb.querySelector('.vb-reserve')?.checked || false;
-        vehicles.push({ name, plate, layout, seats, reserve });
+        const reserveEl = vb.querySelector('.vb-reserve-num');
+        const reserve_seats = reserveEl ? Math.max(0, Math.min(5, parseInt(reserveEl.textContent) || 0)) : 0;
+        vehicles.push({ name, plate, layout, seats, reserve_seats });
     });
 
     showLoader('Створення рейсу...');
@@ -6070,6 +6120,8 @@ function editTrip(calId) {
         if (seatsEl) seatsEl.textContent = FIXED_COUNT_LAYOUTS[activeLayout] || (t.max_seats || 20);
         const counter = vb.querySelector('.seat-counter');
         if (counter) counter.classList.toggle('locked', !!FIXED_COUNT_LAYOUTS[activeLayout]);
+        const reserveEl = vb.querySelector('.vb-reserve-num');
+        if (reserveEl) reserveEl.textContent = String(Math.max(0, Math.min(5, parseInt(t.reserve_seats) || 0)));
     }
 
     // Calendar renders dateStr as DD.MM.YYYY, so normalise the trip's

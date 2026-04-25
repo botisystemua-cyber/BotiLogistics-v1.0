@@ -83,6 +83,7 @@ const SB_TO_GAS_CAL = {
     occupied_seats_list:'Список зайнятих',
     paired_calendar_id: 'PAIRED_CAL_ID',
     status:             'Статус рейсу',
+    reserve_seats:      'reserve_seats',
 };
 
 const GAS_TO_SB_CAL = {};
@@ -596,6 +597,7 @@ function tripRowToFront(row) {
         max_seats:  row.total_seats != null ? row.total_seats : 0,
         occupied:   row.occupied_seats != null ? row.occupied_seats : 0,
         free_seats: Math.max(0, (row.total_seats || 0) - (row.occupied_seats || 0)),
+        reserve_seats: row.reserve_seats || 0,
     };
 }
 
@@ -638,6 +640,7 @@ async function sbCreateTrip(params) {
         for (const d of dates) {
             for (const v of vehicles) {
                 const totalSeats = parseInt(v.seats) || 0;
+                const reserveSeats = Math.max(0, Math.min(5, parseInt(v.reserve_seats) || 0));
                 rows.push({
                     tenant_id: TENANT_ID,
                     cal_id: 'CAL' + Date.now() + Math.floor(Math.random()*1000),
@@ -652,6 +655,7 @@ async function sbCreateTrip(params) {
                     occupied_seats_list: '',
                     vehicle_name: v.name || '',
                     seating_layout: v.layout || '',
+                    reserve_seats: reserveSeats,
                 });
             }
         }
@@ -690,6 +694,7 @@ async function sbUpdateTrip(params) {
             const ts = parseInt(v.seats) || 0;
             sbData.total_seats = ts;
             sbData.available_seats = ts;
+            sbData.reserve_seats = Math.max(0, Math.min(5, parseInt(v.reserve_seats) || 0));
         }
         if (p['Статус рейсу'] !== undefined) sbData.status = p['Статус рейсу'];
 
@@ -714,6 +719,7 @@ async function sbUpdateTrip(params) {
             for (let i = 1; i < p.vehicles.length; i++) {
                 const v = p.vehicles[i];
                 const ts = parseInt(v.seats) || 0;
+                const rs = Math.max(0, Math.min(5, parseInt(v.reserve_seats) || 0));
                 extraRows.push({
                     tenant_id: TENANT_ID,
                     cal_id: 'CAL' + Date.now() + Math.floor(Math.random() * 1000) + i,
@@ -728,6 +734,7 @@ async function sbUpdateTrip(params) {
                     occupied_seats_list: '',
                     vehicle_name: v.name || '',
                     seating_layout: v.layout || '',
+                    reserve_seats: rs,
                 });
             }
             if (extraRows.length) {
