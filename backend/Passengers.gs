@@ -34,7 +34,7 @@
 //   apiBulkDelete()        — масове soft delete
 //   apiArchivePassenger()  — перенос пасажира в Archive_crm → "Архів"
 //   apiRestorePassenger()  — відновлення з архіву назад в Passengers
-//   apiDeleteFromArchive() — Незворотне видалення з архіву (для CRM-кнопки «Видалити назавжди»)
+//   apiDeleteFromArchive() — ЗАБЛОКОВАНО (архів = назавжди)
 //   apiGetArchive()        — отримати записи з архіву
 //
 // ── РЕЙСИ: CRUD (рядки ~1110-1460) ──────────────────────────
@@ -1187,37 +1187,9 @@ function apiGetArchive(params) {
   return { ok: true, rows: rows, total: rows.length, offset: 0, hasMore: false };
 }
 
-// deleteFromArchive — Незворотне видалення рядків з аркуша архіву.
-// Викликається з CRM кнопкою «🗑️ Видалити назавжди» (одиничною або mass).
-// params: { pax_id: '…' } АБО { pax_ids: ['…','…'] }
+// deleteFromArchive — Вимкнено (записи зберігаються в архіві назавжди)
 function apiDeleteFromArchive(params) {
-  var paxIds = params.pax_ids || [];
-  if (params.pax_id) paxIds.push(params.pax_id);
-  if (paxIds.length === 0) return { ok: false, error: 'pax_ids не вказано' };
-
-  var archSS = SpreadsheetApp.openById(DB.ARCHIVE);
-  var archSheet = archSS.getSheetByName('Архів') || archSS.getSheets()[0];
-  var archInfo = getAllData(archSheet);
-  var archIdIdx = archInfo.headers.indexOf('PAX_ID');
-  if (archIdIdx === -1) return { ok: false, error: 'У архіві немає колонки PAX_ID' };
-
-  var rowsToDelete = [];
-  var deleted = 0;
-  for (var i = 0; i < archInfo.data.length; i++) {
-    var archPaxId = String(archInfo.data[i][archIdIdx]);
-    if (paxIds.indexOf(archPaxId) !== -1) {
-      rowsToDelete.push(DATA_START + i);
-      deleted++;
-    }
-  }
-
-  // Видаляємо з кінця (інакше індекси «попливуть»).
-  rowsToDelete.sort(function(a, b) { return b - a; });
-  for (var r = 0; r < rowsToDelete.length; r++) {
-    archSheet.deleteRow(rowsToDelete[r]);
-  }
-
-  return { ok: true, deleted: deleted };
+  return { ok: false, error: 'Видалення з архіву вимкнено. Записи зберігаються в архіві назавжди.' };
 }
 
 // moveDirection — Перенос пасажира між аркушами UE ↔ EU
