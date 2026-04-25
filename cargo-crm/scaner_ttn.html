@@ -1619,6 +1619,41 @@
         var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBnZGh1ZXp4a2VocGpseG9lc29lIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQzNDcyNTYsImV4cCI6MjA4OTkyMzI1Nn0.qG8kFr2sTuat4vhQ7NikGaXIa57YAT21ABZ8Q8gkRXg';
         var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+        // Currency defaults з Owner-panel (system_settings.currency_defaults).
+        // Завантажуємо при ініціалізації, кешуємо локально; використовуємо як
+        // fallback у inline-редакторі та NP-модалці. Так само експонуємо
+        // window.sbGetCurrencyDefault щоб код нижче працював уніфіковано.
+        var _SCANNER_CURRENCY_DEFAULTS = {};
+        function _scannerLoadCurrencyDefaults() {
+            try {
+                var tenantId = (SESSION && SESSION.tenant_id) || '';
+                if (!tenantId) return;
+                // Зберігається як setting_name='currency_defaults', setting_value = JSON.
+                sb.from('system_settings')
+                    .select('setting_value')
+                    .eq('tenant_id', tenantId)
+                    .eq('setting_name', 'currency_defaults')
+                    .maybeSingle()
+                    .then(function(res) {
+                        if (res && res.data && res.data.setting_value) {
+                            try {
+                                var parsed = JSON.parse(res.data.setting_value);
+                                if (parsed && typeof parsed === 'object') {
+                                    _SCANNER_CURRENCY_DEFAULTS = parsed;
+                                }
+                            } catch (_) { /* corrupt */ }
+                        }
+                    });
+            } catch (_) {}
+        }
+        window.sbGetCurrencyDefault = function(app, field, fallback) {
+            var section = _SCANNER_CURRENCY_DEFAULTS[app];
+            if (!section || typeof section !== 'object') return fallback || '';
+            return section[field] || fallback || '';
+        };
+        // Виклик зразу, session тут уже є синхронно (var SESSION = ... вище)
+        setTimeout(_scannerLoadCurrencyDefaults, 0);
+
         // Session from shared localStorage (written by config-crm on login).
         // We need BOTH tenant_id (for row filters) and user_login (for audit).
         var SESSION = (function() {
@@ -3224,7 +3259,18 @@
                     // Валюта за замовчуванням — EUR (основний напрямок UA↔EU).
                     // Ставимо тільки коли в БД порожньо, щоб не перетирати
                     // існуюче значення (UAH/PLN/тощо).
-                    if (col === 'payment_currency' && !rawVal) rawVal = 'EUR';
+                    // Валюта за замовчуванням — з owner currency_defaults
+                    // (cargo.payment). Fallback — EUR.
+                    if (col === 'payment_currency' && !rawVal) {
+                        rawVal = (typeof window.sbGetCurrencyDefault === 'function')
+                            ? (window.sbGetCurrencyDefault('cargo', 'payment', 'EUR') || 'EUR')
+                            : 'EUR';
+                    }
+                    if (col === 'deposit_currency' && !rawVal) {
+                        rawVal = (typeof window.sbGetCurrencyDefault === 'function')
+                            ? (window.sbGetCurrencyDefault('cargo', 'deposit', 'EUR') || 'EUR')
+                            : 'EUR';
+                    }
                     el.value = rawVal;
                     // Якщо поле — phone з селектором країни, синхронізуємо flag
                     if (el._cpApi) el._cpApi.syncFromValue();
@@ -3977,7 +4023,11 @@
             var amt = document.getElementById('npAmount');
             var cur = document.getElementById('npCurrency');
             if (amt) amt.value = '';
-            if (cur) cur.value = 'UAH';
+            // Default currency з owner-panel (cargo.np), fallback UAH.
+            var npDef = (typeof window.sbGetCurrencyDefault === 'function')
+                ? (window.sbGetCurrencyDefault('cargo', 'np', 'UAH') || 'UAH')
+                : 'UAH';
+            if (cur) cur.value = npDef;
             document.getElementById('npModal').classList.add('show');
             _prefillNpFromDb();
         }

@@ -2031,3 +2031,51 @@ async function sbSaveUiPref(key, value) {
 window.sbLoadUiPrefs = sbLoadUiPrefs;
 window.sbGetUiPrefsSync = sbGetUiPrefsSync;
 window.sbSaveUiPref = sbSaveUiPref;
+
+// ================================================================
+// CURRENCY DEFAULTS — централізовані дефолти валют з system_settings.
+// Власник задає у Owner-panel, cargo/pax читає при старті й використовує
+// як fallback для нових лідів та інлайн-редактора.
+// ================================================================
+let _CURRENCY_DEFAULTS_CACHE = null;
+
+async function sbLoadCurrencyDefaults() {
+    if (!BOTI_SESSION || !BOTI_SESSION.tenant_id) {
+        _CURRENCY_DEFAULTS_CACHE = {};
+        return {};
+    }
+    try {
+        // Зберігається у system_settings як рядок з setting_name='currency_defaults',
+        // setting_value — JSON-рядок об'єкта { cargo: {...}, passenger: {...} }.
+        const { data, error } = await sb.from('system_settings')
+            .select('setting_value')
+            .eq('tenant_id', BOTI_SESSION.tenant_id)
+            .eq('setting_name', 'currency_defaults')
+            .maybeSingle();
+        if (error) throw error;
+        let parsed = {};
+        if (data && data.setting_value) {
+            try { parsed = JSON.parse(data.setting_value); } catch (_) { /* corrupt */ }
+        }
+        _CURRENCY_DEFAULTS_CACHE = (parsed && typeof parsed === 'object') ? parsed : {};
+        return _CURRENCY_DEFAULTS_CACHE;
+    } catch (e) {
+        console.warn('[currency_defaults] load failed:', e);
+        _CURRENCY_DEFAULTS_CACHE = {};
+        return {};
+    }
+}
+
+// Sync-геттер з кешу. Parameters:
+//   app   = 'cargo' | 'passenger'
+//   field = 'payment' | 'deposit' | 'np' | 'tips' | 'ticket'
+//   fallback — використати якщо в кеші нема (або owner ще не налаштував)
+function sbGetCurrencyDefault(app, field, fallback) {
+    if (!_CURRENCY_DEFAULTS_CACHE) return fallback || '';
+    const appSection = _CURRENCY_DEFAULTS_CACHE[app];
+    if (!appSection || typeof appSection !== 'object') return fallback || '';
+    return appSection[field] || fallback || '';
+}
+
+window.sbLoadCurrencyDefaults = sbLoadCurrencyDefaults;
+window.sbGetCurrencyDefault = sbGetCurrencyDefault;

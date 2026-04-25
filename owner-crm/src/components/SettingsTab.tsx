@@ -1,31 +1,16 @@
 import { useState, useEffect, useCallback } from 'react';
 import { RoutePointsPanel } from './RoutePointsPanel';
-import { CurrenciesPanel } from './CurrenciesPanel';
+import { CurrencyDefaultsPanel } from './CurrencyDefaultsPanel';
 import { listRoutePointsByTenant, type RoutePoint } from '../api/routes';
-import {
-  getCurrencySettings,
-  DEFAULT_DEFAULT,
-  DEFAULT_ENABLED,
-  type CurrencySettings,
-} from '../api/currencies';
 
 export function SettingsTab({ tenantId }: { tenantId: string }) {
   const [points, setPoints] = useState<RoutePoint[]>([]);
-  const [currencies, setCurrencies] = useState<CurrencySettings>({
-    default: DEFAULT_DEFAULT,
-    enabled: [...DEFAULT_ENABLED],
-  });
   const [loading, setLoading] = useState(true);
 
   const reload = useCallback(async () => {
     setLoading(true);
     try {
-      const [pts, cur] = await Promise.all([
-        listRoutePointsByTenant(tenantId),
-        getCurrencySettings(tenantId),
-      ]);
-      setPoints(pts);
-      setCurrencies(cur);
+      setPoints(await listRoutePointsByTenant(tenantId));
     } catch (e) {
       console.error('Settings load error', e);
     }
@@ -39,7 +24,7 @@ export function SettingsTab({ tenantId }: { tenantId: string }) {
   ) : (
     <>
       <RoutePointsPanel points={points} tenantId={tenantId} onReload={reload} />
-      <CurrenciesPanel tenantId={tenantId} settings={currencies} onReload={reload} />
+      <CurrencyDefaultsPanel tenantId={tenantId} />
     </>
   );
 }

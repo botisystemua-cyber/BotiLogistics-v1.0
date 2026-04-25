@@ -1653,3 +1653,46 @@ async function sbSaveUiPref(key, value) {
 window.sbLoadUiPrefs = sbLoadUiPrefs;
 window.sbGetUiPrefsSync = sbGetUiPrefsSync;
 window.sbSaveUiPref = sbSaveUiPref;
+
+// ================================================================
+// CURRENCY DEFAULTS — централізовані дефолти валют з system_settings
+// (per-tenant, редагуються в owner-crm → Налаштування → Валюти).
+// ================================================================
+let _CURRENCY_DEFAULTS_CACHE = null;
+
+async function sbLoadCurrencyDefaults() {
+    if (!BOTI_SESSION || !BOTI_SESSION.tenant_id) {
+        _CURRENCY_DEFAULTS_CACHE = {};
+        return {};
+    }
+    try {
+        // Зберігається як рядок system_settings з setting_name='currency_defaults',
+        // setting_value — JSON-рядок.
+        const { data, error } = await sb.from('system_settings')
+            .select('setting_value')
+            .eq('tenant_id', BOTI_SESSION.tenant_id)
+            .eq('setting_name', 'currency_defaults')
+            .maybeSingle();
+        if (error) throw error;
+        let parsed = {};
+        if (data && data.setting_value) {
+            try { parsed = JSON.parse(data.setting_value); } catch (_) { /* corrupt */ }
+        }
+        _CURRENCY_DEFAULTS_CACHE = (parsed && typeof parsed === 'object') ? parsed : {};
+        return _CURRENCY_DEFAULTS_CACHE;
+    } catch (e) {
+        console.warn('[currency_defaults] load failed:', e);
+        _CURRENCY_DEFAULTS_CACHE = {};
+        return {};
+    }
+}
+
+function sbGetCurrencyDefault(app, field, fallback) {
+    if (!_CURRENCY_DEFAULTS_CACHE) return fallback || '';
+    const appSection = _CURRENCY_DEFAULTS_CACHE[app];
+    if (!appSection || typeof appSection !== 'object') return fallback || '';
+    return appSection[field] || fallback || '';
+}
+
+window.sbLoadCurrencyDefaults = sbLoadCurrencyDefaults;
+window.sbGetCurrencyDefault = sbGetCurrencyDefault;

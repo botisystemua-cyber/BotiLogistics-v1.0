@@ -856,6 +856,13 @@ document.addEventListener('DOMContentLoaded', async function() {
     }).catch(function() { /* не падаємо навіть якщо БД недоступна */ });
   }
 
+  // Currency defaults з owner-panel (system_settings.currency_defaults).
+  // Завантажуємо паралельно, не блокуємо. Використовуються у openFillModal
+  // та inline-editor для нових лідів як fallback замість hardcoded 'EUR'.
+  if (typeof window.sbLoadCurrencyDefaults === 'function') {
+    window.sbLoadCurrencyDefaults().catch(function() {});
+  }
+
   // Show install banner unless already running as installed PWA
   if (!window.matchMedia('(display-mode: standalone)').matches && !navigator.standalone) {
     showInstallBanner();
@@ -1049,7 +1056,9 @@ function filterData() {
   let data = allData.filter(p => p['Статус CRM'] !== 'Архів');
 
   // Direction filter
-  if (currentDirection === 'new24') {
+  if (currentDirection === 'all') {
+    // Всі напрямки — нічого не відсіюємо (показуємо і UA→EU, і EU→UA).
+  } else if (currentDirection === 'new24') {
     data = data.filter(p => isNew24h(p));
   } else if (currentDirection === 'ue') {
     data = data.filter(p => p['Напрям'] === 'УК→ЄВ');
@@ -2293,8 +2302,13 @@ function openFillModal(pkgId) {
     if (cur != null && cur !== '') {
       el.value = cur;
     } else if (inputId === 'fill_currency') {
-      // Валюта за замовчуванням — з налаштувань власника (system_settings.default_currency)
-      el.value = CURR_DEFAULT;
+      // Валюта за замовчуванням. Пріоритет:
+      //   1. Гранулярні currency_defaults з owner-panel (cargo.payment) — моя реалізація.
+      //   2. Глобальний CURR_DEFAULT з main (system_settings.default_currency).
+      //   3. Fallback 'EUR'.
+      var defCur = (typeof window.sbGetCurrencyDefault === 'function')
+        ? window.sbGetCurrencyDefault('cargo', 'payment', '') : '';
+      el.value = defCur || (typeof CURR_DEFAULT !== 'undefined' ? CURR_DEFAULT : 'EUR');
     } else if (el.tagName === 'SELECT') {
       // select: лишаємо <option selected>, що стоїть у HTML
     } else {
@@ -5618,13 +5632,17 @@ function updateCounters() {
     const eu = active.filter(p => p['Напрям'] === 'ЄВ→УК');
     const new24 = active.filter(p => isNew24h(p));
     const setCount = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+    setCount('countAllDir', active.length);
     setCount('countUe', ue.length);
     setCount('countEu', eu.length);
     setCount('countNew24', new24.length);
+    setCount('mobCountAllDir', active.length);
     setCount('mobCountUe', ue.length);
     setCount('mobCountEu', eu.length);
     setCount('mobCountNew24', new24.length);
-    const dirData = currentDirection === 'new24' ? new24 : (currentDirection === 'ue' ? ue : eu);
+    const dirData = currentDirection === 'all' ? active
+                  : currentDirection === 'new24' ? new24
+                  : currentDirection === 'ue' ? ue : eu;
     var cAll = dirData.length;
     var cChecking = dirData.filter(p => p['Контроль перевірки'] === 'В перевірці').length;
     var cReady = dirData.filter(p => p['Контроль перевірки'] === 'Готова до маршруту').length;
@@ -6234,7 +6252,13 @@ function clearAddForm() {
     if (el) el.value = '';
   });
   document.getElementById('fQty').value = '1';
-  document.getElementById('fCurrency').value = 'UAH';
+  // Валюта за замовчуванням: owner currency_defaults (cargo.payment) →
+  // fallback CURR_DEFAULT (main's default_currency) → 'EUR'.
+  var defAddCur = (typeof window.sbGetCurrencyDefault === 'function')
+    ? window.sbGetCurrencyDefault('cargo', 'payment', '') : '';
+  var addCurrencyVal = defAddCur
+    || (typeof CURR_DEFAULT !== 'undefined' ? CURR_DEFAULT : 'EUR');
+  document.getElementById('fCurrency').value = addCurrencyVal;
   document.getElementById('duplicateWarning').classList.remove('visible');
   document.getElementById('duplicateWarning').textContent = '';
   setDeliveryType('np');
