@@ -169,6 +169,121 @@ function mergeWithDefaults(parsed: unknown): FillFormConfig {
   return merged;
 }
 
+// ---------- Passenger-CRM: групи і поля форми «Новий пасажир» ----------
+
+// На відміну від cargo, у пасажирській форма єдина для обох напрямків
+// (напрямок обирається селектором всередині форми). Тому поля не позначаємо
+// directions — усі універсальні. Locked-поля єдині для обох напрямків:
+// телефон пасажира + точка відправки + точка прибуття. ПІБ — опціональне.
+
+export const PASSENGER_FILL_GROUPS: FieldGroup[] = [
+  {
+    key: 'paxBasic',
+    title: '👤 Пасажир',
+    description: 'Контактні дані пасажира. Телефон обов\'язковий, інші поля опціональні.',
+    fields: [
+      { key: 'paxName',      label: 'ПІБ' },
+      { key: 'paxPhoneReg',  label: 'Тел. реєстратора' },
+      { key: 'paxMessenger', label: 'Месенджер' },
+      { key: 'paxTag',       label: 'Тег' },
+    ],
+  },
+  {
+    key: 'paxRoute',
+    title: '📍 Маршрут',
+    description: 'Точки відправки і прибуття обов\'язкові, дата та інше — опціональні.',
+    fields: [
+      { key: 'paxDate',       label: 'Дата виїзду' },
+      { key: 'paxSeats',      label: 'Кількість місць' },
+      { key: 'paxTiming',     label: 'Таймінг' },
+      { key: 'paxSeatNumber', label: 'Місце в авто' },
+    ],
+  },
+  {
+    key: 'paxTicket',
+    title: '🎫 Квиток і фінанси',
+    fields: [
+      { key: 'paxPrice',           label: 'Ціна квитка + валюта' },
+      { key: 'paxDeposit',         label: 'Завдаток + валюта' },
+      { key: 'paxPayStatus',       label: 'Статус оплати' },
+      { key: 'paxPayForm',         label: 'Форма оплати' },
+    ],
+  },
+  {
+    key: 'paxBaggage',
+    title: '🧳 Багаж',
+    fields: [
+      { key: 'paxBaggage', label: 'Вага + ціна + валюта багажу' },
+    ],
+  },
+  {
+    key: 'paxOther',
+    title: '📝 Інше',
+    fields: [
+      { key: 'paxNote', label: 'Примітка' },
+    ],
+  },
+];
+
+export const PASSENGER_LOCKED_FIELDS: LockedFieldDef[] = [
+  { key: 'paxPhone',   label: '🔒 Телефон пасажира', hint: 'обидва напрямки', directions: ['ue', 'eu'] },
+  { key: 'paxFrom',    label: '🔒 Точка відправки',  hint: 'обидва напрямки', directions: ['ue', 'eu'] },
+  { key: 'paxTo',      label: '🔒 Точка прибуття',   hint: 'обидва напрямки', directions: ['ue', 'eu'] },
+];
+
+export function defaultPassengerConfig(): FillFormConfig {
+  const fields: Record<string, boolean> = {};
+  for (const g of PASSENGER_FILL_GROUPS) {
+    for (const f of g.fields) fields[f.key] = true;
+  }
+  return { smsParser: true, fields };
+}
+
+const SN_PASSENGER = 'fill_form_passenger';
+
+export async function getPassengerFillConfig(tenantId: string): Promise<FillFormConfig> {
+  const { data, error } = await supabase
+    .from('system_settings')
+    .select('setting_value')
+    .eq('tenant_id', tenantId)
+    .eq('setting_name', SN_PASSENGER)
+    .limit(1);
+  if (error) throw error;
+  const raw = data?.[0]?.setting_value;
+  if (!raw) return defaultPassengerConfig();
+  try {
+    return mergePassengerWithDefaults(JSON.parse(raw));
+  } catch (e) {
+    console.warn('[fillFormConfig] passenger JSON parse failed, fallback to default', e);
+    return defaultPassengerConfig();
+  }
+}
+
+export async function savePassengerFillConfig(
+  tenantId: string,
+  cfg: FillFormConfig,
+): Promise<void> {
+  await upsertSetting(tenantId, SN_PASSENGER, JSON.stringify(cfg), 'Форми', 'Колонки форми «Новий пасажир»');
+}
+
+function mergePassengerWithDefaults(parsed: unknown): FillFormConfig {
+  const def = defaultPassengerConfig();
+  if (!parsed || typeof parsed !== 'object') return def;
+  const p = parsed as Partial<FillFormConfig>;
+  const merged: FillFormConfig = {
+    smsParser: typeof p.smsParser === 'boolean' ? p.smsParser : def.smsParser,
+    fields: { ...def.fields },
+  };
+  if (p.fields && typeof p.fields === 'object') {
+    const src = p.fields as Record<string, unknown>;
+    for (const k of Object.keys(merged.fields)) {
+      const v = src[k];
+      if (typeof v === 'boolean') merged.fields[k] = v;
+    }
+  }
+  return merged;
+}
+
 async function upsertSetting(
   tenantId: string,
   name: string,

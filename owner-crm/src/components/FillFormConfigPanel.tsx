@@ -6,12 +6,18 @@ import {
   defaultCargoConfig,
   getCargoFillConfig,
   saveCargoFillConfig,
+  PASSENGER_FILL_GROUPS,
+  PASSENGER_LOCKED_FIELDS,
+  defaultPassengerConfig,
+  getPassengerFillConfig,
+  savePassengerFillConfig,
   type FillFormConfig,
   type FieldDef,
 } from '../api/fillFormConfig';
 
 // Напрямок: 'ue' = УК→ЄВ, 'eu' = ЄВ→УК — той самий код, що в cargo-crm/Cargo.js.
 type Dir = 'ue' | 'eu';
+type Crm = 'cargo' | 'passenger';
 
 // Чи поле належить активному напрямку. Якщо у field.directions нічого не
 // вказано — поле належить ОБОМ напрямкам (універсальне на кшталт SMS-парсера).
@@ -20,57 +26,14 @@ function fieldInDir(f: FieldDef, dir: Dir): boolean {
   return f.directions.includes(dir);
 }
 
-// Панель «📋 Колонки форми заповнення». Поки що тільки cargo-вкладка.
-// Passenger додам після того, як cargo стабілізуємо.
+// ============================================================================
+// FillFormConfigPanel — top-level з CRM-табом. Усередині — окрема секція
+// для кожного CRM (cargo / passenger). Кожна секція має власний state, бо
+// конфіги зберігаються окремими рядками в system_settings.
+// ============================================================================
 export function FillFormConfigPanel({ tenantId }: { tenantId: string }) {
   const [open, setOpen] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [dirty, setDirty] = useState(false);
-  const [cfg, setCfg] = useState<FillFormConfig>(defaultCargoConfig());
-  // Активний напрямок (таб). Один state ділиться між списком чекбоксів і
-  // прев'ю — клац на табі і ліва, і права частина перемикаються синхронно.
-  const [dir, setDir] = useState<Dir>('ue');
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const fresh = await getCargoFillConfig(tenantId);
-      setCfg(fresh);
-      setDirty(false);
-    } catch (e) {
-      console.warn('[FillFormConfig] load failed:', e);
-      setCfg(defaultCargoConfig());
-    }
-    setLoading(false);
-  }, [tenantId]);
-
-  useEffect(() => { if (open) load(); }, [open, load]);
-
-  const toggleField = (key: string) => {
-    setCfg(prev => ({ ...prev, fields: { ...prev.fields, [key]: !prev.fields[key] } }));
-    setDirty(true);
-  };
-  const toggleSms = () => {
-    setCfg(prev => ({ ...prev, smsParser: !prev.smsParser }));
-    setDirty(true);
-  };
-  const resetDefaults = () => {
-    setCfg(defaultCargoConfig());
-    setDirty(true);
-  };
-
-  const save = async () => {
-    setSaving(true);
-    try {
-      await saveCargoFillConfig(tenantId, cfg);
-      setDirty(false);
-    } catch (e) {
-      console.error('[FillFormConfig] save failed:', e);
-      alert('Не вдалось зберегти: ' + (e as Error).message);
-    }
-    setSaving(false);
-  };
+  const [crm, setCrm] = useState<Crm>('cargo');
 
   return (
     <section className="mt-6 lg:mt-8">
@@ -85,169 +48,342 @@ export function FillFormConfigPanel({ tenantId }: { tenantId: string }) {
           <div className="flex-1 min-w-0">
             <h2 className="text-base lg:text-lg font-extrabold text-text">📋 Колонки форми заповнення</h2>
             <p className="text-xs lg:text-sm text-muted mt-0.5">
-              Які поля показувати менеджерам у формі «Додати посилку». Обов'язкові поля прибрати не можна.
+              Які поля показувати менеджерам у формах «Додати посилку» і «Новий пасажир».
             </p>
           </div>
         </button>
       </div>
 
-      {!open ? null : loading ? (
-        <div className="text-center py-8 text-muted text-sm">Завантаження…</div>
-      ) : (
-        <div className="grid lg:grid-cols-2 gap-5 lg:gap-6">
-          {/* ===== ЛІВА КОЛОНКА: налаштування ===== */}
-          <div className="space-y-5">
-            <div className="rounded-xl border border-border p-4 lg:p-5 bg-bg">
-              <h3 className="text-sm lg:text-base font-extrabold text-text mb-1">📦 Посилкова CRM</h3>
-              <p className="text-xs text-muted mb-3">
-                Оберіть напрямок і налаштуйте, які поля показувати у формі.
-                Поля з <span className="font-bold text-amber-700">*</span> — обов'язкові
-                (locked, прибрати не можна). Зберігання — спільне для обох напрямків.
-              </p>
-
-              {/* Direction tabs — фільтрують і список нижче, і прев'ю справа. */}
-              <div className="flex gap-1 mb-4 p-1 rounded-xl bg-bg-light border border-border">
-                <button
-                  type="button"
-                  onClick={() => setDir('ue')}
-                  className={`flex-1 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${
-                    dir === 'ue'
-                      ? 'bg-amber-700 text-white shadow'
-                      : 'text-muted hover:bg-bg'
-                  }`}
-                >
-                  🇺🇦 → 🇪🇺 УК → Європа
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setDir('eu')}
-                  className={`flex-1 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${
-                    dir === 'eu'
-                      ? 'bg-amber-700 text-white shadow'
-                      : 'text-muted hover:bg-bg'
-                  }`}
-                >
-                  🇪🇺 → 🇺🇦 Європа → УК
-                </button>
-              </div>
-
-              {/* SMS-парсер toggle — універсальне поле, не залежить від напрямку. */}
-              <label className="flex items-start gap-3 mb-5 p-3 rounded-lg border border-border bg-white cursor-pointer hover:bg-bg-light transition-colors">
-                <input
-                  type="checkbox"
-                  checked={cfg.smsParser}
-                  onChange={toggleSms}
-                  className="mt-0.5 w-4 h-4 cursor-pointer accent-brand"
-                />
-                <div className="flex-1">
-                  <div className="text-sm font-bold text-text">📋 Розпізнавання SMS</div>
-                  <div className="text-xs text-muted mt-0.5">
-                    Блок нагорі форми, куди менеджер вставляє текст і парсер автоматично
-                    заповнює поля. Якщо вимкнути — блок взагалі не з'являється.
-                  </div>
-                </div>
-              </label>
-
-              {/* Групи полів — фільтрюємо за активним напрямком. Якщо у групі
-                  не залишилось жодного поля — приховуємо всю групу. */}
-              <div className="space-y-4">
-                {CARGO_FILL_GROUPS.map(g => {
-                  const visibleFields = g.fields.filter(f => fieldInDir(f, dir));
-                  if (visibleFields.length === 0) return null;
-                  return (
-                  <div key={g.key} className="rounded-lg border border-border bg-white p-3 lg:p-4">
-                    <div className="font-bold text-sm text-text mb-1">{g.title}</div>
-                    {g.description && <div className="text-xs text-muted mb-3">{g.description}</div>}
-                    <div className="space-y-2">
-                      {visibleFields.map(f => {
-                        const checked = cfg.fields[f.key] !== false;
-                        return (
-                          <label
-                            key={f.key}
-                            className="flex items-center gap-2 p-2 rounded border border-border-light cursor-pointer hover:bg-bg-light transition-colors"
-                          >
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              onChange={() => toggleField(f.key)}
-                              className="w-4 h-4 cursor-pointer accent-brand"
-                            />
-                            <span className="text-sm text-text">{f.label}</span>
-                            {f.hint && <span className="text-[11px] text-muted ml-auto">{f.hint}</span>}
-                          </label>
-                        );
-                      })}
-                    </div>
-                  </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Actions */}
-            <div className="flex flex-wrap items-center gap-3">
-              <button
-                onClick={save}
-                disabled={saving || !dirty}
-                className="px-5 py-2.5 rounded-xl bg-brand text-white font-bold text-sm lg:text-base disabled:opacity-50 cursor-pointer hover:brightness-110 transition-all"
-              >
-                {saving ? 'Збереження…' : dirty ? '💾 Зберегти налаштування' : '✓ Збережено'}
-              </button>
-              <button
-                onClick={resetDefaults}
-                disabled={saving}
-                className="px-4 py-2.5 rounded-xl border border-border text-text font-semibold text-sm flex items-center gap-2 disabled:opacity-50 cursor-pointer hover:bg-bg-light transition-colors"
-              >
-                <RotateCcw className="w-4 h-4" /> Скинути на стандарт
-              </button>
-              {dirty && (
-                <span className="text-xs text-amber-700">Є незбережені зміни</span>
-              )}
-            </div>
-            <p className="text-xs text-muted">
-              Зміни застосовуються при наступному завантаженні cargo-CRM (F5 у вкладці менеджера).
-            </p>
+      {!open ? null : (
+        <>
+          {/* CRM-таб: між cargo / passenger. Конфіги окремі, тож при перемиканні
+              кожен з блоків (нижче) тримає свій власний state. */}
+          <div className="flex gap-1 mb-4 lg:mb-5 p-1 rounded-xl bg-bg-light border border-border max-w-md">
+            <button
+              type="button"
+              onClick={() => setCrm('cargo')}
+              className={`flex-1 px-3 py-2 rounded-lg text-sm font-bold transition-colors ${
+                crm === 'cargo' ? 'bg-amber-700 text-white shadow' : 'text-muted hover:bg-bg'
+              }`}
+            >
+              📦 Посилкова
+            </button>
+            <button
+              type="button"
+              onClick={() => setCrm('passenger')}
+              className={`flex-1 px-3 py-2 rounded-lg text-sm font-bold transition-colors ${
+                crm === 'passenger' ? 'bg-brand text-white shadow' : 'text-muted hover:bg-bg'
+              }`}
+            >
+              👥 Пасажирська
+            </button>
           </div>
 
-          {/* ===== ПРАВА КОЛОНКА: live preview ===== */}
-          <div className="lg:sticky lg:top-4 lg:self-start">
-            <CargoFillFormPreview cfg={cfg} dir={dir} />
-          </div>
-        </div>
+          {crm === 'cargo'
+            ? <CargoConfigSection tenantId={tenantId} />
+            : <PassengerConfigSection tenantId={tenantId} />}
+        </>
       )}
     </section>
   );
 }
 
 // ============================================================================
-// Live-preview макет форми «Додати посилку» — рендериться синхронно з конфігом.
-// Це не функціональна форма, лише візуалізація: оператор бачить, як буде
-// виглядати реальна форма в cargo-crm після збереження. Стилізовано близько до
-// справжнього cargo (бренд amber #92400e), але без логіки.
-//
-// Прев'ю має DIRECTION-перемикач, бо реальна cargo-форма показує різні
-// блоки в УК→ЄВ і ЄВ→УК. У ЄВ→УК — окремий «📤 Відправник (Європа)» зі
-// своїми полями (ПІБ/телефон/адреса). У УК→ЄВ цього блоку взагалі немає,
-// бо відправник — клієнт з України, його дані не вводяться окремо.
-// Плейсхолдери телефонів теж залежать від напрямку.
+// CARGO SECTION — direction-aware (УК→ЄВ / ЄВ→УК). Зберігається у
+// system_settings.fill_form_cargo.
 // ============================================================================
-// Type Dir вже оголошений вище як union 'ue' | 'eu' (повторно не визначаємо).
+function CargoConfigSection({ tenantId }: { tenantId: string }) {
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const [cfg, setCfg] = useState<FillFormConfig>(defaultCargoConfig());
+  const [dir, setDir] = useState<Dir>('ue');
 
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const fresh = await getCargoFillConfig(tenantId);
+      setCfg(fresh);
+      setDirty(false);
+    } catch (e) {
+      console.warn('[FillFormConfig:cargo] load failed:', e);
+      setCfg(defaultCargoConfig());
+    }
+    setLoading(false);
+  }, [tenantId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const toggleField = (key: string) => {
+    setCfg(prev => ({ ...prev, fields: { ...prev.fields, [key]: !prev.fields[key] } }));
+    setDirty(true);
+  };
+  const toggleSms = () => {
+    setCfg(prev => ({ ...prev, smsParser: !prev.smsParser }));
+    setDirty(true);
+  };
+  const resetDefaults = () => {
+    setCfg(defaultCargoConfig());
+    setDirty(true);
+  };
+  const save = async () => {
+    setSaving(true);
+    try {
+      await saveCargoFillConfig(tenantId, cfg);
+      setDirty(false);
+    } catch (e) {
+      console.error('[FillFormConfig:cargo] save failed:', e);
+      alert('Не вдалось зберегти: ' + (e as Error).message);
+    }
+    setSaving(false);
+  };
+
+  if (loading) return <div className="text-center py-8 text-muted text-sm">Завантаження…</div>;
+
+  return (
+    <div className="grid lg:grid-cols-2 gap-5 lg:gap-6">
+      <div className="space-y-5">
+        <div className="rounded-xl border border-border p-4 lg:p-5 bg-bg">
+          <h3 className="text-sm lg:text-base font-extrabold text-text mb-1">📦 Посилкова CRM</h3>
+          <p className="text-xs text-muted mb-3">
+            Оберіть напрямок і налаштуйте, які поля показувати у формі.
+            Поля з <span className="font-bold text-amber-700">*</span> — обов'язкові
+            (locked, прибрати не можна). Зберігання — спільне для обох напрямків.
+          </p>
+
+          {/* Direction tabs */}
+          <div className="flex gap-1 mb-4 p-1 rounded-xl bg-bg-light border border-border">
+            <button
+              type="button"
+              onClick={() => setDir('ue')}
+              className={`flex-1 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${
+                dir === 'ue' ? 'bg-amber-700 text-white shadow' : 'text-muted hover:bg-bg'
+              }`}
+            >
+              🇺🇦 → 🇪🇺 УК → Європа
+            </button>
+            <button
+              type="button"
+              onClick={() => setDir('eu')}
+              className={`flex-1 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${
+                dir === 'eu' ? 'bg-amber-700 text-white shadow' : 'text-muted hover:bg-bg'
+              }`}
+            >
+              🇪🇺 → 🇺🇦 Європа → УК
+            </button>
+          </div>
+
+          <SmsParserToggle checked={cfg.smsParser} onChange={toggleSms} />
+
+          <div className="space-y-4">
+            {CARGO_FILL_GROUPS.map(g => {
+              const visibleFields = g.fields.filter(f => fieldInDir(f, dir));
+              if (visibleFields.length === 0) return null;
+              return (
+                <FieldGroupCard
+                  key={g.key}
+                  title={g.title}
+                  description={g.description}
+                  fields={visibleFields}
+                  cfg={cfg}
+                  onToggle={toggleField}
+                />
+              );
+            })}
+          </div>
+        </div>
+
+        <ActionsBar saving={saving} dirty={dirty} onSave={save} onReset={resetDefaults} hint="Зміни застосовуються при наступному завантаженні cargo-CRM (F5 у вкладці менеджера)." />
+      </div>
+
+      <div className="lg:sticky lg:top-4 lg:self-start">
+        <CargoFillFormPreview cfg={cfg} dir={dir} />
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// PASSENGER SECTION — без direction-tab (форма єдина для обох напрямків).
+// Зберігається у system_settings.fill_form_passenger.
+// ============================================================================
+function PassengerConfigSection({ tenantId }: { tenantId: string }) {
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const [cfg, setCfg] = useState<FillFormConfig>(defaultPassengerConfig());
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const fresh = await getPassengerFillConfig(tenantId);
+      setCfg(fresh);
+      setDirty(false);
+    } catch (e) {
+      console.warn('[FillFormConfig:passenger] load failed:', e);
+      setCfg(defaultPassengerConfig());
+    }
+    setLoading(false);
+  }, [tenantId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const toggleField = (key: string) => {
+    setCfg(prev => ({ ...prev, fields: { ...prev.fields, [key]: !prev.fields[key] } }));
+    setDirty(true);
+  };
+  const toggleSms = () => {
+    setCfg(prev => ({ ...prev, smsParser: !prev.smsParser }));
+    setDirty(true);
+  };
+  const resetDefaults = () => {
+    setCfg(defaultPassengerConfig());
+    setDirty(true);
+  };
+  const save = async () => {
+    setSaving(true);
+    try {
+      await savePassengerFillConfig(tenantId, cfg);
+      setDirty(false);
+    } catch (e) {
+      console.error('[FillFormConfig:passenger] save failed:', e);
+      alert('Не вдалось зберегти: ' + (e as Error).message);
+    }
+    setSaving(false);
+  };
+
+  if (loading) return <div className="text-center py-8 text-muted text-sm">Завантаження…</div>;
+
+  return (
+    <div className="grid lg:grid-cols-2 gap-5 lg:gap-6">
+      <div className="space-y-5">
+        <div className="rounded-xl border border-border p-4 lg:p-5 bg-bg">
+          <h3 className="text-sm lg:text-base font-extrabold text-text mb-1">👥 Пасажирська CRM</h3>
+          <p className="text-xs text-muted mb-4">
+            Налаштуйте, які поля показувати у формі «Новий пасажир». Форма єдина
+            для обох напрямків (УК↔ЄВ обирається в самій формі).
+            Поля з <span className="font-bold text-brand">*</span> — обов'язкові
+            (locked, прибрати не можна).
+          </p>
+
+          <SmsParserToggle checked={cfg.smsParser} onChange={toggleSms} />
+
+          <div className="space-y-4">
+            {PASSENGER_FILL_GROUPS.map(g => (
+              <FieldGroupCard
+                key={g.key}
+                title={g.title}
+                description={g.description}
+                fields={g.fields}
+                cfg={cfg}
+                onToggle={toggleField}
+              />
+            ))}
+          </div>
+        </div>
+
+        <ActionsBar saving={saving} dirty={dirty} onSave={save} onReset={resetDefaults} hint="Зміни застосовуються при наступному завантаженні passenger-CRM (F5 у вкладці менеджера)." />
+      </div>
+
+      <div className="lg:sticky lg:top-4 lg:self-start">
+        <PassengerFillFormPreview cfg={cfg} />
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// SHARED CONTROLS
+// ============================================================================
+function SmsParserToggle({ checked, onChange }: { checked: boolean; onChange: () => void }) {
+  return (
+    <label className="flex items-start gap-3 mb-5 p-3 rounded-lg border border-border bg-white cursor-pointer hover:bg-bg-light transition-colors">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={onChange}
+        className="mt-0.5 w-4 h-4 cursor-pointer accent-brand"
+      />
+      <div className="flex-1">
+        <div className="text-sm font-bold text-text">📋 Розпізнавання SMS</div>
+        <div className="text-xs text-muted mt-0.5">
+          Блок нагорі форми, куди менеджер вставляє текст і парсер автоматично
+          заповнює поля. Якщо вимкнути — блок взагалі не з'являється.
+        </div>
+      </div>
+    </label>
+  );
+}
+
+function FieldGroupCard(
+  { title, description, fields, cfg, onToggle }:
+  { title: string; description?: string; fields: FieldDef[]; cfg: FillFormConfig; onToggle: (k: string) => void },
+) {
+  return (
+    <div className="rounded-lg border border-border bg-white p-3 lg:p-4">
+      <div className="font-bold text-sm text-text mb-1">{title}</div>
+      {description && <div className="text-xs text-muted mb-3">{description}</div>}
+      <div className="space-y-2">
+        {fields.map(f => {
+          const checked = cfg.fields[f.key] !== false;
+          return (
+            <label
+              key={f.key}
+              className="flex items-center gap-2 p-2 rounded border border-border-light cursor-pointer hover:bg-bg-light transition-colors"
+            >
+              <input
+                type="checkbox"
+                checked={checked}
+                onChange={() => onToggle(f.key)}
+                className="w-4 h-4 cursor-pointer accent-brand"
+              />
+              <span className="text-sm text-text">{f.label}</span>
+              {f.hint && <span className="text-[11px] text-muted ml-auto">{f.hint}</span>}
+            </label>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function ActionsBar(
+  { saving, dirty, onSave, onReset, hint }:
+  { saving: boolean; dirty: boolean; onSave: () => void; onReset: () => void; hint: string },
+) {
+  return (
+    <>
+      <div className="flex flex-wrap items-center gap-3">
+        <button
+          onClick={onSave}
+          disabled={saving || !dirty}
+          className="px-5 py-2.5 rounded-xl bg-brand text-white font-bold text-sm lg:text-base disabled:opacity-50 cursor-pointer hover:brightness-110 transition-all"
+        >
+          {saving ? 'Збереження…' : dirty ? '💾 Зберегти налаштування' : '✓ Збережено'}
+        </button>
+        <button
+          onClick={onReset}
+          disabled={saving}
+          className="px-4 py-2.5 rounded-xl border border-border text-text font-semibold text-sm flex items-center gap-2 disabled:opacity-50 cursor-pointer hover:bg-bg-light transition-colors"
+        >
+          <RotateCcw className="w-4 h-4" /> Скинути на стандарт
+        </button>
+        {dirty && <span className="text-xs text-amber-700">Є незбережені зміни</span>}
+      </div>
+      <p className="text-xs text-muted">{hint}</p>
+    </>
+  );
+}
+
+// ============================================================================
+// CARGO PREVIEW — direction-aware візуалізація форми «Додати посилку»
+// ============================================================================
 function CargoFillFormPreview({ cfg, dir }: { cfg: FillFormConfig; dir: Dir }) {
   const isOn = (k: string) => cfg.fields[k] !== false;
-
   const isUe = dir === 'ue';
-  // Плейсхолдери залежно від напрямку:
-  // - УК→ЄВ: відправник (UA, +380), отримувач (EU, +41/+49)
-  // - ЄВ→УК: відправник (EU), отримувач (UA, +380)
   const recvPhonePlaceholder = isUe ? '+41… / +49…' : '+380…';
   const recvAddrPlaceholder  = isUe ? 'Цюрих, Bahnhofstrasse 12' : 'Київ, вул. Хрещатик, буд. 5 / НП…';
-
-  // У реальній cargo-формі sender-блок (з полями fSender/fPhone/fAddressFrom)
-  // існує лише для напрямку ЄВ→УК. У УК→ЄВ його немає. У ЄВ→УК телефон і
-  // адреса відправника обов'язкові — тому секція завжди є для ЄВ→УК.
   const showSenderSection = !isUe;
-  // Деталі посилки і НП-фінанси активні лише в УК→ЄВ.
   const showParcelDetails = isUe && (
     isOn('parcelTtn') || isOn('parcelDescription') || isOn('parcelQty') ||
     isOn('parcelWeightUE') || isOn('parcelEstValueUE')
@@ -266,9 +402,6 @@ function CargoFillFormPreview({ cfg, dir }: { cfg: FillFormConfig; dir: Dir }) {
         <span className="text-xs opacity-80">прев'ю</span>
       </div>
       <div className="p-4 space-y-3 max-h-[680px] overflow-y-auto">
-        {/* Напрямок керується табом ліворуч — у прев'ю окремої кнопки нема. */}
-
-        {/* SMS-парсер */}
         {cfg.smsParser && (
           <PreviewSection title="📋 SMS-парсер" amber>
             <div className="rounded-lg border border-dashed border-amber-300 bg-amber-50/30 p-3 text-xs text-amber-800 italic">
@@ -278,9 +411,6 @@ function CargoFillFormPreview({ cfg, dir }: { cfg: FillFormConfig; dir: Dir }) {
           </PreviewSection>
         )}
 
-        {/* Locked fields — лише для УК→ЄВ показуємо receiver-блок,
-            бо саме в цьому напрямку ці поля обов'язкові. У ЄВ→УК
-            обов'язковими стає sender-блок (нижче). */}
         {isUe && (
           <PreviewSection title="🔒 Обов'язкові поля" locked>
             <PreviewField label="Телефон отримувача *" placeholder={recvPhonePlaceholder} locked />
@@ -288,8 +418,6 @@ function CargoFillFormPreview({ cfg, dir }: { cfg: FillFormConfig; dir: Dir }) {
           </PreviewSection>
         )}
 
-        {/* Sender section — лише для ЄВ→УК. Телефон + адреса locked
-            (контакт людини, у якої забираємо посилку — обов'язкові). */}
         {showSenderSection && (
           <PreviewSection title="🔒 Відправник (Європа) — обов'язкові" locked>
             <PreviewField label="Телефон відправника *" placeholder="+41… / +49…" locked />
@@ -302,26 +430,21 @@ function CargoFillFormPreview({ cfg, dir }: { cfg: FillFormConfig; dir: Dir }) {
           </PreviewSection>
         )}
 
-        {/* Для ЄВ→УК: всі поля отримувача (Україна) — опціональні,
-            кожне окремо вмикається/вимикається через owner-конфіг. */}
         {!isUe && (isOn('receiverNameEu') || isOn('receiverPhoneEu') || isOn('receiverAddressEu')) && (
           <PreviewSection title="📥 Отримувач (Україна)">
-            {isOn('receiverNameEu')    && <PreviewField label="ПІБ отримувача"    placeholder="Прізвище Ім'я По-батькові" />}
+            {isOn('receiverNameEu')    && <PreviewField label="ПІБ отримувача"     placeholder="Прізвище Ім'я По-батькові" />}
             {isOn('receiverPhoneEu')   && <PreviewField label="Телефон отримувача" placeholder="+380…" />}
-            {isOn('receiverAddressEu') && <PreviewField label="Адреса доставки"   placeholder="НП: Київ 174 / вул. …" />}
+            {isOn('receiverAddressEu') && <PreviewField label="Адреса доставки"    placeholder="НП: Київ 174 / вул. …" />}
           </PreviewSection>
         )}
 
-        {/* Receiver name (toggle) — для УК→ЄВ окремим блоком, для ЄВ→УК
-            ПІБ вже включений у «📥 Отримувач (Україна)» вище. */}
         {isUe && (isOn('receiverNameUe') || isOn('senderPhoneUe')) && (
           <PreviewSection title="📥 Отримувач + 📤 Відправник (UA)">
-            {isOn('receiverNameUe') && <PreviewField label="ПІБ отримувача"        placeholder="Прізвище Ім'я По-батькові" />}
+            {isOn('receiverNameUe') && <PreviewField label="ПІБ отримувача"           placeholder="Прізвище Ім'я По-батькові" />}
             {isOn('senderPhoneUe')  && <PreviewField label="Телефон відправника (UA)" placeholder="+380…" />}
           </PreviewSection>
         )}
 
-        {/* Parcel details — лише для УК→ЄВ */}
         {showParcelDetails && (
           <PreviewSection title="📦 Деталі посилки">
             {isOn('parcelTtn') && <PreviewField label="Номер ТТН" placeholder="59001…" />}
@@ -336,7 +459,6 @@ function CargoFillFormPreview({ cfg, dir }: { cfg: FillFormConfig; dir: Dir }) {
           </PreviewSection>
         )}
 
-        {/* Finance — лише для УК→ЄВ */}
         {showFinance && (
           <PreviewSection title="💰 Фінанси">
             <div className="grid grid-cols-2 gap-2">
@@ -353,7 +475,6 @@ function CargoFillFormPreview({ cfg, dir }: { cfg: FillFormConfig; dir: Dir }) {
           </PreviewSection>
         )}
 
-        {/* Footer (always) */}
         <div className="flex gap-2 pt-2">
           <button className="flex-1 py-2 rounded-lg border border-gray-200 text-gray-500 text-xs font-bold cursor-default" disabled>Скасувати</button>
           <button className="flex-1 py-2 rounded-lg bg-amber-700 text-white text-xs font-bold cursor-default" disabled>💾 Зберегти</button>
@@ -363,6 +484,104 @@ function CargoFillFormPreview({ cfg, dir }: { cfg: FillFormConfig; dir: Dir }) {
   );
 }
 
+// ============================================================================
+// PASSENGER PREVIEW — єдина форма для обох напрямків. Locked: телефон +
+// точка відправки + точка прибуття (на верху). Решта togglable.
+// ============================================================================
+function PassengerFillFormPreview({ cfg }: { cfg: FillFormConfig }) {
+  const isOn = (k: string) => cfg.fields[k] !== false;
+  const showRoute  = true; // locked, завжди показуємо
+  const showBasic  = isOn('paxName') || isOn('paxPhoneReg') || isOn('paxMessenger') || isOn('paxTag');
+  const showRouteX = isOn('paxDate') || isOn('paxSeats') || isOn('paxTiming') || isOn('paxSeatNumber');
+  const showTicket = isOn('paxPrice') || isOn('paxDeposit') || isOn('paxPayStatus') || isOn('paxPayForm');
+  const showBag    = isOn('paxBaggage');
+  const showOther  = isOn('paxNote');
+
+  return (
+    <div className="rounded-xl border-2 border-blue-200 bg-white shadow-sm overflow-hidden">
+      <div className="bg-gradient-to-r from-brand to-blue-900 text-white px-4 py-3 flex items-center justify-between">
+        <span className="font-extrabold text-sm">➕ Новий пасажир</span>
+        <span className="text-xs opacity-80">прев'ю</span>
+      </div>
+      <div className="p-4 space-y-3 max-h-[680px] overflow-y-auto">
+        {cfg.smsParser && (
+          <PreviewSection title="📋 SMS-парсер" amber>
+            <div className="rounded-lg border border-dashed border-amber-300 bg-amber-50/30 p-3 text-xs text-amber-800 italic">
+              «12.03 два пасажири до Цюріха +380639763484 мама»
+            </div>
+            <PreviewBtn label="🔍 Розпізнати та заповнити" />
+          </PreviewSection>
+        )}
+
+        {/* Locked: телефон + точки відправки/прибуття (з полем напрямку зверху) */}
+        <PreviewSection title="🔒 Обов'язкові поля" locked>
+          <PreviewField label="Напрямок"             placeholder="🇺🇦→🇪🇺 / 🇪🇺→🇺🇦" />
+          <PreviewField label="Телефон пасажира *"   placeholder="+380…"    locked />
+          {showRoute && (
+            <>
+              <PreviewField label="Точка відправки *" placeholder="Київ"        locked />
+              <PreviewField label="Точка прибуття *"  placeholder="Цюрих"       locked />
+            </>
+          )}
+        </PreviewSection>
+
+        {showBasic && (
+          <PreviewSection title="👤 Пасажир">
+            {isOn('paxName')      && <PreviewField label="ПІБ"              placeholder="Прізвище Ім'я" />}
+            {isOn('paxPhoneReg')  && <PreviewField label="Тел. реєстратора" placeholder="+380…" />}
+            {isOn('paxMessenger') && <PreviewField label="Месенджер"        placeholder="Telegram / WhatsApp / …" />}
+            {isOn('paxTag')       && <PreviewField label="Тег"              placeholder="VIP, постійний…" />}
+          </PreviewSection>
+        )}
+
+        {showRouteX && (
+          <PreviewSection title="📍 Маршрут (додатково)">
+            <div className="grid grid-cols-2 gap-2">
+              {isOn('paxDate')  && <PreviewField label="Дата виїзду" placeholder="2026-05-15" />}
+              {isOn('paxSeats') && <PreviewField label="Місць"       placeholder="1" />}
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {isOn('paxTiming')     && <PreviewField label="Таймінг"     placeholder="14:00" />}
+              {isOn('paxSeatNumber') && <PreviewField label="Місце в авто" placeholder="2A" />}
+            </div>
+          </PreviewSection>
+        )}
+
+        {showTicket && (
+          <PreviewSection title="🎫 Квиток і фінанси">
+            {isOn('paxPrice')   && <PreviewField label="Ціна квитка + валюта" placeholder="100 EUR" />}
+            {isOn('paxDeposit') && <PreviewField label="Завдаток + валюта"    placeholder="20 EUR" />}
+            <div className="grid grid-cols-2 gap-2">
+              {isOn('paxPayStatus') && <PreviewField label="Статус оплати" placeholder="Не оплачено" />}
+              {isOn('paxPayForm')   && <PreviewField label="Форма оплати"  placeholder="Готівка" />}
+            </div>
+          </PreviewSection>
+        )}
+
+        {showBag && (
+          <PreviewSection title="🧳 Багаж">
+            <PreviewField label="Вага + ціна + валюта" placeholder="20 кг — 30 EUR" />
+          </PreviewSection>
+        )}
+
+        {showOther && (
+          <PreviewSection title="📝 Інше">
+            {isOn('paxNote') && <PreviewField label="Примітка" placeholder="Доп. інфо…" />}
+          </PreviewSection>
+        )}
+
+        <div className="flex gap-2 pt-2">
+          <button className="flex-1 py-2 rounded-lg border border-gray-200 text-gray-500 text-xs font-bold cursor-default" disabled>Скасувати</button>
+          <button className="flex-1 py-2 rounded-lg bg-brand text-white text-xs font-bold cursor-default" disabled>💾 Зберегти</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// SHARED PREVIEW HELPERS
+// ============================================================================
 function PreviewSection(
   { title, children, amber, locked }:
   { title: string; children: ReactNode; amber?: boolean; locked?: boolean },
@@ -408,3 +627,8 @@ function PreviewBtn({ label }: { label: string }) {
     </div>
   );
 }
+
+// Силуємо PASSENGER_LOCKED_FIELDS не «втратитись» (Tree-shake може його випиляти,
+// якщо він не використовується вище). Залишаємо як публічний експорт через
+// модуль api/fillFormConfig — тут не звертаємось.
+void PASSENGER_LOCKED_FIELDS;
