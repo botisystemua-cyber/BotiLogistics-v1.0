@@ -490,12 +490,12 @@ function CargoFillFormPreview({ cfg, dir }: { cfg: FillFormConfig; dir: Dir }) {
 // ============================================================================
 function PassengerFillFormPreview({ cfg }: { cfg: FillFormConfig }) {
   const isOn = (k: string) => cfg.fields[k] !== false;
-  const showRoute  = true; // locked, завжди показуємо
   const showBasic  = isOn('paxName') || isOn('paxPhoneReg') || isOn('paxMessenger') || isOn('paxTag');
   const showRouteX = isOn('paxDate') || isOn('paxSeats') || isOn('paxTiming') || isOn('paxSeatNumber');
   const showTicket = isOn('paxPrice') || isOn('paxDeposit') || isOn('paxPayStatus') || isOn('paxPayForm');
   const showBag    = isOn('paxBaggage');
   const showOther  = isOn('paxNote');
+  const TH: Theme = 'blue';
 
   return (
     <div className="rounded-xl border-2 border-blue-200 bg-white shadow-sm overflow-hidden">
@@ -505,68 +505,64 @@ function PassengerFillFormPreview({ cfg }: { cfg: FillFormConfig }) {
       </div>
       <div className="p-4 space-y-3 max-h-[680px] overflow-y-auto">
         {cfg.smsParser && (
-          <PreviewSection title="📋 SMS-парсер" amber>
-            <div className="rounded-lg border border-dashed border-amber-300 bg-amber-50/30 p-3 text-xs text-amber-800 italic">
+          <PreviewSection title="📋 SMS-парсер" amber theme={TH}>
+            <div className="rounded-lg border border-dashed border-blue-300 bg-blue-50/30 p-3 text-xs text-blue-800 italic">
               «12.03 два пасажири до Цюріха +380639763484 мама»
             </div>
-            <PreviewBtn label="🔍 Розпізнати та заповнити" />
+            <PreviewBtn label="🔍 Розпізнати та заповнити" theme={TH} />
           </PreviewSection>
         )}
 
         {/* Locked: телефон + точки відправки/прибуття (з полем напрямку зверху) */}
-        <PreviewSection title="🔒 Обов'язкові поля" locked>
-          <PreviewField label="Напрямок"             placeholder="🇺🇦→🇪🇺 / 🇪🇺→🇺🇦" />
-          <PreviewField label="Телефон пасажира *"   placeholder="+380…"    locked />
-          {showRoute && (
-            <>
-              <PreviewField label="Точка відправки *" placeholder="Київ"        locked />
-              <PreviewField label="Точка прибуття *"  placeholder="Цюрих"       locked />
-            </>
-          )}
+        <PreviewSection title="🔒 Обов'язкові поля" locked theme={TH}>
+          <PreviewField label="Напрямок"           placeholder="🇺🇦→🇪🇺 / 🇪🇺→🇺🇦" theme={TH} />
+          <PreviewField label="Телефон пасажира *" placeholder="+380…"           locked theme={TH} />
+          <PreviewField label="Точка відправки *"  placeholder="Київ"            locked theme={TH} />
+          <PreviewField label="Точка прибуття *"   placeholder="Цюрих"           locked theme={TH} />
         </PreviewSection>
 
         {showBasic && (
-          <PreviewSection title="👤 Пасажир">
-            {isOn('paxName')      && <PreviewField label="ПІБ"              placeholder="Прізвище Ім'я" />}
-            {isOn('paxPhoneReg')  && <PreviewField label="Тел. реєстратора" placeholder="+380…" />}
-            {isOn('paxMessenger') && <PreviewField label="Месенджер"        placeholder="Telegram / WhatsApp / …" />}
-            {isOn('paxTag')       && <PreviewField label="Тег"              placeholder="VIP, постійний…" />}
+          <PreviewSection title="👤 Пасажир" theme={TH}>
+            {isOn('paxName')      && <PreviewField label="ПІБ"              placeholder="Прізвище Ім'я" theme={TH} />}
+            {isOn('paxPhoneReg')  && <PreviewField label="Тел. реєстратора" placeholder="+380…" theme={TH} />}
+            {isOn('paxMessenger') && <PreviewField label="Месенджер"        placeholder="Telegram / WhatsApp / …" theme={TH} />}
+            {isOn('paxTag')       && <PreviewField label="Тег"              placeholder="VIP, постійний…" theme={TH} />}
           </PreviewSection>
         )}
 
         {showRouteX && (
-          <PreviewSection title="📍 Маршрут (додатково)">
+          <PreviewSection title="📍 Маршрут (додатково)" theme={TH}>
             <div className="grid grid-cols-2 gap-2">
-              {isOn('paxDate')  && <PreviewField label="Дата виїзду" placeholder="2026-05-15" />}
-              {isOn('paxSeats') && <PreviewField label="Місць"       placeholder="1" />}
+              {isOn('paxDate')  && <PreviewField label="Дата виїзду" placeholder="2026-05-15" theme={TH} />}
+              {isOn('paxSeats') && <PreviewField label="Місць"       placeholder="1"          theme={TH} />}
             </div>
             <div className="grid grid-cols-2 gap-2">
-              {isOn('paxTiming')     && <PreviewField label="Таймінг"     placeholder="14:00" />}
-              {isOn('paxSeatNumber') && <PreviewField label="Місце в авто" placeholder="2A" />}
+              {isOn('paxTiming')     && <PreviewField label="Таймінг"      placeholder="14:00" theme={TH} />}
+              {isOn('paxSeatNumber') && <PreviewField label="Місце в авто" placeholder="2A"    theme={TH} />}
             </div>
           </PreviewSection>
         )}
 
         {showTicket && (
-          <PreviewSection title="🎫 Квиток і фінанси">
-            {isOn('paxPrice')   && <PreviewField label="Ціна квитка + валюта" placeholder="100 EUR" />}
-            {isOn('paxDeposit') && <PreviewField label="Завдаток + валюта"    placeholder="20 EUR" />}
+          <PreviewSection title="🎫 Квиток і фінанси" theme={TH}>
+            {isOn('paxPrice')   && <PreviewField label="Ціна квитка + валюта" placeholder="100 EUR" theme={TH} />}
+            {isOn('paxDeposit') && <PreviewField label="Завдаток + валюта"    placeholder="20 EUR"  theme={TH} />}
             <div className="grid grid-cols-2 gap-2">
-              {isOn('paxPayStatus') && <PreviewField label="Статус оплати" placeholder="Не оплачено" />}
-              {isOn('paxPayForm')   && <PreviewField label="Форма оплати"  placeholder="Готівка" />}
+              {isOn('paxPayStatus') && <PreviewField label="Статус оплати" placeholder="Не оплачено" theme={TH} />}
+              {isOn('paxPayForm')   && <PreviewField label="Форма оплати"  placeholder="Готівка"     theme={TH} />}
             </div>
           </PreviewSection>
         )}
 
         {showBag && (
-          <PreviewSection title="🧳 Багаж">
-            <PreviewField label="Вага + ціна + валюта" placeholder="20 кг — 30 EUR" />
+          <PreviewSection title="🧳 Багаж" theme={TH}>
+            <PreviewField label="Вага + ціна + валюта" placeholder="20 кг — 30 EUR" theme={TH} />
           </PreviewSection>
         )}
 
         {showOther && (
-          <PreviewSection title="📝 Інше">
-            {isOn('paxNote') && <PreviewField label="Примітка" placeholder="Доп. інфо…" />}
+          <PreviewSection title="📝 Інше" theme={TH}>
+            {isOn('paxNote') && <PreviewField label="Примітка" placeholder="Доп. інфо…" theme={TH} />}
           </PreviewSection>
         )}
 
@@ -581,13 +577,38 @@ function PassengerFillFormPreview({ cfg }: { cfg: FillFormConfig }) {
 
 // ============================================================================
 // SHARED PREVIEW HELPERS
+//
+// Тематика: cargo-превʼю використовує amber (бренд посилкової), passenger —
+// blue (бренд пасажирської). PreviewSection/Field/Btn приймають `theme` і
+// підбирають кольори відповідно. Без явного theme дефолт = amber для
+// сумісності з cargo-кодом, який не передає prop.
 // ============================================================================
+type Theme = 'amber' | 'blue';
+
+const THEME_TOKENS = {
+  amber: {
+    sectionLocked: 'bg-amber-50 border-amber-200',
+    sectionAmber:  'bg-amber-50/40 border-amber-100',
+    fieldLockedLabel: 'text-amber-900',
+    fieldLockedBox:   'bg-amber-50 border-amber-300 text-amber-700',
+    btnBg: 'bg-amber-700/80',
+  },
+  blue: {
+    sectionLocked: 'bg-blue-50 border-blue-200',
+    sectionAmber:  'bg-blue-50/40 border-blue-100',
+    fieldLockedLabel: 'text-blue-900',
+    fieldLockedBox:   'bg-blue-50 border-blue-300 text-blue-700',
+    btnBg: 'bg-brand/90',
+  },
+} as const;
+
 function PreviewSection(
-  { title, children, amber, locked }:
-  { title: string; children: ReactNode; amber?: boolean; locked?: boolean },
+  { title, children, amber, locked, theme = 'amber' }:
+  { title: string; children: ReactNode; amber?: boolean; locked?: boolean; theme?: Theme },
 ) {
-  const bg = locked ? 'bg-amber-50 border-amber-200'
-           : amber  ? 'bg-amber-50/40 border-amber-100'
+  const t = THEME_TOKENS[theme];
+  const bg = locked ? t.sectionLocked
+           : amber  ? t.sectionAmber
            : 'bg-gray-50 border-gray-200';
   return (
     <div className={`rounded-lg border ${bg} p-3`}>
@@ -600,19 +621,18 @@ function PreviewSection(
 }
 
 function PreviewField(
-  { label, placeholder, locked }:
-  { label: string; placeholder?: string; locked?: boolean },
+  { label, placeholder, locked, theme = 'amber' }:
+  { label: string; placeholder?: string; locked?: boolean; theme?: Theme },
 ) {
+  const t = THEME_TOKENS[theme];
   return (
     <div>
-      <div className={`text-[11px] font-semibold mb-0.5 ${locked ? 'text-amber-900' : 'text-gray-600'}`}>
+      <div className={`text-[11px] font-semibold mb-0.5 ${locked ? t.fieldLockedLabel : 'text-gray-600'}`}>
         {locked && <Lock className="inline-block w-3 h-3 mr-1 -mt-0.5" />}
         {label}
       </div>
       <div className={`h-7 rounded border px-2 flex items-center text-[11px] italic ${
-        locked
-          ? 'bg-amber-50 border-amber-300 text-amber-700'
-          : 'bg-white border-gray-200 text-gray-400'
+        locked ? t.fieldLockedBox : 'bg-white border-gray-200 text-gray-400'
       }`}>
         {placeholder || ''}
       </div>
@@ -620,9 +640,10 @@ function PreviewField(
   );
 }
 
-function PreviewBtn({ label }: { label: string }) {
+function PreviewBtn({ label, theme = 'amber' }: { label: string; theme?: Theme }) {
+  const t = THEME_TOKENS[theme];
   return (
-    <div className="mt-2 h-7 rounded bg-amber-700/80 text-white text-[11px] font-bold flex items-center justify-center cursor-default">
+    <div className={`mt-2 h-7 rounded ${t.btnBg} text-white text-[11px] font-bold flex items-center justify-center cursor-default`}>
       {label}
     </div>
   );

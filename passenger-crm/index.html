@@ -513,125 +513,155 @@ $manifest = '../manifest.php' . ($t ? '?name=' . rawurlencode($t) . ($l ? '&logo
 </div>
 
 <!-- PASSENGER MODAL (Add/Edit) -->
-<div class="modal-overlay" id="passengerModal" onclick="if(event.target===this)closeModal('passengerModal')">
-    <div class="modal">
+<div class="modal-overlay pax-add-overlay" id="passengerModal" onclick="if(event.target===this)closeModal('passengerModal')">
+    <div class="modal pax-add-sheet">
         <div class="modal-header"><span class="modal-title" id="paxModalTitle">➕ Новий пасажир</span><button class="modal-close" onclick="closeModal('passengerModal')">×</button></div>
         <div class="modal-body">
-            <div class="duplicate-warning" id="duplicateWarning"></div>
-            <!-- SMS парсер -->
-            <div class="sms-parser-wrap" id="smsParserWrap" data-section-key="smsParser">
-                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
-                    <label style="font-size:11px;font-weight:700;color:var(--text-secondary);">📋 Вставте текст повідомлення</label>
-                    <button type="button" onclick="toggleSmsParser()" style="background:none;border:none;font-size:10px;color:var(--info);cursor:pointer;font-weight:600;font-family:inherit;" id="smsParserToggle">Згорнути ▲</button>
+            <div class="duplicate-warning" id="duplicateWarning" style="margin:10px 12px 0;"></div>
+
+            <!-- SMS-парсер: окремою карткою-секцією. Може бути сховано через owner-конфіг. -->
+            <div class="pax-add-section" id="smsParserWrap" data-section-key="smsParser">
+                <div class="pax-add-section-title sec-sms" onclick="toggleSmsParser()">
+                    📋 SMS-парсер
+                    <span style="margin-left:auto;font-size:10px;font-weight:700;color:inherit;" id="smsParserToggle">Згорнути ▲</span>
                 </div>
-                <div id="smsParserBody">
+                <div class="pax-add-section-body" id="smsParserBody">
                     <textarea id="smsInput" rows="3" placeholder="Наприклад: 12.03 два пасажири до Цюріха +380639763484 мама" style="width:100%;padding:10px;border:2px solid #e2e8f0;border-radius:8px;font-size:12px;font-family:inherit;resize:vertical;box-sizing:border-box;"></textarea>
                     <button type="button" onclick="parseSmsText()" style="width:100%;margin-top:6px;padding:8px;background:linear-gradient(135deg,#7c3aed,#a78bfa);color:white;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">🔍 Розпізнати та заповнити</button>
                     <div id="smsParseResult" style="display:none;margin-top:6px;padding:8px 10px;background:#f0fdf4;border-radius:8px;font-size:11px;color:#059669;font-weight:600;"></div>
                 </div>
             </div>
-            <div style="height:1px;background:var(--border);margin:10px 0;"></div>
-            <div class="form-group"><label>Напрямок <span style="color:var(--danger)">*</span></label>
-                <select id="fDirection"><option value="ua-eu">🇺🇦→🇪🇺 Україна-Європа</option><option value="eu-ua">🇪🇺→🇺🇦 Європа-Україна</option></select>
-            </div>
-            <div class="form-group" data-field-key="paxName"><label>ПіБ</label><input type="text" id="fName" placeholder="Прізвище Ім'я"></div>
-            <div class="form-row">
-                <div class="form-group"><label>Телефон пасажира <span style="color:var(--danger)">*</span></label><input type="tel" id="fPhone" placeholder="+380..."></div>
-                <div class="form-group" data-field-key="paxPhoneReg"><label>Тел. реєстратора</label><input type="tel" id="fPhoneReg"></div>
-            </div>
-            <div class="form-row">
-                <div class="form-group" data-field-key="paxDate"><label>Дата виїзду</label><input type="date" id="fDate" onchange="onDateChanged()"></div>
-                <div class="form-group" data-field-key="paxSeats"><label>Місць</label><input type="number" id="fSeats" value="1" min="1"></div>
-            </div>
-            <!-- Кнопка вибору рейсу (з'являється коли є рейси на дату) -->
-            <div id="tripSuggestPanel" style="display:none; margin-bottom:8px;">
-                <button type="button" onclick="openFormTripModal()" style="width:100%; padding:10px; border:2px dashed var(--orange); border-radius:10px; background:#fff7ed; color:var(--orange); font-size:12px; font-weight:700; cursor:pointer; font-family:inherit;">
-                    🚐 Є рейси на цю дату — натисніть щоб обрати
-                </button>
-                <div id="tripSuggestResult" style="display:none; margin-top:6px; padding:8px 12px; background:#ecfdf5; border-radius:8px; font-size:11px; font-weight:700; color:#059669;"></div>
-            </div>
-            <!-- Точка відправки / прибуття: власний combo-box (не нативний datalist,
-                 який нестабільно працює на iOS Safari). Відкриття dropdown:
-                 (1) клік на ▼, (2) початок вводу тексту. onfocus НЕ вішаємо —
-                 інакше гонка подій з кнопкою зводить всю логіку нанівець. -->
-            <div class="form-group">
-                <label>Точка відправки <span style="color:var(--danger)">*</span></label>
-                <div class="combo-box">
-                    <input type="text" id="fFrom"
-                           placeholder="почніть вводити або торкніться ▼"
-                           oninput="onRoutePointTextChange('from')"
-                           autocomplete="off">
-                    <button type="button" class="combo-box-toggle" tabindex="-1"
-                            onclick="toggleRoutePointDropdown('from')">▼</button>
+
+            <!-- 🔒 Обов'язкові поля: напрямок + телефон + точки відправки/прибуття. -->
+            <div class="pax-add-section">
+                <div class="pax-add-section-title sec-locked">🔒 Обов'язкові поля</div>
+                <div class="pax-add-section-body">
+                    <div class="form-group"><label>Напрямок <span style="color:var(--danger)">*</span></label>
+                        <select id="fDirection"><option value="ua-eu">🇺🇦→🇪🇺 Україна-Європа</option><option value="eu-ua">🇪🇺→🇺🇦 Європа-Україна</option></select>
+                    </div>
+                    <div class="form-group"><label>Телефон пасажира <span style="color:var(--danger)">*</span></label><input type="tel" id="fPhone" placeholder="+380..."></div>
+                    <div class="form-group">
+                        <label>Точка відправки <span style="color:var(--danger)">*</span></label>
+                        <div class="combo-box">
+                            <input type="text" id="fFrom"
+                                   placeholder="почніть вводити або торкніться ▼"
+                                   oninput="onRoutePointTextChange('from')"
+                                   autocomplete="off">
+                            <button type="button" class="combo-box-toggle" tabindex="-1"
+                                    onclick="toggleRoutePointDropdown('from')">▼</button>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Точка прибуття <span style="color:var(--danger)">*</span></label>
+                        <div class="combo-box">
+                            <input type="text" id="fTo"
+                                   placeholder="почніть вводити або торкніться ▼"
+                                   oninput="onRoutePointTextChange('to')"
+                                   autocomplete="off">
+                            <button type="button" class="combo-box-toggle" tabindex="-1"
+                                    onclick="toggleRoutePointDropdown('to')">▼</button>
+                        </div>
+                    </div>
+                    <!-- Спільний контейнер для dropdown — один на сторінку, fixed-positioning. -->
+                    <div id="routePointDropdown" class="combo-box-dropdown"></div>
                 </div>
             </div>
-            <div class="form-group">
-                <label>Точка прибуття <span style="color:var(--danger)">*</span></label>
-                <div class="combo-box">
-                    <input type="text" id="fTo"
-                           placeholder="почніть вводити або торкніться ▼"
-                           oninput="onRoutePointTextChange('to')"
-                           autocomplete="off">
-                    <button type="button" class="combo-box-toggle" tabindex="-1"
-                            onclick="toggleRoutePointDropdown('to')">▼</button>
+
+            <!-- 👤 Пасажир: ПіБ + допконтакти. -->
+            <div class="pax-add-section">
+                <div class="pax-add-section-title sec-pax">👤 Пасажир</div>
+                <div class="pax-add-section-body">
+                    <div class="form-group" data-field-key="paxName"><label>ПіБ</label><input type="text" id="fName" placeholder="Прізвище Ім'я"></div>
+                    <div class="form-row">
+                        <div class="form-group" data-field-key="paxPhoneReg"><label>Тел. реєстратора</label><input type="tel" id="fPhoneReg"></div>
+                        <div class="form-group" data-field-key="paxMessenger">
+                            <label>Месенджер</label>
+                            <input type="text" id="fMessenger" list="messengerOptions" placeholder="Telegram / WhatsApp / …" autocomplete="off">
+                            <datalist id="messengerOptions">
+                                <option value="📱 Telegram"></option>
+                                <option value="💬 WhatsApp"></option>
+                                <option value="🟣 Viber"></option>
+                                <option value="🤖 SmartSender"></option>
+                                <option value="📞 Дзвінок"></option>
+                            </datalist>
+                        </div>
+                    </div>
+                    <div class="form-group" data-field-key="paxTag"><label>Тег</label><input type="text" id="fTag" placeholder="VIP, постійний, новий..."></div>
                 </div>
             </div>
-            <!-- Спільний контейнер для dropdown обох полів — один на сторінку,
-                 position:fixed, координати обчислюються на open -->
-            <div id="routePointDropdown" class="combo-box-dropdown"></div>
-            <!-- Ціна квитка + валюта — togglable одним блоком -->
-            <div class="form-row" data-field-key="paxPrice">
-                <div class="form-group"><label>Ціна квитка</label><input type="text" id="fPrice"></div>
-                <div class="form-group"><label>Валюта квитка</label>
-                    <select id="fCurrency"><option value="UAH">UAH</option><option value="EUR">EUR</option><option value="CHF">CHF</option><option value="USD">USD</option><option value="PLN">PLN</option><option value="CZK">CZK</option></select>
-                </div>
-            </div>
-            <div class="form-row" data-field-key="paxDeposit">
-                <div class="form-group"><label>Завдаток</label><input type="text" id="fDeposit"></div>
-                <div class="form-group"><label>Валюта завдатку</label>
-                    <select id="fCurrencyDeposit"><option value="UAH">UAH</option><option value="EUR">EUR</option><option value="CHF">CHF</option><option value="USD">USD</option><option value="PLN">PLN</option><option value="CZK">CZK</option></select>
-                </div>
-            </div>
-            <div class="form-row" data-field-key="paxTiming">
-                <div class="form-group"><label>Таймінг</label><input type="text" id="fTiming" placeholder="14:00"></div>
-            </div>
-            <!-- Багаж: вага + ціна + валюта — togglable одним блоком, бо ці три
-                 поля логічно один концепт «багаж пасажира». -->
-            <div data-field-key="paxBaggage">
-                <div class="form-row">
-                    <div class="form-group"><label>Вага багажу (кг)</label><input type="text" id="fWeight"></div>
-                    <div class="form-group"><label>Ціна багажу</label><input type="text" id="fWeightPrice"></div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group"><label>Валюта багажу</label>
-                        <select id="fCurrencyWeight"><option value="UAH">UAH</option><option value="EUR">EUR</option><option value="CHF">CHF</option><option value="USD">USD</option><option value="PLN">PLN</option><option value="CZK">CZK</option></select>
+
+            <!-- 📍 Маршрут: дата/місця/таймінг (locked точки — у блоці вище). -->
+            <div class="pax-add-section">
+                <div class="pax-add-section-title sec-route">📍 Маршрут</div>
+                <div class="pax-add-section-body">
+                    <div class="form-row">
+                        <div class="form-group" data-field-key="paxDate"><label>Дата виїзду</label><input type="date" id="fDate" onchange="onDateChanged()"></div>
+                        <div class="form-group" data-field-key="paxSeats"><label>Місць</label><input type="number" id="fSeats" value="1" min="1"></div>
+                    </div>
+                    <!-- Кнопка вибору рейсу (з'являється коли є рейси на дату) -->
+                    <div id="tripSuggestPanel" style="display:none; margin-bottom:8px;">
+                        <button type="button" onclick="openFormTripModal()" style="width:100%; padding:10px; border:2px dashed var(--orange); border-radius:10px; background:#fff7ed; color:var(--orange); font-size:12px; font-weight:700; cursor:pointer; font-family:inherit;">
+                            🚐 Є рейси на цю дату — натисніть щоб обрати
+                        </button>
+                        <div id="tripSuggestResult" style="display:none; margin-top:6px; padding:8px 12px; background:#ecfdf5; border-radius:8px; font-size:11px; font-weight:700; color:#059669;"></div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group" data-field-key="paxTiming"><label>Таймінг</label><input type="text" id="fTiming" placeholder="14:00"></div>
+                        <div class="form-group" data-field-key="paxSeatNumber"><label>Місце в авто</label><input type="text" id="fSeatNumber"></div>
                     </div>
                 </div>
             </div>
-            <div class="form-row">
-                <div class="form-group" data-field-key="paxMessenger">
-                    <label>Месенджер</label>
-                    <input type="text" id="fMessenger" list="messengerOptions" placeholder="Оберіть або введіть свій варіант" autocomplete="off">
-                    <datalist id="messengerOptions">
-                        <option value="📱 Telegram"></option>
-                        <option value="💬 WhatsApp"></option>
-                        <option value="🟣 Viber"></option>
-                        <option value="🤖 SmartSender"></option>
-                        <option value="📞 Дзвінок"></option>
-                    </datalist>
+
+            <!-- 🎫 Квиток і фінанси -->
+            <div class="pax-add-section">
+                <div class="pax-add-section-title sec-ticket">🎫 Квиток і фінанси</div>
+                <div class="pax-add-section-body">
+                    <div class="form-row" data-field-key="paxPrice">
+                        <div class="form-group"><label>Ціна квитка</label><input type="text" id="fPrice"></div>
+                        <div class="form-group"><label>Валюта квитка</label>
+                            <select id="fCurrency"><option value="UAH">UAH</option><option value="EUR">EUR</option><option value="CHF">CHF</option><option value="USD">USD</option><option value="PLN">PLN</option><option value="CZK">CZK</option></select>
+                        </div>
+                    </div>
+                    <div class="form-row" data-field-key="paxDeposit">
+                        <div class="form-group"><label>Завдаток</label><input type="text" id="fDeposit"></div>
+                        <div class="form-group"><label>Валюта завдатку</label>
+                            <select id="fCurrencyDeposit"><option value="UAH">UAH</option><option value="EUR">EUR</option><option value="CHF">CHF</option><option value="USD">USD</option><option value="PLN">PLN</option><option value="CZK">CZK</option></select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group" data-field-key="paxPayStatus"><label>Статус оплати</label>
+                            <select id="fPayStatus"><option value="">—</option><option value="Не оплачено">Не оплачено</option><option value="Часткова">Часткова</option><option value="Повна">Повна</option></select>
+                        </div>
+                        <div class="form-group" data-field-key="paxPayForm"><label>Форма оплати</label>
+                            <select id="fPayForm"><option value="">—</option><option value="Готівка">Готівка</option><option value="Карта">Карта</option><option value="Переказ">Переказ</option></select>
+                        </div>
+                    </div>
                 </div>
-                <div class="form-group" data-field-key="paxSeatNumber"><label>Місце в авто</label><input type="text" id="fSeatNumber"></div>
             </div>
-            <div class="form-row">
-                <div class="form-group" data-field-key="paxPayStatus"><label>Статус оплати</label>
-                    <select id="fPayStatus"><option value="">—</option><option value="Не оплачено">Не оплачено</option><option value="Часткова">Часткова</option><option value="Повна">Повна</option></select>
-                </div>
-                <div class="form-group" data-field-key="paxPayForm"><label>Форма оплати</label>
-                    <select id="fPayForm"><option value="">—</option><option value="Готівка">Готівка</option><option value="Карта">Карта</option><option value="Переказ">Переказ</option></select>
+
+            <!-- 🧳 Багаж — togglable один блоком (вага+ціна+валюта одна сутність). -->
+            <div class="pax-add-section" data-field-key="paxBaggage">
+                <div class="pax-add-section-title sec-baggage">🧳 Багаж</div>
+                <div class="pax-add-section-body">
+                    <div class="form-row">
+                        <div class="form-group"><label>Вага багажу (кг)</label><input type="text" id="fWeight"></div>
+                        <div class="form-group"><label>Ціна багажу</label><input type="text" id="fWeightPrice"></div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group"><label>Валюта багажу</label>
+                            <select id="fCurrencyWeight"><option value="UAH">UAH</option><option value="EUR">EUR</option><option value="CHF">CHF</option><option value="USD">USD</option><option value="PLN">PLN</option><option value="CZK">CZK</option></select>
+                        </div>
+                    </div>
                 </div>
             </div>
-            <div class="form-group" data-field-key="paxTag"><label>Тег</label><input type="text" id="fTag" placeholder="VIP, постійний, новий..."></div>
-            <div class="form-group" data-field-key="paxNote"><label>Примітка</label><input type="text" id="fNote"></div>
+
+            <!-- 📝 Інше -->
+            <div class="pax-add-section">
+                <div class="pax-add-section-title sec-other">📝 Інше</div>
+                <div class="pax-add-section-body">
+                    <div class="form-group" data-field-key="paxNote"><label>Примітка</label><input type="text" id="fNote"></div>
+                </div>
+            </div>
         </div>
         <div class="modal-footer"><button class="btn-cancel" onclick="closeModal('passengerModal')">Скасувати</button><button class="btn-save" id="paxSaveBtn" onclick="savePassenger()">💾 Зберегти</button></div>
     </div>
