@@ -213,12 +213,9 @@ function CargoFillFormPreview({ cfg }: { cfg: FillFormConfig }) {
   const recvAddrPlaceholder  = isUe ? 'Цюрих, Bahnhofstrasse 12' : 'Київ, вул. Хрещатик, буд. 5 / НП…';
 
   // У реальній cargo-формі sender-блок (з полями fSender/fPhone/fAddressFrom)
-  // існує лише для напрямку ЄВ→УК. У УК→ЄВ його немає — тому в прев'ю теж
-  // ховаємо, щоб картина точно збігалась з тим, що бачитиме менеджер.
-  const showSenderSection = !isUe && (
-    isOn('senderName') || isOn('senderPhone') || isOn('senderAddress') ||
-    isOn('senderEstValue') || isOn('senderWeight')
-  );
+  // існує лише для напрямку ЄВ→УК. У УК→ЄВ його немає. У ЄВ→УК телефон і
+  // адреса відправника обов'язкові — тому секція завжди є для ЄВ→УК.
+  const showSenderSection = !isUe;
   // Деталі посилки і НП-фінанси активні лише в УК→ЄВ.
   const showParcelDetails = isUe && (
     isOn('parcelTtn') || isOn('parcelDescription') || isOn('parcelQty') ||
@@ -276,12 +273,13 @@ function CargoFillFormPreview({ cfg }: { cfg: FillFormConfig }) {
           <PreviewField label="Адреса доставки *"    placeholder={recvAddrPlaceholder}  locked />
         </PreviewSection>
 
-        {/* Sender section — лише для ЄВ→УК (як у реальній формі) */}
+        {/* Sender section — лише для ЄВ→УК. Телефон + адреса locked
+            (контакт людини, у якої забираємо посилку — обов'язкові). */}
         {showSenderSection && (
           <PreviewSection title="📤 Відправник (Європа)">
-            {isOn('senderName')    && <PreviewField label="ПІБ відправника"     placeholder="Прізвище Ім'я" />}
-            {isOn('senderPhone')   && <PreviewField label="Телефон відправника" placeholder="+41… / +49…" />}
-            {isOn('senderAddress') && <PreviewField label="Адреса відправника"  placeholder="Введіть адресу…" />}
+            {isOn('senderName') && <PreviewField label="ПІБ відправника" placeholder="Прізвище Ім'я" />}
+            <PreviewField label="Телефон відправника *" placeholder="+41… / +49…" locked />
+            <PreviewField label="Адреса відправника *"  placeholder="Введіть адресу…" locked />
             <div className="grid grid-cols-2 gap-2">
               {isOn('senderEstValue') && <PreviewField label="Оцін. вартість (€)" placeholder="0" />}
               {isOn('senderWeight')   && <PreviewField label="Вага (кг)"         placeholder="0" />}

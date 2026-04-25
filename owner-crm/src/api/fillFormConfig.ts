@@ -33,11 +33,9 @@ export const CARGO_FILL_GROUPS: FieldGroup[] = [
   {
     key: 'sender',
     title: '📤 Відправник',
-    description: 'Дані того, хто відправляє посилку. Активне у напрямку Європа → УК.',
+    description: 'Дані того, хто відправляє посилку. Активне у напрямку Європа → УК. Телефон і адреса — обов\'язкові (це людина, у якої забираємо посилку), знімати не можна.',
     fields: [
       { key: 'senderName',     label: 'ПІБ відправника' },
-      { key: 'senderPhone',    label: 'Телефон відправника' },
-      { key: 'senderAddress',  label: 'Адреса відправника' },
       { key: 'senderEstValue', label: 'Оціночна вартість (€)' },
       { key: 'senderWeight',   label: 'Приблизна вага (кг)' },
     ],
@@ -79,8 +77,10 @@ export const CARGO_FILL_GROUPS: FieldGroup[] = [
 // Поля що ЗАВЖДИ обов'язкові — для UI показу (🔒 lock-icon у списку),
 // у JSON конфігу не зберігаються.
 export const CARGO_LOCKED_FIELDS: FieldDef[] = [
-  { key: 'receiverPhone',   label: '🔒 Телефон отримувача',  hint: 'Завжди вгорі форми, обов\'язкове' },
-  { key: 'receiverAddress', label: '🔒 Адреса доставки',     hint: 'Завжди вгорі форми, обов\'язкове' },
+  { key: 'receiverPhone',   label: '🔒 Телефон отримувача',  hint: 'обидва напрямки' },
+  { key: 'receiverAddress', label: '🔒 Адреса доставки',     hint: 'обидва напрямки' },
+  { key: 'senderPhone',     label: '🔒 Телефон відправника', hint: 'тільки ЄВ → УК (контакт для забору посилки)' },
+  { key: 'senderAddress',   label: '🔒 Адреса відправника',  hint: 'тільки ЄВ → УК (куди їдемо за посилкою)' },
 ];
 
 // ---------- Модель конфігу ----------

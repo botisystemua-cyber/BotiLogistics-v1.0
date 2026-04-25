@@ -607,12 +607,12 @@
               <label>Піб відправника</label>
               <input type="text" id="fSender" placeholder="Прізвище Ім'я">
             </div>
-            <div class="add-row" data-field-key="senderPhone">
-              <label>Телефон відправника</label>
+            <div class="add-row">
+              <label>Телефон відправника <span class="req">*</span></label>
               <input type="tel" id="fPhone" placeholder="+41... / +49... / +48..." oninput="checkDuplicatePhone(this.value)">
             </div>
-            <div class="add-row" data-field-key="senderAddress">
-              <label>Адреса відправника</label>
+            <div class="add-row">
+              <label>Адреса відправника <span class="req">*</span></label>
               <input type="text" id="fAddressFrom" placeholder="Введіть адресу вручну" autocomplete="off">
               <div class="add-swiss-dropdown" id="swissDropdownSender">
                 <button type="button" class="add-swiss-btn" onclick="toggleSwissList('sender')">📍 Або оберіть нашу точку ▼</button>

@@ -6921,15 +6921,18 @@ async function saveParcel() {
 
   if (dir === 'eu') {
     // EU → UA
-    // Обов'язкові: телефон отримувача + адреса доставки. Решта (ПІБ, адреса
-    // відправника, телефон відправника тощо) — опціональні; власник може
-    // їх ховати у формі через owner-crm налаштування.
+    // Обов'язкові поля: телефон+адреса відправника (це людина, у якої
+    // забираємо посилку — без них кур'єр не виїде), плюс телефон отримувача
+    // і адреса доставки. ПІБ + оцін.вартість + вага — опціональні
+    // (власник може ховати через owner-crm налаштування).
     const sender = document.getElementById('fSender').value.trim();
     const phone = document.getElementById('fPhone').value.trim();
     const addressFrom = document.getElementById('fAddressFrom').value.trim();
     const receiver = document.getElementById('fReceiver').value.trim();
     const phoneReceiver = document.getElementById('fPhoneReceiver').value.trim();
 
+    if (!phone) errors.push('Телефон відправника');
+    if (!addressFrom) errors.push('Адреса відправника');
     if (!phoneReceiver) errors.push('Телефон отримувача');
 
     let addressTo = '';
