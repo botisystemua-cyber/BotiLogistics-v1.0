@@ -4478,9 +4478,8 @@ function renderTrips() {
     const today = new Date(); today.setHours(0,0,0,0);
     const todayTs = today.getTime();
 
-    // У списку: всі активні рейси у DOM (включно з минулими). Напрям/авто/дата
-    // фільтри поважаємо. Минулі лишаються доступні скролом вліво — НЕ ховаємо
-    // їх з DOM, бо хочемо щоб юзер міг до них дотягнутися.
+    // У списку: всі активні рейси (минулі теж у DOM, доступні скролом вліво).
+    // Напрям/авто/дата — поважаємо.
     const base = trips.filter(t => {
         if (t.status === 'Архів' || t.status === 'Виконано' || t.status === 'Видалено') return false;
         if (parseTripDateObj(t) === null) return false;
@@ -4495,7 +4494,17 @@ function renderTrips() {
         return true;
     });
 
-    // Групуємо по «Місто + напрям»
+    if (base.length === 0) {
+        grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;">
+            <div class="empty-state-icon">🚐</div>
+            <div class="empty-state-text">Рейсів ще немає</div>
+            <div class="empty-state-sub">Створіть перший рейс</div>
+            <button class="bs-btn primary" style="margin-top:12px;" onclick="openNewTripForm()">➕ Створити перший рейс</button>
+        </div>`;
+        return;
+    }
+
+    // Групуємо по «Місто + напрям» — різні напрями → різні рядки
     const groups = {};
     base.forEach(t => {
         const city = String(t.city || '—').trim();
@@ -4505,42 +4514,36 @@ function renderTrips() {
         groups[key].trips.push(t);
     });
 
-    // Залишаємо тільки ті групи, де є хоч один майбутній рейс. Якщо лише минулі —
-    // рядок ховаємо повністю. Минулі В ІСНУЮЧИХ групах залишаємо в DOM (скрол вліво).
-    const groupList = Object.values(groups)
-        .map(g => {
-            g.trips.sort((a, b) => parseTripDateObj(a) - parseTripDateObj(b));
-            const tsList = g.trips.map(t => parseTripDateObj(t).getTime());
-            const firstFutureTs = tsList.find(ts => ts >= todayTs);
-            if (firstFutureTs === undefined) return null; // тільки минулі — ховаємо рядок
-            g.rank = firstFutureTs - todayTs; // менше = раніший майбутній рейс зверху
-            return g;
-        })
-        .filter(Boolean);
+    // Сортуємо рейси в рядку по даті ASC, рахуємо ранг групи (найближчий майбутній зверху)
+    const groupList = Object.values(groups).map(g => {
+        g.trips.sort((a, b) => parseTripDateObj(a) - parseTripDateObj(b));
+        const tsList = g.trips.map(t => parseTripDateObj(t).getTime());
+        const future = tsList.filter(ts => ts >= todayTs);
+        if (future.length) {
+            g.rank = future[0] - todayTs; // менше = ближче до сьогодні
+        } else {
+            // Тільки минулі — на самий низ, чим давніше тим нижче
+            g.rank = Number.MAX_SAFE_INTEGER - (todayTs - tsList[tsList.length - 1]);
+        }
+        return g;
+    });
     groupList.sort((a, b) => a.rank - b.rank);
-
-    if (groupList.length === 0) {
-        grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;">
-            <div class="empty-state-icon">🚐</div>
-            <div class="empty-state-text">Немає наступних рейсів</div>
-            <div class="empty-state-sub">Створіть новий або підкоригуйте фільтри</div>
-            <button class="bs-btn primary" style="margin-top:12px;" onclick="openNewTripForm()">➕ Створити рейс</button>
-        </div>`;
-        return;
-    }
 
     grid.innerHTML = groupList.map(g => renderTripRow(g, todayTs)).join('');
 
-    // Авто-скрол: сьогоднішній/найближчий майбутній — на лівому краю.
-    // Минулі картки існують ліворуч і доступні скролом, але видимий старт — сьогодні.
+    // Авто-скрол: сьогоднішній/найближчий майбутній — на лівому краю. Якщо в рядку
+    // лише минулі — скрол у кінець, щоб найновіший був видимий.
     requestAnimationFrame(() => {
         document.querySelectorAll('.trow-scroll').forEach(row => {
             const cards = row.querySelectorAll('.trow-card');
+            let anchor = null;
             for (const c of cards) {
-                if (parseInt(c.dataset.ts) >= todayTs) {
-                    row.scrollLeft = c.offsetLeft - row.offsetLeft;
-                    break;
-                }
+                if (parseInt(c.dataset.ts) >= todayTs) { anchor = c; break; }
+            }
+            if (anchor) {
+                row.scrollLeft = anchor.offsetLeft - row.offsetLeft;
+            } else {
+                row.scrollLeft = row.scrollWidth;
             }
         });
     });
