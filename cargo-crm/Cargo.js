@@ -242,6 +242,13 @@ let addFormDirection = 'ue';
 let deliveryType = 'np';
 let showArchive = false;
 let archiveData = [];
+// Архівні фільтри: пошук + швидкі діапазони (рік/місяць/тиждень) + custom from-to.
+// Тримаємо фільтри в JS-стані, бо input у DOM перебудовується разом зі списком
+// (renderArchiveCards) — без стану значення стиралось би на кожен пере-рендер.
+let archiveSearch = '';
+let archiveDateMode = 'all'; // 'all' | 'today' | 'week' | 'month' | 'year' | 'custom'
+let archiveDateFrom = '';   // YYYY-MM-DD (тільки для mode='custom')
+let archiveDateTo = '';     // YYYY-MM-DD (тільки для mode='custom')
 
 // Owner-configurable route points loaded from passenger_route_points
 // table (same catalogue that owner-crm's RoutePointsPanel manages).
@@ -3289,6 +3296,12 @@ function _exitArchiveView() {
   if (!showArchive) return;
   showArchive = false;
   archiveData = [];
+  // Скидаємо фільтри архіву — наступний вхід має бути «з нуля», без застарілих
+  // search-рядків і вибраного діапазону дат.
+  archiveSearch = '';
+  archiveDateMode = 'all';
+  archiveDateFrom = '';
+  archiveDateTo = '';
   var btn = document.getElementById('archiveToggleBtn');
   if (btn) {
     btn.style.background = '';
@@ -6011,27 +6024,176 @@ async function toggleArchiveView() {
   }
 }
 
-// Рендер архівних карток
-function renderArchiveCards() {
-  const container = document.getElementById('cardsList');
-  if (!container) return;
-
-  if (archiveData.length === 0) {
-    container.innerHTML = '<div class="empty-state">🗄️ Архів порожній</div>';
-    return;
+// Повертає archiveData, відфільтровану за search-рядком + датним діапазоном.
+// Шукаємо в основних полях посилки + у причині архівації (ARCHIVE_REASON).
+function getFilteredArchive() {
+  var data = archiveData;
+  var q = (archiveSearch || '').trim().toLowerCase();
+  if (q) {
+    data = data.filter(function(p) {
+      var fields = [
+        p['PKG_ID'], p['Піб відправника'], p['Піб отримувача'],
+        p['Телефон реєстратора'], p['Телефон отримувача'],
+        p['Номер ТТН'], p['Адреса відправки'], p['Адреса в Європі'],
+        p['Місто Нова Пошта'], p['Адреса отримувача'],
+        p['ARCHIVE_REASON'], p['Опис'], p['Тег'],
+      ];
+      for (var i = 0; i < fields.length; i++) {
+        if (String(fields[i] || '').toLowerCase().indexOf(q) !== -1) return true;
+      }
+      return false;
+    });
   }
+  if (archiveDateMode !== 'all') {
+    var range = _archiveDateRange();
+    if (range) {
+      data = data.filter(function(p) {
+        // DATE_ARCHIVE — ISO або «yyyy-mm-dd hh:mm». Date конструктор обидва приймає.
+        var raw = p['DATE_ARCHIVE'];
+        if (!raw) return false;
+        var t = new Date(raw).getTime();
+        if (isNaN(t)) return false;
+        return t >= range.from && t <= range.to;
+      });
+    }
+  }
+  return data;
+}
 
-  // Панель масових дій
+// Повертає {from,to} в мс згідно з archiveDateMode.
+// today = з 00:00 сьогодні; week/month/year = за останні N календарних днів.
+function _archiveDateRange() {
+  var now = Date.now();
+  var DAY = 86400000;
+  if (archiveDateMode === 'today') {
+    var s = new Date(); s.setHours(0,0,0,0);
+    return { from: s.getTime(), to: now };
+  }
+  if (archiveDateMode === 'week')  return { from: now - 7 * DAY,  to: now };
+  if (archiveDateMode === 'month') return { from: now - 30 * DAY, to: now };
+  if (archiveDateMode === 'year')  return { from: now - 365 * DAY, to: now };
+  if (archiveDateMode === 'custom') {
+    var fromMs = archiveDateFrom ? new Date(archiveDateFrom + 'T00:00:00').getTime() : 0;
+    var toMs   = archiveDateTo   ? new Date(archiveDateTo   + 'T23:59:59').getTime() : now;
+    if (isNaN(fromMs)) fromMs = 0;
+    if (isNaN(toMs)) toMs = now;
+    return { from: fromMs, to: toMs };
+  }
+  return null;
+}
+
+function _archiveFilterBarHtml() {
+  var modes = [
+    ['all',    'Всі'],
+    ['today',  'Сьогодні'],
+    ['week',   '7 днів'],
+    ['month',  'Місяць'],
+    ['year',   'Рік'],
+    ['custom', '📅 Період'],
+  ];
+  var chips = modes.map(function(m) {
+    var active = (archiveDateMode === m[0]) ? ' active' : '';
+    return '<button type="button" class="arch-date-chip' + active + '" data-mode="' + m[0] +
+           '" onclick="setArchiveDateMode(\'' + m[0] + '\')">' + m[1] + '</button>';
+  }).join('');
+  var rangeHidden = archiveDateMode === 'custom' ? '' : ' style="display:none;"';
+  // Зберігаємо значення input-ів між перерендерами (стан у JS-змінних).
+  var fromVal = escapeHtml(archiveDateFrom || '');
+  var toVal   = escapeHtml(archiveDateTo   || '');
+  var searchVal = escapeHtml(archiveSearch || '');
+  return '<div class="arch-filter-bar">' +
+    '<div class="arch-filter-row">' +
+      '<input type="search" id="archiveSearchInput" class="arch-search" placeholder="🔍 Пошук в архіві: ПІБ, ТТН, телефон, адреса, причина…" value="' + searchVal + '" oninput="onArchiveSearch(this.value)">' +
+      (searchVal ? '<button type="button" class="arch-search-clear" onclick="onArchiveSearch(\'\')" title="Очистити">✕</button>' : '') +
+    '</div>' +
+    '<div class="arch-filter-row arch-date-chips">' + chips + '</div>' +
+    '<div class="arch-filter-row arch-date-range"' + rangeHidden + '>' +
+      '<label>Від <input type="date" id="archiveDateFromInput" value="' + fromVal + '" onchange="onArchiveDateRangeChange()"></label>' +
+      '<label>До <input type="date" id="archiveDateToInput" value="' + toVal + '" onchange="onArchiveDateRangeChange()"></label>' +
+      (archiveDateFrom || archiveDateTo ? '<button type="button" class="arch-search-clear" onclick="resetArchiveDateRange()" title="Скинути діапазон">✕</button>' : '') +
+    '</div>' +
+  '</div>';
+}
+
+// Повний рендер архівного виду (бар + список). Викликається при вході в архів
+// і при перезавантаженні даних. Для оновлення лише списку (пошук, фільтр) —
+// renderArchiveList(), щоб input не втрачав фокус.
+function renderArchiveCards() {
+  var container = document.getElementById('cardsList');
+  if (!container) return;
+  container.innerHTML =
+    _archiveFilterBarHtml() +
+    '<div id="archiveListInner"></div>';
+  renderArchiveList();
+}
+
+// Оновлює лише вкладений список карток + counter в mass-bar.
+function renderArchiveList() {
+  var inner = document.getElementById('archiveListInner');
+  if (!inner) { renderArchiveCards(); return; }
+  var data = getFilteredArchive();
+  var totalShown = data.length;
+  var totalAll = archiveData.length;
   var massBar = '<div style="padding:8px 12px;background:#fef3c7;border-radius:8px;margin-bottom:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">' +
-    '<span style="font-size:13px;font-weight:600;color:#92400e;">🗄️ Архів — ' + archiveData.length + ' записів</span>' +
+    '<span style="font-size:13px;font-weight:600;color:#92400e;">🗄️ Архів — ' +
+      (totalShown === totalAll ? totalAll + ' записів' : totalShown + ' з ' + totalAll) +
+    '</span>' +
     '<label style="margin-left:auto;font-size:12px;cursor:pointer;color:#92400e;">' +
       '<input type="checkbox" id="archSelectAll" onchange="archiveSelectAll(this.checked)"> Вибрати всі' +
     '</label>' +
     '<button onclick="archiveMassRestore()" style="background:var(--success);color:#fff;border:none;padding:4px 10px;border-radius:6px;font-size:12px;cursor:pointer;">♻️ Відновити вибрані</button>' +
     '<button onclick="archiveMassDelete()" style="background:var(--danger);color:#fff;border:none;padding:4px 10px;border-radius:6px;font-size:12px;cursor:pointer;">🗑️ Видалити назавжди</button>' +
   '</div>';
+  if (totalAll === 0) {
+    inner.innerHTML = '<div class="empty-state">🗄️ Архів порожній</div>';
+    return;
+  }
+  if (totalShown === 0) {
+    inner.innerHTML = massBar + '<div class="empty-state">🔍 Нічого не знайдено за заданими фільтрами</div>';
+    return;
+  }
+  inner.innerHTML = massBar + data.map(function(p) { return renderArchiveCard(p); }).join('');
+}
 
-  container.innerHTML = massBar + archiveData.map(function(p) { return renderArchiveCard(p); }).join('');
+// === Архівні фільтри: handlers ===
+function onArchiveSearch(v) {
+  archiveSearch = v || '';
+  // Очищення хрестиком — треба відобразити сам input як порожній, тож
+  // рендеримо весь бар. При наборі тексту — лише список (фокус збережеться).
+  if (!v) {
+    renderArchiveCards();
+    var inp = document.getElementById('archiveSearchInput');
+    if (inp) inp.focus();
+  } else {
+    renderArchiveList();
+  }
+}
+
+function setArchiveDateMode(mode) {
+  archiveDateMode = mode || 'all';
+  if (mode !== 'custom') {
+    archiveDateFrom = '';
+    archiveDateTo = '';
+  }
+  renderArchiveCards();
+}
+
+function onArchiveDateRangeChange() {
+  var f = document.getElementById('archiveDateFromInput');
+  var t = document.getElementById('archiveDateToInput');
+  archiveDateFrom = (f && f.value) || '';
+  archiveDateTo   = (t && t.value) || '';
+  // Якщо обрано хоч одну дату, але mode не custom — переходимо в custom.
+  if ((archiveDateFrom || archiveDateTo) && archiveDateMode !== 'custom') {
+    archiveDateMode = 'custom';
+  }
+  renderArchiveList();
+}
+
+function resetArchiveDateRange() {
+  archiveDateFrom = '';
+  archiveDateTo = '';
+  renderArchiveCards();
 }
 
 // Архівна картка — такий самий вигляд як активна, але з архівними діями
@@ -6163,11 +6325,13 @@ function archiveToggleSelect(pkgId) {
 function archiveSelectAll(checked) {
   archiveSelectedIds.clear();
   if (checked) {
-    archiveData.forEach(function(p) {
+    // «Вибрати всі» в межах активного фільтра — інакше юзер бачить 5 карток,
+    // а під капотом вибирається 500 з усього архіву.
+    getFilteredArchive().forEach(function(p) {
       if (p['PKG_ID']) archiveSelectedIds.add(p['PKG_ID']);
     });
   }
-  renderArchiveCards();
+  renderArchiveList();
 }
 
 // Відновити з архіву (одну)
@@ -6180,7 +6344,7 @@ async function restoreFromArchive(pkgId) {
     archiveSelectedIds.delete(pkgId);
     var countEl = document.getElementById('countArchive');
     if (countEl) countEl.textContent = archiveData.length;
-    renderArchiveCards();
+    renderArchiveList();
     showToast('Відновлено з архіву', 'success');
   } else {
     showToast(res.error || 'Помилка відновлення', 'error');
@@ -6197,7 +6361,7 @@ async function permanentDelete(pkgId) {
     archiveSelectedIds.delete(pkgId);
     var countEl = document.getElementById('countArchive');
     if (countEl) countEl.textContent = archiveData.length;
-    renderArchiveCards();
+    renderArchiveList();
     showToast('Видалено назавжди', 'success');
   } else {
     showToast(res.error || 'Помилка видалення', 'error');
@@ -6224,7 +6388,7 @@ async function archiveMassRestore() {
     var countEl = document.getElementById('countArchive');
     if (countEl) countEl.textContent = archiveData.length;
   }
-  renderArchiveCards();
+  renderArchiveList();
   showToast('Відновлено ' + success + ' з ' + ids.length, 'success');
 }
 
@@ -6240,7 +6404,7 @@ async function archiveMassDelete() {
     archiveSelectedIds.clear();
     var countEl = document.getElementById('countArchive');
     if (countEl) countEl.textContent = archiveData.length;
-    renderArchiveCards();
+    renderArchiveList();
     showToast('Видалено ' + (res.deleted || ids.length) + ' записів', 'success');
   } else {
     showToast(res.error || 'Помилка видалення', 'error');
