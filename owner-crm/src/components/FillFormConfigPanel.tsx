@@ -315,9 +315,10 @@ function CargoFillFormPreview({ cfg }: { cfg: FillFormConfig }) {
 
         {/* Receiver name (toggle) — для УК→ЄВ окремим блоком, для ЄВ→УК
             ПІБ вже включений у «📥 Отримувач (Україна)» вище. */}
-        {isUe && isOn('receiverNameUe') && (
-          <PreviewSection title="📥 Отримувач (додатково)">
-            <PreviewField label="ПІБ отримувача" placeholder="Прізвище Ім'я По-батькові" />
+        {isUe && (isOn('receiverNameUe') || isOn('senderPhoneUe')) && (
+          <PreviewSection title="📥 Отримувач + 📤 Відправник (UA)">
+            {isOn('receiverNameUe') && <PreviewField label="ПІБ отримувача"        placeholder="Прізвище Ім'я По-батькові" />}
+            {isOn('senderPhoneUe')  && <PreviewField label="Телефон відправника (UA)" placeholder="+380…" />}
           </PreviewSection>
         )}
 

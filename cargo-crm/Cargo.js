@@ -6987,12 +6987,18 @@ async function saveParcel() {
     const npCurrencyEl = document.getElementById('fNpCurrency');
     const npSumVal = npSumEl ? (npSumEl.value || '') : '';
     const npCurrencyVal = npCurrencyEl ? (npCurrencyEl.value || 'UAH') : 'UAH';
+    // Телефон українського відправника — опціональне поле для УК→ЄВ.
+    // Зберігаємо в ту ж колонку, що й у ЄВ→УК ('Телефон реєстратора'),
+    // щоб duplicate-чек і єдина модель даних працювали для обох напрямків.
+    const senderPhoneUeEl = document.getElementById('fSenderPhoneUe');
+    const senderPhoneUe = senderPhoneUeEl ? (senderPhoneUeEl.value.trim() || '') : '';
 
     data = {
       'Напрям': 'УК→ЄВ',
       'Піб отримувача': receiverUE,
       'Телефон отримувача': phoneReceiverUE,
       'Адреса в Європі': addressTo,
+      'Телефон реєстратора': senderPhoneUe,
       'Номер ТТН': document.getElementById('fTTN').value || '',
       'Кг': document.getElementById('fWeightUE').value || '',
       'Оціночна вартість': document.getElementById('fEstValueUE').value || '',

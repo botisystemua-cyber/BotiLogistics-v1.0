@@ -701,6 +701,13 @@
                 <div class="add-swiss-list" id="swissListReceiver"></div>
               </div>
             </div>
+            <!-- Опціональне поле: телефон українського відправника. Активує
+                 перевірку дублів (checkDuplicatePhone) — якщо клієнт уже
+                 відправляв посилку, оператор побачить попередження. -->
+            <div class="add-row" data-field-key="senderPhoneUe">
+              <label>Телефон відправника (UA)</label>
+              <input type="tel" id="fSenderPhoneUe" placeholder="+380..." oninput="checkDuplicatePhone(this.value)">
+            </div>
             <div class="add-row" data-field-key="parcelTtn">
               <label>Номер ТТН</label>
               <input type="text" id="fTTN" placeholder="Номер ТТН">
