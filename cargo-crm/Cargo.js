@@ -2024,8 +2024,13 @@ function afterBulkAction() {
 async function bulkDelete() {
   const ids = getSelectedIds();
   if (ids.length === 0) return;
-  const reason = prompt('Причина архівування ' + ids.length + ' посилок (або залиште порожнім):', '');
+  // Причина — обов'язкова, слугує підтвердженням масової архівації.
+  const reason = prompt('Причина архівування ' + ids.length + ' посилок (обов\'язково):', '');
   if (reason === null) return;
+  if (!reason.trim()) {
+    showToast('Архівацію скасовано: причина обов\'язкова', 'warning');
+    return;
+  }
   // Оновити локально
   ids.forEach(function(pkgId) {
     var item = allData.find(function(p) { return p['PKG_ID'] === pkgId; });
@@ -5979,10 +5984,15 @@ async function loadUnreadCounts() {
 
 // ===== [SECT-ARCHIVE] ARCHIVE SYSTEM =====
 
-// Архівувати посилку з причиною
+// Архівувати посилку з причиною. Причина обов'язкова — слугує підтвердженням
+// дії: якщо користувач не ввів текст, архівація НЕ виконується.
 async function deleteRecord(pkgId) {
-  const reason = prompt('Причина архівування (або залиште порожнім):', '');
+  const reason = prompt('Причина архівування посилки ' + pkgId + ' (обов\'язково):', '');
   if (reason === null) return; // Натиснув Cancel
+  if (!reason.trim()) {
+    showToast('Архівацію скасовано: причина обов\'язкова', 'warning');
+    return;
+  }
 
   const item = allData.find(p => p['PKG_ID'] === pkgId);
   if (item) {
