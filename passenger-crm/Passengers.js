@@ -4919,7 +4919,7 @@ function renderTripCard(t) {
             </div>
             <div class="trip-card-meta">
                 <span class="trip-card-tag ${dirCssClass}">${dirLabel}</span>
-                <span class="trip-card-tag date">${formatTripDate(t.date)}</span>
+                <span class="trip-card-tag date"><span class="trip-card-date-ico">📅</span>${formatTripDate(t.date)}</span>
             </div>
             <div class="trip-card-meta" style="margin-top:4px;">
                 <span class="trip-card-tag auto" style="background:${autoClr.bg};color:${autoClr.color};">${autoName || '—'}</span>
