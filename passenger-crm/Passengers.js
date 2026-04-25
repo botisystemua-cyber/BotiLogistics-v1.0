@@ -5106,8 +5106,9 @@ function renderCalDay(d, key, info, otherMonth, isToday, selectedKey) {
 // Показати список пасажирів рейсу (по cal_id)
 function showTripPassengers(calId) {
     const trip = trips.find(t => t.cal_id === calId);
+    const reserveS = trip ? Math.max(0, parseInt(trip.reserve_seats) || 0) : 0;
     const tripPax = passengers.filter(p => p['CAL_ID'] === calId);
-    const maxS = trip ? (parseInt(trip.max_seats) || 0) : 0;
+    const maxS = trip ? (parseInt(trip.max_seats) || 0) + reserveS : 0;
     const city = trip ? (trip.city || '—') : '—';
     const date = trip ? formatTripDate(trip.date) : '';
     renderPaxPopup(tripPax, city + ' ' + date, maxS);
@@ -5296,12 +5297,11 @@ function addVehicleBuilder() {
                 </div>
             </div>
             <div class="bs-field">
-                <label class="bs-label" style="margin-bottom:4px;">+ Додаткові місця (спальник, підлога)</label>
-                <div class="vb-reserve-row" style="display:flex;align-items:center;gap:10px;">
-                    <button type="button" onclick="changeReserveCount(${idx},-1)" class="vb-reserve-btn">−</button>
+                <label class="bs-label">Додаткові місця</label>
+                <div class="seat-counter" id="reserveCounter-${idx}">
+                    <button type="button" onclick="changeReserveCount(${idx},-1)">−</button>
                     <span class="vb-reserve-num" id="vbReserve-${idx}">0</span>
-                    <button type="button" onclick="changeReserveCount(${idx},1)" class="vb-reserve-btn">+</button>
-                    <span style="font-size:11px;color:var(--text-secondary);">макс. 5</span>
+                    <button type="button" onclick="changeReserveCount(${idx},1)">+</button>
                 </div>
             </div>
         </div>
@@ -5810,7 +5810,8 @@ function renderSeatPickerModal(trip, occupiedMap) {
     const tripDate = formatTripDate(trip.date);
     const tripCity = trip.city || '';
     const occ = Object.keys(occupiedMap).length;
-    const free = Math.max(0, effectiveMax + reserveCount - occ);
+    // free = всього вільних після врахування і чужих, і власного вибору поточного пасажира
+    const free = Math.max(0, effectiveMax + reserveCount - occ - seatPickerSelected.size);
     const totalLabel = reserveCount > 0
         ? `${effectiveMax} + ${reserveCount} додатк.`
         : `${effectiveMax} місць`;
@@ -5827,7 +5828,7 @@ function renderSeatPickerModal(trip, occupiedMap) {
                     <span class="sp-auto-icon">🚐</span>
                     <div class="sp-auto-details">
                         <div class="sp-auto-name">${autoName}</div>
-                        <div>${tripDate} · ${tripCity} · <span style="color:#16a34a;font-weight:700;">${free} вільн.</span> / ${totalLabel} · Обрано: <span id="seatPickerCount" style="font-weight:700;color:var(--primary);">${seatPickerSelected.size}</span></div>
+                        <div>${tripDate} · ${tripCity} · <span id="seatPickerFree" style="color:#16a34a;font-weight:700;">${free}</span> вільн. / ${totalLabel} · Обрано: <span id="seatPickerCount" style="font-weight:700;color:var(--primary);">${seatPickerSelected.size}</span></div>
                     </div>
                 </div>
                 <div id="seatPickerGrid">${vanHtml}</div>
@@ -5868,7 +5869,7 @@ function buildReserveBlockHtml(count, occupiedMap) {
         }
     }
     return `<div class="reserve-block">
-        <div class="reserve-block-title">+ Додаткові місця <span class="reserve-block-hint">(спальник, підлога, коліна)</span></div>
+        <div class="reserve-block-title">Додаткові місця</div>
         <div class="reserve-block-buttons">${buttons}</div>
     </div>`;
 }
@@ -5897,6 +5898,15 @@ function seatPickerSelect(seatName) {
     if (reserveEl) reserveEl.innerHTML = buildReserveBlockHtml(reserveCount, occupiedMap);
     const counter = document.getElementById('seatPickerCount');
     if (counter) counter.textContent = seatPickerSelected.size;
+    // Оновлюємо «вільн.» — враховує і чужі (occupiedMap), і власний поточний вибір
+    const freeEl = document.getElementById('seatPickerFree');
+    if (freeEl) {
+        const layoutPositions = getSeatLayout(layout, maxSeats, false);
+        const layoutSeatCount = layoutPositions.filter(s => s.type === 'seat').length;
+        const effectiveMax = layoutSeatCount > 0 ? layoutSeatCount : maxSeats;
+        const free = Math.max(0, effectiveMax + reserveCount - Object.keys(occupiedMap).length - seatPickerSelected.size);
+        freeEl.textContent = String(free);
+    }
 }
 
 async function saveSeatPicker() {
