@@ -130,6 +130,25 @@ function escapeHtml(s) {
 function escapeRegExp(s) {
   return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
+// Прибирає з адреси частини-плейсхолдери на кшталт «Невідомо», «—», «(невідомо)»,
+// у тому числі з префіксами «буд.», «кв.», «вул.», «м.». Якщо після очищення
+// нічого не лишилось — повертає ''. Це дозволяє в картці ліда не показувати
+// шматки адреси «буд.Невідомо, кв.Невідомо», які залишив сканер.
+function cleanAddress(addr) {
+  const raw = String(addr == null ? '' : addr).trim();
+  if (!raw) return '';
+  const isPlaceholder = (v) => {
+    const s = String(v || '').trim().toLowerCase().replace(/[()«»\s]/g, '');
+    return !s || s === 'невідомо' || s === 'невідома' || s === 'невідомий'
+             || s === '—' || s === '-' || s === 'unknown' || s === 'нема'
+             || s === 'n/a' || s === 'na';
+  };
+  const stripPrefix = (s) => s.replace(/^\s*(буд\.|кв\.|вул\.|м\.|с\.|смт\.|пр\.|просп\.|пров\.|НП:)\s*/i, '');
+  const parts = raw.split(',')
+    .map(p => p.trim())
+    .filter(p => p && !isPlaceholder(stripPrefix(p)));
+  return parts.join(', ');
+}
 function highlightMatch(text) {
   const safe = escapeHtml(text == null ? '' : text);
   if (!searchQuery) return safe;
@@ -1187,8 +1206,8 @@ function renderCard(p, routeCtx) {
   const isUE = direction === 'УК→ЄВ';
   const dirBadgeClass = isUE ? 'dir-badge-ua-eu' : 'dir-badge-eu-ua';
   const dirLabel = isUE ? 'УК→ЄВ' : 'ЄВ→УК';
-  const addressFrom = p['Адреса відправки'] || '';
-  const addressTo = p['Адреса в Європі'] || p['Місто Нова Пошта'] || '';
+  const addressFrom = cleanAddress(p['Адреса відправки'] || '');
+  const addressTo = cleanAddress(p['Адреса в Європі'] || p['Місто Нова Пошта'] || '');
   const weight = p['Кг'] || '';
   const npPlaces = parseInt(p['Місця НП'], 10) || 0;
   const itemCount = parseInt(p['Кількість позицій'], 10) || 0;
@@ -5993,8 +6012,8 @@ function renderArchiveCard(p) {
   var isUE = direction === 'УК→ЄВ';
   var dirLabel = isUE ? 'УК→ЄВ' : 'ЄВ→УК';
   var dirClass = isUE ? 'dir-badge-ua-eu' : 'dir-badge-eu-ua';
-  var addressTo = p['Адреса в Європі'] || p['Місто Нова Пошта'] || p['Адреса отримувача'] || '';
-  var addressFrom = p['Адреса відправки'] || '';
+  var addressTo = cleanAddress(p['Адреса в Європі'] || p['Місто Нова Пошта'] || p['Адреса отримувача'] || '');
+  var addressFrom = cleanAddress(p['Адреса відправки'] || '');
   var weight = p['Кг'] || '';
   var price = p['Сума'] || '';
   var currency = p['Валюта оплати'] || '';
