@@ -3881,6 +3881,61 @@ function cancelInline(paxId, key) {
 // ================================================================
 // ADD / DELETE PASSENGER
 // ================================================================
+// ===== [SECT-FILL-FORM-CONFIG] OWNER-CONFIGURED FIELDS =====
+// Власник у owner-crm обирає, які поля показувати у формі «Новий пасажир».
+// Зберігається як JSON у system_settings.setting_value (key='fill_form_passenger').
+// Якщо рядка немає або кеш порожній — поводимось як «все увімкнено».
+let _fillFormPaxCfg = null;            // { smsParser, fields } | null
+let _fillFormPaxCfgLoaded = false;     // чи був хоч один успішний load
+
+async function loadFillFormPaxConfig() {
+    if (_fillFormPaxCfgLoaded) return _fillFormPaxCfg;
+    try {
+        const TENANT = (typeof TENANT_ID !== 'undefined') ? TENANT_ID
+                     : (typeof window !== 'undefined' ? window.TENANT_ID : null);
+        if (!TENANT || typeof sb === 'undefined' || !sb || !sb.from) {
+            _fillFormPaxCfgLoaded = true;
+            return null;
+        }
+        const { data, error } = await sb
+            .from('system_settings')
+            .select('setting_value')
+            .eq('tenant_id', TENANT)
+            .eq('setting_name', 'fill_form_passenger')
+            .limit(1);
+        if (error) throw error;
+        const raw = data && data[0] && data[0].setting_value;
+        _fillFormPaxCfg = raw ? JSON.parse(raw) : null;
+    } catch (e) {
+        console.warn('[fillFormPaxCfg] load failed, using defaults:', e);
+        _fillFormPaxCfg = null;
+    }
+    _fillFormPaxCfgLoaded = true;
+    return _fillFormPaxCfg;
+}
+
+function applyFillFormPaxConfig() {
+    const cfg = _fillFormPaxCfg;
+    if (!_fillFormPaxCfgLoaded) {
+        loadFillFormPaxConfig().then(() => {
+            const overlay = document.getElementById('passengerModal');
+            if (overlay && overlay.classList.contains('show')) applyFillFormPaxConfig();
+        });
+        return;
+    }
+    document.querySelectorAll('#passengerModal [data-field-key]').forEach(el => {
+        const key = el.getAttribute('data-field-key');
+        const enabled = !cfg || !cfg.fields || cfg.fields[key] !== false;
+        el.style.display = enabled ? '' : 'none';
+    });
+    // SMS-парсер: ховаємо весь блок, не лишаємо порожнього місця.
+    const smsSec = document.querySelector('#passengerModal [data-section-key="smsParser"]');
+    if (smsSec) {
+        const smsEnabled = !cfg || cfg.smsParser !== false;
+        smsSec.style.display = smsEnabled ? '' : 'none';
+    }
+}
+
 function openAddModal() {
     editingPaxId = null;
     document.getElementById('paxModalTitle').textContent = '➕ Новий пасажир';
@@ -3913,6 +3968,9 @@ function openAddModal() {
     document.getElementById('smsParserWrap').style.display = 'block';
     const saveBtn = document.getElementById('paxSaveBtn');
     if (saveBtn) saveBtn.textContent = '💾 Зберегти';
+    // Застосовуємо owner-конфіг (system_settings.fill_form_passenger):
+    // ховаємо [data-field-key=…] і блок SMS-парсера якщо власник їх вимкнув.
+    applyFillFormPaxConfig();
     openModal('passengerModal');
 }
 
@@ -4215,7 +4273,20 @@ async function savePassenger() {
     const name = document.getElementById('fName').value.trim();
     const phone = document.getElementById('fPhone').value.trim();
     const dir = document.getElementById('fDirection').value;
-    if (!name || !phone) { showToast('⚠️ ПІБ та Телефон обов\'язкові'); return; }
+    // Обов'язкові поля для формування ліда: телефон пасажира + точка
+    // відправки + точка прибуття. ПІБ — опціональний (власник може ховати
+    // через owner-crm налаштування). Точки — для чіткого формування маршруту.
+    const fromVal = (typeof readRoutePointCombined === 'function')
+                  ? (readRoutePointCombined('from').text || '').trim()
+                  : ((document.getElementById('fFrom') || {}).value || '').trim();
+    const toVal   = (typeof readRoutePointCombined === 'function')
+                  ? (readRoutePointCombined('to').text || '').trim()
+                  : ((document.getElementById('fTo') || {}).value || '').trim();
+    const errs = [];
+    if (!phone)   errs.push('Телефон пасажира');
+    if (!fromVal) errs.push('Точка відправки');
+    if (!toVal)   errs.push('Точка прибуття');
+    if (errs.length) { showToast('⚠️ Заповніть: ' + errs.join(', ')); return; }
 
     // Візуальний відгук — блокуємо кнопку та показуємо стан
     const origText = saveBtn.textContent;
