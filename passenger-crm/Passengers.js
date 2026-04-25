@@ -5570,9 +5570,13 @@ function renderVan(opts) {
             const occ = occupiedMap[s.name];
             if (occ) {
                 const occLabel = (typeof occ === 'object') ? occ.label : occ;
-                const flexCls = (typeof occ === 'object' && occ.flexible) ? ' seat-flex' : '';
-                const flexIco = (typeof occ === 'object' && occ.flexible) ? '<span class="seat-flex-ico">🔀</span>' : '';
-                return `<div class="seat-pin seat-occupied${flexCls}" style="${style}" title="Зайнято: ${occLabel}">${s.name}${flexIco}<div class="seat-occ-name">${occLabel}</div></div>`;
+                const isFlex = typeof occ === 'object' && occ.flexible;
+                const flexCls = isFlex ? ' seat-flex' : '';
+                const flexIco = isFlex ? '<span class="seat-flex-ico">🔀</span>' : '';
+                // Flexible-occupied: clickable — shuffle логіка спрацює на save (Phase 2).
+                const occHandler = (interactive && isFlex) ? `onclick="${clickHandler}('${s.name}')"` : '';
+                const occTitle = isFlex ? `Гнучке: ${occLabel}. Можна обрати — пасажир переміститься.` : `Зайнято: ${occLabel}`;
+                return `<div class="seat-pin seat-occupied${flexCls}" style="${style}" ${occHandler} title="${occTitle}">${s.name}${flexIco}<div class="seat-occ-name">${occLabel}</div></div>`;
             }
             if (selected.has(s.name)) {
                 const handler = interactive ? `onclick="${clickHandler}('${s.name}')"` : '';
@@ -5590,9 +5594,12 @@ function renderVan(opts) {
         const occ2 = occupiedMap[s.name];
         if (occ2) {
             const occLabel2 = (typeof occ2 === 'object') ? occ2.label : occ2;
-            const flexCls2 = (typeof occ2 === 'object' && occ2.flexible) ? ' seat-flex' : '';
-            const flexIco2 = (typeof occ2 === 'object' && occ2.flexible) ? '<span class="seat-flex-ico">🔀</span>' : '';
-            return `<div class="seat seat-occupied${flexCls2}" style="${style}" title="Зайнято: ${occLabel2}">
+            const isFlex2 = typeof occ2 === 'object' && occ2.flexible;
+            const flexCls2 = isFlex2 ? ' seat-flex' : '';
+            const flexIco2 = isFlex2 ? '<span class="seat-flex-ico">🔀</span>' : '';
+            const occHandler2 = (interactive && isFlex2) ? `onclick="${clickHandler}('${s.name}')"` : '';
+            const occTitle2 = isFlex2 ? `Гнучке: ${occLabel2}. Можна обрати — пасажир переміститься.` : `Зайнято: ${occLabel2}`;
+            return `<div class="seat seat-occupied${flexCls2}" style="${style}" ${occHandler2} title="${occTitle2}">
                 ${chairImg}
                 <div class="seat-num">${s.name}${flexIco2}</div>
                 <div class="seat-occ-name">${occLabel2}</div>
@@ -5696,9 +5703,13 @@ function getOccupiedSeats(calId, excludePaxId) {
 }
 
 // Знайти перше вільне місце на рейсі (числові за зростанням, потім R1..RN).
+// excludePaxId — ігноруємо рядок з цим pax_id у мапі зайнятих.
+// extraExcluded (опц.) — додатково забороняємо ці місця (напр. ті що тільки
+// що були звільнені shuffle і одразу зайняті іншим).
 // Повертає назву ('1', '4', 'R2', ...) або '' якщо всіх зайняли.
-function findFirstFreeSeat(trip, excludePaxId) {
+function findFirstFreeSeat(trip, excludePaxId, extraExcluded) {
     if (!trip) return '';
+    extraExcluded = extraExcluded || new Set();
     const layout = detectLayout(trip);
     const maxSeats = parseInt(trip.max_seats) || 7;
     const reserveCount = Math.max(0, parseInt(trip.reserve_seats) || 0);
@@ -5707,12 +5718,12 @@ function findFirstFreeSeat(trip, excludePaxId) {
     // Спочатку числові seat-позиції (з layout) — за порядком як вони в layout-схемі
     const numericNames = positions.filter(p => p.type === 'seat').map(p => p.name);
     for (const name of numericNames) {
-        if (!occupied[name]) return name;
+        if (!occupied[name] && !extraExcluded.has(name)) return name;
     }
     // Потім резерв R1..RN
     for (let i = 1; i <= reserveCount; i++) {
         const r = 'R' + i;
-        if (!occupied[r]) return r;
+        if (!occupied[r] && !extraExcluded.has(r)) return r;
     }
     return ''; // все зайняте
 }
@@ -5913,9 +5924,13 @@ function buildReserveBlockHtml(count, occupiedMap, opts) {
         const isSel = isSelected(name);
         if (isOcc) {
             const occLabel = (typeof isOcc === 'object') ? isOcc.label : isOcc;
-            const flexC = (typeof isOcc === 'object' && isOcc.flexible) ? ' rseat-flex' : '';
-            const flexI = (typeof isOcc === 'object' && isOcc.flexible) ? ' 🔀' : '';
-            buttons += `<button type="button" class="rseat rseat-occupied${flexC}" disabled title="Зайнято: ${occLabel}">${name}${flexI}<span class="rseat-name">${occLabel}</span></button>`;
+            const isFx = typeof isOcc === 'object' && isOcc.flexible;
+            const flexC = isFx ? ' rseat-flex' : '';
+            const flexI = isFx ? ' 🔀' : '';
+            // Flexible — clickable, hard — disabled
+            const btnAttr = isFx ? `onclick="${clickHandler}('${name}')"` : 'disabled';
+            const btnTitle = isFx ? `Гнучке: ${occLabel}. Можна обрати — пасажир переміститься.` : `Зайнято: ${occLabel}`;
+            buttons += `<button type="button" class="rseat rseat-occupied${flexC}" ${btnAttr} title="${btnTitle}">${name}${flexI}<span class="rseat-name">${occLabel}</span></button>`;
         } else if (isSel) {
             buttons += `<button type="button" class="rseat rseat-selected" onclick="${clickHandler}('${name}')">${name}<span class="rseat-check">✓</span></button>`;
         } else {
@@ -5987,9 +6002,48 @@ async function saveSeatPicker() {
 
     if (newVal === oldVal && !seatsChanged) { closeSeatPicker(); return; }
 
+    // Phase 2 shuffle: для кожного picked seat, який сидить flexible — посунути його.
+    // Йдемо послідовно щоб кожне переміщення враховувало вже зайняті/звільнені.
+    const calId = p['CAL_ID'] || '';
+    const trip = trips.find(t => t.cal_id === calId);
+    const shuffles = [];
+    if (trip && picked.length > 0) {
+        const occMap = getOccupiedSeats(calId, paxId);
+        const reserved = new Set(picked); // мої майбутні місця — не можна туди пересаджувати
+        for (const pickedSeat of picked) {
+            const o = occMap[pickedSeat];
+            if (o && typeof o === 'object' && o.flexible && o.paxId) {
+                const nextFree = findFirstFreeSeat(trip, o.paxId, reserved);
+                if (!nextFree) {
+                    showToast('❌ Немає куди посунути ' + o.label + ' з ' + pickedSeat);
+                    return; // НЕ закриваємо пікер, щоб юзер змінив вибір
+                }
+                shuffles.push({ paxId: o.paxId, oldSeat: pickedSeat, newSeat: nextFree, label: o.label });
+                reserved.add(nextFree);
+            }
+        }
+    }
+
     p[colName] = newVal;
     if (seatsChanged && picked.length > 0) p['Кількість місць'] = newSeatsCount;
     closeSeatPicker();
+
+    // Виконуємо shuffles ДО запису власного — щоб місця реально звільнились
+    for (const sh of shuffles) {
+        const movedPax = passengers.find(x => x['PAX_ID'] === sh.paxId);
+        if (!movedPax) continue;
+        const movedSheet = movedPax._sheet || '';
+        const moveRes = await apiPost('updateField', {
+            sheet: movedSheet, pax_id: sh.paxId, col: 'Місце в авто', value: sh.newSeat
+        });
+        if (moveRes && moveRes.ok) {
+            movedPax['Місце в авто'] = sh.newSeat;
+            showToast('🔀 ' + sh.label + ': ' + sh.oldSeat + ' → ' + sh.newSeat);
+        } else {
+            showToast('❌ Не зміг посунути ' + sh.label);
+            return;
+        }
+    }
 
     const el = document.getElementById('dv-' + paxId + '-seatInCar');
     if (el) el.textContent = newVal || '—';
@@ -7487,6 +7541,38 @@ async function doAssignTrip(calId, paxIds, seatChoice) {
     // Показуємо лоадер ДО закриття модалки
     showLoader('Призначаю рейс...');
     closeTripModal();
+
+    // Якщо обрано місце де сидить flexible — спершу його посунути.
+    // Phase 2 shuffle: атомарно (якщо не зміг — блокуємо повний save).
+    if (seatChoice && paxIds.length === 1) {
+        var trip0 = trips.find(function(t) { return t.cal_id === calId; });
+        if (trip0) {
+            var occMap = getOccupiedSeats(calId, paxIds[0]);
+            var occ = occMap[seatChoice];
+            if (occ && typeof occ === 'object' && occ.flexible && occ.paxId) {
+                var newSeat = findFirstFreeSeat(trip0, occ.paxId, new Set([seatChoice]));
+                if (!newSeat) {
+                    hideLoader();
+                    showToast('❌ Немає куди посунути ' + occ.label + ' з місця ' + seatChoice);
+                    return;
+                }
+                var movedPax = passengers.find(function(x) { return x['PAX_ID'] === occ.paxId; });
+                if (movedPax) {
+                    var movedSheet = movedPax._sheet || '';
+                    var moveRes = await apiPost('updateField', {
+                        sheet: movedSheet, pax_id: occ.paxId, col: 'Місце в авто', value: newSeat
+                    });
+                    if (!moveRes || !moveRes.ok) {
+                        hideLoader();
+                        showToast('❌ Не зміг посунути ' + occ.label + ': ' + (moveRes && moveRes.error || ''));
+                        return;
+                    }
+                    movedPax['Місце в авто'] = newSeat;
+                    showToast('🔀 ' + occ.label + ': ' + seatChoice + ' → ' + newSeat);
+                }
+            }
+        }
+    }
 
     var res = await apiPost('assignTrip', { cal_id: calId, pax_ids: paxIds });
 
