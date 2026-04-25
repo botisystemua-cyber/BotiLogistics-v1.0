@@ -1926,10 +1926,15 @@ body.route-sort-active #rteTogglePay {
 
 /* Vehicle cards in trip modal */
 .tm-section-label { font-size: 10px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; margin: 12px 0 8px; letter-spacing: 0.5px; }
-/* Trip-assign модалка: блок розсадки */
-.tm-free-btn { display: block; width: 100%; padding: 12px 14px; border-radius: 10px; border: 2px solid var(--border); background: white; font-family: inherit; font-size: 13px; font-weight: 700; color: var(--text-primary); cursor: pointer; margin: 8px 0; transition: all 0.15s; text-align: left; }
+/* Trip-assign модалка: блок розсадки. Radio-style: ○ / ● зліва */
+.tm-free-btn { display: flex; align-items: center; gap: 10px; width: 100%; padding: 12px 14px; border-radius: 10px; border: 2px solid var(--border); background: white; font-family: inherit; font-size: 14px; font-weight: 700; color: var(--text-primary); cursor: pointer; margin: 8px 0; transition: all 0.15s; text-align: left; }
 .tm-free-btn:hover { border-color: var(--primary); background: #f0f7ff; }
-.tm-free-btn.active { border-color: #16a34a; background: #f0fdf4; color: #15803d; box-shadow: 0 0 0 1px #16a34a inset; }
+.tm-free-btn.active { border-color: #16a34a; background: #f0fdf4; color: #15803d; box-shadow: 0 0 0 2px rgba(22,163,74,0.15); }
+.tm-radio { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; font-size: 22px; line-height: 1; color: #cbd5e1; flex-shrink: 0; }
+.tm-free-btn.active .tm-radio { color: #16a34a; }
+.tm-free-sub { font-weight: 500; color: var(--text-secondary); font-size: 12px; }
+.tm-free-btn.active .tm-free-sub { color: #15803d; }
+.tm-picked-count { background: var(--primary); color: white; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 10px; margin-left: 6px; text-transform: none; letter-spacing: 0.3px; }
 .tm-or-label { font-size: 11px; color: var(--text-secondary); margin: 8px 0 6px; text-align: center; font-weight: 500; }
 .tm-vehicle-card { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; border: 2px solid var(--border); background: white; cursor: pointer; margin-bottom: 6px; transition: all 0.15s; }
 .tm-vehicle-card:hover { border-color: var(--primary); background: #f0f7ff; }
