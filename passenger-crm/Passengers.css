@@ -1810,6 +1810,109 @@ body.route-sort-active #rteTogglePay {
 .modal-body { padding: 12px; max-height: 60vh; overflow-y: auto; }
 .modal-footer { padding: 10px 12px; background: var(--bg-main); display: flex; justify-content: flex-end; gap: 6px; }
 
+/* ===== BOTTOM-SHEET для модалки «Новий пасажир» (#passengerModal) =====
+   Mirror cargo-crm's .add-overlay / .add-sheet — slideUp анімація знизу,
+   стилі секцій-карт з кольоровими шапками. Активується додатковим
+   класом .pax-add-overlay/.pax-add-sheet, тому інші модалки CRM не
+   зачеплено. */
+.modal-overlay.pax-add-overlay {
+    align-items: flex-end;
+    backdrop-filter: blur(4px);
+    padding: 0;
+}
+.modal.pax-add-sheet {
+    max-width: 540px;
+    max-height: 92vh;
+    border-radius: 20px 20px 0 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    animation: paxSlideUp 0.35s ease-out;
+    padding-bottom: env(safe-area-inset-bottom, 16px);
+}
+@keyframes paxSlideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+
+.modal.pax-add-sheet .modal-header {
+    position: sticky; top: 0; z-index: 2;
+    background: linear-gradient(135deg, var(--primary), #0f2849);
+    padding: 14px 18px;
+    border-radius: 0;
+}
+.modal.pax-add-sheet .modal-title { font-size: 15px; font-weight: 800; }
+.modal.pax-add-sheet .modal-close {
+    width: 30px; height: 30px; border-radius: 50%;
+    background: rgba(255,255,255,0.18); font-size: 16px;
+}
+.modal.pax-add-sheet .modal-body {
+    padding: 0;
+    max-height: none;
+    overflow: visible;
+}
+.modal.pax-add-sheet .modal-footer {
+    position: sticky; bottom: 0; z-index: 2;
+    padding: 12px 18px;
+    background: #fff;
+    border-top: 1px solid var(--border);
+    justify-content: stretch;
+    gap: 10px;
+}
+.modal.pax-add-sheet .modal-footer .btn-cancel,
+.modal.pax-add-sheet .modal-footer .btn-save {
+    flex: 1;
+    padding: 12px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 700;
+}
+.modal.pax-add-sheet .modal-footer .btn-save {
+    background: linear-gradient(135deg, var(--primary), #0f2849);
+    color: #fff;
+    border: none;
+}
+.modal.pax-add-sheet .modal-footer .btn-save:hover { filter: brightness(1.1); }
+.modal.pax-add-sheet .modal-footer .btn-cancel {
+    background: #f3f4f6;
+    color: #374151;
+    border: none;
+}
+
+/* Секції-картки всередині модалки. */
+.pax-add-section {
+    margin: 12px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    background: #fff;
+}
+.pax-add-section-title {
+    padding: 10px 14px;
+    font-size: 12px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+/* Кольорові акценти секцій — синь-доміновані для passenger,
+   плюс кілька варіантів для контрасту між блоками. */
+.pax-add-section-title.sec-sms     { background: #f0fdf4; color: #166534; } /* green — як у cargo */
+.pax-add-section-title.sec-locked  { background: #eff6ff; color: #1e40af; } /* primary blue */
+.pax-add-section-title.sec-pax     { background: #ede9fe; color: #5b21b6; } /* indigo */
+.pax-add-section-title.sec-route   { background: #e0f2fe; color: #075985; } /* sky */
+.pax-add-section-title.sec-ticket  { background: #fef3c7; color: #92400e; } /* amber */
+.pax-add-section-title.sec-baggage { background: #fce7f3; color: #9d174d; } /* pink */
+.pax-add-section-title.sec-other   { background: #f3f4f6; color: #374151; } /* neutral */
+.pax-add-section-body { padding: 14px; background: #fff; }
+
+/* Ущільнюємо form-group/form-row всередині секцій. */
+.pax-add-section .form-group { margin-bottom: 12px; }
+.pax-add-section .form-group:last-child { margin-bottom: 0; }
+.pax-add-section .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+.pax-add-section .form-row:last-child { margin-bottom: 0; }
+.pax-add-section .form-row .form-group { margin-bottom: 0; }
+.pax-add-section .form-group label { font-size: 11px; font-weight: 600; color: var(--text-secondary); }
+
 /* Column configurator */
 .col-cfg-section { margin-bottom: 14px; }
 .col-cfg-label { font-size: 11px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 6px; letter-spacing: 0.3px; }
