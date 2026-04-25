@@ -1913,6 +1913,42 @@ body.route-sort-active #rteTogglePay {
 .pax-add-section .form-row .form-group { margin-bottom: 0; }
 .pax-add-section .form-group label { font-size: 11px; font-weight: 600; color: var(--text-secondary); }
 
+/* Перемикач напрямку у формі «Новий пасажир» — два кнопки в одному ряді,
+   замість <select>. Mirror cargo's .add-dir-toggle, але з пасажирською
+   палітрою: UA→EU = синій (primary), EU→UA = зелений. */
+.pax-dir-toggle {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 12px;
+}
+.pax-dir-btn {
+    flex: 1;
+    padding: 10px 8px;
+    border-radius: 10px;
+    border: 2px solid var(--border);
+    background: #fff;
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-primary);
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.2s;
+}
+.pax-dir-btn:hover { background: #f8fafc; }
+.pax-dir-btn.active-ua-eu {
+    background: linear-gradient(135deg, #dbeafe, #bfdbfe);
+    border-color: var(--primary);
+    color: #1d4ed8;
+    box-shadow: 0 2px 8px rgba(29,78,216,0.15);
+}
+.pax-dir-btn.active-eu-ua {
+    background: linear-gradient(135deg, #d1fae5, #a7f3d0);
+    border-color: #047857;
+    color: #047857;
+    box-shadow: 0 2px 8px rgba(4,120,87,0.15);
+}
+
 /* Column configurator */
 .col-cfg-section { margin-bottom: 14px; }
 .col-cfg-label { font-size: 11px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 6px; letter-spacing: 0.3px; }

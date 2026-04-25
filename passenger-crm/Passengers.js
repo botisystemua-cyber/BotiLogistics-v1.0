@@ -2567,7 +2567,7 @@ function openRouteEditModal(rteId, sheetName) {
 
     const dir = String(r['Напрям'] || '').toLowerCase().trim();
     const isEuUa = dir.startsWith('єв') || dir.startsWith('eu') || dir.startsWith('європа');
-    document.getElementById('fDirection').value = isEuUa ? 'eu-ua' : 'ua-eu';
+    setPaxDirection(isEuUa ? 'eu-ua' : 'ua-eu');
     document.getElementById('fName').value = r['Піб пасажира'] || '';
     document.getElementById('fPhone').value = r['Телефон пасажира'] || '';
     document.getElementById('fPhoneReg').value = r['Телефон реєстратора'] || '';
@@ -3722,7 +3722,7 @@ function openEditPax(id) {
     // Заповнюємо всі поля форми існуючими даними ліда
     const dir = String(p['Напрям'] || '').toLowerCase().trim();
     const isEuUa = dir.startsWith('єв') || dir.startsWith('eu') || dir.startsWith('європа');
-    document.getElementById('fDirection').value = isEuUa ? 'eu-ua' : 'ua-eu';
+    setPaxDirection(isEuUa ? 'eu-ua' : 'ua-eu');
     document.getElementById('fName').value = p['Піб'] || '';
     document.getElementById('fPhone').value = p['Телефон пасажира'] || '';
     document.getElementById('fPhoneReg').value = p['Телефон реєстратора'] || '';
@@ -3881,6 +3881,21 @@ function cancelInline(paxId, key) {
 // ================================================================
 // ADD / DELETE PASSENGER
 // ================================================================
+// Перемикач напрямку у формі «Новий пасажир» — два кнопки замість <select>.
+// Підтримує канонічні значення 'ua-eu' / 'eu-ua' (ті самі, що й раніше у
+// dropdown), і синхронізує hidden input #fDirection + .active-стан обох
+// кнопок. Викликати замість прямого `document.getElementById('fDirection').value = X`,
+// щоб UI завжди співпадав зі станом.
+function setPaxDirection(dir) {
+    const value = (dir === 'eu-ua') ? 'eu-ua' : 'ua-eu';
+    const input = document.getElementById('fDirection');
+    if (input) input.value = value;
+    const btnUa = document.getElementById('paxDirUaEu');
+    const btnEu = document.getElementById('paxDirEuUa');
+    if (btnUa) btnUa.classList.toggle('active-ua-eu', value === 'ua-eu');
+    if (btnEu) btnEu.classList.toggle('active-eu-ua', value === 'eu-ua');
+}
+
 // ===== [SECT-FILL-FORM-CONFIG] OWNER-CONFIGURED FIELDS =====
 // Власник у owner-crm обирає, які поля показувати у формі «Новий пасажир».
 // Зберігається як JSON у system_settings.setting_value (key='fill_form_passenger').
@@ -3949,7 +3964,7 @@ function openAddModal() {
     });
     document.getElementById('fSeats').value = '1';
     document.getElementById('fDate').value = '';
-    document.getElementById('fDirection').value = currentDir === 'eu-ua' ? 'eu-ua' : 'ua-eu';
+    setPaxDirection(currentDir === 'eu-ua' ? 'eu-ua' : 'ua-eu');
     document.getElementById('fCurrency').value = CURR_DEFAULT;
     document.getElementById('fCurrencyDeposit').value = CURR_DEFAULT;
     document.getElementById('fCurrencyWeight').value = CURR_DEFAULT;
@@ -4090,7 +4105,7 @@ function parseSmsText() {
     }
 
     if (direction) {
-        document.getElementById('fDirection').value = direction;
+        setPaxDirection(direction);
         result.push('🧭 Напрям: ' + (direction === 'ua-eu' ? 'UA→EU' : 'EU→UA'));
     }
     // 4b. Конкретні адреси: "виїзд:", "відправка:", "забрати:", "прибуття:", "доставка:" тощо
