@@ -1382,7 +1382,7 @@ body.route-sort-active #rteTogglePay {
     position: relative;
     width: 100%;
     max-width: 560px;
-    aspect-ratio: 1024 / 339;
+    aspect-ratio: 1408 / 768;
     background: transparent;
 }
 .van-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; display: block; pointer-events: none; user-select: none; }
