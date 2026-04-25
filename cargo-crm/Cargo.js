@@ -130,23 +130,35 @@ function escapeHtml(s) {
 function escapeRegExp(s) {
   return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
-// Прибирає з адреси частини-плейсхолдери на кшталт «Невідомо», «—», «(невідомо)»,
-// у тому числі з префіксами «буд.», «кв.», «вул.», «м.». Якщо після очищення
-// нічого не лишилось — повертає ''. Це дозволяє в картці ліда не показувати
-// шматки адреси «буд.Невідомо, кв.Невідомо», які залишив сканер.
+// Спільний детектор тексту-плейсхолдера. Використовується і для адрес
+// (cleanAddress), і для імен у card-row2 (isEmptyName). Тримай список варіантів
+// тут — щоб не розсинхронити дві копії.
+function _isPlaceholderText(v) {
+  const s = String(v == null ? '' : v).trim().toLowerCase().replace(/[()«»\s.,]/g, '');
+  if (!s) return true;
+  // Усі канонічні варіанти, які пише сканер/оператор замість порожнього поля.
+  // Лишай лише форми БЕЗ пробілів/крапок — їх вже зняли вище.
+  const KNOWN = new Set([
+    'невідомо', 'невідома', 'невідомий',
+    'невказано', 'невказана', 'невказаний',
+    'незаповнено', 'незаповнена', 'незаповнений',
+    'немає', 'нема', 'нету', 'нет',
+    'unknown', 'none', 'null', 'undefined', 'na', 'n/a',
+    '—', '-', '–', '?', '??', '???',
+  ]);
+  return KNOWN.has(s);
+}
+// Прибирає з адреси частини-плейсхолдери на кшталт «Невідомо», «(не вказано)»,
+// «—», у тому числі з префіксами «буд.», «кв.», «вул.», «м.». Якщо після
+// очищення нічого не лишилось — повертає ''. Це дозволяє в картці ліда не
+// показувати шматки адреси «буд.Невідомо, кв.Невідомо», які залишив сканер.
 function cleanAddress(addr) {
   const raw = String(addr == null ? '' : addr).trim();
   if (!raw) return '';
-  const isPlaceholder = (v) => {
-    const s = String(v || '').trim().toLowerCase().replace(/[()«»\s]/g, '');
-    return !s || s === 'невідомо' || s === 'невідома' || s === 'невідомий'
-             || s === '—' || s === '-' || s === 'unknown' || s === 'нема'
-             || s === 'n/a' || s === 'na';
-  };
   const stripPrefix = (s) => s.replace(/^\s*(буд\.|кв\.|вул\.|м\.|с\.|смт\.|пр\.|просп\.|пров\.|НП:)\s*/i, '');
   const parts = raw.split(',')
     .map(p => p.trim())
-    .filter(p => p && !isPlaceholder(stripPrefix(p)));
+    .filter(p => p && !_isPlaceholderText(stripPrefix(p)));
   return parts.join(', ');
 }
 function highlightMatch(text) {
@@ -1478,19 +1490,15 @@ function renderCard(p, routeCtx) {
               // Відправник / отримувач — два окремих тоггли. pkg_id прибрано —
               // його видно в деталях на вкладці «⚙ Системні» (readonly).
               // Вважаємо порожнім не лише null/''/whitespace, але й звичайні
-              // заглушки-плейсхолдери («невідомо», «(невідомо)», «—» тощо),
+              // заглушки-плейсхолдери («невідомо», «(не вказано)», «—» тощо),
               // які міг залишити сканер у новому ліді до ручного заповнення.
-              const isEmptyName = (v) => {
-                const s = String(v || '').trim().toLowerCase().replace(/[()«»\s]/g, '');
-                return !s || s === 'невідомо' || s === 'невідома' || s === 'невідомий'
-                         || s === '—' || s === '-' || s === 'unknown' || s === 'нема';
-              };
+              // Список варіантів — у спільному _isPlaceholderText.
               const showSender = visCols.includes('sender');
               const showRecv   = visCols.includes('receiver');
               if (!showSender && !showRecv) return '';
               const parts = [];
-              if (showSender && !isEmptyName(name))     parts.push(highlightMatch(name));
-              if (showRecv   && !isEmptyName(receiver)) parts.push(highlightMatch(receiver));
+              if (showSender && !_isPlaceholderText(name))     parts.push(highlightMatch(name));
+              if (showRecv   && !_isPlaceholderText(receiver)) parts.push(highlightMatch(receiver));
               if (parts.length === 0) return '';
               return `<span class="card-sender-recv">👤 ${parts.join(' → ')}</span>`;
             })()}
