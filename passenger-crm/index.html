@@ -536,8 +536,18 @@ $manifest = '../manifest.php' . ($t ? '?name=' . rawurlencode($t) . ($l ? '&logo
             <div class="pax-add-section">
                 <div class="pax-add-section-title sec-locked">🔒 Обов'язкові поля</div>
                 <div class="pax-add-section-body">
-                    <div class="form-group"><label>Напрямок <span style="color:var(--danger)">*</span></label>
-                        <select id="fDirection"><option value="ua-eu">🇺🇦→🇪🇺 Україна-Європа</option><option value="eu-ua">🇪🇺→🇺🇦 Європа-Україна</option></select>
+                    <div class="form-group">
+                        <label>Напрямок <span style="color:var(--danger)">*</span></label>
+                        <!-- Дві кнопки замість <select> — як у cargo. fDirection лишився
+                             прихованим input з тими самими значеннями ('ua-eu' / 'eu-ua'),
+                             тож saveSpassenger / SMS-парсер / edit-mode читають його так
+                             само. setPaxDirection(...) синхронізує і input, і active-стан
+                             кнопок. -->
+                        <div class="pax-dir-toggle">
+                            <button type="button" class="pax-dir-btn active-ua-eu" id="paxDirUaEu" onclick="setPaxDirection('ua-eu')">🇺🇦 → 🇪🇺 Україна → Європа</button>
+                            <button type="button" class="pax-dir-btn" id="paxDirEuUa" onclick="setPaxDirection('eu-ua')">🇪🇺 → 🇺🇦 Європа → Україна</button>
+                        </div>
+                        <input type="hidden" id="fDirection" value="ua-eu">
                     </div>
                     <div class="form-group"><label>Телефон пасажира <span style="color:var(--danger)">*</span></label><input type="tel" id="fPhone" placeholder="+380..."></div>
                     <div class="form-group">
