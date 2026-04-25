@@ -4532,19 +4532,19 @@ function renderTrips() {
     grid.innerHTML = groupList.map(g => renderTripRow(g, todayTs)).join('');
 
     // Авто-скрол: сьогоднішній/найближчий майбутній — на лівому краю. Якщо в рядку
-    // лише минулі — скрол у кінець, щоб найновіший був видимий.
+    // лише минулі — на лівий край ставиться найновіший минулий, щоб праворуч лишався
+    // вільний простір (сигнал що треба додати наступні рейси). Спейсер у кінці
+    // забезпечує overflow навіть коли карток мало.
     requestAnimationFrame(() => {
         document.querySelectorAll('.trow-scroll').forEach(row => {
             const cards = row.querySelectorAll('.trow-card');
+            if (cards.length === 0) return;
             let anchor = null;
             for (const c of cards) {
                 if (parseInt(c.dataset.ts) >= todayTs) { anchor = c; break; }
             }
-            if (anchor) {
-                row.scrollLeft = anchor.offsetLeft - row.offsetLeft;
-            } else {
-                row.scrollLeft = row.scrollWidth;
-            }
+            if (!anchor) anchor = cards[cards.length - 1]; // лише минулі → останній
+            row.scrollLeft = anchor.offsetLeft - row.offsetLeft;
         });
     });
 }
@@ -4575,7 +4575,9 @@ function renderTripRow(g, todayTs) {
                 '<button class="trow-nav-btn" onclick="trowScroll(this,1)" title="Вперед">▶</button>' +
             '</div>' +
         '</div>' +
-        '<div class="trow-scroll" id="' + safeGroupId + '">' + cardsHtml + '</div>' +
+        '<div class="trow-scroll" id="' + safeGroupId + '">' + cardsHtml +
+            '<div class="trow-spacer" aria-hidden="true"></div>' +
+        '</div>' +
     '</div>';
 }
 
