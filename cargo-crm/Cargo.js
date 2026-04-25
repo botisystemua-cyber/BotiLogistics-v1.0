@@ -6590,6 +6590,18 @@ async function archiveMassDelete() {
   }
 }
 
+// Заглушка для кнопки «📹 Навчання» в sidebar. Поки що в посилковій CRM
+// немає відеоінструкцій (на відміну від passenger-crm з obOpenCatalog), тож
+// показуємо інформативний toast. Коли відео буде — заміни цю функцію на
+// реальне відкриття каталогу/модалки.
+function openVideoModal() {
+  if (typeof showToast === 'function') {
+    showToast('📹 Навчальні відео по «Посилкам» — у розробці. Скоро з\'являться!', 'info');
+  } else {
+    alert('Навчальні відео по «Посилкам» — у розробці.');
+  }
+}
+
 // ===== [SECT-ADDFORM] ADD PARCEL FORM =====
 function openAddForm() {
   // 'new24' — це віртуальна вкладка (фільтр за свіжістю), не реальний напрям.
