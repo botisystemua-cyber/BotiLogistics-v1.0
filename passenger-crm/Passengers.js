@@ -6554,7 +6554,24 @@ function closeSideMenu() {
 var _ACCORDION_SECTIONS = ['pax', 'paxCal', 'trips', 'routes'];
 function _capSection(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 
+// Тимчасово прибирає скрол з desktop sidebar на час акордеон-анімації, щоб
+// він не з'являвся-зникав при кожному перемиканні секцій (max-height двох
+// секцій ненадовго розпирає висоту). Тривалість має >= тривалості transition
+// у CSS (.pc-sidebar-content max-height — 0.4s).
+var _pcSidebarToggleTimer = null;
+function _flashPcSidebarNoScroll() {
+    var sb = document.querySelector('.pc-sidebar');
+    if (!sb) return;
+    sb.classList.add('is-toggling');
+    if (_pcSidebarToggleTimer) clearTimeout(_pcSidebarToggleTimer);
+    _pcSidebarToggleTimer = setTimeout(function() {
+        sb.classList.remove('is-toggling');
+        _pcSidebarToggleTimer = null;
+    }, 450);
+}
+
 function setActiveAccordion(section) {
+    _flashPcSidebarNoScroll();
     // Desktop sidebar
     _ACCORDION_SECTIONS.forEach(function(s) {
         var c = document.getElementById('pcSection' + _capSection(s));
@@ -6610,6 +6627,7 @@ function togglePcSection(section) {
         setActiveAccordion(section);
     } else {
         // Вже відкрита — згортаємо лише її.
+        _flashPcSidebarNoScroll();
         c.classList.add('collapsed');
         var h = c.previousElementSibling;
         if (h) h.classList.add('collapsed');
@@ -8573,6 +8591,12 @@ let archiveTotal = 0;
 let archiveHasMore = false;
 let archiveLoading = false;
 const ARCHIVE_PAGE_SIZE = 50;
+// Фільтри архіву (search + швидкі діапазони + custom from-to). Стан у JS-вар,
+// бо filter-bar перебудовується разом з рендером — без стану значення input
+// стиралось би.
+let archiveDateMode = 'all'; // 'all' | 'today' | 'week' | 'month' | 'year' | 'custom'
+let archiveDateFrom = '';   // YYYY-MM-DD
+let archiveDateTo = '';     // YYYY-MM-DD
 
 async function loadArchive(append) {
     if (archiveLoading) return;
@@ -8588,6 +8612,8 @@ async function loadArchive(append) {
             }
             archiveTotal = res.total || archivedPassengers.length;
             archiveHasMore = res.hasMore || false;
+            const ct = document.getElementById('pcCountArchive');
+            if (ct) ct.textContent = archiveTotal > 0 ? String(archiveTotal) : '';
             if (currentView === 'archive') renderArchive();
         }
     } catch (e) {
@@ -8603,81 +8629,182 @@ function showArchiveView() {
     document.getElementById('tripsView').classList.remove('active');
     document.getElementById('routesView').style.display = 'none';
     document.getElementById('archiveView').style.display = 'block';
+    // Кожен новий вхід в архів — з чистими фільтрами (як у cargo).
+    window._archiveSearchQuery = '';
+    archiveDateMode = 'all';
+    archiveDateFrom = '';
+    archiveDateTo = '';
+    archiveSelectedIds.clear();
     updatePcSidebarActive();
     updateMobileSidebarActive();
-    // Архів — пункт секції «Пасажири», тримаємо цю секцію розгорнутою.
-    setActiveAccordion('pax');
+    // Архів тепер standalone-кнопка, а не пункт «Пасажири» — згортаємо
+    // акордеон-секції, як це роблять інші standalone-кнопки в посилковій CRM.
+    if (typeof setActiveAccordion === 'function') setActiveAccordion(null);
     showLoader('📦 Завантаження архіву...');
     loadArchive().then(function() { hideLoader(); }).catch(function() { hideLoader(); });
 }
 
+// === Архівні фільтри (search + швидкі діапазони + custom from-to) ===
+
 function getArchivedPassengers() {
-    const search = (document.getElementById('archiveSearch')?.value || '').toLowerCase().trim();
-    return archivedPassengers.filter(p => {
-        if (search && !passengerMatchesQuery(p, search)) return false;
-        return true;
-    });
+    const q = (window._archiveSearchQuery || '').toLowerCase().trim();
+    let data = archivedPassengers;
+    if (q) {
+        data = data.filter(p => passengerMatchesQuery(p, q) || _archiveExtraMatch(p, q));
+    }
+    if (archiveDateMode !== 'all') {
+        const range = _archiveDateRange();
+        if (range) {
+            data = data.filter(p => {
+                const raw = p['DATE_ARCHIVE'];
+                if (!raw) return false;
+                const t = new Date(raw).getTime();
+                if (isNaN(t)) return false;
+                return t >= range.from && t <= range.to;
+            });
+        }
+    }
+    return data;
 }
 
+// Розширений пошук — passengerMatchesQuery не покриває архівні поля.
+function _archiveExtraMatch(p, q) {
+    const fields = [p['ARCHIVE_REASON'], p['ARCHIVED_BY'], p['Був у маршрутах']];
+    for (let i = 0; i < fields.length; i++) {
+        if (String(fields[i] || '').toLowerCase().indexOf(q) !== -1) return true;
+    }
+    return false;
+}
+
+// Повертає {from,to} в мс згідно з archiveDateMode (як у cargo).
+function _archiveDateRange() {
+    const now = Date.now();
+    const DAY = 86400000;
+    if (archiveDateMode === 'today') {
+        const s = new Date(); s.setHours(0,0,0,0);
+        return { from: s.getTime(), to: now };
+    }
+    if (archiveDateMode === 'week')  return { from: now - 7  * DAY, to: now };
+    if (archiveDateMode === 'month') return { from: now - 30 * DAY, to: now };
+    if (archiveDateMode === 'year')  return { from: now - 365 * DAY, to: now };
+    if (archiveDateMode === 'custom') {
+        let fromMs = archiveDateFrom ? new Date(archiveDateFrom + 'T00:00:00').getTime() : 0;
+        let toMs   = archiveDateTo   ? new Date(archiveDateTo   + 'T23:59:59').getTime() : now;
+        if (isNaN(fromMs)) fromMs = 0;
+        if (isNaN(toMs)) toMs = now;
+        return { from: fromMs, to: toMs };
+    }
+    return null;
+}
+
+function _archiveFilterBarHtml() {
+    const modes = [
+        ['all',    'Всі'],
+        ['today',  'Сьогодні'],
+        ['week',   '7 днів'],
+        ['month',  'Місяць'],
+        ['year',   'Рік'],
+        ['custom', '📅 Період'],
+    ];
+    const chips = modes.map(m => {
+        const active = (archiveDateMode === m[0]) ? ' active' : '';
+        return '<button type="button" class="arch-date-chip' + active + '" data-mode="' + m[0] +
+               '" onclick="setArchiveDateMode(\'' + m[0] + '\')">' + m[1] + '</button>';
+    }).join('');
+    const rangeHidden = archiveDateMode === 'custom' ? '' : ' style="display:none;"';
+    const fromVal = escapeHtmlSafe(archiveDateFrom || '');
+    const toVal   = escapeHtmlSafe(archiveDateTo   || '');
+    const searchVal = escapeHtmlSafe(window._archiveSearchQuery || '');
+    return '<div class="arch-filter-bar">' +
+      '<div class="arch-filter-row">' +
+        '<input type="search" id="archiveSearchInput" class="arch-search" placeholder="🔍 Пошук в архіві: ПІБ, телефон, адреса, причина…" value="' + searchVal + '" oninput="onArchiveSearch(this.value)">' +
+        (searchVal ? '<button type="button" class="arch-search-clear" onclick="onArchiveSearch(\'\')" title="Очистити">✕</button>' : '') +
+      '</div>' +
+      '<div class="arch-filter-row arch-date-chips">' + chips + '</div>' +
+      '<div class="arch-filter-row arch-date-range"' + rangeHidden + '>' +
+        '<label>Від <input type="date" id="archiveDateFromInput" value="' + fromVal + '" onchange="onArchiveDateRangeChange()"></label>' +
+        '<label>До <input type="date" id="archiveDateToInput" value="' + toVal + '" onchange="onArchiveDateRangeChange()"></label>' +
+        (archiveDateFrom || archiveDateTo ? '<button type="button" class="arch-search-clear" onclick="resetArchiveDateRange()" title="Скинути діапазон">✕</button>' : '') +
+      '</div>' +
+    '</div>';
+}
+
+// Простий ескейп для атрибутів (HTML-функції тут різні в різних місцях; не сподіваємось).
+function escapeHtmlSafe(s) {
+    return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function onArchiveSearch(v) {
+    window._archiveSearchQuery = v || '';
+    if (!v) {
+        renderArchive();
+        const inp = document.getElementById('archiveSearchInput');
+        if (inp) inp.focus();
+    } else {
+        renderArchiveList();
+    }
+}
+
+function setArchiveDateMode(mode) {
+    archiveDateMode = mode || 'all';
+    if (mode !== 'custom') {
+        archiveDateFrom = '';
+        archiveDateTo = '';
+    }
+    renderArchive();
+}
+
+function onArchiveDateRangeChange() {
+    const f = document.getElementById('archiveDateFromInput');
+    const t = document.getElementById('archiveDateToInput');
+    archiveDateFrom = (f && f.value) || '';
+    archiveDateTo   = (t && t.value) || '';
+    if ((archiveDateFrom || archiveDateTo) && archiveDateMode !== 'custom') {
+        archiveDateMode = 'custom';
+    }
+    renderArchiveList();
+}
+
+function resetArchiveDateRange() {
+    archiveDateFrom = '';
+    archiveDateTo = '';
+    renderArchive();
+}
+
+// === Рендер архіву: filter-bar (один раз) + список (оновлюється на пошук). ===
+
 function renderArchive() {
+    const bar = document.getElementById('archiveFilterBar');
+    if (bar) bar.innerHTML = _archiveFilterBarHtml();
+    renderArchiveList();
+}
+
+function renderArchiveList() {
     const list = document.getElementById('archiveList');
     const subtitle = document.getElementById('archiveSubtitle');
     if (!list) return;
 
     const archived = getArchivedPassengers();
-    subtitle.textContent = (archiveTotal > archived.length ? archived.length + ' з ' + archiveTotal : archived.length) + ' записів в архіві';
+    const totalShown = archived.length;
+    if (subtitle) {
+        subtitle.textContent = (archiveTotal > totalShown ? totalShown + ' з ' + archiveTotal : totalShown) + ' записів';
+    }
 
-    if (archived.length === 0) {
+    if (archivedPassengers.length === 0) {
         list.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-secondary);font-size:13px;">📦 Архів порожній</div>';
+        updateArchiveBulkToolbar();
+        return;
+    }
+    if (totalShown === 0) {
+        list.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-secondary);font-size:13px;">🔍 Нічого не знайдено за заданими фільтрами</div>';
+        updateArchiveBulkToolbar();
         return;
     }
 
-    let cardsHtml = archived.map(p => {
-        const id = p['PAX_ID'] || '';
-        const name = p['Піб'] || '—';
-        const phone = String(p['Телефон пасажира'] || '—');
-        const from = p['Адреса відправки'] || '';
-        const to = p['Адреса прибуття'] || '';
-        const date = p['Дата виїзду'] || '';
-        const reason = p['ARCHIVE_REASON'] || '';
-        const archDate = p['DATE_ARCHIVE'] || '';
-        const archivedBy = p['ARCHIVED_BY'] || '';
-        const fromRoutes = p['Був у маршрутах'] || '';
-        const dir = p['Напрям'] || '';
-        const isSelected = archiveSelectedIds.has(id);
-        const dirLabel = dir.includes('ua-eu') || dir.includes('UA→EU') ? 'UA→EU' : dir.includes('eu-ua') || dir.includes('EU→UA') ? 'EU→UA' : '';
-        const dirCls = dirLabel === 'UA→EU' ? 'dir-badge-ua-eu' : dirLabel === 'EU→UA' ? 'dir-badge-eu-ua' : '';
-        const isFromRoute = !!fromRoutes || reason.indexOf('маршрут') !== -1;
+    let cardsHtml = archived.map(p => renderArchiveCard(p)).join('');
 
-        return `<div class="pax-card ${isSelected ? 'selected' : ''}" style="border-left:3px solid ${isFromRoute ? '#f59e0b' : '#9ca3af'};opacity:0.85;" id="arc-${id}">
-            <div class="card-top">
-                <div class="card-checkbox-wrap" onclick="event.stopPropagation()">
-                    <input class="card-checkbox" type="checkbox" ${isSelected ? 'checked' : ''} onchange="toggleArchiveSelect('${id}',this.checked)">
-                </div>
-                ${dirLabel ? '<span class="card-direction ' + dirCls + '">' + dirLabel + '</span>' : ''}
-                <span class="card-phone">${phone}</span>
-                <span class="card-date">${date}</span>
-            </div>
-            <div class="card-info">
-                <span class="card-name">${name}</span>
-                ${isFromRoute
-                    ? '<span style="font-size:9px;background:#fef3c7;color:#b45309;padding:2px 6px;border-radius:4px;font-weight:700;">🚐 З маршруту</span>'
-                    : '<span style="font-size:9px;background:#f3f4f6;color:#6b7280;padding:2px 6px;border-radius:4px;">📦 Архів</span>'}
-            </div>
-            ${(from || to) ? '<div class="card-route">📍 ' + (from || '—') + ' → ' + (to || '—') + '</div>' : ''}
-            <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px;">
-                ${archDate ? '<span style="font-size:10px;color:#6b7280;">📅 ' + archDate + '</span>' : ''}
-                ${archivedBy ? '<span style="font-size:10px;color:#6b7280;">👤 ' + archivedBy + '</span>' : ''}
-                ${reason ? '<span style="font-size:10px;color:#6b7280;">💬 ' + reason + '</span>' : ''}
-                ${fromRoutes ? '<span style="font-size:10px;color:#b45309;">🚐 Був у маршрутах: ' + fromRoutes + '</span>' : ''}
-            </div>
-            ${isFromRoute ? '' : `<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
-                <button class="btn-card-action" style="background:#d1fae5;color:#059669;" onclick="event.stopPropagation(); restorePax('${id}','${name}')">♻️ Відновити</button>
-            </div>`}
-        </div>`;
-    }).join('');
-
-    // Кнопка "Завантажити ще" якщо є ще записи
     if (archiveHasMore) {
         cardsHtml += `<div style="text-align:center;padding:16px;">
             <button onclick="loadArchive(true)" style="padding:8px 24px;border:1px solid var(--border);border-radius:8px;background:var(--bg-card);color:var(--text-primary);cursor:pointer;font-size:13px;">
@@ -8687,8 +8814,85 @@ function renderArchive() {
     }
 
     list.innerHTML = cardsHtml;
-
     updateArchiveBulkToolbar();
+}
+
+// Архівна картка — структурно ближча до renderCard (показуємо більше полів,
+// бейджі статусу/оплати), але з архівними діями: ♻️ Відновити, 🗑️ Видалити назавжди.
+function renderArchiveCard(p) {
+    const id = p['PAX_ID'] || '';
+    const name = p['Піб'] || '—';
+    const phone = String(p['Телефон пасажира'] || '—');
+    const cleanPhone = phone.replace(/[^+\d]/g, '');
+    const from = p['Адреса відправки'] || '';
+    const to = p['Адреса прибуття'] || '';
+    const date = formatTripDate(p['Дата виїзду'] || '');
+    const reason = p['ARCHIVE_REASON'] || '';
+    const archDate = p['DATE_ARCHIVE'] || '';
+    const archivedBy = p['ARCHIVED_BY'] || '';
+    const fromRoutes = p['Був у маршрутах'] || '';
+    const dir = String(p['Напрям'] || '');
+    const dirCode = (typeof getDirectionCode === 'function') ? getDirectionCode(dir) : (dir.indexOf('eu-ua') !== -1 ? 'eu-ua' : 'ua-eu');
+    const isUaEu = dirCode === 'ua-eu';
+    const dirLabel = isUaEu ? 'UA → EU' : 'EU → UA';
+    const dirCls = isUaEu ? 'dir-badge-ua-eu' : 'dir-badge-eu-ua';
+    const price = p['Ціна квитка'] || '';
+    const curr = p['Валюта квитка'] || '';
+    const leadStatus = p['Статус ліда'] || '';
+    const payStatus = p['Статус оплати'] || '';
+    const isSelected = archiveSelectedIds.has(id);
+    const isFromRoute = !!fromRoutes || reason.indexOf('маршрут') !== -1;
+
+    const leadBadgeMap = { 'Новий':'badge-new', 'В роботі':'badge-work', 'Підтверджено':'badge-confirmed', 'Відмова':'badge-refused' };
+    const leadBadge = leadStatus ? '<span class="badge ' + (leadBadgeMap[leadStatus] || '') + '">' + escapeHtmlSafe(leadStatus) + '</span>' : '';
+    const payBadgeMap = { 'Оплачено':'badge-paid', 'Частково':'badge-partial', 'Не оплачено':'badge-unpaid' };
+    const payBadge = payStatus ? '<span class="badge ' + (payBadgeMap[payStatus] || '') + '">' + escapeHtmlSafe(payStatus) + '</span>' : '';
+
+    const accent = isFromRoute ? '#f59e0b' : '#9ca3af';
+
+    return `<div class="pax-card ${isSelected ? 'selected' : ''}" style="border-left:3px solid ${accent};opacity:0.92;" id="arc-${id}">
+        <div class="card-top">
+            <div class="card-checkbox-wrap" onclick="event.stopPropagation()">
+                <input class="card-checkbox" type="checkbox" ${isSelected ? 'checked' : ''} onchange="toggleArchiveSelect('${id}',this.checked)">
+            </div>
+            <span class="card-direction ${dirCls}">${dirLabel}</span>
+            <span class="card-phone">${escapeHtmlSafe(phone)}</span>
+            ${date ? `<span class="card-date">${escapeHtmlSafe(date)}</span>` : ''}
+            ${price ? `<span class="card-price">${escapeHtmlSafe(price)} ${escapeHtmlSafe(curr)}</span>` : ''}
+        </div>
+        <div class="card-info">
+            <span class="card-name">${escapeHtmlSafe(name)}</span>
+            ${leadBadge} ${payBadge}
+            ${isFromRoute
+                ? '<span style="font-size:9px;background:#fef3c7;color:#b45309;padding:2px 6px;border-radius:4px;font-weight:700;">🚐 З маршруту</span>'
+                : '<span style="font-size:9px;background:#f3f4f6;color:#6b7280;padding:2px 6px;border-radius:4px;">📦 Архів</span>'}
+        </div>
+        ${(from || to) ? `<div class="card-route">📍 ${escapeHtmlSafe(from || '—')} → ${escapeHtmlSafe(to || '—')}</div>` : ''}
+        <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px;">
+            ${archDate ? `<span style="font-size:10px;color:#6b7280;">📅 ${escapeHtmlSafe(archDate)}</span>` : ''}
+            ${archivedBy ? `<span style="font-size:10px;color:#6b7280;">👤 ${escapeHtmlSafe(archivedBy)}</span>` : ''}
+            ${reason ? `<span style="font-size:10px;color:#6b7280;">💬 ${escapeHtmlSafe(reason)}</span>` : ''}
+            ${fromRoutes ? `<span style="font-size:10px;color:#b45309;">🚐 Був у маршрутах: ${escapeHtmlSafe(fromRoutes)}</span>` : ''}
+        </div>
+        <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
+            ${cleanPhone ? `<button class="btn-card-action" onclick="event.stopPropagation(); window.open('tel:${cleanPhone}')">📞 Дзвінок</button>` : ''}
+            ${isFromRoute ? '' : `<button class="btn-card-action" style="background:#d1fae5;color:#059669;" onclick="event.stopPropagation(); restorePax('${id}','${_sqJsEsc(name)}')">♻️ Відновити</button>`}
+            <button class="btn-card-action btn-delete" onclick="event.stopPropagation(); permanentDeletePax('${id}','${_sqJsEsc(name)}')">🗑️ Видалити назавжди</button>
+        </div>
+    </div>`;
+}
+
+// Екранування для JS-літерала, який потім кладемо в onclick="…'X'…":
+// заходить через два декодери (HTML-attr → JS-string), тож треба двічі
+// безпечно. Беремо: escape backslash → single quote → HTML-amp/lt/gt/quot.
+function _sqJsEsc(s) {
+    return String(s == null ? '' : s)
+        .replace(/\\/g, '\\\\')
+        .replace(/'/g, "\\'")
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
 }
 
 // ── Архівування пасажира ──
@@ -8884,12 +9088,18 @@ function deletePaxPermanent(paxId, sheet, name) {
         if (res.ok) {
             archivedPassengers = archivedPassengers.filter(p => p['PAX_ID'] !== paxId);
             archiveSelectedIds.delete(paxId);
+            archiveTotal = Math.max(0, archiveTotal - 1);
             showToast('✅ Видалено назавжди');
             renderArchive(); updateAllCounts();
         } else {
             showToast('❌ ' + (res.error || 'Помилка'));
         }
     });
+}
+
+// Аліас з простішою сигнатурою — викликається з кнопки на архівній картці.
+function permanentDeletePax(paxId, name) {
+    deletePaxPermanent(paxId, null, name);
 }
 
 // ── Archive selection ──
@@ -8971,8 +9181,12 @@ function archiveBulkDelete() {
         const res = await apiPost('deleteFromArchive', { pax_ids: ids });
         hideLoader();
         if (res.ok) {
+            const removed = res.deleted || ids.length;
             archivedPassengers = archivedPassengers.filter(p => !ids.includes(p['PAX_ID']));
-            showToast('✅ Видалено назавжди ' + (res.deleted || ids.length) + ' записів');
+            archiveTotal = Math.max(0, archiveTotal - removed);
+            const ct = document.getElementById('pcCountArchive');
+            if (ct) ct.textContent = archiveTotal > 0 ? String(archiveTotal) : '';
+            showToast('✅ Видалено назавжди ' + removed + ' записів');
             clearArchiveSelection();
             renderArchive(); updateAllCounts();
         } else {
