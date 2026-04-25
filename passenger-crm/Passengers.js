@@ -337,7 +337,6 @@ let currentView = 'pax'; // 'pax' | 'trips' | 'routes'
 // За замовчуванням при вході у CRM показуємо «Нові (24 год)», а не всіх.
 // Якщо користувач захоче всіх — натискає «📊 Всі» в сайдбарі.
 let currentDir = 'new24';
-let tripTimeFilter = 'future';
 let tripDirFilter = 'all';
 let tripDateFilter = '';
 let tripAutoFilter = 'all';
@@ -4479,10 +4478,11 @@ function renderTrips() {
     const today = new Date(); today.setHours(0,0,0,0);
     const todayTs = today.getTime();
 
-    // В list-режимі ігноруємо time-фільтр (минулі зліва завжди доступні скролом).
+    // У списку: всі активні рейси (минулі теж у DOM, доступні скролом вліво).
     // Напрям/авто/дата — поважаємо.
     const base = trips.filter(t => {
         if (t.status === 'Архів' || t.status === 'Виконано' || t.status === 'Видалено') return false;
+        if (parseTripDateObj(t) === null) return false;
         if (tripDirFilter !== 'all' && getTripDirection(t) !== tripDirFilter) return false;
         if (tripAutoFilter !== 'all' && cleanAutoName(t.auto_name) !== tripAutoFilter) return false;
         if (tripDateFilter) {
@@ -4491,7 +4491,7 @@ function renderTrips() {
             const target = p[2] + '.' + p[1] + '.' + p[0];
             if (fd !== target) return false;
         }
-        return parseTripDateObj(t) !== null;
+        return true;
     });
 
     if (base.length === 0) {
@@ -4514,26 +4514,25 @@ function renderTrips() {
         groups[key].trips.push(t);
     });
 
-    // Сортуємо рейси в рядку по даті ASC, рахуємо ранг групи
+    // Сортуємо рейси в рядку по даті ASC, рахуємо ранг групи (найближчий майбутній зверху)
     const groupList = Object.values(groups).map(g => {
         g.trips.sort((a, b) => parseTripDateObj(a) - parseTripDateObj(b));
         const tsList = g.trips.map(t => parseTripDateObj(t).getTime());
         const future = tsList.filter(ts => ts >= todayTs);
-        let rank;
         if (future.length) {
-            rank = future[0] - todayTs; // менше = ближче до сьогодні
+            g.rank = future[0] - todayTs; // менше = ближче до сьогодні
         } else {
             // Тільки минулі — на самий низ, чим давніше тим нижче
-            rank = Number.MAX_SAFE_INTEGER - (todayTs - tsList[tsList.length - 1]);
+            g.rank = Number.MAX_SAFE_INTEGER - (todayTs - tsList[tsList.length - 1]);
         }
-        g.rank = rank;
         return g;
     });
     groupList.sort((a, b) => a.rank - b.rank);
 
     grid.innerHTML = groupList.map(g => renderTripRow(g, todayTs)).join('');
 
-    // Скрол кожного рядка так, щоб сьогоднішній/найближчий майбутній був зліва
+    // Авто-скрол: сьогоднішній/найближчий майбутній — на лівому краю. Якщо в рядку
+    // лише минулі — скрол у кінець, щоб найновіший був видимий.
     requestAnimationFrame(() => {
         document.querySelectorAll('.trow-scroll').forEach(row => {
             const cards = row.querySelectorAll('.trow-card');
@@ -4845,16 +4844,6 @@ function getFilteredTrips() {
     return trips.filter(t => {
         // Hide archived/done
         if (t.status === 'Архів' || t.status === 'Виконано' || t.status === 'Видалено') return false;
-        // Time filter
-        if (tripTimeFilter !== 'all') {
-            const parts = String(t.date || '').split('.');
-            let tDate;
-            if (parts.length === 3) tDate = new Date(parts[2], parts[1]-1, parts[0]);
-            else tDate = new Date(t.date);
-            const today = new Date(); today.setHours(0,0,0,0);
-            if (tripTimeFilter === 'future' && tDate < today) return false;
-            if (tripTimeFilter === 'past' && tDate >= today) return false;
-        }
         // Dir filter
         if (tripDirFilter !== 'all') {
             if (getTripDirection(t) !== tripDirFilter) return false;
@@ -4948,12 +4937,6 @@ function renderTripCard(t) {
             </div>
         </div>
     </div>`;
-}
-
-function setTripTimeFilter(btn, val) {
-    tripTimeFilter = val;
-    document.querySelectorAll('.trip-filter-btn[data-time]').forEach(b => b.classList.toggle('active', b.dataset.time === val));
-    renderTrips();
 }
 
 function setTripDirFilter(btn, val) {
