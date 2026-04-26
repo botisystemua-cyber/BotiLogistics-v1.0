@@ -98,7 +98,10 @@ async function upsertSetting(
     return;
   }
 
-  const settingId = `SET-${name}`.slice(0, 64);
+  // setting_id з tenant_id-префіксом, бо UNIQUE constraint на колонці
+  // setting_id глобальний — без префіксу другий tenant не зможе зберегти.
+  const safeTenant = String(tenantId).replace(/[^a-z0-9-]/gi, '').slice(0, 32);
+  const settingId = `SET-${safeTenant}-${name}`.slice(0, 64);
   const { error } = await supabase
     .from('system_settings')
     .insert({

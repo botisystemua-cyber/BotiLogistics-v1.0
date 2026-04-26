@@ -89,11 +89,15 @@ export function CurrencyDefaultsPanel({ tenantId }: { tenantId: string }) {
           .eq('id', existing[0].id);
         if (error) throw error;
       } else {
+        // setting_id має містити tenant_id, інакше при першому збереженні
+        // у новому tenant порушується UNIQUE(setting_id) — бо інший tenant
+        // вже має рядок з setting_id='SET-currency_defaults'.
+        const safeTenant = String(tenantId).replace(/[^a-z0-9-]/gi, '').slice(0, 32);
         const { error } = await supabase
           .from('system_settings')
           .insert({
             tenant_id: tenantId,
-            setting_id: `SET-${SETTING_NAME}`.slice(0, 64),
+            setting_id: `SET-${safeTenant}-${SETTING_NAME}`.slice(0, 64),
             setting_section: SETTING_SECTION,
             setting_name: SETTING_NAME,
             setting_value: value,
