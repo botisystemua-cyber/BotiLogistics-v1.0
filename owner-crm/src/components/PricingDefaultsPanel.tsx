@@ -123,17 +123,26 @@ export function PricingDefaultsPanel({ tenantId }: { tenantId: string }) {
           <div className="rounded-xl border border-border p-4 lg:p-5 bg-bg">
             <h3 className="text-sm lg:text-base font-extrabold text-text mb-1">📦 Посилкова CRM</h3>
             <p className="text-xs text-muted mb-4">
-              Тариф за 1 кг множиться на введену вагу — поле «Сума» у формі
-              «Нова посилка» заповнюється автоматично. Менеджер може переписати.
+              У формі «Нова посилка» менеджер обирає тип тарифу (звичайний /
+              комерційний / обʼємний). Сума рахується автоматично:
+              <code className="text-[11px] bg-gray-100 px-1.5 py-0.5 rounded mx-1">вага × тариф</code>.
+              Для обʼємного — вага рахується як <code className="text-[11px] bg-gray-100 px-1.5 py-0.5 rounded mx-1">H × W × L / 4000</code> (як у Нової Пошти).
+              Менеджер може переписати суму вручну.
             </p>
 
-            <FieldGroup title="📦 Тариф за 1 кг посилки">
+            <FieldGroup title="📦 Звичайний тариф (за 1 кг фактичної ваги)">
               <NumField label="UA → EU" value={cfg.cargo.perKgUe} onChange={v => setCargo('perKgUe', v)} placeholder="3" step="0.1" />
               <NumField label="EU → UA" value={cfg.cargo.perKgEu} onChange={v => setCargo('perKgEu', v)} placeholder="3.5" step="0.1" />
             </FieldGroup>
 
-            <FieldGroup title="💵 Завдаток (фіксована сума)">
-              <NumField label="Завдаток" value={cfg.cargo.deposit} onChange={v => setCargo('deposit', v)} placeholder="20" />
+            <FieldGroup title="💼 Комерційний тариф (за 1 кг)">
+              <NumField label="UA → EU" value={cfg.cargo.commercialPerKgUe} onChange={v => setCargo('commercialPerKgUe', v)} placeholder="5" step="0.1" />
+              <NumField label="EU → UA" value={cfg.cargo.commercialPerKgEu} onChange={v => setCargo('commercialPerKgEu', v)} placeholder="5" step="0.1" />
+            </FieldGroup>
+
+            <FieldGroup title="📐 Обʼємний тариф (за 1 кг обʼємної ваги, формула H·W·L/4000)">
+              <NumField label="UA → EU" value={cfg.cargo.volumetricPerKgUe} onChange={v => setCargo('volumetricPerKgUe', v)} placeholder="2" step="0.1" />
+              <NumField label="EU → UA" value={cfg.cargo.volumetricPerKgEu} onChange={v => setCargo('volumetricPerKgEu', v)} placeholder="2" step="0.1" />
             </FieldGroup>
           </div>
 

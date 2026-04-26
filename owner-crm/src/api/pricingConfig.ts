@@ -31,9 +31,18 @@ export interface PassengerPricing {
 }
 
 export interface CargoPricing {
-  perKgUe?: number;         // тариф за 1 кг UA→EU
-  perKgEu?: number;         // тариф за 1 кг EU→UA
-  deposit?: number;         // фіксована сума завдатку
+  // Звичайний тариф за 1 кг (фактична вага посилки).
+  perKgUe?: number;             // UA→EU
+  perKgEu?: number;             // EU→UA
+  // Комерційний тариф за 1 кг (другий вид тарифу — для специфічних типів
+  // вантажу, ставка зазвичай інша ніж звичайна).
+  commercialPerKgUe?: number;   // UA→EU
+  commercialPerKgEu?: number;   // EU→UA
+  // Обʼємний тариф за 1 кг (для крупногабаритних). У формі менеджер вводить
+  // Висота × Ширина × Довжина (см); обʼємна вага = H·W·L/4000 (формула НП).
+  // Підсумкова сума = обʼємна_вага × volumetricPerKg.
+  volumetricPerKgUe?: number;   // UA→EU
+  volumetricPerKgEu?: number;   // EU→UA
 }
 
 export interface PricingConfig {
@@ -83,13 +92,36 @@ export async function savePricingConfig(
   await upsertSetting(tenantId, SN_PRICING, JSON.stringify(cleaned), 'Прайс', 'Дефолтні ціни (квитки, багаж, посилки, завдатки)');
 }
 
+// Тільки ці ключі дозволені — захист від застарілих/невідомих полів у JSON
+// (наприклад legacy `cargo.deposit`, який ми прибрали — у cargo нема справжнього
+// «дефолтного завдатку», там є часткова оплата без дефолту).
+const PASSENGER_KEYS: Array<keyof PassengerPricing> = [
+  'ticketAdultUe', 'ticketAdultEu', 'ticketChildUe', 'ticketChildEu',
+  'deposit', 'baggagePerKgUe', 'baggagePerKgEu',
+];
+const CARGO_KEYS: Array<keyof CargoPricing> = [
+  'perKgUe', 'perKgEu',
+  'commercialPerKgUe', 'commercialPerKgEu',
+  'volumetricPerKgUe', 'volumetricPerKgEu',
+];
+
 function mergeWithDefaults(parsed: unknown): PricingConfig {
   const def = defaultPricingConfig();
   if (!parsed || typeof parsed !== 'object') return def;
   const p = parsed as Partial<PricingConfig>;
+  const pickNumeric = <T extends string>(src: unknown, keys: T[]): Partial<Record<T, number>> => {
+    const out: Partial<Record<T, number>> = {};
+    if (!src || typeof src !== 'object') return out;
+    const obj = src as Record<string, unknown>;
+    for (const k of keys) {
+      const v = obj[k];
+      if (typeof v === 'number' && !isNaN(v) && v >= 0) out[k] = v;
+    }
+    return out;
+  };
   return {
-    passenger: { ...def.passenger, ...(p.passenger || {}) },
-    cargo:     { ...def.cargo,     ...(p.cargo     || {}) },
+    passenger: { ...def.passenger, ...pickNumeric(p.passenger, PASSENGER_KEYS) },
+    cargo:     { ...def.cargo,     ...pickNumeric(p.cargo,     CARGO_KEYS) },
   };
 }
 
