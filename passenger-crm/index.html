@@ -550,6 +550,12 @@ $manifest = '../manifest.php' . ($t ? '?name=' . rawurlencode($t) . ($l ? '&logo
                         <input type="hidden" id="fDirection" value="ua-eu">
                     </div>
                     <div class="form-group"><label>Телефон пасажира <span style="color:var(--danger)">*</span></label><input type="tel" id="fPhone" placeholder="+380..."></div>
+                    <div class="form-group" data-field-key="paxExtraPhones">
+                        <label>📞 Ще номери пасажира (UA + EU)</label>
+                        <input type="hidden" id="fExtraPhones" value="[]">
+                        <div class="pax-phones-box" id="fExtraPhonesBox"></div>
+                        <button type="button" class="pax-phones-add" onclick="addPaxExtraPhone()">+ ще номер</button>
+                    </div>
                     <div class="form-group">
                         <label>Точка відправки <span style="color:var(--danger)">*</span></label>
                         <div class="combo-box">

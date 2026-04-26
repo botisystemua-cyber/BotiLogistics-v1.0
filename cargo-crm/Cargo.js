@@ -2633,6 +2633,89 @@ function addFillExtraPhone() {
   _appendFillExtraPhoneInput('');
 }
 
+// 📞 Додаткові номери у формі «Нова посилка» — generic helper, який
+// працює з парою ID (hidden + box) для UA→EU і EU→UA напрямків.
+// Зберігаємо як jsonb-масив у packages.extra_phones (max 2 додаткових).
+function _getAddExtraPhones(boxId) {
+  const box = document.getElementById(boxId);
+  if (!box) return [];
+  return Array.from(box.querySelectorAll('input.fill-phone-extra'))
+    .map(i => (i.value || '').trim())
+    .filter(v => !!v);
+}
+function _syncAddExtraPhones(boxId, hiddenId) {
+  const box = document.getElementById(boxId);
+  const hidden = document.getElementById(hiddenId);
+  if (!box || !hidden) return;
+  hidden.value = JSON.stringify(_getAddExtraPhones(boxId));
+}
+function _appendAddExtraPhoneInput(boxId, hiddenId, initial) {
+  const box = document.getElementById(boxId);
+  if (!box) return;
+  const count = box.querySelectorAll('input.fill-phone-extra').length;
+  if (count >= _FILL_MAX_EXTRA_PHONES) return;
+  const wrap = document.createElement('div');
+  wrap.className = 'fill-phone-row';
+  const inp = document.createElement('input');
+  inp.type = 'tel';
+  inp.className = 'fill-phone-extra';
+  inp.placeholder = '+380… або +48… +420…';
+  inp.value = initial || '';
+  wrap.appendChild(inp);
+  const rm = document.createElement('button');
+  rm.type = 'button';
+  rm.className = 'fill-phone-rm';
+  rm.textContent = '×';
+  rm.title = 'Прибрати цей номер';
+  rm.onclick = () => { wrap.remove(); _syncAddExtraPhones(boxId, hiddenId); };
+  wrap.appendChild(rm);
+  box.appendChild(wrap);
+  if (window.CountryPhone) {
+    const cpDefault = initial ? 'UA' : 'PL';
+    window.CountryPhone.attach(inp, {
+      theme: 'light',
+      defaultCountry: cpDefault,
+      onChange: () => _syncAddExtraPhones(boxId, hiddenId),
+    });
+  } else {
+    if (typeof attachPhoneNormalization === 'function') attachPhoneNormalization(inp, '+380');
+    inp.addEventListener('input', () => _syncAddExtraPhones(boxId, hiddenId));
+    inp.addEventListener('blur',  () => _syncAddExtraPhones(boxId, hiddenId));
+  }
+  if (!initial) setTimeout(() => inp.focus(), 50);
+}
+function _resetAddExtraPhonesUI(boxId, hiddenId, arr) {
+  const box = document.getElementById(boxId);
+  const hidden = document.getElementById(hiddenId);
+  if (!box || !hidden) return;
+  arr = Array.isArray(arr) ? arr : [];
+  box.innerHTML = '';
+  arr.slice(0, _FILL_MAX_EXTRA_PHONES).forEach(p => _appendAddExtraPhoneInput(boxId, hiddenId, p));
+  hidden.value = JSON.stringify(arr);
+}
+// EU→UA (отримувач в Україні)
+function addAddExtraPhone() {
+  const box = document.getElementById('fAddExtraPhonesBox');
+  if (!box) return;
+  const count = box.querySelectorAll('input.fill-phone-extra').length;
+  if (count >= _FILL_MAX_EXTRA_PHONES) {
+    showToast('Максимум 3 номери (1 основний + 2 додаткові)', 'info');
+    return;
+  }
+  _appendAddExtraPhoneInput('fAddExtraPhonesBox', 'fAddExtraPhones', '');
+}
+// UA→EU (отримувач у Європі)
+function addAddExtraPhoneUe() {
+  const box = document.getElementById('fAddExtraPhonesBoxUe');
+  if (!box) return;
+  const count = box.querySelectorAll('input.fill-phone-extra').length;
+  if (count >= _FILL_MAX_EXTRA_PHONES) {
+    showToast('Максимум 3 номери (1 основний + 2 додаткові)', 'info');
+    return;
+  }
+  _appendAddExtraPhoneInput('fAddExtraPhonesBoxUe', 'fAddExtraPhonesUe', '');
+}
+
 // ===== [SECT-PHONE-NORMALIZE] Нормалізація телефону =====
 // «0639763485»        → «+380639763485»  (українська звичка писати без коду)
 // «639763485»         → «+380639763485»  (9 цифр — припускаємо UA)
@@ -6918,6 +7001,11 @@ function clearAddForm() {
     const el = document.getElementById(id);
     if (el) el.value = '';
   });
+  // Скидаємо віджети «Ще номери отримувача» обох напрямків.
+  if (typeof _resetAddExtraPhonesUI === 'function') {
+    _resetAddExtraPhonesUI('fAddExtraPhonesBox', 'fAddExtraPhones', []);
+    _resetAddExtraPhonesUI('fAddExtraPhonesBoxUe', 'fAddExtraPhonesUe', []);
+  }
   document.getElementById('fQty').value = '1';
   // Валюта за замовчуванням: owner currency_defaults (cargo.payment) →
   // fallback CURR_DEFAULT (main's default_currency) → 'EUR'.
@@ -7153,6 +7241,7 @@ async function saveParcel() {
       return;
     }
 
+    _syncAddExtraPhones('fAddExtraPhonesBox', 'fAddExtraPhones');
     data = {
       'Напрям': 'ЄВ→УК',
       'Піб відправника': sender,
@@ -7160,6 +7249,7 @@ async function saveParcel() {
       'Адреса відправки': addressFrom,
       'Піб отримувача': receiver,
       'Телефон отримувача': phoneReceiver,
+      'Ще телефони': _getAddExtraPhones('fAddExtraPhonesBox'),
       'Адреса в Європі': addressTo,
       'Кг': document.getElementById('fWeight').value || '',
       'Оціночна вартість': document.getElementById('fEstValue').value || ''
@@ -7193,10 +7283,12 @@ async function saveParcel() {
     const senderPhoneUeEl = document.getElementById('fSenderPhoneUe');
     const senderPhoneUe = senderPhoneUeEl ? (senderPhoneUeEl.value.trim() || '') : '';
 
+    _syncAddExtraPhones('fAddExtraPhonesBoxUe', 'fAddExtraPhonesUe');
     data = {
       'Напрям': 'УК→ЄВ',
       'Піб отримувача': receiverUE,
       'Телефон отримувача': phoneReceiverUE,
+      'Ще телефони': _getAddExtraPhones('fAddExtraPhonesBoxUe'),
       'Адреса в Європі': addressTo,
       'Телефон реєстратора': senderPhoneUe,
       'Номер ТТН': document.getElementById('fTTN').value || '',
@@ -7242,6 +7334,7 @@ async function saveParcel() {
         'Адреса відправки': data['Адреса відправки'] || '',
         'Піб отримувача': data['Піб отримувача'] || '',
         'Телефон отримувача': data['Телефон отримувача'] || '',
+        'Ще телефони': data['Ще телефони'] || [],
         'Адреса в Європі': data['Адреса в Європі'] || '',
         'Номер ТТН': data['Номер ТТН'] || '',
         'Опис': data['Опис'] || '',

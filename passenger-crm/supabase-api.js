@@ -45,6 +45,7 @@ const SB_TO_GAS = {
     archive_id:        'ARCHIVE_ID',
     cal_id:            'CAL_ID',
     messenger:         'Месенджер',
+    extra_phones:      'Ще телефони',
     // Extra fields from Supabase not in GAS
     id:                '_uuid',
     tenant_id:         '_tenant',
@@ -160,6 +161,7 @@ const FORM_TO_SB = {
     tag: 'tag',
     note: 'notes',
     noteSms: 'sms_notes',
+    extraPhones: 'extra_phones',
     pax_id: 'pax_id',
     smartId: 'smart_id',
     direction: 'direction',
@@ -178,6 +180,10 @@ const NUMERIC_COLS = new Set([
     'total_seats', 'available_seats', 'occupied_seats',
 ]);
 
+// JSONB columns (масиви/обʼєкти; передаються без JSON.stringify).
+// `extra_phones` — додаткові телефони пасажира (UA + EU).
+const JSONB_COLS = new Set(['extra_phones']);
+
 function gasToSbObj(gasObj, mapping) {
     const m = mapping || GAS_TO_SB;
     const obj = {};
@@ -191,6 +197,13 @@ function gasToSbObj(gasObj, mapping) {
             if (v !== null && NUMERIC_COLS.has(sbKey)) {
                 const n = parseFloat(v);
                 v = isNaN(n) ? null : n;
+            }
+            // JSONB-масиви: парсимо string→array, гарантуємо тип
+            if (v !== null && JSONB_COLS.has(sbKey)) {
+                if (typeof v === 'string') {
+                    try { v = JSON.parse(v); } catch (_) { v = []; }
+                }
+                if (!Array.isArray(v)) v = [];
             }
             obj[sbKey] = v;
         }

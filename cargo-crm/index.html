@@ -646,6 +646,12 @@
               <label>Телефон отримувача</label>
               <input type="tel" id="fPhoneReceiver" placeholder="+380...">
             </div>
+            <div class="add-row" data-field-key="receiverExtraPhonesEu">
+              <label>📞 Ще номери отримувача (UA + EU)</label>
+              <input type="hidden" id="fAddExtraPhones" value="[]">
+              <div class="fill-phones-box" id="fAddExtraPhonesBox"></div>
+              <button type="button" class="fill-phones-add" onclick="addAddExtraPhone()">+ ще номер</button>
+            </div>
             <!-- Адреса доставки (НП або адресна) — togglable одним блоком,
                  щоб власник міг сховати весь delivery-розділ для ЄВ→УК. -->
             <div data-field-key="receiverAddressEu">
@@ -696,6 +702,12 @@
             <div class="add-row">
               <label>Телефон отримувача <span class="req">*</span></label>
               <input type="tel" id="fPhoneReceiverUE" placeholder="+41... / +49..." oninput="checkDuplicatePhone(this.value)">
+            </div>
+            <div class="add-row" data-field-key="receiverExtraPhonesUe">
+              <label>📞 Ще номери отримувача (UA + EU)</label>
+              <input type="hidden" id="fAddExtraPhonesUe" value="[]">
+              <div class="fill-phones-box" id="fAddExtraPhonesBoxUe"></div>
+              <button type="button" class="fill-phones-add" onclick="addAddExtraPhoneUe()">+ ще номер</button>
             </div>
             <div class="add-row">
               <label>Адреса в Європі <span class="req">*</span></label>

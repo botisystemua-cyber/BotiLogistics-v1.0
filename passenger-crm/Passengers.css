@@ -1917,6 +1917,26 @@ body.route-sort-active #rteTogglePay {
 .pax-add-section .form-row .form-group { margin-bottom: 0; }
 .pax-add-section .form-group label { font-size: 11px; font-weight: 600; color: var(--text-secondary); }
 
+/* 📞 Додаткові номери пасажира — динамічні inputs + «+ ще номер» */
+.pax-phones-box { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+.pax-phone-row { display: flex; gap: 6px; align-items: stretch; }
+.pax-phone-row input.pax-phone-extra {
+    flex: 1;
+    border: 2px solid var(--border); border-radius: 4px; padding: 7px;
+    font-family: inherit; font-size: 12px;
+}
+.pax-phone-rm {
+    background: #fef2f2; color: #b91c1c;
+    border: 1px solid #fecaca; border-radius: 4px; width: 30px;
+    cursor: pointer; font-size: 16px; line-height: 1;
+}
+.pax-phones-add {
+    margin-top: 4px; background: #eff6ff; color: #1d4ed8;
+    border: 1px dashed #93c5fd; border-radius: 4px;
+    padding: 6px 10px; font-family: inherit; font-size: 11px; cursor: pointer;
+}
+.pax-phones-add:hover { background: #dbeafe; }
+
 /* Перемикач напрямку у формі «Новий пасажир» — два кнопки в одному ряді,
    замість <select>. Mirror cargo's .add-dir-toggle, але з пасажирською
    палітрою: UA→EU = синій (primary), EU→UA = зелений. */
