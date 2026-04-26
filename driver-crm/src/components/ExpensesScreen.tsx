@@ -22,7 +22,8 @@ const CATEGORIES: { key: ExpenseCategory; label: string; icon: typeof Fuel; colo
   { key: 'other', label: 'Інше', icon: HelpCircle, color: 'text-gray-600', bg: 'bg-gray-100' },
 ];
 
-const CURRENCIES = ['UAH', 'EUR', 'CHF', 'PLN', 'USD'];
+// EUR — перший у списку, бо це дефолт для форми «+ Витрата».
+const CURRENCIES = ['EUR', 'CHF', 'UAH', 'PLN', 'USD'];
 
 function getCat(key: string) {
   return CATEGORIES.find((c) => c.key === key) || CATEGORIES[7];
@@ -491,7 +492,7 @@ function AddExpenseModal({ onClose, onAdd, routeNames, isUnifiedView, defaultRou
 }) {
   const [category, setCategory] = useState<ExpenseCategory>('fuel');
   const [amount, setAmount] = useState('');
-  const [currency, setCurrency] = useState('CHF');
+  const [currency, setCurrency] = useState('EUR');
   const [description, setDescription] = useState('');
   const [selectedRoute, setSelectedRoute] = useState(defaultRoute);
   const [submitting, setSubmitting] = useState(false);
