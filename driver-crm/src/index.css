@@ -71,7 +71,12 @@
 [data-theme="lone-wolf"] .text-purple-700 { color: #d8b4fe !important; }
 [data-theme="lone-wolf"] .border-red-200,
 [data-theme="lone-wolf"] .border-green-200,
-[data-theme="lone-wolf"] .border-blue-200 { border-color: #34343a !important; }
+[data-theme="lone-wolf"] .border-blue-200,
+[data-theme="lone-wolf"] .border-emerald-200,
+[data-theme="lone-wolf"] .border-amber-200,
+[data-theme="lone-wolf"] .border-orange-200,
+[data-theme="lone-wolf"] .border-purple-200,
+[data-theme="lone-wolf"] .border-yellow-200 { border-color: #34343a !important; }
 [data-theme="lone-wolf"] input,
 [data-theme="lone-wolf"] textarea,
 [data-theme="lone-wolf"] select { color: var(--theme-text); }
