@@ -9,6 +9,8 @@ import { fetchExpenses, addExpense, deleteExpense, updateAdvance, buildRouteSumm
 import type { ExpenseItem, ExpenseAdvance, ExpenseCategory, RouteSummary } from '../types';
 import { RouteSummaryModal } from './RouteSummaryModal';
 
+// Чайові НЕ є витратами — їх ведемо окремо через TipsButton на картці ліда,
+// у summary рахуються в `summary.tips`. У списку категорій витрат їх немає.
 const CATEGORIES: { key: ExpenseCategory; label: string; icon: typeof Fuel; color: string; bg: string }[] = [
   { key: 'fuel', label: 'Бензин', icon: Fuel, color: 'text-amber-600', bg: 'bg-amber-50' },
   { key: 'food', label: 'Їжа', icon: UtensilsCrossed, color: 'text-orange-600', bg: 'bg-orange-50' },
@@ -18,7 +20,6 @@ const CATEGORIES: { key: ExpenseCategory; label: string; icon: typeof Fuel; colo
   { key: 'customs', label: 'Митниця', icon: Landmark, color: 'text-emerald-600', bg: 'bg-emerald-50' },
   { key: 'topUp', label: 'Поповнення', icon: Smartphone, color: 'text-cyan-600', bg: 'bg-cyan-50' },
   { key: 'other', label: 'Інше', icon: HelpCircle, color: 'text-gray-600', bg: 'bg-gray-100' },
-  { key: 'tips', label: 'Чайові', icon: Receipt, color: 'text-pink-600', bg: 'bg-pink-50' },
 ];
 
 const CURRENCIES = ['UAH', 'EUR', 'CHF', 'PLN', 'USD'];
@@ -52,7 +53,11 @@ export function ExpensesScreen() {
           const data = await fetchExpenses(rn);
           return {
             routeName: rn,
-            items: data.items.filter((e) => e.driver === driverName).map((e) => ({ ...e, _routeName: rn })),
+            // Виключаємо legacy записи з category='tips' — Чайові тепер тільки
+            // через TipsButton на картці ліда, у витратах їм не місце.
+            items: data.items
+              .filter((e) => e.driver === driverName && e.category !== 'tips')
+              .map((e) => ({ ...e, _routeName: rn })),
             advance: data.advance,
           };
         })

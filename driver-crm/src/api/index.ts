@@ -688,6 +688,10 @@ export async function buildRouteSummary(
   let advCash = 0, advCashCur = 'CHF', advCard = 0, advCardCur = 'CHF';
 
   for (const e of expenses.items) {
+    // Чайові — не витрата. Якщо у legacy-даних збереглася категорія 'tips',
+    // не зараховуємо її ні в expTotals, ні у toReturn (там вона б віднялася
+    // від готівки — це робило баланс некоректним). Tips окремо у tipsTotals.
+    if (e.category === 'tips') continue;
     addCur(expTotals, e.currency, e.amount);
     expByCategory[e.category] = { amount: e.amount, currency: e.currency };
   }
