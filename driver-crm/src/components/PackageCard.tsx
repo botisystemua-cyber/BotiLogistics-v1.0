@@ -57,6 +57,16 @@ export function PackageCard({ pkg: p, index, searchQuery = '', onEdit, onConvert
     ? { label: 'EU → UA', cls: 'bg-orange-100 text-orange-700 border-orange-300' }
     : null;
 
+  // Напрямко-залежний primary-телефон:
+  //   ЄВ→УК — забираємо посилку у відправника в Європі → primary = senderPhone.
+  //   УК→ЄВ — везеомо посилку отримувачу в Європі → primary = recipientPhone.
+  // Кнопка «Дзвонити» і phone-chip використовують primary;
+  // secondary показуємо нижче (другий контакт ліда теж під рукою).
+  const primaryPhone   = dirKind === 'eu-ua' ? p.senderPhone : p.recipientPhone;
+  const secondaryPhone = dirKind === 'eu-ua' ? p.recipientPhone : p.senderPhone;
+  const primaryLabel   = dirKind === 'eu-ua' ? 'відправник' : 'отримувач';
+  const secondaryLabel = dirKind === 'eu-ua' ? 'отримувач' : 'відправник';
+
   const doStatus = async (ns: ItemStatus) => {
     setStatus(p._statusKey, ns);
     try { await updateItemStatus(driverName, routeName, p, ns); showToast(stLabel[ns].t + '!'); }
@@ -105,7 +115,12 @@ export function PackageCard({ pkg: p, index, searchQuery = '', onEdit, onConvert
         </div>
 
         <div className="flex items-center gap-2 ml-9 mb-2 flex-wrap">
-          {show('recipientPhone') && p.recipientPhone && <Chip icon={Phone} c="green">{hl(p.recipientPhone)}</Chip>}
+          {show('recipientPhone') && primaryPhone && (
+            <Chip icon={Phone} c="green" title={primaryLabel}>{hl(primaryPhone)}</Chip>
+          )}
+          {show('recipientPhone') && secondaryPhone && (
+            <Chip icon={Phone} c="gray" title={secondaryLabel}>{hl(secondaryPhone)}</Chip>
+          )}
           {show('amount') && p.amount && <Chip icon={CreditCard} c="green" b>{p.amount} {p.currency}</Chip>}
           {show('payStatus') && (() => { const ps = derivePayStatus(p.payForm); return (
             <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${ps.cls}`}>{ps.label}</span>
@@ -114,8 +129,8 @@ export function PackageCard({ pkg: p, index, searchQuery = '', onEdit, onConvert
         </div>
 
         <div className="flex gap-2 mb-2">
-          <Btn icon={Phone} label="Дзвонити" color="bg-green-50 text-green-700" onClick={() => { if (p.recipientPhone) window.location.href = `tel:${p.recipientPhone}`; else showToast('Немає телефону'); }} />
-          <Btn icon={MessageCircle} label="Написати" color="bg-purple-50 text-purple-700" onClick={() => { if (p.recipientPhone) setShowMessenger(true); else showToast('Немає телефону'); }} />
+          <Btn icon={Phone} label={`Дзвонити (${primaryLabel})`} color="bg-green-50 text-green-700" onClick={() => { if (primaryPhone) window.location.href = `tel:${primaryPhone}`; else showToast('Немає телефону'); }} />
+          <Btn icon={MessageCircle} label="Написати" color="bg-purple-50 text-purple-700" onClick={() => { if (primaryPhone) setShowMessenger(true); else showToast('Немає телефону'); }} />
           <Btn icon={MapPin} label="Адреси" color="bg-blue-50 text-blue-700" onClick={() => { if (p.addrFrom || p.recipientAddr) setShowAddrPicker(true); else showToast('Немає адрес'); }} />
           <Btn icon={expanded ? ChevronUp : Info} label={expanded ? 'Згорнути' : 'Деталі'} color={expanded ? 'bg-brand/10 text-brand' : 'bg-gray-50 text-gray-600'} onClick={() => setExpanded(!expanded)} />
         </div>
@@ -167,7 +182,7 @@ export function PackageCard({ pkg: p, index, searchQuery = '', onEdit, onConvert
         </div>
       )}
 
-      {showMessenger && <MessengerPopup phone={p.recipientPhone} onClose={() => setShowMessenger(false)} />}
+      {showMessenger && <MessengerPopup phone={primaryPhone} onClose={() => setShowMessenger(false)} />}
       {showAddrPicker && <AddressPicker addrFrom={p.addrFrom} addrTo={p.recipientAddr} onClose={() => setShowAddrPicker(false)} />}
 
       {showCancel && (
@@ -186,9 +201,9 @@ function Cell({ label, value, bold, accent, full }: { label: string; value?: str
   const vc = accent === 'green' ? 'text-emerald-700' : accent === 'red' ? 'text-red-600' : accent === 'amber' ? 'text-amber-700' : 'text-text';
   return (<div className={`py-1 min-w-0 ${full ? 'col-span-2' : ''}`}><div className="text-[9px] text-muted font-semibold uppercase tracking-wide">{label}</div><div className={`text-[11px] ${bold ? 'font-bold' : 'font-medium'} ${vc} truncate`}>{value}</div></div>);
 }
-function Chip({ icon: I, c, b, children }: { icon: typeof Phone; c: string; b?: boolean; children: React.ReactNode }) {
+function Chip({ icon: I, c, b, title, children }: { icon: typeof Phone; c: string; b?: boolean; title?: string; children: React.ReactNode }) {
   const m: Record<string, string> = { green: 'bg-green-50 text-green-700', blue: 'bg-blue-50 text-blue-700', gray: 'bg-gray-100 text-gray-500' };
-  return <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] ${b ? 'font-bold' : 'font-medium'} ${m[c]}`}><I className="w-3 h-3" />{children}</span>;
+  return <span title={title} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] ${b ? 'font-bold' : 'font-medium'} ${m[c]}`}><I className="w-3 h-3" />{children}</span>;
 }
 function Btn({ icon: I, label, color, onClick }: { icon: typeof Phone; label: string; color: string; onClick: () => void }) {
   return <button onClick={onClick} className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-semibold cursor-pointer active:scale-95 transition-transform ${color}`}><I className="w-4 h-4" />{label}</button>;
