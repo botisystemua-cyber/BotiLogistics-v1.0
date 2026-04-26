@@ -259,8 +259,24 @@ export async function fetchExpenses(routeName: string): Promise<{ items: Expense
     .eq('tenant_id', tenantId)
     .order('created_at', { ascending: true });
 
+  // expenses.rte_id колонки немає — фільтруємо по routes.id (uuid).
+  // Резолвимо routeName → uuid; якщо не знайшли — повернеться порожній
+  // список (запит з не-існуючим uuid просто не матчить).
   if (routeName && routeName !== '__unified__') {
-    query = query.eq('rte_id', routeName);
+    const { data: routeMatch } = await supabase
+      .from('routes')
+      .select('id, is_placeholder')
+      .eq('tenant_id', tenantId)
+      .eq('rte_id', routeName)
+      .order('is_placeholder', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (routeMatch) {
+      query = query.eq('route_id', routeMatch.id);
+    } else {
+      // Маршруту з таким rte_id немає — повертаємо порожній список.
+      return { items: [], advance: null };
+    }
   }
 
   const { data, error } = await query;
@@ -539,10 +555,27 @@ export async function addExpense(data: Record<string, string>) {
   const dateStr = now.toISOString().slice(0, 10);
   const expId = 'EXP-' + dateStr.replace(/-/g, '') + '-' + now.toTimeString().slice(0, 8).replace(/:/g, '');
 
+  // Резолвимо routes.id (uuid) для цього rte_id — cargo-crm sidebar
+  // «💰 Витрати» групує саме за route_id-uuid (sbPkgGetExpensesList) і
+  // detail-view фільтрує `expenses.route_id=routeUuid`. Без цього driver
+  // експенси падали у бакет «—» і не зʼявлялись у потрібному маршруті.
+  let routeUuid: string | null = null;
+  if (data.routeName) {
+    const { data: routeMatch } = await supabase
+      .from('routes')
+      .select('id, is_placeholder')
+      .eq('tenant_id', tenantId)
+      .eq('rte_id', data.routeName)
+      .order('is_placeholder', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (routeMatch) routeUuid = routeMatch.id;
+  }
+
   const row: Record<string, unknown> = {
     tenant_id: tenantId,
     exp_id: expId,
-    rte_id: data.routeName,
+    route_id: routeUuid,             // ← ключ зв'язку з cargo (rte_id колонки нема)
     trip_date: dateStr,
     driver_name: data.driverName || '',
     expense_currency: data.currency || 'CHF',
@@ -584,15 +617,32 @@ export async function updateAdvance(data: Record<string, string>) {
   const tenantId = getTenantId();
   const routeName = data.routeName;
 
-  // Advance is stored on the first expense row for a given route.
-  // Find or create it.
-  const { data: existing } = await supabase
-    .from('expenses')
-    .select('id')
+  // Резолвимо routes.id (uuid) для цього rte_id — і select, і insert
+  // далі фільтрують саме по route_id (колонки expenses.rte_id не існує).
+  let routeUuid: string | null = null;
+  const { data: routeMatch } = await supabase
+    .from('routes')
+    .select('id, is_placeholder')
     .eq('tenant_id', tenantId)
     .eq('rte_id', routeName)
-    .order('created_at', { ascending: true })
-    .limit(1);
+    .order('is_placeholder', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (routeMatch) routeUuid = routeMatch.id;
+
+  // Advance is stored on the first expense row for a given route.
+  // Find or create it.
+  let existing: Array<{ id: string }> | null = null;
+  if (routeUuid) {
+    const { data } = await supabase
+      .from('expenses')
+      .select('id')
+      .eq('tenant_id', tenantId)
+      .eq('route_id', routeUuid)
+      .order('created_at', { ascending: true })
+      .limit(1);
+    existing = data;
+  }
 
   const advanceFields = {
     advance_cash: parseFloat(data.cash) || 0,
@@ -609,10 +659,9 @@ export async function updateAdvance(data: Record<string, string>) {
       .eq('id', existing[0].id);
     if (error) throw error;
   } else {
-    // Create new row with advance info
     const { error } = await supabase.from('expenses').insert({
       tenant_id: tenantId,
-      rte_id: routeName,
+      route_id: routeUuid,
       exp_id: `ADV-${routeName}-${Date.now()}`,
       driver_name: data.driverName || '',
       ...advanceFields,
