@@ -79,8 +79,11 @@ export function PackageCard({ pkg: p, index, searchQuery = '', onEdit, onConvert
     catch (e) { showToast('Помилка: ' + (e as Error).message); }
   };
   const doUndo = async () => {
-    if (!canUndo) return; const prev = status; setStatus(p._statusKey, 'pending');
-    try { await updateItemStatus(driverName, routeName, p, 'pending', 'Відміна'); showToast('Відмінено'); }
+    // «Назад» з Готово/Скасов. повертає лід у «В роботі», а не в чергу
+    // («Очікує») — водій вже почав роботу і просто помилково натиснув
+    // термінальний статус. Якщо API падає — реверт у попередній стан.
+    if (!canUndo) return; const prev = status; setStatus(p._statusKey, 'in-progress');
+    try { await updateItemStatus(driverName, routeName, p, 'in-progress', 'Відміна'); showToast('Повернено в роботу'); }
     catch (e) { showToast('Помилка: ' + (e as Error).message); setStatus(p._statusKey, prev); }
   };
 

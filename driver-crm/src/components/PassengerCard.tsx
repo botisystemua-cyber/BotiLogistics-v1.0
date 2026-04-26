@@ -61,8 +61,10 @@ export function PassengerCard({ passenger: p, index, searchQuery = '', onEdit }:
     catch (e) { showToast('Помилка: ' + (e as Error).message); }
   };
   const doUndo = async () => {
-    if (!canUndo) return; const prev = status; setStatus(p._statusKey, 'pending');
-    try { await updateItemStatus(driverName, routeName, p, 'pending', 'Відміна'); showToast('Відмінено'); }
+    // Undo повертає в «В роботі» — водій уже взявся за пасажира і
+    // помилково натиснув Готово/Скасов. Не скидаємо назад у чергу.
+    if (!canUndo) return; const prev = status; setStatus(p._statusKey, 'in-progress');
+    try { await updateItemStatus(driverName, routeName, p, 'in-progress', 'Відміна'); showToast('Повернено в роботу'); }
     catch (e) { showToast('Помилка: ' + (e as Error).message); setStatus(p._statusKey, prev); }
   };
 
