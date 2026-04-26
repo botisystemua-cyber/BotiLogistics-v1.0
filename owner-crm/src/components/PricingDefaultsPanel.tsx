@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { ChevronRight, RotateCcw } from 'lucide-react';
 import {
   defaultPricingConfig,
@@ -190,23 +190,61 @@ function NumField(
     step?: string;
   },
 ) {
+  const enabled = value !== undefined;
+  // Запам'ятовуємо останнє введене значення, щоб при OFF→ON відновити, а
+  // не давати юзеру «свіжі 0». Якщо поле приходить з БД заповненим —
+  // ініціалізуємо ним; інакше — null (нічого не пам'ятаємо).
+  const lastValueRef = useRef<number | undefined>(value);
+  useEffect(() => { if (value !== undefined) lastValueRef.current = value; }, [value]);
+
+  const toggle = () => {
+    if (enabled) {
+      // OFF: значення в БД не піде (undefined), але lastValueRef зберігає
+      // останнє введене на випадок, якщо юзер передумає.
+      onChange(undefined);
+    } else {
+      // ON: відновлюємо попереднє значення; якщо ніколи не було — placeholder
+      // як підказка (зберігаємо як число для сумісності зі стейтом).
+      const prev = lastValueRef.current;
+      const fallback = placeholder ? parseFloat(placeholder) : 0;
+      onChange(prev !== undefined ? prev : (isNaN(fallback) ? 0 : fallback));
+    }
+  };
+
   return (
-    <label className="flex flex-col gap-1">
-      <span className="text-[11px] font-semibold text-muted">{label}</span>
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center gap-2">
+        <input
+          type="checkbox"
+          checked={enabled}
+          onChange={toggle}
+          className="w-4 h-4 cursor-pointer accent-brand flex-shrink-0"
+          title={enabled ? 'Вимкнути дефолт' : 'Увімкнути дефолт'}
+        />
+        <span className={`text-[11px] font-semibold ${enabled ? 'text-muted' : 'text-gray-400'}`}>
+          {label}
+        </span>
+      </div>
       <input
         type="number"
         min="0"
         step={step || '1'}
-        value={value === undefined || value === null ? '' : String(value)}
+        disabled={!enabled}
+        value={enabled && value !== undefined ? String(value) : ''}
         onChange={e => {
           const raw = e.target.value;
           if (raw === '') return onChange(undefined);
           const n = parseFloat(raw);
+          if (!isNaN(n)) lastValueRef.current = n;
           onChange(isNaN(n) ? undefined : n);
         }}
-        placeholder={placeholder || '0'}
-        className="px-3 py-2 rounded-lg border border-border bg-white text-sm font-semibold text-text focus:outline-none focus:border-brand transition-colors"
+        placeholder={enabled ? (placeholder || '0') : 'вимкнено'}
+        className={`px-3 py-2 rounded-lg border text-sm font-semibold transition-colors ${
+          enabled
+            ? 'border-border bg-white text-text focus:outline-none focus:border-brand'
+            : 'border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed'
+        }`}
       />
-    </label>
+    </div>
   );
 }
