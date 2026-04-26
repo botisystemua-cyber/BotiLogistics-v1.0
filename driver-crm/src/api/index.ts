@@ -259,8 +259,24 @@ export async function fetchExpenses(routeName: string): Promise<{ items: Expense
     .eq('tenant_id', tenantId)
     .order('created_at', { ascending: true });
 
+  // expenses.rte_id колонки немає — фільтруємо по routes.id (uuid).
+  // Резолвимо routeName → uuid; якщо не знайшли — повернеться порожній
+  // список (запит з не-існуючим uuid просто не матчить).
   if (routeName && routeName !== '__unified__') {
-    query = query.eq('rte_id', routeName);
+    const { data: routeMatch } = await supabase
+      .from('routes')
+      .select('id, is_placeholder')
+      .eq('tenant_id', tenantId)
+      .eq('rte_id', routeName)
+      .order('is_placeholder', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (routeMatch) {
+      query = query.eq('route_id', routeMatch.id);
+    } else {
+      // Маршруту з таким rte_id немає — повертаємо порожній список.
+      return { items: [], advance: null };
+    }
   }
 
   const { data, error } = await query;
@@ -349,6 +365,73 @@ export async function addRouteItem(data: Record<string, string>) {
   const typeRaw = data.itemType || data.type || '';
   const isPackage = typeRaw.toLowerCase().includes('посилк');
 
+  // ─── ВІДПРАВКА (cargo «Оформити відправку») → пишемо у dispatches, не routes.
+  // Cargo-CRM «📥 Відправка» в sidebar маршруту читає саме з dispatches table
+  // (за route_id-uuid). Без цього прохода відправка лишалась тільки на стороні
+  // водія, у власника / менеджера — не зʼявлялась.
+  if (isPackage && (data.direction || '').toLowerCase() === 'відправка') {
+    // Спробуємо прив’язати dispatch до маршруту через routes.id (uuid).
+    // Беремо placeholder-рядок (один на маршрут, метадані рейсу), а якщо
+    // його нема — будь-який рядок цього rte_id. Безуспішно? — лишаємо null,
+    // dispatch однаково зберігається.
+    let routeUuid: string | null = null;
+    let routeDate = data.dateTrip || '';
+    let vehicleName = data.autoNum || '';
+    // driver_name = логін водія, що ЗБЕРІГ відправку (не водія маршруту).
+    // У cargo-crm це показується як «Водій» у списку відправок з відміткою
+    // часу, щоб менеджер бачив хто і коли вніс запис.
+    const savedByDriver = data.driverName || '';
+    if (data.routeName) {
+      const { data: routeMatch } = await supabase
+        .from('routes')
+        .select('id, route_date, vehicle_name, is_placeholder')
+        .eq('tenant_id', tenantId)
+        .eq('rte_id', data.routeName)
+        .order('is_placeholder', { ascending: false }) // placeholder=true спершу
+        .limit(1)
+        .maybeSingle();
+      if (routeMatch) {
+        routeUuid = routeMatch.id;
+        if (!routeDate)   routeDate   = routeMatch.route_date   || '';
+        if (!vehicleName) vehicleName = routeMatch.vehicle_name || '';
+      }
+    }
+
+    const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const dispatchId = `DISP_${today}_${Date.now().toString().slice(-6)}`;
+
+    const dispRow: Record<string, unknown> = {
+      tenant_id: tenantId,
+      dispatch_id: dispatchId,
+      route_id: routeUuid,
+      route_date: routeDate || new Date().toISOString().slice(0, 10),
+      vehicle_name: vehicleName,
+      driver_name: savedByDriver,
+      sender_name: data.senderName || '',
+      sender_phone: data.senderPhone || '',
+      registrar_phone: data.senderPhone || '',
+      recipient_name: data.recipientName || '',
+      recipient_phone: data.recipientPhone || '',
+      recipient_address: data.recipientAddr || '',
+      internal_number: data.internalNum || null,
+      weight_kg: data.pkgWeight ? parseFloat(data.pkgWeight) || null : null,
+      package_description: data.pkgDesc || '',
+      amount: data.amount ? parseFloat(data.amount) || null : null,
+      amount_currency: data.currency || 'UAH',
+      deposit: data.deposit ? parseFloat(data.deposit) || null : null,
+      deposit_currency: data.depositCurrency || 'UAH',
+      payment_form: data.payForm || null,
+      payment_status: 'pending',
+      status: 'pending',
+      notes: data.note || '',
+    };
+
+    const { error } = await supabase.from('dispatches').insert(dispRow);
+    if (error) throw error;
+    return { success: true };
+  }
+
+  // ─── Інші типи (пасажир, посилка-отримання, посилка-pickup) → у routes як було.
   const row: Record<string, unknown> = {
     tenant_id: tenantId,
     rte_id: data.routeName,
@@ -474,10 +557,27 @@ export async function addExpense(data: Record<string, string>) {
   const dateStr = now.toISOString().slice(0, 10);
   const expId = 'EXP-' + dateStr.replace(/-/g, '') + '-' + now.toTimeString().slice(0, 8).replace(/:/g, '');
 
+  // Резолвимо routes.id (uuid) для цього rte_id — cargo-crm sidebar
+  // «💰 Витрати» групує саме за route_id-uuid (sbPkgGetExpensesList) і
+  // detail-view фільтрує `expenses.route_id=routeUuid`. Без цього driver
+  // експенси падали у бакет «—» і не зʼявлялись у потрібному маршруті.
+  let routeUuid: string | null = null;
+  if (data.routeName) {
+    const { data: routeMatch } = await supabase
+      .from('routes')
+      .select('id, is_placeholder')
+      .eq('tenant_id', tenantId)
+      .eq('rte_id', data.routeName)
+      .order('is_placeholder', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (routeMatch) routeUuid = routeMatch.id;
+  }
+
   const row: Record<string, unknown> = {
     tenant_id: tenantId,
     exp_id: expId,
-    rte_id: data.routeName,
+    route_id: routeUuid,             // ← ключ зв'язку з cargo (rte_id колонки нема)
     trip_date: dateStr,
     driver_name: data.driverName || '',
     expense_currency: data.currency || 'CHF',
@@ -519,15 +619,32 @@ export async function updateAdvance(data: Record<string, string>) {
   const tenantId = getTenantId();
   const routeName = data.routeName;
 
-  // Advance is stored on the first expense row for a given route.
-  // Find or create it.
-  const { data: existing } = await supabase
-    .from('expenses')
-    .select('id')
+  // Резолвимо routes.id (uuid) для цього rte_id — і select, і insert
+  // далі фільтрують саме по route_id (колонки expenses.rte_id не існує).
+  let routeUuid: string | null = null;
+  const { data: routeMatch } = await supabase
+    .from('routes')
+    .select('id, is_placeholder')
     .eq('tenant_id', tenantId)
     .eq('rte_id', routeName)
-    .order('created_at', { ascending: true })
-    .limit(1);
+    .order('is_placeholder', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (routeMatch) routeUuid = routeMatch.id;
+
+  // Advance is stored on the first expense row for a given route.
+  // Find or create it.
+  let existing: Array<{ id: string }> | null = null;
+  if (routeUuid) {
+    const { data } = await supabase
+      .from('expenses')
+      .select('id')
+      .eq('tenant_id', tenantId)
+      .eq('route_id', routeUuid)
+      .order('created_at', { ascending: true })
+      .limit(1);
+    existing = data;
+  }
 
   const advanceFields = {
     advance_cash: parseFloat(data.cash) || 0,
@@ -544,10 +661,9 @@ export async function updateAdvance(data: Record<string, string>) {
       .eq('id', existing[0].id);
     if (error) throw error;
   } else {
-    // Create new row with advance info
     const { error } = await supabase.from('expenses').insert({
       tenant_id: tenantId,
-      rte_id: routeName,
+      route_id: routeUuid,
       exp_id: `ADV-${routeName}-${Date.now()}`,
       driver_name: data.driverName || '',
       ...advanceFields,
