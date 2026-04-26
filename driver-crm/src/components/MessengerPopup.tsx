@@ -30,7 +30,10 @@ export function MessengerPopup({ phone, onClose }: Props) {
         {!waOpen ? (
           <>
             <Btn href={`viber://chat?number=${clean}`} bg="#7360f2">Viber</Btn>
-            <Btn href={`https://t.me/${cleanNoPlus}`} bg="#0088cc">Telegram</Btn>
+            {/* https://t.me/<digits> Telegram сприймає як username і повертає
+                «User not found». Для пошуку за номером телефону потрібно
+                префікс `+`, тоді t.me відкриває «Find by phone» flow. */}
+            <Btn href={`https://t.me/+${cleanNoPlus}`} bg="#0088cc">Telegram</Btn>
             <Btn bg="#25d366" onClick={() => setWaOpen(true)}>WhatsApp</Btn>
           </>
         ) : (

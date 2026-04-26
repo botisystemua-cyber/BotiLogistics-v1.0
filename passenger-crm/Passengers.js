@@ -3771,6 +3771,13 @@ function openEditPax(id) {
     const currWtEl = document.getElementById('fCurrencyWeight');
     if (currWtEl) currWtEl.value = p['Валюта багажу'] || CURR_DEFAULT;
 
+    // Підтягуємо існуючі додаткові номери (jsonb-масив).
+    let exPh = p['Ще телефони'] || p.extra_phones || [];
+    if (typeof exPh === 'string') {
+        try { exPh = JSON.parse(exPh); } catch (_) { exPh = []; }
+    }
+    _applyPaxExtraPhonesUI(Array.isArray(exPh) ? exPh : []);
+
     const saveBtn = document.getElementById('paxSaveBtn');
     if (saveBtn) saveBtn.textContent = '💾 Оновити';
     openModal('passengerModal');
@@ -4147,7 +4154,74 @@ function openAddModal() {
     const childCb = document.getElementById('paxChildToggle');
     if (childCb) childCb.checked = false;
     applyPaxPricingDefaults();
+    // Скидаємо віджет «Ще номери пасажира» — порожній стан для нового ліда.
+    _applyPaxExtraPhonesUI([]);
     openModal('passengerModal');
+}
+
+// ================================================================
+// 📞 Додаткові номери пасажира (UA + EU) — динамічні inputs + «+»
+// Зберігаємо як jsonb-масив у passengers.extra_phones. Первинний
+// номер залишається в `phone`. Максимум 3 (1 основний + 2 додаткові).
+// ================================================================
+const _PAX_MAX_EXTRA_PHONES = 2;
+function _getPaxExtraPhones() {
+    const hidden = document.getElementById('fExtraPhones');
+    if (!hidden) return [];
+    try { return JSON.parse(hidden.value || '[]'); } catch (_) { return []; }
+}
+function _syncPaxExtraPhones() {
+    const box = document.getElementById('fExtraPhonesBox');
+    const hidden = document.getElementById('fExtraPhones');
+    if (!box || !hidden) return;
+    const arr = Array.from(box.querySelectorAll('input.pax-phone-extra'))
+        .map(i => (i.value || '').trim())
+        .filter(v => !!v);
+    hidden.value = JSON.stringify(arr);
+}
+function _applyPaxExtraPhonesUI(arr) {
+    const box = document.getElementById('fExtraPhonesBox');
+    const hidden = document.getElementById('fExtraPhones');
+    if (!box || !hidden) return;
+    arr = Array.isArray(arr) ? arr : [];
+    box.innerHTML = '';
+    arr.slice(0, _PAX_MAX_EXTRA_PHONES).forEach(p => _appendPaxExtraPhoneInput(p));
+    hidden.value = JSON.stringify(arr);
+}
+function _appendPaxExtraPhoneInput(initial) {
+    const box = document.getElementById('fExtraPhonesBox');
+    if (!box) return;
+    const count = box.querySelectorAll('input.pax-phone-extra').length;
+    if (count >= _PAX_MAX_EXTRA_PHONES) return;
+    const wrap = document.createElement('div');
+    wrap.className = 'pax-phone-row';
+    const inp = document.createElement('input');
+    inp.type = 'tel';
+    inp.className = 'pax-phone-extra';
+    inp.placeholder = '+380… або +48… +420…';
+    inp.value = initial || '';
+    inp.addEventListener('input', _syncPaxExtraPhones);
+    inp.addEventListener('blur', _syncPaxExtraPhones);
+    wrap.appendChild(inp);
+    const rm = document.createElement('button');
+    rm.type = 'button';
+    rm.className = 'pax-phone-rm';
+    rm.textContent = '×';
+    rm.title = 'Прибрати цей номер';
+    rm.onclick = () => { wrap.remove(); _syncPaxExtraPhones(); };
+    wrap.appendChild(rm);
+    box.appendChild(wrap);
+    if (!initial) setTimeout(() => inp.focus(), 50);
+}
+function addPaxExtraPhone() {
+    const box = document.getElementById('fExtraPhonesBox');
+    if (!box) return;
+    const count = box.querySelectorAll('input.pax-phone-extra').length;
+    if (count >= _PAX_MAX_EXTRA_PHONES) {
+        showToast('Максимум 3 номери (1 основний + 2 додаткові)', 'info');
+        return;
+    }
+    _appendPaxExtraPhoneInput('');
 }
 
 // ================================================================
@@ -4475,6 +4549,9 @@ async function savePassenger() {
     // Якщо точку не вибрано — fallback на текст у прихованому fFrom/fTo.
     const fromCombined = readRoutePointCombined('from');
     const toCombined = readRoutePointCombined('to');
+    // Перед читанням масиву — sync, щоб встигнути забрати останній символ
+    // зі ще-зафокусованого input-а (deltaчасто blur не встигає до save).
+    if (typeof _syncPaxExtraPhones === 'function') _syncPaxExtraPhones();
     const formData = {
         name, phone,
         phoneReg: document.getElementById('fPhoneReg').value.trim(),
@@ -4495,7 +4572,8 @@ async function savePassenger() {
         seatNumber: (document.getElementById('fSeatNumber')||{}).value?.trim() || '',
         payStatus: (document.getElementById('fPayStatus')||{}).value || '',
         payForm: (document.getElementById('fPayForm')||{}).value || '',
-        tag: (document.getElementById('fTag')||{}).value?.trim() || ''
+        tag: (document.getElementById('fTag')||{}).value?.trim() || '',
+        extraPhones: _getPaxExtraPhones()
     };
 
     // === РЕЖИМ РЕДАГУВАННЯ МАРШРУТУ: оновлюємо поля через updateRouteField ===
@@ -4570,6 +4648,7 @@ async function savePassenger() {
                 p['Ціна багажу'] = formData.weightPrice;
                 p['Валюта багажу'] = formData.currencyWeight;
                 p['Примітка'] = formData.note;
+                p['Ще телефони'] = formData.extraPhones || [];
             }
             // Одразу закриваємо і рендеримо — дані вже оновлені локально
             hideLoader();
@@ -4652,6 +4731,7 @@ async function savePassenger() {
             'Статус CRM': 'Активний',
             'Дата створення': new Date().toISOString(),
             'CAL_ID': selectedFormCalId || '',
+            'Ще телефони': formData.extraPhones || [],
             _sheet: dir === 'eu-ua' ? 'eu' : 'ue'
         };
         passengers.unshift(newPax);
