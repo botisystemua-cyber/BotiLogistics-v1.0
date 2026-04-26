@@ -349,6 +349,71 @@ export async function addRouteItem(data: Record<string, string>) {
   const typeRaw = data.itemType || data.type || '';
   const isPackage = typeRaw.toLowerCase().includes('посилк');
 
+  // ─── ВІДПРАВКА (cargo «Оформити відправку») → пишемо у dispatches, не routes.
+  // Cargo-CRM «📥 Відправка» в sidebar маршруту читає саме з dispatches table
+  // (за route_id-uuid). Без цього прохода відправка лишалась тільки на стороні
+  // водія, у власника / менеджера — не зʼявлялась.
+  if (isPackage && (data.direction || '').toLowerCase() === 'відправка') {
+    // Спробуємо прив’язати dispatch до маршруту через routes.id (uuid).
+    // Беремо placeholder-рядок (один на маршрут, метадані рейсу), а якщо
+    // його нема — будь-який рядок цього rte_id. Безуспішно? — лишаємо null,
+    // dispatch однаково зберігається.
+    let routeUuid: string | null = null;
+    let routeDate = data.dateTrip || '';
+    let vehicleName = data.autoNum || '';
+    let driverName = data.driverName || '';
+    if (data.routeName) {
+      const { data: routeMatch } = await supabase
+        .from('routes')
+        .select('id, route_date, vehicle_name, driver_name, is_placeholder')
+        .eq('tenant_id', tenantId)
+        .eq('rte_id', data.routeName)
+        .order('is_placeholder', { ascending: false }) // placeholder=true спершу
+        .limit(1)
+        .maybeSingle();
+      if (routeMatch) {
+        routeUuid = routeMatch.id;
+        if (!routeDate)   routeDate   = routeMatch.route_date   || '';
+        if (!vehicleName) vehicleName = routeMatch.vehicle_name || '';
+        if (!driverName)  driverName  = routeMatch.driver_name  || '';
+      }
+    }
+
+    const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const dispatchId = `DISP_${today}_${Date.now().toString().slice(-6)}`;
+
+    const dispRow: Record<string, unknown> = {
+      tenant_id: tenantId,
+      dispatch_id: dispatchId,
+      route_id: routeUuid,
+      route_date: routeDate || new Date().toISOString().slice(0, 10),
+      vehicle_name: vehicleName,
+      driver_name: driverName,
+      sender_name: data.senderName || '',
+      sender_phone: data.senderPhone || '',
+      registrar_phone: data.senderPhone || '',
+      recipient_name: data.recipientName || '',
+      recipient_phone: data.recipientPhone || '',
+      recipient_address: data.recipientAddr || '',
+      internal_number: data.internalNum || null,
+      weight_kg: data.pkgWeight ? parseFloat(data.pkgWeight) || null : null,
+      package_description: data.pkgDesc || '',
+      amount: data.amount ? parseFloat(data.amount) || null : null,
+      amount_currency: data.currency || 'UAH',
+      deposit: data.deposit ? parseFloat(data.deposit) || null : null,
+      deposit_currency: data.depositCurrency || 'UAH',
+      payment_form: data.payForm || null,
+      payment_status: 'pending',
+      status: 'pending',
+      notes: data.note || '',
+    };
+
+    const { error } = await supabase.from('dispatches').insert(dispRow);
+    if (error) throw error;
+    return { success: true };
+  }
+
+  // ─── Інші типи (пасажир, посилка-отримання, посилка-pickup) → у routes як було.
   const row: Record<string, unknown> = {
     tenant_id: tenantId,
     rte_id: data.routeName,
