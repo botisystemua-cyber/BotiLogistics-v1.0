@@ -377,11 +377,14 @@ export async function addRouteItem(data: Record<string, string>) {
     let routeUuid: string | null = null;
     let routeDate = data.dateTrip || '';
     let vehicleName = data.autoNum || '';
-    let driverName = data.driverName || '';
+    // driver_name = логін водія, що ЗБЕРІГ відправку (не водія маршруту).
+    // У cargo-crm це показується як «Водій» у списку відправок з відміткою
+    // часу, щоб менеджер бачив хто і коли вніс запис.
+    const savedByDriver = data.driverName || '';
     if (data.routeName) {
       const { data: routeMatch } = await supabase
         .from('routes')
-        .select('id, route_date, vehicle_name, driver_name, is_placeholder')
+        .select('id, route_date, vehicle_name, is_placeholder')
         .eq('tenant_id', tenantId)
         .eq('rte_id', data.routeName)
         .order('is_placeholder', { ascending: false }) // placeholder=true спершу
@@ -391,7 +394,6 @@ export async function addRouteItem(data: Record<string, string>) {
         routeUuid = routeMatch.id;
         if (!routeDate)   routeDate   = routeMatch.route_date   || '';
         if (!vehicleName) vehicleName = routeMatch.vehicle_name || '';
-        if (!driverName)  driverName  = routeMatch.driver_name  || '';
       }
     }
 
@@ -404,7 +406,7 @@ export async function addRouteItem(data: Record<string, string>) {
       route_id: routeUuid,
       route_date: routeDate || new Date().toISOString().slice(0, 10),
       vehicle_name: vehicleName,
-      driver_name: driverName,
+      driver_name: savedByDriver,
       sender_name: data.senderName || '',
       sender_phone: data.senderPhone || '',
       registrar_phone: data.senderPhone || '',

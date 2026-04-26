@@ -944,13 +944,26 @@ async function sbPkgUpdateRouteField(params) {
 // Менеджер (cargo-crm) тільки ЧИТАЄ — ніяких create/update/delete.
 
 // Mapping: dispatches SB column → GAS Ukrainian header (used by Cargo.js UI)
+// «YYYY-MM-DD HH:MM» з ISO-рядка з БД (UTC). Використовуємо у відправках/витратах,
+// щоб менеджер у cargo-crm бачив не лише дату, а й годину коли водій
+// зберіг запис.
+function _fmtDateTime(iso) {
+    if (!iso) return '';
+    const s = String(iso);
+    // 2026-04-25T22:46:48.575964+00:00 → 2026-04-25 22:46
+    const m = s.match(/^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2})/);
+    return m ? `${m[1]} ${m[2]}` : s.slice(0, 16);
+}
+
 function dispatchRowToGas(r, routeInfo) {
     return {
         'DISPATCH_ID':        r.dispatch_id || '',
-        'Дата створення':     r.created_at ? String(r.created_at).slice(0, 10) : '',
+        // Дата+час коли водій зберіг відправку — щоб у cargo бачити аудит-слід.
+        'Дата створення':     _fmtDateTime(r.created_at),
         'Дата рейсу':         r.route_date || '',
         'RTE_ID':             routeInfo && routeInfo.rte_id ? routeInfo.rte_id : '',
-        'Водій':              routeInfo && routeInfo.driver_name ? routeInfo.driver_name : '',
+        // Водій-логін, що зберіг відправку (fallback — водій маршруту).
+        'Водій':              r.driver_name || (routeInfo && routeInfo.driver_name) || '',
         'Номер авто':         routeInfo && routeInfo.vehicle_name ? routeInfo.vehicle_name : '',
         'AUTO_ID':            r.vehicle_id || '',
         'Піб відправника':    r.sender_name || '',
@@ -1714,9 +1727,12 @@ async function sbPkgGetExpenses(params) {
 function expenseRowToGas(r, routeInfo) {
     return {
         'EXP_ID':             r.exp_id || '',
+        // Дата+час коли водій зберіг витрату — окремо від «Дата рейсу».
+        'Створено':           _fmtDateTime(r.created_at),
         'Дата рейсу':         r.route_date || '',
         'RTE_ID':             routeInfo && routeInfo.rte_id ? routeInfo.rte_id : '',
-        'Водій':              routeInfo && routeInfo.driver_name ? routeInfo.driver_name : '',
+        // Водій-логін, що зберіг витрату (fallback — водій маршруту).
+        'Водій':              r.driver_name || (routeInfo && routeInfo.driver_name) || '',
         'Номер авто':         routeInfo && routeInfo.vehicle_name ? routeInfo.vehicle_name : '',
         'AUTO_ID':            r.vehicle_id || '',
         'Аванс готівка':      r.advance_cash || '',
@@ -1739,7 +1755,7 @@ function expenseRowToGas(r, routeInfo) {
         'Чайові':             r.tips || '',
         'Валюта чайових':     r.tips_currency || '',
         'Примітка':           r.notes || '',
-        'Дата створення':     r.created_at ? String(r.created_at).slice(0, 10) : '',
+        'Дата створення':     _fmtDateTime(r.created_at),
     };
 }
 

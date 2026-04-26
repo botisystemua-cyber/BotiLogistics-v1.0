@@ -5600,12 +5600,13 @@ function renderExpensesView(exp) {
   document.getElementById('routeFilters').innerHTML = '';
 
   var html = '<table class="route-table"><thead><tr>' +
-    '<th>Дата</th><th>Водій</th><th>Авто</th><th>Бензин</th><th>Їжа</th><th>Паркування</th><th>Толл</th><th>Штраф</th><th>Всього</th><th>Чайові</th>' +
+    '<th>Дата рейсу</th><th>Створено</th><th>Водій</th><th>Авто</th><th>Бензин</th><th>Їжа</th><th>Паркування</th><th>Толл</th><th>Штраф</th><th>Всього</th><th>Чайові</th>' +
   '</tr></thead><tbody>';
 
   routeData.forEach(function(r) {
     html += '<tr>' +
       '<td>' + (r['Дата рейсу'] || '—') + '</td>' +
+      '<td style="white-space:nowrap;font-size:11px;">' + (r['Створено'] || '—') + '</td>' +
       '<td>' + (r['Водій'] || '—') + '</td>' +
       '<td>' + (r['Номер авто'] || '—') + '</td>' +
       '<td>' + (r['Бензин'] || '—') + '</td>' +
