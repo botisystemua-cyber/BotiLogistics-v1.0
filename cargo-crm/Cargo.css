@@ -1229,10 +1229,13 @@ body {
   white-space: nowrap;
 }
 .badge-inner-num .num {
-  font-family: "SF Mono", Monaco, Consolas, monospace;
+  /* Без monospace (SF Mono виглядає як «90-ті»). Беремо ту ж Montserrat
+     що й решта картки, але з tabular-nums — цифри однакової ширини,
+     тож № вирівнюються вертикально між картками. */
   font-size: 13px; font-weight: 800;
   color: #7c2d12;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.3px;
+  font-variant-numeric: tabular-nums;
 }
 
 /* Підказки клієнта (Phase A: пошук адрес по номеру телефону) */
@@ -1306,7 +1309,8 @@ body {
   flex-wrap: wrap; justify-content: flex-end;
 }
 .card-price {
-  font-size: 15px; font-weight: 800;
+  font-size: 14px; font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 .card-price.paid { color: var(--success); }
 .card-price.partial { color: var(--warning); }
