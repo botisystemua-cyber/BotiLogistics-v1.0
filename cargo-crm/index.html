@@ -716,6 +716,28 @@
               <label>Номер ТТН</label>
               <input type="text" id="fTTN" placeholder="Номер ТТН">
             </div>
+            <!-- Селектор тарифу: видимий лише якщо власник у налаштуваннях
+                 задав щонайменше 2 з 3 тарифів. Для одного тарифу селектор
+                 не потрібен — він показується/ховається з applyCargoPricingDefaults. -->
+            <div class="add-row" id="fTariffWrap" style="display:none;">
+              <label>Тип тарифу</label>
+              <div class="add-tariff-toggle">
+                <button type="button" class="add-tariff-btn active" data-tariff="regular" onclick="setCargoTariff('regular')">📦 Звичайний</button>
+                <button type="button" class="add-tariff-btn" data-tariff="commercial" onclick="setCargoTariff('commercial')">💼 Комерційний</button>
+                <button type="button" class="add-tariff-btn" data-tariff="volumetric" onclick="setCargoTariff('volumetric')">📐 Обʼємний</button>
+              </div>
+            </div>
+            <!-- Виміри H/W/L — показуються лише при виборі обʼємного тарифу.
+                 Авто-формула: обʼємна вага = H × W × L / 4000 (Нова Пошта). -->
+            <div class="add-row" id="fDimensionsWrap" style="display:none;">
+              <label>Виміри (см) — обʼємна вага = H × W × L / 4000</label>
+              <div class="add-dim-row">
+                <input type="number" id="fDimH" placeholder="Висота" min="0" step="0.1">
+                <input type="number" id="fDimW" placeholder="Ширина" min="0" step="0.1">
+                <input type="number" id="fDimL" placeholder="Довжина" min="0" step="0.1">
+              </div>
+              <div class="add-vol-hint" id="fVolHint" style="display:none;">Обʼємна вага: <strong id="fVolWeight">—</strong> кг</div>
+            </div>
             <div class="add-row-grid">
               <div class="add-row" data-field-key="parcelWeightUE">
                 <label>Приблизна вага (кг)</label>

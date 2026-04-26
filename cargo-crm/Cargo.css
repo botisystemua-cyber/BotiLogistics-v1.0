@@ -1989,6 +1989,38 @@ body {
   border-color: #3b82f6; color: #1e40af;
 }
 
+/* Селектор тарифу (Звичайний / Комерційний / Обʼємний) у формі «Нова посилка»
+   для напрямку УК → Європа. Активна кнопка — амбер (бренд cargo). */
+.add-tariff-toggle { display: flex; gap: 6px; flex-wrap: wrap; }
+.add-tariff-btn {
+  flex: 1; min-width: 90px;
+  padding: 8px 6px;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  font-family: inherit; font-size: 11px; font-weight: 600;
+  cursor: pointer; text-align: center;
+  transition: all 0.15s;
+}
+.add-tariff-btn:hover { background: #f8fafc; }
+.add-tariff-btn.active {
+  background: linear-gradient(135deg, #fef3c7, #fff7ed);
+  border-color: #f59e0b;
+  color: #92400e;
+  box-shadow: 0 2px 8px rgba(245,158,11,0.15);
+}
+/* Виміри посилки H × W × L — три інпути в один ряд. */
+.add-dim-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+.add-vol-hint {
+  margin-top: 6px;
+  padding: 6px 10px;
+  background: #fef3c7;
+  color: #92400e;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
 .add-form-body { padding: 0 20px 20px; }
 
 .add-section {

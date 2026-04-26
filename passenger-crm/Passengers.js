@@ -3894,6 +3894,151 @@ function setPaxDirection(dir) {
     const btnEu = document.getElementById('paxDirEuUa');
     if (btnUa) btnUa.classList.toggle('active-ua-eu', value === 'ua-eu');
     if (btnEu) btnEu.classList.toggle('active-eu-ua', value === 'eu-ua');
+    // Зміна напрямку → перерахунок дефолтних цін (квиток + багаж),
+    // якщо менеджер ще не вручну редагував ці поля.
+    if (typeof applyPaxPricingDefaults === 'function') applyPaxPricingDefaults();
+}
+
+// ===== [SECT-PRICING-DEFAULTS] OWNER-CONFIGURED PRICES =====
+// Власник у owner-crm задає дефолтні ціни (ticket adult/child UE/EU,
+// deposit, baggage per kg). При відкритті форми «Новий пасажир» поля
+// заповнюються автоматично; manual-win — якщо менеджер набрав щось своє,
+// автоформула не перетирає його значення поки модалка відкрита.
+let _pricingCfg = null;
+let _pricingCfgLoaded = false;
+let _isChildTicket = false;
+// Прапорці «менеджер редагував вручну» — скидаються в openAddModal.
+const _priceManualFlags = { fPrice: false, fDeposit: false, fWeightPrice: false };
+
+async function loadPaxPricingConfig() {
+    if (_pricingCfgLoaded) return _pricingCfg;
+    try {
+        const TENANT = (typeof TENANT_ID !== 'undefined') ? TENANT_ID
+                     : (typeof window !== 'undefined' ? window.TENANT_ID : null);
+        if (!TENANT || typeof sb === 'undefined' || !sb || !sb.from) {
+            _pricingCfgLoaded = true;
+            return null;
+        }
+        const { data, error } = await sb
+            .from('system_settings')
+            .select('setting_value')
+            .eq('tenant_id', TENANT)
+            .eq('setting_name', 'pricing_defaults')
+            .limit(1);
+        if (error) throw error;
+        const raw = data && data[0] && data[0].setting_value;
+        _pricingCfg = raw ? JSON.parse(raw) : null;
+    } catch (e) {
+        console.warn('[pricingCfg] load failed:', e);
+        _pricingCfg = null;
+    }
+    _pricingCfgLoaded = true;
+    return _pricingCfg;
+}
+
+// Перерозраховує і вписує дефолтні значення у fPrice / fDeposit / fWeightPrice
+// згідно з owner-конфігом. Враховує:
+//   - напрямок (fDirection)
+//   - дитячу галочку (_isChildTicket)
+//   - вагу багажу (fWeight) для авто-розрахунку ціни багажу
+// Поля з manual-win прапорцем не перезаписуємо. У режимі редагування ліда
+// (editingPaxId != null) взагалі не чіпаємо поля — там підтягнуті збережені.
+function applyPaxPricingDefaults() {
+    // Якщо ще не завантажений конфіг — стартуємо load у фоні і потім перерендеримо.
+    if (!_pricingCfgLoaded) {
+        loadPaxPricingConfig().then(() => {
+            const overlay = document.getElementById('passengerModal');
+            if (overlay && overlay.classList.contains('show')) applyPaxPricingDefaults();
+        });
+        return;
+    }
+    if (typeof editingPaxId !== 'undefined' && editingPaxId) return;
+    const cfg = _pricingCfg;
+    if (!cfg || !cfg.passenger) {
+        // Конфіг порожній — приховуємо галочку дитини, нічого не заповнюємо.
+        const wrap = document.getElementById('paxChildToggleWrap');
+        if (wrap) wrap.style.display = 'none';
+        return;
+    }
+    const pax = cfg.passenger;
+    const dir = (document.getElementById('fDirection') || {}).value || 'ua-eu';
+    const isUe = dir === 'ua-eu';
+
+    // Ticket price (adult/child залежно від _isChildTicket).
+    const ticketEl = document.getElementById('fPrice');
+    if (ticketEl && !_priceManualFlags.fPrice) {
+        const val = _isChildTicket
+            ? (isUe ? pax.ticketChildUe : pax.ticketChildEu)
+            : (isUe ? pax.ticketAdultUe : pax.ticketAdultEu);
+        ticketEl.value = (typeof val === 'number') ? String(val) : '';
+    }
+
+    // Deposit.
+    const depEl = document.getElementById('fDeposit');
+    if (depEl && !_priceManualFlags.fDeposit) {
+        depEl.value = (typeof pax.deposit === 'number') ? String(pax.deposit) : '';
+    }
+
+    // Baggage = вага × тариф (округлено до 2 знаків).
+    const wEl = document.getElementById('fWeight');
+    const wpEl = document.getElementById('fWeightPrice');
+    if (wEl && wpEl && !_priceManualFlags.fWeightPrice) {
+        const weight = parseFloat(wEl.value) || 0;
+        const tariff = isUe ? pax.baggagePerKgUe : pax.baggagePerKgEu;
+        if (weight > 0 && typeof tariff === 'number') {
+            wpEl.value = String(Math.round(weight * tariff * 100) / 100);
+        } else if (weight === 0) {
+            wpEl.value = '';
+        }
+        // Якщо тариф не задано — лишаємо поле порожнім (нічого не пишемо).
+    }
+
+    // Галочка «🧒 Дитячий» — показуємо тільки якщо для активного напрямку
+    // власник задав хоча б одну дитячу ціну. Інакше нема куди переключатись.
+    const wrap = document.getElementById('paxChildToggleWrap');
+    if (wrap) {
+        const childPrice = isUe ? pax.ticketChildUe : pax.ticketChildEu;
+        wrap.style.display = (typeof childPrice === 'number') ? '' : 'none';
+        // Якщо дитяча ціна для нового напряму не задана — знімаємо галочку.
+        if (typeof childPrice !== 'number' && _isChildTicket) {
+            _isChildTicket = false;
+            const cb = document.getElementById('paxChildToggle');
+            if (cb) cb.checked = false;
+        }
+    }
+}
+
+// Перемикач «🧒 Дитячий квиток» у формі. Скидає manual-win прапорець для fPrice
+// (це ж явний сигнал «хочу дитячу ціну»), щоб applyPaxPricingDefaults перетер
+// поточне значення на дитячий тариф.
+function togglePaxChild() {
+    const cb = document.getElementById('paxChildToggle');
+    _isChildTicket = cb ? cb.checked : !_isChildTicket;
+    _priceManualFlags.fPrice = false;
+    applyPaxPricingDefaults();
+}
+
+// Прив'язуємо input-listener один раз — щоб ловити ручні редагування
+// fPrice / fDeposit / fWeightPrice і вимикати авто-перерахунок для цих полів.
+// Також fWeight → перерахунок fWeightPrice при зміні ваги.
+function _initPaxPricingListeners() {
+    const markManual = (id) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener('input', () => { _priceManualFlags[id] = true; });
+    };
+    markManual('fPrice');
+    markManual('fDeposit');
+    markManual('fWeightPrice');
+    const wEl = document.getElementById('fWeight');
+    if (wEl) wEl.addEventListener('input', () => applyPaxPricingDefaults());
+}
+if (typeof document !== 'undefined') {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', _initPaxPricingListeners);
+    } else {
+        _initPaxPricingListeners();
+    }
 }
 
 // ===== [SECT-FILL-FORM-CONFIG] OWNER-CONFIGURED FIELDS =====
@@ -3965,9 +4110,16 @@ function openAddModal() {
     document.getElementById('fSeats').value = '1';
     document.getElementById('fDate').value = '';
     setPaxDirection(currentDir === 'eu-ua' ? 'eu-ua' : 'ua-eu');
-    document.getElementById('fCurrency').value = CURR_DEFAULT;
-    document.getElementById('fCurrencyDeposit').value = CURR_DEFAULT;
-    document.getElementById('fCurrencyWeight').value = CURR_DEFAULT;
+    // Валюти за замовчуванням — з owner-panel (currency_defaults) per-field,
+    // fallback на глобальний CURR_DEFAULT, потім EUR. Раніше тут стояв
+    // тільки CURR_DEFAULT для всіх 3-ох — тому валюта завдатку/багажу
+    // ігнорувала гранулярні налаштування власника.
+    const _gcur = (fld) => (typeof window.sbGetCurrencyDefault === 'function')
+        ? (window.sbGetCurrencyDefault('passenger', fld, '') || (typeof CURR_DEFAULT !== 'undefined' ? CURR_DEFAULT : 'EUR'))
+        : (typeof CURR_DEFAULT !== 'undefined' ? CURR_DEFAULT : 'EUR');
+    document.getElementById('fCurrency').value        = _gcur('ticket');
+    document.getElementById('fCurrencyDeposit').value = _gcur('deposit');
+    document.getElementById('fCurrencyWeight').value  = _gcur('tips');
     // Route points: нічого попередньо рендерити не треба — dropdown
     // будується на open. Якщо каталог не готовий — фоново підтягнемо,
     // щоб при натиску ▼ одразу показати список.
@@ -3986,6 +4138,15 @@ function openAddModal() {
     // Застосовуємо owner-конфіг (system_settings.fill_form_passenger):
     // ховаємо [data-field-key=…] і блок SMS-парсера якщо власник їх вимкнув.
     applyFillFormPaxConfig();
+    // Скидаємо manual-win прапорці і галочку «🧒 Дитячий» — кожен новий лід
+    // починає з дефолтних цін. Потім applyPaxPricingDefaults їх підставить.
+    _priceManualFlags.fPrice = false;
+    _priceManualFlags.fDeposit = false;
+    _priceManualFlags.fWeightPrice = false;
+    _isChildTicket = false;
+    const childCb = document.getElementById('paxChildToggle');
+    if (childCb) childCb.checked = false;
+    applyPaxPricingDefaults();
     openModal('passengerModal');
 }
 
