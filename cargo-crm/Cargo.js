@@ -6615,8 +6615,188 @@ function openAddForm() {
   // Застосовуємо owner-конфіг (system_settings.fill_form_cargo): ховаємо
   // [data-field-key=…] і блок SMS-парсера якщо власник їх вимкнув.
   applyFillFormConfig();
+  // Скидаємо стан pricing для нового ліда: тариф = звичайний, manual-win
+  // прапорці зняті, виміри очищені, hint обʼємної ваги схований.
+  _resetCargoPricingState();
+  applyCargoPricingDefaults();
   document.getElementById('addFormOverlay').classList.add('open');
   document.body.style.overflow = 'hidden';
+}
+
+// ===== [SECT-CARGO-PRICING] OWNER-CONFIGURED PRICES (cargo runtime) =====
+// Власник задає тарифи в owner-crm → 💰 Прайс. У формі «Нова посилка»
+// (напрямок УК → Європа) менеджер обирає тип тарифу (звичайний / комерційний /
+// обʼємний); сума автоматично рахується = вага × тариф. Для обʼємного
+// додатково вводяться H × W × L (см) → обʼємна вага = H·W·L/4000 → у поле «Кг».
+// Manual-win: ручне редагування fSum або fWeightUE відключає автоформулу
+// для цього поля до наступного відкриття форми.
+let _cargoPriceCfg = null;
+let _cargoPriceCfgLoaded = false;
+let _cargoTariff = 'regular'; // 'regular' | 'commercial' | 'volumetric'
+const _cargoManualFlags = { fSum: false, fWeightUE: false };
+
+async function loadCargoPricingConfig() {
+  if (_cargoPriceCfgLoaded) return _cargoPriceCfg;
+  try {
+    const TENANT = (typeof TENANT_ID !== 'undefined') ? TENANT_ID
+                 : (typeof window !== 'undefined' ? window.TENANT_ID : null);
+    if (!TENANT || typeof sb === 'undefined' || !sb || !sb.from) {
+      _cargoPriceCfgLoaded = true;
+      return null;
+    }
+    const { data, error } = await sb
+      .from('system_settings')
+      .select('setting_value')
+      .eq('tenant_id', TENANT)
+      .eq('setting_name', 'pricing_defaults')
+      .limit(1);
+    if (error) throw error;
+    const raw = data && data[0] && data[0].setting_value;
+    _cargoPriceCfg = raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    console.warn('[cargoPriceCfg] load failed:', e);
+    _cargoPriceCfg = null;
+  }
+  _cargoPriceCfgLoaded = true;
+  return _cargoPriceCfg;
+}
+
+function _resetCargoPricingState() {
+  _cargoTariff = 'regular';
+  _cargoManualFlags.fSum = false;
+  _cargoManualFlags.fWeightUE = false;
+  document.querySelectorAll('.add-tariff-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.tariff === 'regular');
+  });
+  const dim = document.getElementById('fDimensionsWrap');
+  if (dim) dim.style.display = 'none';
+  ['fDimH', 'fDimW', 'fDimL'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  const hint = document.getElementById('fVolHint');
+  if (hint) hint.style.display = 'none';
+}
+
+function setCargoTariff(type) {
+  if (type !== 'regular' && type !== 'commercial' && type !== 'volumetric') return;
+  _cargoTariff = type;
+  document.querySelectorAll('.add-tariff-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.tariff === type);
+  });
+  // Виміри показуємо лише для обʼємного тарифу.
+  const dim = document.getElementById('fDimensionsWrap');
+  if (dim) dim.style.display = (type === 'volumetric') ? '' : 'none';
+  // Перемикання тарифу — це явний сигнал «перерахуй мою суму»: знімаємо
+  // manual-win прапорці. Для обʼємного також знімаємо з fWeightUE,
+  // щоб H·W·L могли її перезаписати.
+  _cargoManualFlags.fSum = false;
+  if (type === 'volumetric') {
+    _cargoManualFlags.fWeightUE = false;
+    _recomputeVolumetricWeight();
+  }
+  applyCargoPricingDefaults();
+}
+
+function _recomputeVolumetricWeight() {
+  const h = parseFloat((document.getElementById('fDimH') || {}).value) || 0;
+  const w = parseFloat((document.getElementById('fDimW') || {}).value) || 0;
+  const l = parseFloat((document.getElementById('fDimL') || {}).value) || 0;
+  const hint = document.getElementById('fVolHint');
+  const hintNum = document.getElementById('fVolWeight');
+  if (h > 0 && w > 0 && l > 0) {
+    const vWeight = Math.round((h * w * l / 4000) * 100) / 100;
+    const wEl = document.getElementById('fWeightUE');
+    if (wEl && !_cargoManualFlags.fWeightUE) wEl.value = String(vWeight);
+    if (hint) hint.style.display = '';
+    if (hintNum) hintNum.textContent = String(vWeight);
+  } else if (hint) {
+    hint.style.display = 'none';
+  }
+}
+
+function applyCargoPricingDefaults() {
+  if (!_cargoPriceCfgLoaded) {
+    loadCargoPricingConfig().then(() => {
+      const overlay = document.getElementById('addFormOverlay');
+      if (overlay && overlay.classList.contains('open')) applyCargoPricingDefaults();
+    });
+    return;
+  }
+  // Тільки УК → Європа має поле fSum + auto-розрахунок суми.
+  if (addFormDirection !== 'ue') {
+    const tariffWrap = document.getElementById('fTariffWrap');
+    if (tariffWrap) tariffWrap.style.display = 'none';
+    const dim = document.getElementById('fDimensionsWrap');
+    if (dim) dim.style.display = 'none';
+    return;
+  }
+  const cargo = (_cargoPriceCfg && _cargoPriceCfg.cargo) || {};
+  // Збираємо доступні тарифи для UE-напряму.
+  const rates = {
+    regular:    cargo.perKgUe,
+    commercial: cargo.commercialPerKgUe,
+    volumetric: cargo.volumetricPerKgUe,
+  };
+  const configuredCount = Object.values(rates).filter(v => typeof v === 'number').length;
+  const tariffWrap = document.getElementById('fTariffWrap');
+  // Селектор показуємо тільки якщо є з чого вибирати (>=2 тарифи задано).
+  if (tariffWrap) tariffWrap.style.display = (configuredCount >= 2) ? '' : 'none';
+  // Кожна кнопка показується лише якщо для неї заданий тариф.
+  document.querySelectorAll('.add-tariff-btn').forEach(b => {
+    const t = b.getAttribute('data-tariff');
+    b.style.display = (typeof rates[t] === 'number') ? '' : 'none';
+  });
+  // Якщо активний тариф зник з налаштувань — fallback на «звичайний».
+  if (typeof rates[_cargoTariff] !== 'number') {
+    if (typeof rates.regular === 'number') {
+      setCargoTariff('regular');
+      return;
+    }
+    // Жодного тарифу не задано — нічого не робимо.
+    return;
+  }
+  // Сума = вага × активний тариф (якщо менеджер ще не вручну змінив суму).
+  const wEl = document.getElementById('fWeightUE');
+  const sumEl = document.getElementById('fSum');
+  const rate = rates[_cargoTariff];
+  if (wEl && sumEl && !_cargoManualFlags.fSum && typeof rate === 'number') {
+    const weight = parseFloat(wEl.value) || 0;
+    if (weight > 0) {
+      sumEl.value = String(Math.round(weight * rate * 100) / 100);
+    } else {
+      sumEl.value = '';
+    }
+  }
+}
+
+// Listeners — навішуємо один раз. Реагуємо на:
+//   - input у fSum / fWeightUE — manual-win прапорець
+//   - input у fWeightUE — перерахунок суми
+//   - input у fDim{H,W,L} — обʼємна вага → fWeightUE → сума
+function _initCargoPricingListeners() {
+  const markManual = (id) => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', () => { _cargoManualFlags[id] = true; });
+  };
+  markManual('fSum');
+  markManual('fWeightUE');
+  const wEl = document.getElementById('fWeightUE');
+  if (wEl) wEl.addEventListener('input', () => applyCargoPricingDefaults());
+  ['fDimH', 'fDimW', 'fDimL'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', () => {
+      _recomputeVolumetricWeight();
+      applyCargoPricingDefaults();
+    });
+  });
+}
+if (typeof document !== 'undefined') {
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _initCargoPricingListeners);
+  } else {
+    _initCargoPricingListeners();
+  }
 }
 
 // ===== [SECT-FILL-FORM-CONFIG] OWNER-CONFIGURED FIELDS =====
@@ -6711,6 +6891,9 @@ function setAddDirection(dir) {
   } else {
     smsTextarea.placeholder = 'Іванов Петро +380631234567 Київ, вул. Хрещатик';
   }
+  // Перемикання напрямку → перерахунок селектора тарифу і суми (показ/ховання
+  // блоків відбувається в applyCargoPricingDefaults — для EU там нема Sum).
+  if (typeof applyCargoPricingDefaults === 'function') applyCargoPricingDefaults();
 }
 
 function clearAddForm() {
