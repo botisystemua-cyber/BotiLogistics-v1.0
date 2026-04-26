@@ -132,7 +132,7 @@ export function PackageCard({ pkg: p, index, searchQuery = '', onEdit, onConvert
         </div>
 
         <div className="flex gap-2 mb-2">
-          <Btn icon={Phone} label={`Дзвонити (${primaryLabel})`} color="bg-green-50 text-green-700" onClick={() => { if (primaryPhone) window.location.href = `tel:${primaryPhone}`; else showToast('Немає телефону'); }} />
+          <Btn icon={Phone} label="Дзвонити" color="bg-green-50 text-green-700" onClick={() => { if (primaryPhone) window.location.href = `tel:${primaryPhone}`; else showToast('Немає телефону'); }} />
           <Btn icon={MessageCircle} label="Написати" color="bg-purple-50 text-purple-700" onClick={() => { if (primaryPhone) setShowMessenger(true); else showToast('Немає телефону'); }} />
           <Btn icon={MapPin} label="Адреси" color="bg-blue-50 text-blue-700" onClick={() => { if (p.addrFrom || p.recipientAddr) setShowAddrPicker(true); else showToast('Немає адрес'); }} />
           <Btn icon={expanded ? ChevronUp : Info} label={expanded ? 'Згорнути' : 'Деталі'} color={expanded ? 'bg-brand/10 text-brand' : 'bg-gray-50 text-gray-600'} onClick={() => setExpanded(!expanded)} />
