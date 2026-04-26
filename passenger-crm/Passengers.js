@@ -4110,9 +4110,16 @@ function openAddModal() {
     document.getElementById('fSeats').value = '1';
     document.getElementById('fDate').value = '';
     setPaxDirection(currentDir === 'eu-ua' ? 'eu-ua' : 'ua-eu');
-    document.getElementById('fCurrency').value = CURR_DEFAULT;
-    document.getElementById('fCurrencyDeposit').value = CURR_DEFAULT;
-    document.getElementById('fCurrencyWeight').value = CURR_DEFAULT;
+    // Валюти за замовчуванням — з owner-panel (currency_defaults) per-field,
+    // fallback на глобальний CURR_DEFAULT, потім EUR. Раніше тут стояв
+    // тільки CURR_DEFAULT для всіх 3-ох — тому валюта завдатку/багажу
+    // ігнорувала гранулярні налаштування власника.
+    const _gcur = (fld) => (typeof window.sbGetCurrencyDefault === 'function')
+        ? (window.sbGetCurrencyDefault('passenger', fld, '') || (typeof CURR_DEFAULT !== 'undefined' ? CURR_DEFAULT : 'EUR'))
+        : (typeof CURR_DEFAULT !== 'undefined' ? CURR_DEFAULT : 'EUR');
+    document.getElementById('fCurrency').value        = _gcur('ticket');
+    document.getElementById('fCurrencyDeposit').value = _gcur('deposit');
+    document.getElementById('fCurrencyWeight').value  = _gcur('tips');
     // Route points: нічого попередньо рендерити не треба — dropdown
     // будується на open. Якщо каталог не готовий — фоново підтягнемо,
     // щоб при натиску ▼ одразу показати список.

@@ -6916,6 +6916,12 @@ function clearAddForm() {
   var addCurrencyVal = defAddCur
     || (typeof CURR_DEFAULT !== 'undefined' ? CURR_DEFAULT : 'EUR');
   document.getElementById('fCurrency').value = addCurrencyVal;
+  // НП-валюта (cargo.np) — окреме гранулярне налаштування. Дефолт UAH,
+  // якщо власник не задав.
+  var defNpCur = (typeof window.sbGetCurrencyDefault === 'function')
+    ? window.sbGetCurrencyDefault('cargo', 'np', '') : '';
+  var npCurEl = document.getElementById('fNpCurrency');
+  if (npCurEl) npCurEl.value = defNpCur || 'UAH';
   document.getElementById('duplicateWarning').classList.remove('visible');
   document.getElementById('duplicateWarning').textContent = '';
   setDeliveryType('np');
