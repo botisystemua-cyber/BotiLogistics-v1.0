@@ -56,12 +56,15 @@ export function ShippingCard({ item, index, onEdit }: Props) {
     } catch (e) { showToast('Помилка: ' + (e as Error).message); }
   };
   const doUndo = async () => {
+    // Undo повертає у «В роботі», а не «Очікує» — водій уже взявся за
+    // диспетчеризацію посилки, кнопка «Назад» не повинна скидати все
+    // у початкову чергу. Якщо API падає — реверт у попередній стан.
     if (!canUndo || !item._statusKey) return;
     const prev = status;
-    setStatus(item._statusKey, 'pending');
+    setStatus(item._statusKey, 'in-progress');
     try {
-      await updateItemStatus(driverName, sheetName, item, 'pending', 'Відміна');
-      showToast('Відмінено');
+      await updateItemStatus(driverName, sheetName, item, 'in-progress', 'Відміна');
+      showToast('Повернено в роботу');
     } catch (e) { showToast('Помилка: ' + (e as Error).message); setStatus(item._statusKey, prev); }
   };
 
