@@ -6094,22 +6094,24 @@ function openMessenger(phone, pkgId) {
     return phones.some(ph => ph.replace(/[^+\d]/g, '') === clean);
   });
   const chatId = item ? item['PKG_ID'] : null;
-  // Месенджери, відмічені при створенні/редагуванні ліда.
-  // Невідмічені показуємо приглушеними, але клікабельними — месенджер
-  // може й бути, просто не відмітили.
+  // Месенджери, відмічені при створенні/редагуванні ліда — це
+  // «улюблені» клієнта. Раніше невідмічені малювалися сірими, але
+  // оператори скаржилися: «вони ж усі працюють, навіщо приглушувати?».
+  // Тепер усі кнопки повного кольору; на «улюблених» ставимо 👤 — щоб
+  // оператор бачив, який месенджер клієнт сам обрав.
   const markedArr = (item && Array.isArray(item['Месенджери'])) ? item['Месенджери'] : [];
   const marked = new Set(markedArr);
-  const dim = (on) => on ? '' : 'opacity:0.35;filter:grayscale(70%);';
+  const mark = (on) => on ? ' <span title="Клієнт користується цим месенджером" style="font-size:14px;">👤</span>' : '';
 
   const menu = document.createElement('div');
   menu.style.cssText = 'position:fixed;inset:0;z-index:700;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.5);';
   menu.innerHTML = `
     <div style="background:#fff;border-radius:16px;padding:20px;min-width:260px;text-align:center;">
       <div style="font-weight:700;margin-bottom:12px;">Написати ${phone}</div>
-      <a href="viber://chat?number=${clean}" style="display:block;padding:10px;margin:4px 0;background:#7360f2;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;${dim(marked.has('viber'))}">💜 Viber${marked.has('viber') ? '' : ' <span style=\"font-size:10px;font-weight:400;\">(не відмічено)</span>'}</a>
-      <a href="https://t.me/${clean}" style="display:block;padding:10px;margin:4px 0;background:#0088cc;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;${dim(marked.has('telegram'))}">✈️ Telegram${marked.has('telegram') ? '' : ' <span style=\"font-size:10px;font-weight:400;\">(не відмічено)</span>'}</a>
-      <a href="https://wa.me/${clean.replace('+','')}" style="display:block;padding:10px;margin:4px 0;background:#25d366;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;${dim(marked.has('whatsapp'))}">💚 WhatsApp${marked.has('whatsapp') ? '' : ' <span style=\"font-size:10px;font-weight:400;\">(не відмічено)</span>'}</a>
-      ${chatId ? `<button onclick="this.closest('div').parentElement.remove();openClientChat('${chatId}','${clean}')" style="display:block;width:100%;padding:10px;margin:4px 0;background:#8b5cf6;color:#fff;border-radius:8px;border:none;font-weight:600;cursor:pointer;font-family:inherit;font-size:14px;${dim(marked.has('chat'))}">💬 Чат CRM${marked.has('chat') ? '' : ' <span style=\"font-size:10px;font-weight:400;\">(не відмічено)</span>'}</button>` : ''}
+      <a href="viber://chat?number=${clean}" style="display:block;padding:10px;margin:4px 0;background:#7360f2;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;">💜 Viber${mark(marked.has('viber'))}</a>
+      <a href="https://t.me/${clean}" style="display:block;padding:10px;margin:4px 0;background:#0088cc;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;">✈️ Telegram${mark(marked.has('telegram'))}</a>
+      <a href="https://wa.me/${clean.replace('+','')}" style="display:block;padding:10px;margin:4px 0;background:#25d366;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;">💚 WhatsApp${mark(marked.has('whatsapp'))}</a>
+      ${chatId ? `<button onclick="this.closest('div').parentElement.remove();openClientChat('${chatId}','${clean}')" style="display:block;width:100%;padding:10px;margin:4px 0;background:#8b5cf6;color:#fff;border-radius:8px;border:none;font-weight:600;cursor:pointer;font-family:inherit;font-size:14px;">💬 Чат CRM${mark(marked.has('chat'))}</button>` : ''}
       <button onclick="this.closest('div').parentElement.remove()" style="margin-top:10px;padding:8px 20px;border:1px solid #e2e8f0;border-radius:8px;background:#fff;cursor:pointer;font-family:inherit;">Скасувати</button>
     </div>
   `;
