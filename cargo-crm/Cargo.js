@@ -5360,9 +5360,18 @@ function openDispatchDetail(idx) {
 // Creation / edits / status updates happen in driver-crm (водії).
 
 // ===== DISPATCH PRINT LIST =====
+// Колонки для діалогу «🖨️ Друк списку відправок». on=true → у дефолтному
+// чекбокс-наборі при відкритті діалогу. Менеджер може додати/прибрати
+// будь-яку через чекбокси, ставити «Вибрати всі» / «Зняти всі», або
+// перейти у preview перед відправкою на принтер.
 var dispPrintCols = [
   { key: '№',                  label: '№',           on: true,  getter: function(r,i){ return i+1; } },
   { key: 'Внутрішній №',       label: 'Внутр. №',    on: true  },
+  { key: 'DISPATCH_ID',        label: 'DISPATCH_ID', on: false },
+  { key: 'Дата створення',     label: 'Створено (дата+час)', on: true  },
+  { key: 'Дата рейсу',         label: 'Дата рейсу',   on: false },
+  { key: 'Водій',              label: 'Водій (хто зберіг)', on: true },
+  { key: 'Номер авто',         label: 'Авто',         on: false },
   { key: 'Піб відправника',    label: 'Відправник',   on: true  },
   { key: 'Телефон відправника', label: 'Тел. відпр.',  on: true  },
   { key: 'Піб отримувача',     label: 'Отримувач',    on: true  },
@@ -5373,12 +5382,12 @@ var dispPrintCols = [
   { key: 'Сума',                label: 'Сума',         on: true  },
   { key: 'Валюта',              label: 'Валюта',       on: false },
   { key: 'Завдаток',            label: 'Завдаток',     on: false },
+  { key: 'Валюта завдатку',     label: 'Вал. завд.',   on: false },
   { key: 'Борг',                label: 'Борг',         on: false },
   { key: 'Форма оплати',        label: 'Оплата',       on: false },
   { key: 'Статус оплати',       label: 'Статус опл.',  on: false },
   { key: 'Статус',              label: 'Статус',       on: false },
-  { key: 'Примітка',            label: 'Примітка',     on: true  },
-  { key: 'Дата створення',      label: 'Дата',         on: false }
+  { key: 'Примітка',            label: 'Примітка',     on: true  }
 ];
 
 function openDispatchPrintDialog() {
