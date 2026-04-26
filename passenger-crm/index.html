@@ -626,6 +626,15 @@ $manifest = '../manifest.php' . ($t ? '?name=' . rawurlencode($t) . ($l ? '&logo
             <div class="pax-add-section">
                 <div class="pax-add-section-title sec-ticket">🎫 Квиток і фінанси</div>
                 <div class="pax-add-section-body">
+                    <!-- Галочка «Дитячий квиток» — показується тільки коли власник у
+                         налаштуваннях задав хоча б одну дитячу ціну для активного
+                         напрямку. Toggle перерозраховує fPrice на дитячий тариф. -->
+                    <div class="pax-child-toggle-wrap" id="paxChildToggleWrap" style="display:none;margin-bottom:12px;">
+                        <label style="display:inline-flex;align-items:center;gap:8px;padding:8px 12px;background:#fef3c7;border:1.5px solid #fde68a;border-radius:10px;cursor:pointer;font-size:12px;font-weight:600;color:#92400e;">
+                            <input type="checkbox" id="paxChildToggle" onchange="togglePaxChild()" style="width:16px;height:16px;cursor:pointer;accent-color:#92400e;">
+                            🧒 Дитячий квиток
+                        </label>
+                    </div>
                     <div class="form-row" data-field-key="paxPrice">
                         <div class="form-group"><label>Ціна квитка</label><input type="text" id="fPrice"></div>
                         <div class="form-group"><label>Валюта квитка</label>
