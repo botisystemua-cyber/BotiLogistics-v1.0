@@ -6072,9 +6072,8 @@ function findFirstFreeSeat(trip, excludePaxId, extraExcluded) {
 }
 
 // Застосовує pending shifts до базової occupiedMap і повертає нову мапу.
-// На новому місці окупант позначається flexible:false — щоб не дозволяти
-// каскадно зрушувати вже-зрушеного в межах того ж пікера (логічно: один
-// клік = одне переселення).
+// Окупант на новому місці зберігає flexible:true — це дозволяє повторно
+// клацати по ньому щоб зрушити каскадом ще далі.
 function effectiveOccupiedMap(baseMap, pendingShifts) {
     const out = {};
     for (const k in baseMap) out[k] = baseMap[k];
@@ -6084,7 +6083,7 @@ function effectiveOccupiedMap(baseMap, pendingShifts) {
         const occ = out[sh.from];
         if (occ && typeof occ === 'object' && occ.paxId === paxId) {
             delete out[sh.from];
-            out[sh.to] = Object.assign({}, occ, { flexible: false });
+            out[sh.to] = occ; // зберігаємо все включно з flexible
         }
     }
     return out;
@@ -6122,15 +6121,34 @@ function findFirstFreeSeatFromMap(trip, occMap, reserved) {
 function seatFlexHoverIn(seatName, occupantPaxId) {
     if (!occupantPaxId) return;
     let trip = null;
+    let pending = {};
+    let mySelected = new Set();
+    let myExclude = null;
     if (typeof seatPickerPaxId !== 'undefined' && seatPickerPaxId) {
         const me = passengers.find(x => x['PAX_ID'] === seatPickerPaxId);
         if (me) trip = trips.find(t => t.cal_id === me['CAL_ID']);
+        pending = seatPickerPendingShifts || {};
+        mySelected = seatPickerSelected || new Set();
+        myExclude = seatPickerPaxId;
     } else if (typeof tmSelectedCalId !== 'undefined' && tmSelectedCalId
             && typeof tmPaxIds !== 'undefined' && tmPaxIds.length >= 1) {
         trip = trips.find(t => t.cal_id === tmSelectedCalId);
+        pending = tmPendingShifts || {};
+        mySelected = tmSelectedSeats || new Set();
     }
     if (!trip) return;
-    const target = findFirstFreeSeat(trip, occupantPaxId);
+    // liveMap з застосованими pending. Поточна позиція seatName "вільніє" коли
+    // ми її переселимо далі (cascade) — виключаємо її з мапи для пошуку target.
+    const baseMap = getOccupiedSeats(trip.cal_id, myExclude);
+    const liveMap = effectiveOccupiedMap(baseMap, pending);
+    const tempMap = Object.assign({}, liveMap);
+    delete tempMap[seatName];
+    const reserved = new Set();
+    mySelected.forEach(s => reserved.add(s));
+    for (const pid in pending) {
+        if (pid !== occupantPaxId) reserved.add(pending[pid].to);
+    }
+    const target = findFirstFreeSeatFromMap(trip, tempMap, reserved);
     if (!target) return;
     const occ = passengers.find(x => x['PAX_ID'] === occupantPaxId);
     let label = '';
@@ -6314,8 +6332,10 @@ function renderSeatPickerModal(trip, occupiedMap) {
     // N/M лічильник: M береться з 'Кількість місць' пасажира (default 1).
     const px = passengers.find(x => x['PAX_ID'] === seatPickerPaxId);
     const expected = Math.max(1, parseInt((px && px['Кількість місць']) || 1) || 1);
-    const counterColor = (seatPickerSelected.size === expected) ? '#16a34a' : '#dc2626';
-    const saveDisabled = !(seatPickerFreeSeating || seatPickerSelected.size === expected);
+    const counterColor = seatPickerSelected.size === expected
+        ? '#16a34a'
+        : (seatPickerSelected.size > expected ? '#d97706' : '#dc2626');
+    const saveDisabled = !(seatPickerFreeSeating || seatPickerSelected.size >= expected);
 
     const html = `<div class="seat-picker-overlay" id="seatPickerOverlay" onclick="if(event.target===this)closeSeatPicker()">
         <div class="${modalCls}">
@@ -6419,47 +6439,70 @@ function seatPickerSelect(seatName) {
     if (!seatName) {
         seatPickerSelected = new Set();
         seatPickerPendingShifts = {};
-    } else if (seatPickerSelected.has(seatName)) {
-        // Deselect: якщо це місце мало flex-окупанта якого ми зрушили — повернути.
+        rerenderSeatPicker(p, trip);
+        return;
+    }
+
+    if (seatPickerSelected.has(seatName)) {
+        // Deselect: якщо це оригінальне місце якогось зрушеного — відкат повністю.
         seatPickerSelected.delete(seatName);
         const baseOcc = baseMap[seatName];
         if (baseOcc && typeof baseOcc === 'object' && baseOcc.paxId
-            && seatPickerPendingShifts[baseOcc.paxId]) {
+            && seatPickerPendingShifts[baseOcc.paxId]
+            && seatPickerPendingShifts[baseOcc.paxId].from === seatName) {
             delete seatPickerPendingShifts[baseOcc.paxId];
             showToast('↩️ ' + baseOcc.label + ' повернувся на ' + seatName);
         }
-    } else {
+        rerenderSeatPicker(p, trip);
+        return;
+    }
+
+    // Чи це поточна позиція якогось вже-зрушеного flex-окупанта? → каскад.
+    let cascadingPaxId = null;
+    for (const pid in seatPickerPendingShifts) {
+        if (seatPickerPendingShifts[pid].to === seatName) { cascadingPaxId = pid; break; }
+    }
+
+    if (cascadingPaxId) {
+        const sh = seatPickerPendingShifts[cascadingPaxId];
         const liveMap = effectiveOccupiedMap(baseMap, seatPickerPendingShifts);
-        const liveOcc = liveMap[seatName];
-        const baseOcc = baseMap[seatName];
-        if (liveOcc && !(baseOcc && typeof baseOcc === 'object' && baseOcc.flexible
-                          && baseOcc.paxId && !seatPickerPendingShifts[baseOcc.paxId])) {
-            // Місце зайняте (з урахуванням пендингів) і це не свіжий flex для shift —
-            // нічого не робимо (rseat-occupied non-flex без onclick, але про всяк).
+        // Шукаємо target: виключаємо мої picked, всі інші pending.to, і поточну позицію (вона звільниться).
+        const tempMap = Object.assign({}, liveMap);
+        delete tempMap[seatName];
+        const reserved = new Set([...seatPickerSelected]);
+        for (const pid in seatPickerPendingShifts) {
+            if (pid !== cascadingPaxId) reserved.add(seatPickerPendingShifts[pid].to);
+        }
+        const target = findFirstFreeSeatFromMap(trip, tempMap, reserved);
+        if (!target) {
+            showToast('❌ Немає куди посунути ' + sh.label + ' далі');
             return;
         }
-        if (baseOcc && typeof baseOcc === 'object' && baseOcc.flexible
-            && baseOcc.paxId && !seatPickerPendingShifts[baseOcc.paxId]) {
-            // Flex-occupied: миттєво зрушуємо окупанта на target.
-            const reserved = new Set([...seatPickerSelected, seatName]);
-            for (const pid in seatPickerPendingShifts) {
-                reserved.add(seatPickerPendingShifts[pid].to);
-            }
-            const target = findFirstFreeSeatFromMap(trip, liveMap, reserved);
-            if (!target) {
-                showToast('❌ Немає куди посунути ' + baseOcc.label);
-                return;
-            }
-            seatPickerPendingShifts[baseOcc.paxId] = {
-                from: seatName, to: target, label: baseOcc.label
-            };
-            seatPickerSelected.add(seatName);
-            seatPickerFreeSeating = false;
-            showToast('🔀 ' + baseOcc.label + ': ' + seatName + ' → ' + target);
-        } else {
-            seatPickerSelected.add(seatName);
-            seatPickerFreeSeating = false;
-        }
+        seatPickerPendingShifts[cascadingPaxId] = { from: sh.from, to: target, label: sh.label };
+        showToast('🔀 ' + sh.label + ': ' + seatName + ' → ' + target);
+        rerenderSeatPicker(p, trip);
+        return;
+    }
+
+    const liveMap = effectiveOccupiedMap(baseMap, seatPickerPendingShifts);
+    const baseOcc = baseMap[seatName];
+    const isFreshFlex = baseOcc && typeof baseOcc === 'object' && baseOcc.flexible
+        && baseOcc.paxId && !seatPickerPendingShifts[baseOcc.paxId];
+
+    if (liveMap[seatName] && !isFreshFlex) return; // hard occupied — нічого не робимо
+
+    if (isFreshFlex) {
+        const reserved = new Set([...seatPickerSelected, seatName]);
+        for (const pid in seatPickerPendingShifts) reserved.add(seatPickerPendingShifts[pid].to);
+        const target = findFirstFreeSeatFromMap(trip, liveMap, reserved);
+        if (!target) { showToast('❌ Немає куди посунути ' + baseOcc.label); return; }
+        seatPickerPendingShifts[baseOcc.paxId] = { from: seatName, to: target, label: baseOcc.label };
+        seatPickerSelected.add(seatName);
+        seatPickerFreeSeating = false;
+        showToast('🔀 ' + baseOcc.label + ': ' + seatName + ' → ' + target);
+    } else {
+        seatPickerSelected.add(seatName);
+        seatPickerFreeSeating = false;
     }
     rerenderSeatPicker(p, trip);
 }
@@ -6477,12 +6520,15 @@ function rerenderSeatPicker(p, trip) {
     if (grid) grid.innerHTML = renderVan({ layout, maxSeats, hasReserve: false, occupiedMap: liveMap, selected: seatPickerSelected, interactive: true });
     const reserveEl = document.getElementById('seatPickerReserve');
     if (reserveEl) reserveEl.innerHTML = buildReserveBlockHtml(reserveCount, liveMap);
-    // Лічильник «N/M» зеленим коли збігається з потрібною кількістю місць.
+    // Лічильник «N/M». Зелений коли збігається, помаранчевий якщо обрано
+    // БІЛЬШЕ (буде confirm на save), червоний якщо МЕНШЕ (save заблоковано).
     const expected = Math.max(1, parseInt(p['Кількість місць']) || 1);
     const counter = document.getElementById('seatPickerCount');
     if (counter) {
         counter.textContent = seatPickerSelected.size + '/' + expected;
-        counter.style.color = (seatPickerSelected.size === expected) ? '#16a34a' : '#dc2626';
+        counter.style.color = seatPickerSelected.size === expected
+            ? '#16a34a'
+            : (seatPickerSelected.size > expected ? '#d97706' : '#dc2626');
     }
     const freeEl = document.getElementById('seatPickerFree');
     if (freeEl) {
@@ -6492,10 +6538,11 @@ function rerenderSeatPicker(p, trip) {
         const free = Math.max(0, effectiveMax + reserveCount - Object.keys(liveMap).length - seatPickerSelected.size);
         freeEl.textContent = String(free);
     }
-    // Кнопка save: enabled тільки якщо free-seating АБО обрано рівно скільки треба.
+    // Кнопка save: disabled лише якщо обрано МЕНШЕ ніж кількість місць пасажира
+    // (без free-seating). N > M дозволено — на save буде confirm про збільшення.
     const saveBtn = document.getElementById('seatPickerSaveBtn');
     if (saveBtn) {
-        const valid = seatPickerFreeSeating || seatPickerSelected.size === expected;
+        const valid = seatPickerFreeSeating || seatPickerSelected.size >= expected;
         saveBtn.disabled = !valid;
     }
     const freeBtn = document.getElementById('seatPickerFreeBtn');
@@ -6517,6 +6564,20 @@ async function saveSeatPicker() {
     if (seatPickerSelected.size === 0 && !seatPickerFreeSeating) {
         showToast('⚠️ Оберіть місце або натисніть «Без місця»');
         return;
+    }
+
+    // Якщо обрано БІЛЬШЕ місць ніж у пасажира — питаємо чи збільшити кількість.
+    const expectedSeats = Math.max(1, parseInt(p['Кількість місць']) || 1);
+    if (!seatPickerFreeSeating && seatPickerSelected.size > expectedSeats) {
+        const newCount = seatPickerSelected.size;
+        const ok = await new Promise(resolve => {
+            showConfirm(
+                'За пасажиром ' + expectedSeats + ' місце(ь), а ви обрали ' + newCount + '. '
+                + 'Збільшити кількість місць пасажира до ' + newCount + '?',
+                yes => resolve(yes)
+            );
+        });
+        if (!ok) return; // користувач передумав — нічого не зберігаємо
     }
 
     const colName = 'Місце в авто';
@@ -8079,7 +8140,9 @@ function renderTmSeatPicker(trip) {
         var p = passengers.find(function(x) { return x['PAX_ID'] === id; });
         expected += Math.max(1, parseInt((p && p['Кількість місць']) || 1) || 1);
     });
-    var counterColor = (tmSelectedSeats.size === expected) ? '#16a34a' : '#dc2626';
+    var counterColor = tmSelectedSeats.size === expected
+        ? '#16a34a'
+        : (tmSelectedSeats.size > expected ? '#d97706' : '#dc2626');
     var pickedInfo = '<span class="tm-picked-count" style="color:' + counterColor + ';">Обрано: '
         + tmSelectedSeats.size + '/' + expected + '</span>';
     wrap.innerHTML =
@@ -8091,10 +8154,11 @@ function renderTmSeatPicker(trip) {
         '<div class="tm-or-label">або обрати конкретні місця:</div>' +
         vanHtml + reserveHtml;
 
-    // Save кнопка: enabled тільки коли або «Без місця», або обрано рівно скільки треба.
+    // Save кнопка: disabled тільки коли обрано МЕНШЕ ніж треба (без free).
+    // N > M дозволено — для single-pax буде confirm про збільшення.
     var saveBtn = document.getElementById('tmSaveBtn');
     if (saveBtn) {
-        var valid = tmFreeSeating || tmSelectedSeats.size === expected;
+        var valid = tmFreeSeating || tmSelectedSeats.size >= expected;
         saveBtn.disabled = !valid;
     }
 }
@@ -8110,37 +8174,59 @@ function tmSelectAssignSeat(seatName) {
 
     if (tmSelectedSeats.has(seatName)) {
         tmSelectedSeats.delete(seatName);
-        var baseOcc = baseMap[seatName];
-        if (baseOcc && typeof baseOcc === 'object' && baseOcc.paxId
-            && tmPendingShifts[baseOcc.paxId]) {
-            delete tmPendingShifts[baseOcc.paxId];
-            showToast('↩️ ' + baseOcc.label + ' повернувся на ' + seatName);
+        var bo = baseMap[seatName];
+        if (bo && typeof bo === 'object' && bo.paxId
+            && tmPendingShifts[bo.paxId] && tmPendingShifts[bo.paxId].from === seatName) {
+            delete tmPendingShifts[bo.paxId];
+            showToast('↩️ ' + bo.label + ' повернувся на ' + seatName);
         }
-    } else {
-        var liveMap = effectiveOccupiedMap(baseMap, tmPendingShifts);
-        var liveOcc = liveMap[seatName];
-        var baseOcc2 = baseMap[seatName];
-        var freshFlex = baseOcc2 && typeof baseOcc2 === 'object'
-            && baseOcc2.flexible && baseOcc2.paxId && !tmPendingShifts[baseOcc2.paxId];
-        if (liveOcc && !freshFlex) return; // зайняте — нічого не робимо
-        if (freshFlex) {
-            var reserved = new Set();
-            tmSelectedSeats.forEach(function(s) { reserved.add(s); });
-            reserved.add(seatName);
-            for (var pid in tmPendingShifts) reserved.add(tmPendingShifts[pid].to);
-            var target = findFirstFreeSeatFromMap(trip, liveMap, reserved);
-            if (!target) {
-                showToast('❌ Немає куди посунути ' + baseOcc2.label);
-                return;
-            }
-            tmPendingShifts[baseOcc2.paxId] = { from: seatName, to: target, label: baseOcc2.label };
-            tmSelectedSeats.add(seatName);
-            showToast('🔀 ' + baseOcc2.label + ': ' + seatName + ' → ' + target);
-        } else {
-            tmSelectedSeats.add(seatName);
-        }
-        tmFreeSeating = false;
+        renderTmSeatPicker(trip);
+        return;
     }
+
+    // Каскад: клік на поточну позицію вже-зрушеного → пересунути далі.
+    var cascadePid = null;
+    for (var pid in tmPendingShifts) {
+        if (tmPendingShifts[pid].to === seatName) { cascadePid = pid; break; }
+    }
+    if (cascadePid) {
+        var sh = tmPendingShifts[cascadePid];
+        var liveMap0 = effectiveOccupiedMap(baseMap, tmPendingShifts);
+        var tempMap = Object.assign({}, liveMap0);
+        delete tempMap[seatName];
+        var reserved0 = new Set();
+        tmSelectedSeats.forEach(function(s) { reserved0.add(s); });
+        for (var p2 in tmPendingShifts) {
+            if (p2 !== cascadePid) reserved0.add(tmPendingShifts[p2].to);
+        }
+        var target0 = findFirstFreeSeatFromMap(trip, tempMap, reserved0);
+        if (!target0) { showToast('❌ Немає куди посунути ' + sh.label + ' далі'); return; }
+        tmPendingShifts[cascadePid] = { from: sh.from, to: target0, label: sh.label };
+        showToast('🔀 ' + sh.label + ': ' + seatName + ' → ' + target0);
+        renderTmSeatPicker(trip);
+        return;
+    }
+
+    var liveMap = effectiveOccupiedMap(baseMap, tmPendingShifts);
+    var baseOcc2 = baseMap[seatName];
+    var freshFlex = baseOcc2 && typeof baseOcc2 === 'object'
+        && baseOcc2.flexible && baseOcc2.paxId && !tmPendingShifts[baseOcc2.paxId];
+    if (liveMap[seatName] && !freshFlex) return;
+
+    if (freshFlex) {
+        var reserved = new Set();
+        tmSelectedSeats.forEach(function(s) { reserved.add(s); });
+        reserved.add(seatName);
+        for (var pid2 in tmPendingShifts) reserved.add(tmPendingShifts[pid2].to);
+        var target = findFirstFreeSeatFromMap(trip, liveMap, reserved);
+        if (!target) { showToast('❌ Немає куди посунути ' + baseOcc2.label); return; }
+        tmPendingShifts[baseOcc2.paxId] = { from: seatName, to: target, label: baseOcc2.label };
+        tmSelectedSeats.add(seatName);
+        showToast('🔀 ' + baseOcc2.label + ': ' + seatName + ' → ' + target);
+    } else {
+        tmSelectedSeats.add(seatName);
+    }
+    tmFreeSeating = false;
     renderTmSeatPicker(trip);
 }
 
@@ -8178,6 +8264,24 @@ async function confirmTripAssign() {
     for (var pid in tmPendingShifts) {
         var sh = tmPendingShifts[pid];
         pendingShifts.push({ paxId: pid, oldSeat: sh.from, newSeat: sh.to, label: sh.label });
+    }
+
+    // Single-pax: якщо обрано БІЛЬШЕ місць ніж в пасажира — питаємо чи збільшити.
+    // doAssignTrip далі сам перепише 'Кількість місць' = pickedSeats.length.
+    if (paxIds.length === 1 && !freeSeating && pickedSeats.length > 0) {
+        var pSingle = passengers.find(function(x) { return x['PAX_ID'] === paxIds[0]; });
+        var expSingle = pSingle ? Math.max(1, parseInt(pSingle['Кількість місць']) || 1) : 1;
+        if (pickedSeats.length > expSingle) {
+            var n = pickedSeats.length;
+            var ok = await new Promise(function(resolve) {
+                showConfirm(
+                    'За пасажиром ' + expSingle + ' місце(ь), а ви обрали ' + n + '. '
+                    + 'Збільшити кількість місць пасажира до ' + n + '?',
+                    function(yes) { resolve(yes); }
+                );
+            });
+            if (!ok) return;
+        }
     }
 
     // Якщо з форми додавання — callback і закриваємо
