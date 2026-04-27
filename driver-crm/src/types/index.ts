@@ -46,6 +46,9 @@ interface RouteItemBase {
   // routes.id — UUID, потрібен RPC driver_set_payment'у. itemId/PAX_ID/PKG_ID
   // не годяться, бо для пасажирського рейсу-плейсхолдера itemId порожній.
   _uuid: string;
+  // Якщо ця посилка — primary об'єднаного ліда, тут перелік ТТН дочок.
+  // Водій бачить «🔗 + ТТН A, B» у картці — щоб не пропустити коробки клієнта.
+  mergedTtns: string[];
   sheet: string;
   _statusKey: string;
   _sourceRoute?: string;

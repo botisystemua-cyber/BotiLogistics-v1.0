@@ -1462,6 +1462,36 @@
         <button class="topbar-btn" onclick="openHistory()" title="Історія сесії">≡</button>
     </div>
 
+    <!-- 🔗 MERGE-SCAN MODAL: «всі ТТН або жодна» — водій має відсканувати ВСІ
+         коробки обʼєднаного ліда, перш ніж дозволимо стандартні дії.
+         Захист від «натиснув погоджуюсь, забув про другу коробку клієнта». -->
+    <div id="mergeScanBackdrop"
+         style="display:none;position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,0.7);align-items:center;justify-content:center;padding:16px;"
+         onclick="if(event.target===this)mergeScanSkip()">
+        <div style="width:100%;max-width:480px;background:#fff;border-radius:16px;padding:18px 16px;max-height:88vh;display:flex;flex-direction:column;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                <span style="font-size:24px;">🔗</span>
+                <span style="font-weight:800;font-size:15px;color:#5b21b6;">Обʼєднаний лід — кілька коробок</span>
+            </div>
+            <div id="mergeScanProgress" style="font-size:12px;color:#1f2937;margin-bottom:10px;font-weight:700;">—</div>
+            <div id="mergeScanList" style="overflow-y:auto;max-height:55vh;display:flex;flex-direction:column;gap:6px;margin-bottom:14px;"></div>
+            <div id="mergeScanFinish" style="display:none;margin-bottom:8px;">
+                <button type="button" onclick="mergeScanFinish()"
+                        style="width:100%;padding:14px;border-radius:12px;border:none;background:#10b981;color:#fff;font-weight:800;font-size:14px;cursor:pointer;">
+                    ✅ Усі ТТН знайдено — продовжити
+                </button>
+            </div>
+            <button type="button" onclick="mergeScanContinue()"
+                    style="width:100%;padding:11px;border-radius:10px;border:1.5px solid #c4b5fd;background:#faf5ff;color:#5b21b6;font-weight:700;font-size:13px;cursor:pointer;margin-bottom:6px;">
+                ✅ Погоджуюсь, шукаю далі
+            </button>
+            <button type="button" onclick="mergeScanSkip()"
+                    style="width:100%;padding:9px;border-radius:8px;border:1px solid #e5e7eb;background:#f9fafb;color:#475569;font-weight:600;font-size:12px;cursor:pointer;">
+                ⏭ Пропустити (повернутись пізніше)
+            </button>
+        </div>
+    </div>
+
     <!-- 🔁 DUPLICATES MODAL: попередження що на цього клієнта є ще ТТН.
          Показується ПЕРЕД action-menu. Кнопки:
            ▶ Продовжити — стандартні дії з цією ТТН (відкриваємо action-menu)
@@ -2283,6 +2313,132 @@
             }
         }
 
+        // ==== MERGE-SCAN: «всі ТТН або жодна» ============================
+        // Якщо просканована ТТН входить в обʼєднаний лід (3 коробки клієнта),
+        // водій ОБОВʼЯЗКОВО має відсканувати усі. Поки не зібрав комплект —
+        // action-menu заблоковано. Стан зберігаємо в sessionStorage, щоб
+        // водій міг тимчасово відійти від каси і повернутися.
+        var _mergeScanState = null;  // { primaryId, ttns:[], pkgIds:[], scannedTtns:Set, pendingCfg }
+
+        try {
+            var savedMs = sessionStorage.getItem('_mergeScanState');
+            if (savedMs) {
+                var parsedMs = JSON.parse(savedMs);
+                if (parsedMs && Array.isArray(parsedMs.scannedTtns)) {
+                    _mergeScanState = {
+                        primaryId: parsedMs.primaryId,
+                        ttns: parsedMs.ttns || [],
+                        pkgIds: parsedMs.pkgIds || [],
+                        scannedTtns: new Set(parsedMs.scannedTtns),
+                        pendingCfg: parsedMs.pendingCfg || null,
+                    };
+                }
+            }
+        } catch (_) { _mergeScanState = null; }
+
+        function _persistMergeScanState() {
+            try {
+                if (!_mergeScanState) {
+                    sessionStorage.removeItem('_mergeScanState');
+                    return;
+                }
+                sessionStorage.setItem('_mergeScanState', JSON.stringify({
+                    primaryId: _mergeScanState.primaryId,
+                    ttns: _mergeScanState.ttns,
+                    pkgIds: _mergeScanState.pkgIds,
+                    scannedTtns: Array.from(_mergeScanState.scannedTtns),
+                    pendingCfg: _mergeScanState.pendingCfg,
+                }));
+            } catch (_) {}
+        }
+
+        // Тягне з БД групу обʼєднання для будь-якої ТТН (primary або дочка).
+        // Повертає { primaryId, ttns:[], pkgIds:[] } або null якщо не merged.
+        async function _resolveMergeGroup(pkgId) {
+            if (!pkgId || !TENANT_ID) return null;
+            try {
+                var headers = { apikey: SUPABASE_ANON_KEY, Authorization: 'Bearer ' + SUPABASE_ANON_KEY };
+                // 1) сам цей рядок — щоб дізнатись чи він дочка (merged_into_pkg_id != null)
+                var me = await fetch(SUPABASE_URL + '/rest/v1/packages' +
+                    '?tenant_id=eq.' + encodeURIComponent(TENANT_ID) +
+                    '&pkg_id=eq.' + encodeURIComponent(pkgId) +
+                    '&select=pkg_id,ttn_number,merged_into_pkg_id', { headers: headers })
+                    .then(function(r) { return r.json(); });
+                if (!Array.isArray(me) || !me.length) return null;
+                var primaryId = me[0].merged_into_pkg_id || me[0].pkg_id;
+
+                // 2) primary + всі дочки
+                var all = await fetch(SUPABASE_URL + '/rest/v1/packages' +
+                    '?tenant_id=eq.' + encodeURIComponent(TENANT_ID) +
+                    '&or=(pkg_id.eq.' + encodeURIComponent(primaryId) +
+                    ',merged_into_pkg_id.eq.' + encodeURIComponent(primaryId) + ')' +
+                    '&select=pkg_id,ttn_number', { headers: headers })
+                    .then(function(r) { return r.json(); });
+                if (!Array.isArray(all) || all.length < 2) return null;  // одинак — не merged
+
+                return {
+                    primaryId: primaryId,
+                    ttns: all.map(function(x) { return x.ttn_number || ''; }).filter(Boolean),
+                    pkgIds: all.map(function(x) { return x.pkg_id; }),
+                };
+            } catch (e) {
+                console.warn('[mergeScan] resolve group failed:', e);
+                return null;
+            }
+        }
+
+        function _renderMergeScanModal() {
+            var st = _mergeScanState;
+            if (!st) return;
+            var prog = document.getElementById('mergeScanProgress');
+            var list = document.getElementById('mergeScanList');
+            var finishBox = document.getElementById('mergeScanFinish');
+            if (!prog || !list) return;
+            var done = st.scannedTtns.size;
+            var total = st.ttns.length;
+            prog.textContent = 'Знайдено: ' + done + ' з ' + total + (done < total ? ' · скануй наступну коробку' : ' · всі знайдено!');
+            var esc = function(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) {
+                return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c];
+            }); };
+            list.innerHTML = st.ttns.map(function(t) {
+                var found = st.scannedTtns.has(t);
+                return '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;border:1.5px solid ' +
+                       (found ? '#86efac;background:#dcfce7;color:#166534' : '#e5e7eb;background:#fafafa;color:#1f2937') + ';">' +
+                         '<span style="font-size:18px;">' + (found ? '✅' : '⏳') + '</span>' +
+                         '<span style="font-weight:700;font-size:13px;flex:1;">' + esc(t) + '</span>' +
+                         '<span style="font-size:10px;font-weight:700;text-transform:uppercase;">' + (found ? 'ОК' : 'чекає скану') + '</span>' +
+                       '</div>';
+            }).join('');
+            finishBox.style.display = (done >= total) ? '' : 'none';
+        }
+
+        function _openMergeScanModal() {
+            _renderMergeScanModal();
+            document.getElementById('mergeScanBackdrop').style.display = 'flex';
+        }
+        function _closeMergeScanModal() {
+            document.getElementById('mergeScanBackdrop').style.display = 'none';
+        }
+        function mergeScanContinue() {
+            // Закриваємо модал — водій повертається до камери, чекаємо наступний скан.
+            _closeMergeScanModal();
+        }
+        function mergeScanSkip() {
+            _closeMergeScanModal();
+            _mergeScanState = null;
+            _persistMergeScanState();
+        }
+        function mergeScanFinish() {
+            var st = _mergeScanState;
+            if (!st || st.scannedTtns.size < st.ttns.length) return;
+            _closeMergeScanModal();
+            var cfg = st.pendingCfg;
+            _mergeScanState = null;
+            _persistMergeScanState();
+            // Усі ТТН зібрано → відкриваємо звичайне action-menu для primary.
+            if (cfg) showCheckActionMenu(cfg);
+        }
+
         // Стан між моменом peek_ttn і кліком «Продовжити» — щоб після підтвердження
         // викликати showCheckActionMenu з тими самими параметрами.
         var _pendingActionCfg = null;
@@ -2347,13 +2503,57 @@
             // скан-сигналом. Тут не зупиняємо камеру явно, бо сканер уже у idle.
         }
 
-        // Обгортка: якщо є дублікати — показати модал і відкласти action-menu.
-        // Інакше — одразу як було (showCheckActionMenu).
+        // Обгортка: послідовність перевірок перед action-menu.
+        //   1) merge-група (якщо ТТН входить в обʼєднаний лід — водій має зібрати всі)
+        //   2) дублікати (різні ТТН на того ж клієнта — попередження)
+        //   3) звичайне action-menu
         async function _showActionMenuMaybeWithDups(cfg) {
             if (!cfg || !cfg.pkg_id || cfg.isUnknown) {
                 showCheckActionMenu(cfg);
                 return;
             }
+
+            // [merge-group] Перевіряємо чи ця ТТН входить у group обʼєднаних.
+            var group = await _resolveMergeGroup(cfg.pkg_id);
+            if (group && group.ttns.length >= 2) {
+                // Якщо це продовження поточної сесії — додаємо ттн в зібрані.
+                // Інакше стартуємо нову сесію з цією ТТН як перша зібрана.
+                if (_mergeScanState && _mergeScanState.primaryId === group.primaryId) {
+                    _mergeScanState.scannedTtns.add(cfg.ttn);
+                    _mergeScanState.pendingCfg = {  // pending = primary action-menu
+                        ttn: cfg.ttn, pkg_id: group.primaryId,
+                        count: cfg.count, isUnknown: false, scanStatus: cfg.scanStatus,
+                        sessionDup: cfg.sessionDup,
+                    };
+                } else {
+                    _mergeScanState = {
+                        primaryId: group.primaryId,
+                        ttns: group.ttns,
+                        pkgIds: group.pkgIds,
+                        scannedTtns: new Set([cfg.ttn]),
+                        pendingCfg: {
+                            ttn: cfg.ttn, pkg_id: group.primaryId,
+                            count: cfg.count, isUnknown: false, scanStatus: cfg.scanStatus,
+                            sessionDup: cfg.sessionDup,
+                        },
+                    };
+                }
+                _persistMergeScanState();
+                if (_mergeScanState.scannedTtns.size < _mergeScanState.ttns.length) {
+                    // Ще не всі — блокуємо action-menu, показуємо прогрес
+                    _openMergeScanModal();
+                    return;
+                }
+                // Усе знайдено — закриваємо стан, нижче пускаємо у дублі-перевірку
+                // або одразу в action-menu для primary
+                cfg = _mergeScanState.pendingCfg;
+                _mergeScanState = null;
+                _persistMergeScanState();
+                showToast({ variant: 'success', icon: '🔗', label: 'Усі ТТН зібрані',
+                            value: '', status: group.ttns.join(', ') });
+                setTimeout(function(){ document.getElementById('resultToast').classList.remove('show'); }, 2000);
+            }
+
             var dups = await _findScannerDuplicates(cfg.pkg_id);
             if (!dups || !dups.length) {
                 showCheckActionMenu(cfg);

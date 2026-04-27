@@ -185,6 +185,14 @@ export function PackageCard({ pkg: p, index, searchQuery = '', onEdit, onConvert
           {show('dateTrip') && p.dateTrip && <Chip icon={Calendar} c="gray">{p.dateTrip}</Chip>}
         </div>
 
+        {/* 🔗 Якщо це primary об'єднаного — показуємо ТТН дочок, щоб водій
+            бачив усі коробки клієнта і не пропустив жодної на видачі. */}
+        {p.mergedTtns && p.mergedTtns.length > 0 && (
+          <div className="ml-9 mb-2 px-2 py-1 rounded-lg bg-violet-50 border border-violet-200 text-[11px] font-bold text-violet-700">
+            🔗 + {p.mergedTtns.length} ТТН: {p.mergedTtns.join(', ')}
+          </div>
+        )}
+
         <div className="flex gap-2 mb-2">
           <Btn icon={Phone} label="Дзвонити" color="bg-green-50 text-green-700" onClick={() => { if (primaryPhone) window.location.href = `tel:${primaryPhone}`; else showToast('Немає телефону'); }} />
           <Btn icon={MessageCircle} label="Написати" color="bg-purple-50 text-purple-700" onClick={() => { if (primaryPhone) setShowMessenger(true); else showToast('Немає телефону'); }} />

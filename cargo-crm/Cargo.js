@@ -1403,7 +1403,10 @@ function renderCard(p, routeCtx) {
     metaHtml += `<span class="meta-tag" style="background:#fef3c7;color:#92400e;">📅 Візит: ${escapeHtml(formatTripDate(p['Дата отримання']))}</span>`;
   }
   if (visCols.includes('statusPkg') && statusPkg) metaHtml += `<span class="meta-tag">${escapeHtml(statusPkg)}</span>`;
-  if (visCols.includes('smartId') && p['Ід_смарт']) metaHtml += `<span class="meta-tag">🆔 ${highlightMatch(String(p['Ід_смарт']))}</span>`;
+  if (visCols.includes('smartId') && p['Ід_смарт']) {
+    const _ss = String(p['Ід_смарт']).replace(/'/g, "\\'");
+    metaHtml += `<span class="meta-tag copyable" onclick="event.stopPropagation(); copyToClipboard('${_ss}', 'Ід_смарт скопійовано')" title="Клац — скопіювати Ід_смарт">🆔 ${highlightMatch(String(p['Ід_смарт']))}</span>`;
+  }
   // Внутрішній № винесено у card-top-row як .badge-inner-num — у meta-row не дублюємо.
   if (visCols.includes('phone') && phone) {
     const _sp = String(phone).replace(/'/g, "\\'");
@@ -5230,12 +5233,24 @@ function rteResetAll(btn) {
 // Helper: «Дата отримання» живе у таблиці `packages`, а не у `routes`
 // (route-row тримає тільки snapshot базових полів). Шукаємо оригінал
 // у allData за PKG_ID і читаємо дату звідти; якщо нема — порожньо.
+// Дата для фільтра в маршруті: для посилок — «Дата отримання» (день візиту
+// водія); для пасажирів — «Дата рейсу» (вони доставляються разом). Якщо
+// «Дата отримання» порожня в посилковому ліді — fallback на «Дата рейсу»,
+// бо це найпевніша дата доставки.
 function _getRouteRowReceivedDate(r) {
-    const leadId = (r && (r['PKG_ID'] || r['PAX_ID'])) || '';
-    if (!leadId) return '';
-    const p = allData.find(x => (x['PKG_ID'] || '') === leadId);
-    if (!p) return '';
-    return formatTripDate(p['Дата отримання'] || '');
+    if (!r) return '';
+    const isPax = (r['Тип запису'] || '').includes('Пасажир');
+    if (isPax) {
+        return formatTripDate(r['Дата рейсу'] || r['Дата отримання'] || '');
+    }
+    const pkgId = r['PKG_ID'] || '';
+    if (pkgId) {
+        const p = (allData || []).find(x => (x['PKG_ID'] || '') === pkgId);
+        if (p && p['Дата отримання']) return formatTripDate(p['Дата отримання']);
+    }
+    // Fallback: дата рейсу (з самого route-row) — корисно якщо «Дата отримання»
+    // у посилки ще не призначена менеджером.
+    return formatTripDate(r['Дата рейсу'] || '');
 }
 
 function getFilteredRouteRows(rows) {
@@ -5357,7 +5372,7 @@ function renderRoutes() {
 
     if (uniqueDates.length > 0) {
         html += '<div class="route-date-chips">';
-        html += '<span class="route-date-chips-label">📅 Дата візиту:</span>';
+        html += '<span class="route-date-chips-label">📅 Дата доставки:</span>';
         uniqueDates.forEach(d => {
             const active = (routeDateFilter === d);
             const cnt = rawRows.filter(r => _getRouteRowReceivedDate(r) === d).length;
@@ -5481,6 +5496,15 @@ function renderRouteCard(r, idx, sheetName) {
     // backend сам мовчки пропустить їх при спробі редагування.
     const ttn = r['Номер ТТН'] || '';
     const desc = r['Опис'] || r['Опис посилки'] || '';
+    // Якщо в маршруті primary-лід обʼєднання — додатково показуємо ТТН
+    // дочок, щоб водій бачив усі коробки клієнта (рядок «🔗 + ТТН A, B»).
+    const _routePkg = (allData || []).find(p => p['PKG_ID'] === leadId);
+    const _routeMergedTtns = (_routePkg && typeof getMergedChildren === 'function')
+        ? getMergedChildren(leadId).map(c => c['Номер ТТН']).filter(Boolean)
+        : [];
+    const _routeMergedHtml = _routeMergedTtns.length > 0
+        ? `<div class="route-card-merged">🔗 + ${_routeMergedTtns.length} ТТН: ${_routeMergedTtns.map(t => escapeHtml(t)).join(', ')}</div>`
+        : '';
     const contactsFields = isPax ? [
         {label: 'ПІБ', key: 'Піб пасажира', value: name},
         {label: 'Телефон', key: 'Телефон пасажира', value: phone},
@@ -5557,6 +5581,7 @@ function renderRouteCard(r, idx, sheetName) {
                 ${lsBadge} ${payBadge}
                 ${_routeDebtUnpaid ? `<span class="badge badge-unpaid" title="Не повністю оплачено">🔴 Борг: ${_routeDebt}${curr ? ' ' + curr : ''}</span>` : ''}
             </div>
+            ${_routeMergedHtml}
             ${(from || to) ? `<div class="route-card-route">📍 ${from || '—'} → ${to || '—'}</div>` : ''}
             <div class="route-card-meta">
                 ${auto ? `<span>🚐 ${auto}</span>` : ''}
