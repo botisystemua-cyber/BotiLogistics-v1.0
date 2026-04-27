@@ -7008,14 +7008,66 @@ function _recomputeVolumetricWeight() {
   }
 }
 
+// Визначаємо мінімалку для поточного напряму add-форми. Залежить від
+// `addFormDirection` ('ue' для UA→EU, 'eu' для EU→UA). Повертає число
+// або null якщо власник у прайсі не задав.
+function _getMinOrderForCurrentDir() {
+  const cargo = (_cargoPriceCfg && _cargoPriceCfg.cargo) || {};
+  const dir = (typeof addFormDirection !== 'undefined') ? addFormDirection : '';
+  if (dir === 'ue' && typeof cargo.minOrderUe === 'number') return cargo.minOrderUe;
+  if (dir === 'eu' && typeof cargo.minOrderEu === 'number') return cargo.minOrderEu;
+  // fill-form (редактор уже існуючого ліда) має свою логіку напряму, тому
+  // як fallback віддаємо UE-мінімалку якщо вона задана, інакше EU.
+  if (typeof cargo.minOrderUe === 'number') return cargo.minOrderUe;
+  if (typeof cargo.minOrderEu === 'number') return cargo.minOrderEu;
+  return null;
+}
+
+// Перемикає видимість кнопки «🛡 Мінім.» поруч з полями «Сума». Викликаємо
+// одночасно з applyCargoPricingDefaults — щоб як тільки прайс прийшов, кнопка
+// зʼявилась автоматично, без перезавантаження форми.
+function _refreshMinOrderButtons() {
+  const min = _getMinOrderForCurrentDir();
+  ['fSumMinBtn', 'fill_sumMinBtn'].forEach(id => {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    if (min != null && min > 0) {
+      btn.style.display = '';
+      btn.textContent = '🛡 ' + min;
+    } else {
+      btn.style.display = 'none';
+    }
+  });
+}
+
+// Хендлер кнопки «🛡 Мінім.» — вставляє мінімальний заїзд у вказане поле і
+// ставить manual-win flag, щоб weight×rate автообчислення не перетерло
+// значення менеджера. Якщо мінімалки нема (юзер відкрив форму до завантаження
+// прайсу) — підвантажуємо прайс і повторюємо.
+async function applyMinOrderToSum(targetId) {
+  if (!_cargoPriceCfgLoaded) await loadCargoPricingConfig();
+  const min = _getMinOrderForCurrentDir();
+  if (min == null || min <= 0) {
+    showToast('Мінімалку не задано у прайсі власника', 'warning');
+    return;
+  }
+  const el = document.getElementById(targetId);
+  if (!el) return;
+  el.value = String(min);
+  // Тригеримо input event щоб onChange-listener'и (manual-win flag) спрацювали.
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
 function applyCargoPricingDefaults() {
   if (!_cargoPriceCfgLoaded) {
     loadCargoPricingConfig().then(() => {
       const overlay = document.getElementById('addFormOverlay');
       if (overlay && overlay.classList.contains('open')) applyCargoPricingDefaults();
+      _refreshMinOrderButtons();
     });
     return;
   }
+  _refreshMinOrderButtons();
   // Тільки УК → Європа має поле fSum + auto-розрахунок суми.
   if (addFormDirection !== 'ue') {
     const tariffWrap = document.getElementById('fTariffWrap');
