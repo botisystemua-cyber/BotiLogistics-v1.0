@@ -1855,6 +1855,30 @@ async function sbGetRoutePoints(params) {
 }
 
 // ================================================================
+// PACKAGE DESCRIPTIONS (owner-configurable parcel description hints)
+// ================================================================
+
+// Returns active tenant-owned package descriptions from package_descriptions
+// (same table owner-crm writes to via PackageDescriptionsPanel). Used for the
+// description-autocomplete dropdowns in the add-package and fill forms.
+async function sbGetPackageDescriptions() {
+    try {
+        const { data, error } = await sb
+            .from('package_descriptions')
+            .select('id, text, sort_order, active')
+            .eq('tenant_id', TENANT_ID)
+            .eq('active', true)
+            .order('sort_order', { ascending: true });
+        if (error) throw error;
+        return { ok: true, data: data || [] };
+    } catch (e) {
+        console.error('sbGetPackageDescriptions error:', e);
+        // Не фатально: CRM має працювати й без каталога (fallback — вільний текст)
+        return { ok: true, data: [] };
+    }
+}
+
+// ================================================================
 // MAIN ROUTER — replaces apiPost()
 // ================================================================
 
@@ -1871,6 +1895,9 @@ async function apiPostSupabase(action, params) {
 
         // Owner-configurable route points (address autocomplete)
         getRoutePoints:     sbGetRoutePoints,
+
+        // Owner-configurable package descriptions (description autocomplete)
+        getPackageDescriptions: sbGetPackageDescriptions,
 
         // Archive
         deleteParcel:       sbPkgDelete,

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { RoutePointsPanel } from './RoutePointsPanel';
+import { PackageDescriptionsPanel } from './PackageDescriptionsPanel';
 import { CurrencyDefaultsPanel } from './CurrencyDefaultsPanel';
 import { PricingDefaultsPanel } from './PricingDefaultsPanel';
 import { FillFormConfigPanel } from './FillFormConfigPanel';
@@ -26,6 +27,7 @@ export function SettingsTab({ tenantId }: { tenantId: string }) {
   ) : (
     <>
       <RoutePointsPanel points={points} tenantId={tenantId} onReload={reload} />
+      <PackageDescriptionsPanel tenantId={tenantId} />
       <CurrencyDefaultsPanel tenantId={tenantId} />
       <PricingDefaultsPanel tenantId={tenantId} />
       <FillFormConfigPanel tenantId={tenantId} />

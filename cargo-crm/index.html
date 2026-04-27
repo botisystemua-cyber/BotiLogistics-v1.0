@@ -449,6 +449,10 @@
       <div class="fill-row">
         <label>Опис посилки</label>
         <textarea id="fill_description" placeholder="Що всередині…"></textarea>
+        <div class="add-swiss-dropdown" id="descrDropdownFill">
+          <button type="button" class="add-swiss-btn" onclick="togglePackageDescriptions('fill')">📦 Або оберіть зі стандартних ▼</button>
+          <div class="add-swiss-list" id="descrListFill"></div>
+        </div>
       </div>
 
       <div class="fill-grid2">
@@ -763,7 +767,11 @@
             <div class="add-row-grid">
               <div class="add-row" data-field-key="parcelDescription">
                 <label>Опис</label>
-                <input type="text" id="fDescription" placeholder="Опис вмісту">
+                <input type="text" id="fDescription" placeholder="Опис вмісту" autocomplete="off">
+                <div class="add-swiss-dropdown" id="descrDropdownAdd">
+                  <button type="button" class="add-swiss-btn" onclick="togglePackageDescriptions('add')">📦 Або оберіть зі стандартних ▼</button>
+                  <div class="add-swiss-list" id="descrListAdd"></div>
+                </div>
               </div>
               <div class="add-row" data-field-key="parcelQty">
                 <label>Кількість позицій</label>
