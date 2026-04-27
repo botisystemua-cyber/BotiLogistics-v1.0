@@ -144,6 +144,16 @@ export function PricingDefaultsPanel({ tenantId }: { tenantId: string }) {
               <NumField label="UA → EU" value={cfg.cargo.volumetricPerKgUe} onChange={v => setCargo('volumetricPerKgUe', v)} placeholder="2" step="0.1" />
               <NumField label="EU → UA" value={cfg.cargo.volumetricPerKgEu} onChange={v => setCargo('volumetricPerKgEu', v)} placeholder="2" step="0.1" />
             </FieldGroup>
+
+            <FieldGroup title="🛡 Мінімальний заїзд (нижня межа суми за посилку)">
+              <NumField label="UA → EU" value={cfg.cargo.minOrderUe} onChange={v => setCargo('minOrderUe', v)} placeholder="15" />
+              <NumField label="EU → UA" value={cfg.cargo.minOrderEu} onChange={v => setCargo('minOrderEu', v)} placeholder="15" />
+            </FieldGroup>
+            <p className="text-[11px] text-muted -mt-2 mb-3 px-1">
+              У формі «Нова посилка» поруч із «Сума» зʼявиться кнопка «🛡 Мінімалка» —
+              одним тапом менеджер вставить цю цифру (на випадок легкої посилки,
+              де вага×тариф вийшла менше ніж ваш мінімальний заїзд).
+            </p>
           </div>
 
           {/* Actions */}

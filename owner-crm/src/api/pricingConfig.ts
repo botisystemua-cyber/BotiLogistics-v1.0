@@ -43,6 +43,12 @@ export interface CargoPricing {
   // Підсумкова сума = обʼємна_вага × volumetricPerKg.
   volumetricPerKgUe?: number;   // UA→EU
   volumetricPerKgEu?: number;   // EU→UA
+  // Мінімальний заїзд: фікс-сума, нижче якої посилка не може коштувати
+  // (легка ~2кг·€2 = €4, але мінімалка €15 → беремо €15). У cargo-формі
+  // додано кнопку «🛡 Мінімалка», що одним тапом вставляє це число у поле
+  // «Сума». Хардкоду «якщо менше — перетерти» немає — менеджер сам тисне.
+  minOrderUe?: number;          // UA→EU
+  minOrderEu?: number;          // EU→UA
 }
 
 export interface PricingConfig {
@@ -103,6 +109,7 @@ const CARGO_KEYS: Array<keyof CargoPricing> = [
   'perKgUe', 'perKgEu',
   'commercialPerKgUe', 'commercialPerKgEu',
   'volumetricPerKgUe', 'volumetricPerKgEu',
+  'minOrderUe', 'minOrderEu',
 ];
 
 function mergeWithDefaults(parsed: unknown): PricingConfig {

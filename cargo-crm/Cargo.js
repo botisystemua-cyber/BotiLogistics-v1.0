@@ -2598,12 +2598,19 @@ function openFillModal(pkgId) {
     if (el._cpApi) el._cpApi.syncFromValue();
   });
 
-  // Фото посилки: ставимо превʼю якщо URL уже є
+  // Фото посилки: ставимо превʼю якщо URL уже є.
+  // Для EU→UA весь блок ховаємо — фото додасть клієнт у своїй CRM (поки
+  // вона не підключена, ховаємо повністю, щоб менеджер не плутався).
   const photoUrl = row['Фото посилки'] || '';
   const prev = document.getElementById('fill_photoPreview');
   const clr = document.getElementById('fill_photoClear');
-  const fileInput = document.getElementById('fill_photoInput');
-  if (fileInput) fileInput.value = '';
+  const photoRow = document.getElementById('fill_photoRow');
+  const isEuUa = (row['Напрям'] || '').includes('ЄВ→УК') || (row['Напрям'] || '').includes('Європа-УК');
+  if (photoRow) photoRow.style.display = isEuUa ? 'none' : '';
+  ['fill_photoInputCam','fill_photoInputGal'].forEach(id => {
+    const fi = document.getElementById(id);
+    if (fi) fi.value = '';
+  });
   if (prev) {
     if (photoUrl) { prev.src = photoUrl; prev.style.display = ''; if (clr) clr.style.display = ''; }
     else { prev.src = ''; prev.style.display = 'none'; if (clr) clr.style.display = 'none'; }
@@ -3026,13 +3033,79 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // Фото-аплоад для CRM fill-модалки — використовує той самий бакет
-// `package-photos` що і сканер. На зміну file input → upload до Storage
-// → URL кладемо в hidden #fill_photoUrl. Кнопка Очистити прибирає URL.
+// `package-photos` що і сканер. Дві кнопки (камера/галерея) клікають
+// два приховані input'и; обидва тригерять onFillPhotoPick.
 const _STORAGE_BUCKET_FILL = 'package-photos';
 document.addEventListener('DOMContentLoaded', () => {
-  const fi = document.getElementById('fill_photoInput');
-  if (fi) fi.addEventListener('change', onFillPhotoPick);
+  ['fill_photoInputCam', 'fill_photoInputGal'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('change', onFillPhotoPick);
+  });
 });
+
+function _fillPhotoTrigger(mode) {
+  const inp = document.getElementById(mode === 'cam' ? 'fill_photoInputCam' : 'fill_photoInputGal');
+  if (!inp) return;
+  inp.value = '';
+  inp.click();
+}
+
+// ===== Фото для add-form (UA→EU) — кнопки «📷 Сфотографувати» + «🖼 Галерея»
+// Дві приховані input'и (camera-capture і no-capture) тригеряться кнопками.
+// Upload іде у той самий bucket package-photos. URL зберігається у hidden
+// #fAddPhotoUrl, який saveLead включає у data['Фото посилки']. Превʼю
+// показується одразу, оператор може очистити «✕ Очистити».
+function _addPhotoTrigger(mode) {
+  const inp = document.getElementById(mode === 'cam' ? 'fAddPhotoCam' : 'fAddPhotoGal');
+  if (!inp) return;
+  inp.value = ''; // дозволяємо повторний вибір того ж файлу
+  inp.click();
+}
+
+async function onAddPhotoPick(inputEl) {
+  const file = inputEl.files && inputEl.files[0];
+  if (!file) return;
+  let ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+  if (!['jpg','jpeg','png','webp'].includes(ext)) ext = 'jpg';
+  const tenantId = (getBotiSession() && getBotiSession().tenant_id) || 'tn';
+  // Ще нема pkg_id (лід не створений), тому пишемо у тимчасовий шлях
+  // <tenant>/_pending-<timestamp>.<ext>. Після створення ліда URL уже
+  // зберігається у packages.photo_url як є — bucket public, так що
+  // доступ не зміниться.
+  const path = `${tenantId}/_pending-${Date.now()}.${ext}`;
+
+  showToast('⏳ Завантаження фото…', 'info');
+  try {
+    const { error } = await sb.storage
+      .from(_STORAGE_BUCKET_FILL)
+      .upload(path, file, { contentType: file.type || `image/${ext}`, upsert: true });
+    if (error) throw error;
+    const url = `${SUPABASE_URL}/storage/v1/object/public/${_STORAGE_BUCKET_FILL}/${path}`;
+    const hidden = document.getElementById('fAddPhotoUrl');
+    if (hidden) hidden.value = url;
+    const prev = document.getElementById('fAddPhotoPreview');
+    const clr  = document.getElementById('fAddPhotoClear');
+    if (prev) { prev.src = url; prev.style.display = ''; }
+    if (clr)  clr.style.display = '';
+    showToast('📷 Фото додано — натисни Зберегти', 'success');
+  } catch (err) {
+    console.error('[add_photo] upload error:', err);
+    showToast('Помилка фото: ' + (err.message || err), 'error');
+  }
+}
+
+function clearAddPhoto() {
+  const hidden = document.getElementById('fAddPhotoUrl');
+  if (hidden) hidden.value = '';
+  ['fAddPhotoCam','fAddPhotoGal'].forEach(id => {
+    const fi = document.getElementById(id);
+    if (fi) fi.value = '';
+  });
+  const prev = document.getElementById('fAddPhotoPreview');
+  const clr  = document.getElementById('fAddPhotoClear');
+  if (prev) { prev.src = ''; prev.style.display = 'none'; }
+  if (clr)  clr.style.display = 'none';
+}
 
 async function onFillPhotoPick(ev) {
   const file = ev.target.files && ev.target.files[0];
@@ -3066,8 +3139,10 @@ async function onFillPhotoPick(ev) {
 function clearFillPhoto() {
   const hidden = document.getElementById('fill_photoUrl');
   if (hidden) hidden.value = '';
-  const fi = document.getElementById('fill_photoInput');
-  if (fi) fi.value = '';
+  ['fill_photoInputCam', 'fill_photoInputGal'].forEach(id => {
+    const fi = document.getElementById(id);
+    if (fi) fi.value = '';
+  });
   const prev = document.getElementById('fill_photoPreview');
   const clr = document.getElementById('fill_photoClear');
   if (prev) { prev.src = ''; prev.style.display = 'none'; }
@@ -7008,14 +7083,66 @@ function _recomputeVolumetricWeight() {
   }
 }
 
+// Визначаємо мінімалку для поточного напряму add-форми. Залежить від
+// `addFormDirection` ('ue' для UA→EU, 'eu' для EU→UA). Повертає число
+// або null якщо власник у прайсі не задав.
+function _getMinOrderForCurrentDir() {
+  const cargo = (_cargoPriceCfg && _cargoPriceCfg.cargo) || {};
+  const dir = (typeof addFormDirection !== 'undefined') ? addFormDirection : '';
+  if (dir === 'ue' && typeof cargo.minOrderUe === 'number') return cargo.minOrderUe;
+  if (dir === 'eu' && typeof cargo.minOrderEu === 'number') return cargo.minOrderEu;
+  // fill-form (редактор уже існуючого ліда) має свою логіку напряму, тому
+  // як fallback віддаємо UE-мінімалку якщо вона задана, інакше EU.
+  if (typeof cargo.minOrderUe === 'number') return cargo.minOrderUe;
+  if (typeof cargo.minOrderEu === 'number') return cargo.minOrderEu;
+  return null;
+}
+
+// Перемикає видимість кнопки «🛡 Мінім.» поруч з полями «Сума». Викликаємо
+// одночасно з applyCargoPricingDefaults — щоб як тільки прайс прийшов, кнопка
+// зʼявилась автоматично, без перезавантаження форми.
+function _refreshMinOrderButtons() {
+  const min = _getMinOrderForCurrentDir();
+  ['fSumMinBtn', 'fill_sumMinBtn'].forEach(id => {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    if (min != null && min > 0) {
+      btn.style.display = '';
+      btn.textContent = '🛡 ' + min;
+    } else {
+      btn.style.display = 'none';
+    }
+  });
+}
+
+// Хендлер кнопки «🛡 Мінім.» — вставляє мінімальний заїзд у вказане поле і
+// ставить manual-win flag, щоб weight×rate автообчислення не перетерло
+// значення менеджера. Якщо мінімалки нема (юзер відкрив форму до завантаження
+// прайсу) — підвантажуємо прайс і повторюємо.
+async function applyMinOrderToSum(targetId) {
+  if (!_cargoPriceCfgLoaded) await loadCargoPricingConfig();
+  const min = _getMinOrderForCurrentDir();
+  if (min == null || min <= 0) {
+    showToast('Мінімалку не задано у прайсі власника', 'warning');
+    return;
+  }
+  const el = document.getElementById(targetId);
+  if (!el) return;
+  el.value = String(min);
+  // Тригеримо input event щоб onChange-listener'и (manual-win flag) спрацювали.
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
 function applyCargoPricingDefaults() {
   if (!_cargoPriceCfgLoaded) {
     loadCargoPricingConfig().then(() => {
       const overlay = document.getElementById('addFormOverlay');
       if (overlay && overlay.classList.contains('open')) applyCargoPricingDefaults();
+      _refreshMinOrderButtons();
     });
     return;
   }
+  _refreshMinOrderButtons();
   // Тільки УК → Європа має поле fSum + auto-розрахунок суми.
   if (addFormDirection !== 'ue') {
     const tariffWrap = document.getElementById('fTariffWrap');
@@ -7223,6 +7350,8 @@ function clearAddForm() {
   document.getElementById('duplicateWarning').classList.remove('visible');
   document.getElementById('duplicateWarning').textContent = '';
   setDeliveryType('np');
+  // Скидаємо фото посилки (ховаємо превʼю + чистимо URL)
+  if (typeof clearAddPhoto === 'function') clearAddPhoto();
 }
 
 function initSwissPoints() {
@@ -7539,7 +7668,9 @@ async function saveParcel() {
       'Валюта оплати': document.getElementById('fCurrency').value || 'UAH',
       'Сума НП': npSumVal,
       'Валюта НП': npCurrencyVal,
-      'Примітка': document.getElementById('fNote').value || ''
+      'Примітка': document.getElementById('fNote').value || '',
+      // Фото посилки — заповнюється кнопками «📷/🖼» у формі. URL уже в storage.
+      'Фото посилки': (document.getElementById('fAddPhotoUrl') || {}).value || ''
     };
   }
 
