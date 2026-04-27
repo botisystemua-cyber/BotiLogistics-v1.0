@@ -233,7 +233,20 @@ export async function fetchShippingItems(sheetName: string): Promise<ShippingIte
     .eq('tenant_id', tenantId);
 
   if (sheetName && sheetName !== '__unified__') {
-    query = query.eq('rte_id', rteId);
+    // У `dispatches` нема текстового rte_id — лише FK route_id (UUID на routes.id).
+    // Тому спершу резолвимо rte_id → uuid, далі WHERE route_id = uuid.
+    // Якщо для цього rte_id є кілька рядків routes (placeholder + leadи) —
+    // беремо placeholder (один на маршрут), він є джерелом правди для FK.
+    const { data: routeMatches } = await supabase
+      .from('routes')
+      .select('id')
+      .eq('tenant_id', tenantId)
+      .eq('rte_id', rteId)
+      .order('is_placeholder', { ascending: false })
+      .limit(1);
+    const routeUuid = routeMatches && routeMatches[0] && routeMatches[0].id;
+    if (!routeUuid) return [];
+    query = query.eq('route_id', routeUuid);
   }
 
   const { data, error } = await query;
