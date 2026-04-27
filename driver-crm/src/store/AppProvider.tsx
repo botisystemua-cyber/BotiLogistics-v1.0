@@ -3,6 +3,7 @@ import { AppContext, type AppStore, type Theme } from './useAppStore';
 import type { ItemStatus, StatusFilter, Route, ShippingRoute, ViewTab } from '../types';
 import { readSession } from '../lib/session';
 import { loadUiPrefs, getUiPrefSync, setUiPref } from '../lib/uiPrefs';
+import { loadCurrencyDefaults } from '../lib/currencyDefaults';
 
 function loadStatuses(sheet: string): Record<string, ItemStatus> {
   // Статуси — per-route, per-device (рішення водія у моменті: готово / в роботі).
@@ -54,6 +55,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Якщо юзер мав legacy-значення у localStorage, а в БД ще порожньо —
   // заливаємо, щоб нічого не втратити. Далі всі save/load йдуть через БД.
   useEffect(() => {
+    // currency-defaults — паралельно з ui-prefs, обидва нічого не блокують
+    loadCurrencyDefaults();
     (async () => {
       const prefs = await loadUiPrefs();
       // Migrate legacy localStorage → DB (once)

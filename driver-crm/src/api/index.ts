@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
 import { readSession } from '../lib/session';
+import { getCurrencyDefault } from '../lib/currencyDefaults';
 import type { Route, ShippingRoute, Passenger, Package, ShippingItem, RouteItem, ExpenseItem, ExpenseAdvance } from '../types';
 
 // ============================================
@@ -69,6 +70,11 @@ export async function fetchRoutes(): Promise<{ routes: Route[]; shipping: Shippi
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function buildCommon(r: any, sheetName: string) {
+  // Якщо в БД валюта порожня (старі або імпортовані рядки) — підтягуємо дефолт
+  // з owner-crm CurrencyDefaultsPanel. Pax-рядки → passenger.*, інші → cargo.*.
+  const isPax = (r.record_type || '').toLowerCase() === 'пасажир'
+    || (r.record_type || '').toLowerCase() === 'passenger';
+  const app = isPax ? 'passenger' : 'cargo';
   return {
     rowNum: 0,                                 // no row numbers in Supabase — use id
     _uuid: r.id,
@@ -83,9 +89,9 @@ function buildCommon(r: any, sheetName: string) {
     driver: s(r.driver_name),
     city: s(r.city),
     amount: s(r.amount),
-    currency: s(r.amount_currency),
+    currency: s(r.amount_currency) || getCurrencyDefault(app, isPax ? 'ticket' : 'payment'),
     deposit: s(r.deposit),
-    depositCurrency: s(r.deposit_currency),
+    depositCurrency: s(r.deposit_currency) || getCurrencyDefault(app, 'deposit'),
     payForm: s(r.payment_form),
     payStatus: s(r.payment_status),
     debt: s(r.debt),
@@ -96,7 +102,7 @@ function buildCommon(r: any, sheetName: string) {
     note: s(r.notes),
     smsNote: s(r.sms_notes),
     tips: s(r.tips),
-    tipsCurrency: s(r.tips_currency),
+    tipsCurrency: s(r.tips_currency) || getCurrencyDefault(app, 'tips'),
     sheet: sheetName,
     _statusKey: '',
     _sourceRoute: undefined as string | undefined,
@@ -216,9 +222,10 @@ export async function fetchShippingItems(sheetName: string): Promise<ShippingIte
     description: s(r.description),
     photo: s(r.photo_url),
     amount: s(r.total_amount),
-    currency: s(r.payment_currency),
+    // Fallback на cargo currency_defaults для записів без явно заповненої валюти
+    currency: s(r.payment_currency) || getCurrencyDefault('cargo', 'payment'),
     deposit: s(r.deposit),
-    depositCurrency: s(r.deposit_currency),
+    depositCurrency: s(r.deposit_currency) || getCurrencyDefault('cargo', 'deposit'),
     payForm: s(r.payment_form),
     payStatus: s(r.payment_status),
     debt: s(r.debt),
@@ -226,7 +233,7 @@ export async function fetchShippingItems(sheetName: string): Promise<ShippingIte
     pkgId: s(r.pkg_id),
     note: s(r.notes),
     tips: s(r.tips),
-    tipsCurrency: s(r.tips_currency),
+    tipsCurrency: s(r.tips_currency) || getCurrencyDefault('cargo', 'tips'),
     sheet: sheetName,
     _statusKey: '',
     _sourceRoute: undefined as string | undefined,

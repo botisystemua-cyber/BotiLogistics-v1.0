@@ -189,6 +189,17 @@ const CURR_MASTER = ['UAH','EUR','USD','CHF','PLN','CZK','GBP','SEK','NOK','DKK'
 let CURR_ENABLED = ['UAH','EUR','USD','CHF','PLN','CZK'];
 let CURR_DEFAULT = 'EUR';
 
+// Granular per-field defaults from owner-crm CurrencyDefaultsPanel (зберігається
+// у system_settings.currency_defaults як JSON). Раніше читав тільки сканер —
+// тепер CRM теж тягне сюди, інакше виклики window.sbGetCurrencyDefault на 2506
+// і 7025 поверталися undefined (функція не була визначена).
+let _CURRENCY_DEFAULTS = {};
+window.sbGetCurrencyDefault = function(app, field, fallback) {
+  const section = _CURRENCY_DEFAULTS[app];
+  if (!section || typeof section !== 'object') return fallback || '';
+  return section[field] || fallback || '';
+};
+
 async function loadCurrencySettings() {
   try {
     if (typeof sb === 'undefined' || !sb) return;
@@ -196,17 +207,24 @@ async function loadCurrencySettings() {
       .from('system_settings')
       .select('setting_name, setting_value')
       .eq('tenant_id', TENANT_ID)
-      .in('setting_name', ['default_currency', 'supported_currencies']);
+      .in('setting_name', ['default_currency', 'supported_currencies', 'currency_defaults']);
     if (error) throw error;
     const rows = data || [];
     const sup = rows.find(r => r.setting_name === 'supported_currencies');
     const def = rows.find(r => r.setting_name === 'default_currency');
+    const grn = rows.find(r => r.setting_name === 'currency_defaults');
     if (sup && sup.setting_value) {
       const codes = String(sup.setting_value).split(',').map(s => s.trim()).filter(c => CURR_MASTER.includes(c));
       if (codes.length > 0) CURR_ENABLED = codes;
     }
     const defCode = def && def.setting_value ? String(def.setting_value).trim() : '';
     CURR_DEFAULT = CURR_ENABLED.includes(defCode) ? defCode : CURR_ENABLED[0];
+    if (grn && grn.setting_value) {
+      try {
+        const parsed = JSON.parse(grn.setting_value);
+        if (parsed && typeof parsed === 'object') _CURRENCY_DEFAULTS = parsed;
+      } catch (_) { /* corrupt JSON — лишаємо порожній obj */ }
+    }
   } catch (e) {
     console.warn('[currency] load failed, using defaults:', e);
   }
@@ -4803,15 +4821,22 @@ function renderRouteCard(r, idx, sheetName) {
     const from = r['Адреса відправки'] || '';
     const to = r['Адреса прибуття'] || r['Адреса отримувача'] || '';
     const price = r['Сума'] || '';
-    const curr = r['Валюта'] || '';
+    // Fallback на owner currency_defaults (cargo.*) для старих записів без валюти.
+    // Pax-рядки маршруту мапимо на passenger.* — щоб квитки/завдатки/багаж
+    // тягнули свої окремі дефолти з owner-panel.
+    const _isPaxRow = (r['Тип запису'] || '').includes('Пасажир');
+    const _ownerCur = (field, fb) => (typeof window.sbGetCurrencyDefault === 'function')
+        ? window.sbGetCurrencyDefault(_isPaxRow ? 'passenger' : 'cargo', field, fb)
+        : fb;
+    const curr = r['Валюта'] || _ownerCur(_isPaxRow ? 'ticket' : 'payment', '');
     const deposit = r['Завдаток'] || '';
-    const depositCurr = r['Валюта завдатку'] || '';
+    const depositCurr = r['Валюта завдатку'] || _ownerCur('deposit', '');
     const payStatus = r['Статус оплати'] || '';
     const status = r['Статус'] || '';
     const driver = r['Водій'] || '';
     const weight = r['Вага багажу'] || '';
     const weightPrice = r['Ціна багажу'] || '';
-    const weightCurr = r['Валюта багажу'] || '';
+    const weightCurr = r['Валюта багажу'] || _ownerCur(_isPaxRow ? 'tips' : 'np', '');
     const note = r['Примітка'] || '';
     const phoneReg = r['Телефон реєстратора'] || '';
     const smartId = r['Ід_смарт'] || '';
