@@ -942,13 +942,6 @@ document.addEventListener('DOMContentLoaded', async function() {
   // Скан «Зберегти» пише прямо в БД (scan_ttn RPC), а клієнт про це не
   // знає — без цього слухача новий «Невідомий» з'являється тільки після
   // F5. Троттлимо, щоб не штормити loadData при кожному фокусі.
-  var _lastAutoReload = 0;
-  function _maybeAutoReload() {
-    var now = Date.now();
-    if (now - _lastAutoReload < 1500) return;
-    _lastAutoReload = now;
-    loadData().then(function() { renderCards(); updateCounters(); }).catch(function(){});
-  }
   document.addEventListener('visibilitychange', function() {
     if (document.visibilityState === 'visible') _maybeAutoReload();
   });
@@ -956,7 +949,68 @@ document.addEventListener('DOMContentLoaded', async function() {
     // bfcache-restored сторінки теж треба оновити
     if (e.persisted) _maybeAutoReload();
   });
+
+  // Realtime — стартуємо після першого loadData, щоб у allData вже були дані
+  // і ми не перерендерювали порожній список через перший event.
+  startRealtime();
 });
+
+// ===== [SECT-REALTIME] Live updates через Supabase WebSocket =====
+// Без цього менеджер бачить нову ТТН зі сканера тільки після F5. З realtime
+// підписуємось на INSERT/UPDATE у packages і routes для свого tenant'а:
+//
+//   — INSERT у packages → toast «📡 Нова ТТН: …» + debounced reload
+//   — UPDATE у packages → debounced reload (без toast — буває часто)
+//   — будь-яке у routes → debounced reload (зміни оплати від водія, etc)
+//
+// Канал створюється один раз. Supabase Realtime автоматично перепідключається
+// при втраті мережі (бо socket-rejoin вшитий у клієнта). Тому 30 рядків
+// достатньо — без власного reconnect-loop'у.
+var _lastAutoReload = 0;
+function _maybeAutoReload() {
+  var now = Date.now();
+  if (now - _lastAutoReload < 1500) return;
+  _lastAutoReload = now;
+  loadData().then(function() { renderCards(); updateCounters(); }).catch(function(){});
+}
+
+var _rtReloadTimer = null;
+function _rtDebouncedReload() {
+  clearTimeout(_rtReloadTimer);
+  _rtReloadTimer = setTimeout(_maybeAutoReload, 800);
+}
+
+function startRealtime() {
+  if (typeof sb === 'undefined' || !sb || !TENANT_ID) return;
+  if (window._cargoRealtimeChannel) return;
+
+  var ch = sb.channel('cargo-' + TENANT_ID)
+    .on('postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'packages',
+          filter: 'tenant_id=eq.' + TENANT_ID },
+        function(payload) {
+          var ttn = (payload.new && payload.new.ttn_number) || '(нова)';
+          showToast('📡 Нова ТТН зі сканера: ' + ttn, 'info');
+          _rtDebouncedReload();
+        })
+    .on('postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'packages',
+          filter: 'tenant_id=eq.' + TENANT_ID },
+        function() { _rtDebouncedReload(); })
+    .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'routes',
+          filter: 'tenant_id=eq.' + TENANT_ID },
+        function() { _rtDebouncedReload(); })
+    .subscribe(function(status) {
+      if (status === 'SUBSCRIBED') {
+        console.log('[realtime] cargo-crm channel ready');
+      } else if (status === 'CHANNEL_ERROR') {
+        console.warn('[realtime] cargo channel error — оновлення тільки через F5');
+      }
+    });
+
+  window._cargoRealtimeChannel = ch;
+}
 
 // ===== [SECT-SCANRETURN] SCANNER → CRM HAND-OFF =====
 // Сканер (scaner_ttn.html) після успішного скану редіректить сюди з
