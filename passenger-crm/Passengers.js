@@ -2259,6 +2259,10 @@ function renderRouteCard(r, idx, sheetName) {
     const weightPrice = r['Ціна багажу'] || '';
     const weightCurr = r['Валюта багажу'] || '';
     const note = r['Примітка'] || '';
+    // Борг — показуємо чіп у заголовку та поле у вкладці «Фінанси» лише коли
+    // статус оплати «Не оплачено»/«Частково» І сума боргу > 0.
+    const _routeDebt = parseFloat(r['Борг']) || 0;
+    const _routeDebtUnpaid = (payStatus === 'Не оплачено' || payStatus === 'Частково') && _routeDebt > 0;
     const phoneReg = r['Телефон реєстратора'] || '';
     const smartId = r['Ід_смарт'] || '';
 
@@ -2317,6 +2321,7 @@ function renderRouteCard(r, idx, sheetName) {
         {label: 'Ціна багажу', key: 'Ціна багажу', value: weightPrice},
         {label: 'Валюта багажу', key: 'Валюта багажу', value: weightCurr},
         {label: 'Статус оплати', key: 'Статус оплати', value: payStatus},
+        ...(_routeDebtUnpaid ? [{label: 'Борг', key: 'Борг', value: `${_routeDebt}${curr ? ' ' + curr : ''}`}] : []),
         {label: 'Статус', key: 'Статус', value: status},
         {label: 'Примітка', key: 'Примітка', value: note}
     ];
@@ -2339,6 +2344,7 @@ function renderRouteCard(r, idx, sheetName) {
         {label: 'Завдаток', key: 'Завдаток', value: deposit},
         {label: 'Валюта завдатку', key: 'Валюта завдатку', value: depositCurr},
         {label: 'Статус оплати', key: 'Статус оплати', value: payStatus},
+        ...(_routeDebtUnpaid ? [{label: 'Борг', key: 'Борг', value: `${_routeDebt}${curr ? ' ' + curr : ''}`}] : []),
         {label: 'Ціна багажу', key: 'Ціна багажу', value: weightPrice},
         {label: 'Валюта багажу', key: 'Валюта багажу', value: weightCurr},
     ];
@@ -2387,6 +2393,7 @@ function renderRouteCard(r, idx, sheetName) {
                 <span class="route-card-name">${headerName}</span>
                 <span style="color:var(--text-secondary);font-size:10px;">${rteId}</span>
                 ${lsBadge} ${payBadge}
+                ${_routeDebtUnpaid ? `<span class="badge badge-unpaid" title="Не повністю оплачено">🔴 Борг: ${_routeDebt}${curr ? ' ' + curr : ''}</span>` : ''}
             </div>
             ${(from || to) ? `<div class="route-card-route">📍 ${from || '—'} → ${to || '—'}</div>` : ''}
             <div class="route-card-meta">
@@ -3354,7 +3361,13 @@ function renderCard(p) {
                             ${cf.includes('name') ? `<span class="card-name">${hlMatch(name, _hlQ)}</span>` : ''}
                             ${isRecent24h ? '<span class="badge badge-new24">🆕 NEW</span>' : ''}
                             ${cf.includes('leadStatus') ? lsBadge : ''} ${cf.includes('payStatus') ? payBadge : ''}
-                            ${cf.includes('debt') && debt > 0 ? '<span class="badge badge-debt">Борг: '+debt+'</span>' : ''}
+                            ${(() => {
+                                // Борг видно завжди при unpaid/partial — менеджер не повинен втратити
+                                // цифру через приховану колонку. Інакше — за бажаним visCols.
+                                const _isUnpaid = payStatus === 'Не оплачено' || payStatus === 'Частково';
+                                const _showDebt = debt > 0 && (_isUnpaid || cf.includes('debt'));
+                                return _showDebt ? '<span class="badge badge-debt">Борг: '+debt+'</span>' : '';
+                            })()}
                         </div>
                         ${cf.includes('route') ? routeHtml : ''}
                         <div class="card-meta-row">
