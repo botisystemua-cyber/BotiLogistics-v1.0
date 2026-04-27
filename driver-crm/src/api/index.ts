@@ -42,15 +42,30 @@ export async function fetchRoutes(): Promise<{ routes: Route[]; shipping: Shippi
 
   const routes = Object.values(routeMap).sort((a, b) => a.name.localeCompare(b.name));
 
-  // Dispatches — count per rte_id
+  // Dispatches — count per rte_id. У `dispatches` нема текстового rte_id —
+  // лише FK route_id (UUID). Тягнемо route_id з dispatches + map id→rte_id
+  // з routes, потім склеюємо. Один зайвий SELECT, але без 400 на неіснуючій
+  // колонці (попередній варіант падав, sidebar був без shipping count).
   const { data: dispData } = await supabase
     .from('dispatches')
-    .select('rte_id')
+    .select('route_id')
     .eq('tenant_id', tenantId);
+
+  const dispRouteUuids = [...new Set((dispData ?? []).map((d) => d.route_id).filter(Boolean))];
+  const uuidToRteId: Record<string, string> = {};
+  if (dispRouteUuids.length > 0) {
+    const { data: rteRows } = await supabase
+      .from('routes')
+      .select('id, rte_id')
+      .eq('tenant_id', tenantId)
+      .in('id', dispRouteUuids);
+    for (const r of rteRows ?? []) uuidToRteId[r.id] = r.rte_id || '';
+  }
 
   const dispMap: Record<string, number> = {};
   for (const d of dispData ?? []) {
-    const name = d.rte_id || '';
+    const name = uuidToRteId[d.route_id] || '';
+    if (!name) continue;
     dispMap[name] = (dispMap[name] || 0) + 1;
   }
 
@@ -268,21 +283,26 @@ export async function fetchShippingItems(sheetName: string): Promise<ShippingIte
     recipientAddr: s(r.recipient_address),
     internalNum: s(r.internal_number),
     weight: s(r.weight_kg),
-    description: s(r.description),
+    // Колонка зветься package_description, не description (помилка mapping
+    // мовчки повертала undefined → пусто на UI).
+    description: s(r.package_description),
     photo: s(r.photo_url),
-    amount: s(r.total_amount),
-    // Fallback на cargo currency_defaults для записів без явно заповненої валюти
-    currency: s(r.payment_currency) || getCurrencyDefault('cargo', 'payment'),
+    // Колонка amount (не total_amount), валюта — amount_currency
+    // (не payment_currency). Старий mapping ніколи не показував суму.
+    amount: s(r.amount),
+    currency: s(r.amount_currency) || getCurrencyDefault('cargo', 'payment'),
     deposit: s(r.deposit),
     depositCurrency: s(r.deposit_currency) || getCurrencyDefault('cargo', 'deposit'),
     payForm: s(r.payment_form),
     payStatus: s(r.payment_status),
     debt: s(r.debt),
     status: s(r.status),
-    pkgId: s(r.pkg_id),
+    // У dispatches нема pkg_id / tips / tips_currency — це shipping-only лог
+    // без звʼязку з конкретним пакетом і чайових. Залишаємо порожнє.
+    pkgId: '',
     note: s(r.notes),
-    tips: s(r.tips),
-    tipsCurrency: s(r.tips_currency) || getCurrencyDefault('cargo', 'tips'),
+    tips: '',
+    tipsCurrency: '',
     sheet: sheetName,
     _statusKey: '',
     _sourceRoute: undefined as string | undefined,
