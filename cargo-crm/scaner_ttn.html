@@ -1021,6 +1021,33 @@
 
         /* 📷 Фото посилки */
         .inl-photo-wrap { display: flex; flex-direction: column; gap: 8px; }
+        .inl-photo-buttons { display: flex; gap: 8px; flex-wrap: wrap; }
+        .inl-photo-btn {
+            flex: 1 1 calc(50% - 4px);
+            min-width: 140px;
+            color: #fff;
+            background: rgba(255,255,255,0.08);
+            border: 1.5px solid rgba(255,255,255,0.25);
+            border-radius: 10px;
+            padding: 12px 8px;
+            font-family: inherit;
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+        .inl-photo-btn.cam {
+            background: rgba(245,158,11,0.18);
+            border-color: rgba(245,158,11,0.5);
+        }
+        .inl-photo-btn.gal {
+            background: rgba(59,130,246,0.18);
+            border-color: rgba(59,130,246,0.5);
+        }
+        .inl-photo-btn:active { transform: scale(0.97); }
         .inl-photo-file {
             color: #fff;
             background: rgba(255,255,255,0.06);
@@ -2690,6 +2717,19 @@
             });
         }
 
+        // Кнопки «📷 Сфотографувати» / «🖼 Галерея» в inline-editor — клікають
+        // відповідний прихований <input type=file>. capture-input відкриває
+        // камеру на мобільних, no-capture — звичайний file-picker.
+        function _inlPhotoTrigger(col, mode) {
+            var inputs = document.querySelectorAll(
+                '.inl-photo-file[data-target="' + col + '"][data-mode="' + mode + '"]'
+            );
+            var inp = inputs && inputs[0];
+            if (!inp) return;
+            inp.value = ''; // дозволяємо повторний вибір того ж файлу
+            inp.click();
+        }
+
         function onInlinePhotoPick(inputEl) {
             var file = inputEl.files && inputEl.files[0];
             if (!file) return;
@@ -3025,10 +3065,26 @@
 
                 var wrap = document.createElement('div');
                 wrap.className = 'inl-photo-wrap';
+                // Дві кнопки + два приховані input'и: одна явно з camera capture
+                // (на iOS/Android відкриває камеру), друга без capture (галерея).
+                // Раніше був один input з capture="environment", але багато
+                // браузерів його ігнорують і показують один спільний пікер —
+                // тому зробили окремі кнопки для гарантованого вибору.
                 wrap.innerHTML =
+                  '<div class="inl-photo-buttons">' +
+                    '<button type="button" class="inl-photo-btn cam" ' +
+                      'onclick="_inlPhotoTrigger(\'' + f.col + '\', \'cam\')">' +
+                      '📷 Сфотографувати</button>' +
+                    '<button type="button" class="inl-photo-btn gal" ' +
+                      'onclick="_inlPhotoTrigger(\'' + f.col + '\', \'gal\')">' +
+                      '🖼 Галерея</button>' +
+                  '</div>' +
                   '<input type="file" accept="image/*" capture="environment" ' +
-                    'class="inl-photo-file" data-target="' + f.col + '" ' +
-                    'onchange="onInlinePhotoPick(this)">' +
+                    'class="inl-photo-file" data-target="' + f.col + '" data-mode="cam" ' +
+                    'onchange="onInlinePhotoPick(this)" style="display:none;">' +
+                  '<input type="file" accept="image/*" ' +
+                    'class="inl-photo-file" data-target="' + f.col + '" data-mode="gal" ' +
+                    'onchange="onInlinePhotoPick(this)" style="display:none;">' +
                   '<img class="inl-photo-preview" data-preview="' + f.col + '" ' +
                     'style="display:none;">' +
                   '<button type="button" class="inl-photo-clear" data-clear="' + f.col + '" ' +
