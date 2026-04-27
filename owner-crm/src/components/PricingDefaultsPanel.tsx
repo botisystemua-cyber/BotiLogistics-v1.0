@@ -9,7 +9,7 @@ import {
   type CargoPricing,
 } from '../api/pricingConfig';
 
-// Панель «💰 Прайс» у owner-crm Налаштування. Власник задає дефолтні ціни,
+// Панель «Ціни» у owner-crm Налаштування. Власник задає дефолтні ціни,
 // що автоматично підставляються у форми менеджерів при створенні нових
 // лідів. Менеджер може переписати вручну (manual win).
 //
@@ -73,7 +73,7 @@ export function PricingDefaultsPanel({ tenantId }: { tenantId: string }) {
             className={`w-4 h-4 lg:w-5 lg:h-5 text-muted transition-transform ${open ? 'rotate-90' : ''}`}
           />
           <div className="flex-1 min-w-0">
-            <h2 className="text-base lg:text-lg font-extrabold text-text">💰 Прайс</h2>
+            <h2 className="text-base lg:text-lg font-extrabold text-text">Ціни</h2>
             <p className="text-xs lg:text-sm text-muted mt-0.5">
               Дефолтні ціни, що підставляються у форми менеджерів автоматично.
               Менеджер може переписати вручну. Валюту беремо з блоку «Валюти» вище.

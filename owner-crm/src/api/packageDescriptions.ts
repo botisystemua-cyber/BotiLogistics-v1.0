@@ -9,15 +9,31 @@ export interface PackageDescription {
   tenant_id: string;
   text: string;
   sort_order: number;
-  active: boolean;
   created_at: string;
   updated_at: string;
 }
 
-export type PackageDescriptionInput = Omit<
+export type PackageDescriptionInput = Pick<
   PackageDescription,
-  'id' | 'tenant_id' | 'created_at' | 'updated_at'
+  'text' | 'sort_order'
 >;
+
+// Стандартний набір описів — засіюється для тенанта при першому
+// відкритті панелі, якщо в нього ще немає жодного запису.
+export const DEFAULT_PACKAGE_DESCRIPTIONS: string[] = [
+  'Документи',
+  'Одяг',
+  'Взуття',
+  'Електроніка',
+  'Косметика',
+  'Ліки',
+  'Дитячі речі',
+  'Продукти харчування',
+  'Подарунки',
+  'Побутова хімія',
+  'Книги',
+  'Інструменти',
+];
 
 // ================================================================
 // CRUD
@@ -92,4 +108,22 @@ export async function swapPackageDescriptionOrder(
   await updatePackageDescription(tenantId, b.id, { sort_order: a.sort_order });
   await updatePackageDescription(tenantId, a.id, { sort_order: b.sort_order });
   return true;
+}
+
+// Засіває стандартний набір описів для тенанта. Викликається з
+// PackageDescriptionsPanel якщо list повернув порожній масив.
+// ON CONFLICT DO NOTHING (через upsert ignoreDuplicates) гарантує безпеку
+// при гонці двох клієнтів.
+export async function seedDefaultPackageDescriptions(
+  tenantId: string,
+): Promise<void> {
+  const rows = DEFAULT_PACKAGE_DESCRIPTIONS.map((text, i) => ({
+    tenant_id: tenantId,
+    text,
+    sort_order: i + 1,
+  }));
+  const { error } = await supabase
+    .from('package_descriptions')
+    .upsert(rows, { onConflict: 'tenant_id,text', ignoreDuplicates: true });
+  if (error) throw error;
 }
