@@ -46,7 +46,7 @@ export function FillFormConfigPanel({ tenantId }: { tenantId: string }) {
             className={`w-4 h-4 lg:w-5 lg:h-5 text-muted transition-transform ${open ? 'rotate-90' : ''}`}
           />
           <div className="flex-1 min-w-0">
-            <h2 className="text-base lg:text-lg font-extrabold text-text">📋 Колонки форми заповнення</h2>
+            <h2 className="text-base lg:text-lg font-extrabold text-text">Колонки форми заповнення</h2>
             <p className="text-xs lg:text-sm text-muted mt-0.5">
               Які поля показувати менеджерам у формах «Додати посилку» і «Новий пасажир».
             </p>

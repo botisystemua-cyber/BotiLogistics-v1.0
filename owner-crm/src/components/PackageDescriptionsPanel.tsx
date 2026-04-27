@@ -9,6 +9,7 @@ import {
   updatePackageDescription,
   deletePackageDescription,
   swapPackageDescriptionOrder,
+  seedDefaultPackageDescriptions,
   type PackageDescription,
   type PackageDescriptionInput,
 } from '../api/packageDescriptions';
@@ -16,24 +17,21 @@ import {
 type DescForm = {
   text: string;
   sort_order: number;
-  active: boolean;
 };
 
 const EMPTY_FORM: DescForm = {
   text: '',
   sort_order: 1,
-  active: true,
 };
 
 function descToForm(d: PackageDescription): DescForm {
-  return { text: d.text, sort_order: d.sort_order, active: d.active };
+  return { text: d.text, sort_order: d.sort_order };
 }
 
 function formToInput(f: DescForm): PackageDescriptionInput {
   return {
     text: f.text.trim(),
     sort_order: f.sort_order,
-    active: f.active,
   };
 }
 
@@ -45,12 +43,20 @@ export function PackageDescriptionsPanel({ tenantId }: { tenantId: string }) {
   const [isNew, setIsNew] = useState(false);
   const [swapping, setSwapping] = useState(false);
 
+  // Завантаження + автоматичний засів стандартного набору, якщо тенант
+  // ще не має жодного опису. Працює один раз для будь-якого нового тенанта.
   const reload = useCallback(async () => {
     try {
-      setItems(await listPackageDescriptionsByTenant(tenantId));
+      let list = await listPackageDescriptionsByTenant(tenantId);
+      if (list.length === 0) {
+        await seedDefaultPackageDescriptions(tenantId);
+        list = await listPackageDescriptionsByTenant(tenantId);
+      }
+      setItems(list);
       setLoaded(true);
     } catch (e) {
       console.error('PackageDescriptions load error', e);
+      setLoaded(true);
     }
   }, [tenantId]);
 
@@ -138,46 +144,33 @@ export function PackageDescriptionsPanel({ tenantId }: { tenantId: string }) {
           Немає описів. Натисніть «Додати» щоб створити перший.
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-2.5 lg:gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
           {items.map((d, idx) => (
             <div
               key={d.id}
-              className={`rounded-xl lg:rounded-2xl border overflow-hidden shadow-sm ${
-                d.active ? 'bg-white border-border' : 'bg-gray-50 border-gray-200 opacity-60'
-              }`}
+              className="rounded-lg border border-border bg-white shadow-sm flex items-center gap-2 px-2.5 py-1.5"
             >
-              <div className="p-3 lg:p-5 flex items-center gap-3 lg:gap-4">
-                <div className="w-10 h-10 lg:w-14 lg:h-14 rounded-lg lg:rounded-xl flex items-center justify-center shrink-0 bg-amber-50 text-amber-600 border border-amber-200">
-                  <Package className="w-5 h-5 lg:w-6 lg:h-6" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5 lg:gap-2">
-                    <span className="text-sm lg:text-base font-bold text-text truncate">{d.text}</span>
-                    {!d.active && (
-                      <span className="text-[10px] lg:text-xs font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 border border-gray-200">
-                        Неактивний
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <div className="flex gap-0.5 lg:gap-1 shrink-0">
-                  <button onClick={() => handleSwap(idx, 'up')} disabled={idx === 0 || swapping}
-                    className="p-1 lg:p-1.5 rounded-lg hover:bg-bg cursor-pointer transition-all disabled:opacity-20 disabled:cursor-not-allowed">
-                    <ChevronUp className="w-4 h-4 text-muted" />
-                  </button>
-                  <button onClick={() => handleSwap(idx, 'down')} disabled={idx === items.length - 1 || swapping}
-                    className="p-1 lg:p-1.5 rounded-lg hover:bg-bg cursor-pointer transition-all disabled:opacity-20 disabled:cursor-not-allowed">
-                    <ChevronDown className="w-4 h-4 text-muted" />
-                  </button>
-                  <button onClick={() => { setEditItem(d); setIsNew(false); }}
-                    className="p-1.5 lg:p-2.5 rounded-lg lg:rounded-xl hover:bg-blue-50 cursor-pointer transition-all">
-                    <Pencil className="w-4 h-4 lg:w-5 lg:h-5 text-blue-500" />
-                  </button>
-                  <button onClick={() => handleDelete(d)}
-                    className="p-1.5 lg:p-2.5 rounded-lg lg:rounded-xl hover:bg-red-50 cursor-pointer transition-all">
-                    <Trash2 className="w-4 h-4 lg:w-5 lg:h-5 text-red-400" />
-                  </button>
-                </div>
+              <div className="w-7 h-7 rounded-md flex items-center justify-center shrink-0 bg-amber-50 text-amber-600 border border-amber-200">
+                <Package className="w-3.5 h-3.5" />
+              </div>
+              <span className="flex-1 min-w-0 text-sm font-semibold text-text truncate">{d.text}</span>
+              <div className="flex gap-0 shrink-0">
+                <button onClick={() => handleSwap(idx, 'up')} disabled={idx === 0 || swapping}
+                  className="p-1 rounded hover:bg-bg cursor-pointer transition-all disabled:opacity-20 disabled:cursor-not-allowed">
+                  <ChevronUp className="w-3.5 h-3.5 text-muted" />
+                </button>
+                <button onClick={() => handleSwap(idx, 'down')} disabled={idx === items.length - 1 || swapping}
+                  className="p-1 rounded hover:bg-bg cursor-pointer transition-all disabled:opacity-20 disabled:cursor-not-allowed">
+                  <ChevronDown className="w-3.5 h-3.5 text-muted" />
+                </button>
+                <button onClick={() => { setEditItem(d); setIsNew(false); }}
+                  className="p-1 rounded hover:bg-blue-50 cursor-pointer transition-all">
+                  <Pencil className="w-3.5 h-3.5 text-blue-500" />
+                </button>
+                <button onClick={() => handleDelete(d)}
+                  className="p-1 rounded hover:bg-red-50 cursor-pointer transition-all">
+                  <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                </button>
               </div>
             </div>
           ))}
@@ -245,16 +238,6 @@ function DescModal({
               className="w-full px-3 lg:px-4 py-2.5 lg:py-3 bg-bg border border-border rounded-xl text-sm text-text placeholder:text-muted/50 focus:outline-none focus:border-brand transition-all"
             />
           </div>
-
-          <label className="flex items-center gap-3 px-4 py-3 bg-bg rounded-xl cursor-pointer">
-            <input
-              type="checkbox"
-              checked={form.active}
-              onChange={e => set('active', e.target.checked)}
-              className="w-5 h-5 accent-brand cursor-pointer"
-            />
-            <span className="text-sm font-bold text-text">Активний</span>
-          </label>
         </div>
 
         <div className="px-5 lg:px-6 py-4 lg:py-5 border-t border-border shrink-0 pb-[max(1rem,env(safe-area-inset-bottom))]">
