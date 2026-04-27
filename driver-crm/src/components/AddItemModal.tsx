@@ -54,7 +54,16 @@ interface Props {
 export function AddItemModal({ onClose, onAdded, defaultType: dt, forceShipping = false, prefill }: Props) {
   const { currentSheet, isUnifiedView, routes, driverName, viewTab, shippingRoutes, showToast } = useApp();
 
-  const defaultType = dt || (viewTab === 'packages' || viewTab === 'shipping' ? 'посилка' : 'пасажир');
+  // За замовчуванням «посилка» для всіх посилкових табів (включно з
+  // pkgUaEu/pkgEuUa/allPackages). defaultDirection нижче вже = 'відправка',
+  // тому водій тапнув «+» у будь-якому посилковому контексті → одразу
+  // готова форма «Оформити відправку».
+  const defaultType = dt || (
+    viewTab === 'packages' || viewTab === 'shipping' || viewTab === 'allPackages'
+      || viewTab === 'pkgUaEu' || viewTab === 'pkgEuUa'
+    ? 'посилка'
+    : 'пасажир'
+  );
   const [itemType, setItemType] = useState<'пасажир' | 'посилка'>(forceShipping ? 'посилка' : defaultType);
   const [selectedRoute, setSelectedRoute] = useState(isUnifiedView ? routes[0]?.name || '' : currentSheet);
   const [submitting, setSubmitting] = useState(false);
