@@ -204,7 +204,13 @@ export function ListScreen() {
     prevAllTotalRef.current = allTabTotal;
   }, [allTabTotal, viewTab]);
 
-  const currentItems = isPassengersMode || viewTab === 'all' ? filteredPassengers : viewTab === 'packages' ? filteredPackages : [];
+  // Для пасажирських табів (включно з paxUaEu/paxEuUa) → filteredPassengers.
+  // Для посилкових табів (packages, pkgUaEu, pkgEuUa) → filteredPackages.
+  // Раніше тут була зашита перевірка `viewTab === 'packages'`, через що
+  // pkgUaEu/pkgEuUa повертали порожній масив — фільтр напрямків посилок не працював.
+  const currentItems = isPassengersMode || viewTab === 'all' ? filteredPassengers
+    : (viewTab === 'packages' || viewTab === 'pkgUaEu' || viewTab === 'pkgEuUa') ? filteredPackages
+    : [];
 
   // Stats
   const allStatsItems: { _statusKey: string; _sourceRoute?: string }[] = viewTab === 'all'
