@@ -5922,8 +5922,8 @@ function getSeatLayout(layout, maxSeats, hasReserve) {
                      hasReserve ? 'reserve' : 'driver',
                      175, 110, 245, 170));
 
-        const n = Math.max(8, parseInt(maxSeats) || 20);
-        const rowsNeeded = Math.ceil(n / 4);
+        const n = Math.max(1, parseInt(maxSeats) || 8);
+        const rowsNeeded = Math.max(1, Math.ceil(n / 4));
         const xStart = 310, xEnd = 960;
         const step = rowsNeeded === 1 ? 0 : (xEnd - xStart) / (rowsNeeded - 1);
         const seatW = Math.min(58, step - 6); // fits the number of rows we need
@@ -5974,6 +5974,10 @@ function renderVan(opts) {
     // clickHandler — імʼя глобальної функції яка викликається при кліку. За замовч.
     // seatPickerSelect (multi-select Set), для trip-assign модалки — tmSelectAssignSeat (single).
     const clickHandler = opts.clickHandler || 'seatPickerSelect';
+    // selectedFlex: коли активна «вільна розсадка», обрані місця рендеряться
+    // у блідо-синьому стилі (як flex) з галочкою — щоб юзер бачив що це
+    // авто-розсаджена, а не обрана вручну фіксована розсадка.
+    const selectedFlex = !!opts.selectedFlex;
 
     const positions = getSeatLayout(layout, maxSeats, hasReserve);
     const vanCls = layout === 'bus'   ? 'van van-bus'
@@ -6006,7 +6010,8 @@ function renderVan(opts) {
             }
             if (selected.has(s.name)) {
                 const handler = interactive ? `onclick="${clickHandler}('${s.name}')"` : '';
-                return `<div class="seat-pin seat-selected" style="${style}" data-seat="${s.name}" ${handler}>${s.name}<div class="seat-check">✓</div></div>`;
+                const flexCls = selectedFlex ? ' seat-selected-flex' : '';
+                return `<div class="seat-pin seat-selected${flexCls}" style="${style}" data-seat="${s.name}" ${handler}>${s.name}<div class="seat-check">✓</div></div>`;
             }
             const stateCls = s.type === 'reserve' ? 'seat-reserve' : 'seat-free';
             const handler = interactive ? `onclick="${clickHandler}('${s.name}')"` : '';
@@ -6034,7 +6039,8 @@ function renderVan(opts) {
         }
         if (selected.has(s.name)) {
             const handler = interactive ? `onclick="${clickHandler}('${s.name}')"` : '';
-            return `<div class="seat seat-selected" style="${style}" data-seat="${s.name}" ${handler}>
+            const flexCls = selectedFlex ? ' seat-selected-flex' : '';
+            return `<div class="seat seat-selected${flexCls}" style="${style}" data-seat="${s.name}" ${handler}>
                 ${chairImg}
                 <div class="seat-num">${s.name}</div>
                 <div class="seat-check">✓</div>
@@ -6411,8 +6417,8 @@ function renderSeatPickerModal(trip, occupiedMap) {
     const layoutPositions = getSeatLayout(layout, maxSeats, false);
     const layoutSeatCount = layoutPositions.filter(s => s.type === 'seat').length;
     const effectiveMax = layoutSeatCount > 0 ? layoutSeatCount : maxSeats;
-    const vanHtml = renderVan({ layout, maxSeats, hasReserve: false, occupiedMap, selected: seatPickerSelected, interactive: true });
-    const reserveHtml = buildReserveBlockHtml(reserveCount, occupiedMap);
+    const vanHtml = renderVan({ layout, maxSeats, hasReserve: false, occupiedMap, selected: seatPickerSelected, interactive: true, selectedFlex: seatPickerFreeSeating });
+    const reserveHtml = buildReserveBlockHtml(reserveCount, occupiedMap, { selectedFlex: seatPickerFreeSeating });
     const tripDate = formatTripDate(trip.date);
     const tripCity = trip.city || '';
     const occ = Object.keys(occupiedMap).length;
@@ -6478,6 +6484,7 @@ function buildReserveBlockHtml(count, occupiedMap, opts) {
     // selectedCheck: функція що каже чи seat обраний. За замовч — seatPickerSelected.has().
     // Для trip-assign модалки передається інша функція що звіряє з tmSelectedSeat.
     const isSelected = opts.isSelected || ((name) => seatPickerSelected.has(name));
+    const selectedFlex = !!opts.selectedFlex;
     let buttons = '';
     for (let i = 1; i <= count; i++) {
         const name = 'R' + i;
@@ -6494,7 +6501,8 @@ function buildReserveBlockHtml(count, occupiedMap, opts) {
             const btnTitle = isFx ? `Гнучке: ${occLabel}. Клік — посадити сюди (пасажир переїде).` : `Зайнято: ${occLabel}`;
             buttons += `<button type="button" class="rseat rseat-occupied${flexC}" data-seat="${name}" ${btnAttr} title="${btnTitle}">${name}${flexI}<span class="rseat-name">${occLabel}</span></button>`;
         } else if (isSel) {
-            buttons += `<button type="button" class="rseat rseat-selected" data-seat="${name}" onclick="${clickHandler}('${name}')">${name}<span class="rseat-check">✓</span></button>`;
+            const flexCls = selectedFlex ? ' rseat-selected-flex' : '';
+            buttons += `<button type="button" class="rseat rseat-selected${flexCls}" data-seat="${name}" onclick="${clickHandler}('${name}')">${name}<span class="rseat-check">✓</span></button>`;
         } else {
             buttons += `<button type="button" class="rseat rseat-free" data-seat="${name}" onclick="${clickHandler}('${name}')">${name}</button>`;
         }
@@ -6614,9 +6622,9 @@ function rerenderSeatPicker(p, trip) {
     const reserveCount = Math.max(0, parseInt(trip.reserve_seats) || 0);
     const maxSeats = parseInt(trip.max_seats) || 7;
     const grid = document.getElementById('seatPickerGrid');
-    if (grid) grid.innerHTML = renderVan({ layout, maxSeats, hasReserve: false, occupiedMap: liveMap, selected: seatPickerSelected, interactive: true });
+    if (grid) grid.innerHTML = renderVan({ layout, maxSeats, hasReserve: false, occupiedMap: liveMap, selected: seatPickerSelected, interactive: true, selectedFlex: seatPickerFreeSeating });
     const reserveEl = document.getElementById('seatPickerReserve');
-    if (reserveEl) reserveEl.innerHTML = buildReserveBlockHtml(reserveCount, liveMap);
+    if (reserveEl) reserveEl.innerHTML = buildReserveBlockHtml(reserveCount, liveMap, { selectedFlex: seatPickerFreeSeating });
     // Лічильник «N/M». Зелений коли збігається, помаранчевий якщо обрано
     // БІЛЬШЕ (буде confirm на save), червоний якщо МЕНШЕ (save заблоковано).
     const expected = Math.max(1, parseInt(p['Кількість місць']) || 1);
@@ -8228,11 +8236,13 @@ function renderTmSeatPicker(trip) {
         occupiedMap: occupiedMap,
         selected: tmSelectedSeats,
         interactive: true,
-        clickHandler: 'tmSelectAssignSeat'
+        clickHandler: 'tmSelectAssignSeat',
+        selectedFlex: tmFreeSeating
     });
     var reserveHtml = buildReserveBlockHtml(reserveCount, occupiedMap, {
         clickHandler: 'tmSelectAssignSeat',
-        isSelected: function(name) { return tmSelectedSeats.has(name); }
+        isSelected: function(name) { return tmSelectedSeats.has(name); },
+        selectedFlex: tmFreeSeating
     });
     // Radio-style індикатор: ● коли активне, ○ коли ні. Активне тільки якщо
     // користувач явно натиснув «Без місця» — порожній вибір НЕ трактується
