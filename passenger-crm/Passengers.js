@@ -5408,29 +5408,31 @@ function getSeatLayout(layout, maxSeats, hasReserve) {
     //   minivan-top.png → (19, 50)   bus-top.png → (15, 51)
     // Seat height (aspect 1/1): 8.5% × 3.02 ≈ 25.7% for van. Rows touch when Δy ≈ 25.
     // 1-3-3 layout: фото Mercedes Sprinter Ultra Long top-down (1408×768).
-    // Передня кабіна — 3 cells: D (водій верх) + 1 (пасажир посередині) + D2 (співводій низ).
-    // Середній і задній ряди — 3 сидіння стопкою, кучніше (менший вертикальний крок).
+    // Координати задаються центром (cx, cy) + розмір — простіше підкручувати
+    // після візуальної перевірки.
     if (layout === '1-3-3') {
-        const s = (name, type, px0, py0, px1, py1) => ({
+        const W_FRONT = 200, H_FRONT = 170; // передня кабіна (D, 1, D2)
+        const W_ROW = 200, H_ROW = 150;     // мід / задній ряд
+        const s = (name, type, cx, cy, w, h) => ({
             name, type,
             boxed: true,
-            x: px0 / 1408 * 100,
-            y: py0 / 768 * 100,
-            w: (px1 - px0) / 1408 * 100,
-            h: (py1 - py0) / 768 * 100,
+            x: (cx - w / 2) / 1408 * 100,
+            y: (cy - h / 2) / 768 * 100,
+            w: w / 1408 * 100,
+            h: h / 768 * 100,
         });
-        // Передня кабіна — стопкою у лівій частині (D зверху, 1 посередині, D2 знизу)
-        seats.push(s('D',  'driver',  80,  70, 260, 240));   // водій верх (з кермом)
-        seats.push(s('1',  'seat',    90, 290, 270, 470));   // пасажир посередині передньої колонки
-        seats.push(s('D2', 'driver',  80, 520, 260, 690));   // співводій низ
-        // Середній ряд — посунуто вправо і кучніше (менші вертикальні зазори)
-        seats.push(s('2', 'seat',   560, 200, 740, 350));
-        seats.push(s('3', 'seat',   560, 360, 740, 510));
-        seats.push(s('4', 'seat',   560, 520, 740, 670));
-        // Задній ряд — ще далі вправо, та сама кучна вертикаль
-        seats.push(s('5', 'seat',   990, 200, 1170, 350));
-        seats.push(s('6', 'seat',   990, 360, 1170, 510));
-        seats.push(s('7', 'seat',   990, 520, 1170, 670));
+        // Передня кабіна — D, 1, D2 у одному стовпці
+        seats.push(s('D',  'driver', 150, 180, W_FRONT, H_FRONT)); // водій верх
+        seats.push(s('1',  'seat',   150, 360, W_FRONT, H_FRONT)); // пасажир посередині
+        seats.push(s('D2', 'driver', 150, 540, W_FRONT, H_FRONT)); // співводій низ
+        // Середній ряд — 3 сидіння стопкою
+        seats.push(s('2', 'seat', 630, 200, W_ROW, H_ROW));
+        seats.push(s('3', 'seat', 630, 360, W_ROW, H_ROW));
+        seats.push(s('4', 'seat', 630, 520, W_ROW, H_ROW));
+        // Задній ряд — посунуто вперед (ближче до середнього)
+        seats.push(s('5', 'seat', 900, 200, W_ROW, H_ROW));
+        seats.push(s('6', 'seat', 900, 360, W_ROW, H_ROW));
+        seats.push(s('7', 'seat', 900, 520, W_ROW, H_ROW));
         return seats;
     }
 
