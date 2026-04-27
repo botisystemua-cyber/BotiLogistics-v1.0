@@ -5422,17 +5422,17 @@ function getSeatLayout(layout, maxSeats, hasReserve) {
             h: h / 768 * 100,
         });
         // Передня кабіна — D, 1, D2 у одному стовпці
-        seats.push(s('D',  'driver', 150, 180, W_FRONT, H_FRONT)); // водій верх
-        seats.push(s('1',  'seat',   150, 360, W_FRONT, H_FRONT)); // пасажир посередині
-        seats.push(s('D2', 'driver', 150, 540, W_FRONT, H_FRONT)); // співводій низ
+        seats.push(s('D',  'driver', 350, 180, W_FRONT, H_FRONT)); // водій верх
+        seats.push(s('1',  'seat',   350, 360, W_FRONT, H_FRONT)); // пасажир посередині
+        seats.push(s('D2', 'driver', 350, 540, W_FRONT, H_FRONT)); // співводій низ
         // Середній ряд — 3 сидіння стопкою
-        seats.push(s('2', 'seat', 630, 200, W_ROW, H_ROW));
-        seats.push(s('3', 'seat', 630, 360, W_ROW, H_ROW));
-        seats.push(s('4', 'seat', 630, 520, W_ROW, H_ROW));
-        // Задній ряд — посунуто вперед (ближче до середнього)
-        seats.push(s('5', 'seat', 900, 200, W_ROW, H_ROW));
-        seats.push(s('6', 'seat', 900, 360, W_ROW, H_ROW));
-        seats.push(s('7', 'seat', 900, 520, W_ROW, H_ROW));
+        seats.push(s('2', 'seat', 720, 200, W_ROW, H_ROW));
+        seats.push(s('3', 'seat', 720, 360, W_ROW, H_ROW));
+        seats.push(s('4', 'seat', 720, 520, W_ROW, H_ROW));
+        // Задній ряд
+        seats.push(s('5', 'seat', 970, 200, W_ROW, H_ROW));
+        seats.push(s('6', 'seat', 970, 360, W_ROW, H_ROW));
+        seats.push(s('7', 'seat', 970, 520, W_ROW, H_ROW));
         return seats;
     }
 
