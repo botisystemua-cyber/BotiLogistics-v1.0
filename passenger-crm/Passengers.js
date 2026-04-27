@@ -7664,23 +7664,6 @@ function openTripModal(paxIds, mode, callback) {
     renderTripModalStep1();
     bindTmCalendarTouch();
     overlay.classList.add('show');
-
-    // Preload для re-open: якщо пасажир уже на рейсі, одразу пропускаємо
-    // кроки 1-2 і відкриваємо seat-picker з його обраними місцями.
-    if (tmPaxIds.length === 1 && mode !== 'form') {
-        var pxRe = passengers.find(function(x) { return x['PAX_ID'] === tmPaxIds[0]; });
-        if (pxRe && pxRe['CAL_ID']) {
-            var tripRe = trips.find(function(t) { return t.cal_id === pxRe['CAL_ID']; });
-            if (tripRe) {
-                setTimeout(function() {
-                    selectTripDate(formatTripDate(tripRe.date));
-                    selectTripVehicle(pxRe['CAL_ID']);
-                    tmSelectedSeats = new Set(parseSeats(pxRe['Місце в авто'] || ''));
-                    renderTmSeatPicker(tripRe);
-                }, 0);
-            }
-        }
-    }
 }
 
 function closeTripModal() {
@@ -8107,6 +8090,14 @@ function selectTripVehicle(calId) {
     tmSelectedSeats = new Set();
     tmFreeSeating = false; // скидаємо при зміні авто
     tmPendingShifts = {};
+    // Preload: якщо single-pax уже сидить на цьому авто — підставити його
+    // місця як обрані, щоб юзер бачив поточну розсадку і міг правити.
+    if (tmPaxIds.length === 1 && tmPaxIds[0] !== '__form__') {
+        var pxPre = passengers.find(function(x) { return x['PAX_ID'] === tmPaxIds[0]; });
+        if (pxPre && pxPre['CAL_ID'] === calId) {
+            tmSelectedSeats = new Set(parseSeats(pxPre['Місце в авто'] || ''));
+        }
+    }
     document.querySelectorAll('.tm-vehicle-card').forEach(function(el) { el.classList.remove('active'); });
     var el = document.getElementById('tm-veh-' + calId);
     if (el) el.classList.add('active');
