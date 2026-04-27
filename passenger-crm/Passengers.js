@@ -221,6 +221,16 @@ const SELECT_OPTIONS = {
     direction: ['Україна-ЄВ','Європа-УК']
 };
 
+// Granular per-field defaults from owner-crm (system_settings.currency_defaults).
+// Раніше читав тільки сканер посилок — пасажирська викликала
+// window.sbGetCurrencyDefault на 2604 але функція була undefined.
+let _CURRENCY_DEFAULTS = {};
+window.sbGetCurrencyDefault = function(app, field, fallback) {
+    const section = _CURRENCY_DEFAULTS[app];
+    if (!section || typeof section !== 'object') return fallback || '';
+    return section[field] || fallback || '';
+};
+
 async function loadCurrencySettings() {
     try {
         if (typeof sb === 'undefined' || !sb) return;
@@ -228,17 +238,24 @@ async function loadCurrencySettings() {
             .from('system_settings')
             .select('setting_name, setting_value')
             .eq('tenant_id', TENANT_ID)
-            .in('setting_name', ['default_currency', 'supported_currencies']);
+            .in('setting_name', ['default_currency', 'supported_currencies', 'currency_defaults']);
         if (error) throw error;
         const rows = data || [];
         const sup = rows.find(r => r.setting_name === 'supported_currencies');
         const def = rows.find(r => r.setting_name === 'default_currency');
+        const grn = rows.find(r => r.setting_name === 'currency_defaults');
         if (sup && sup.setting_value) {
             const codes = String(sup.setting_value).split(',').map(s => s.trim()).filter(c => CURR_MASTER.includes(c));
             if (codes.length > 0) CURR_ENABLED = codes;
         }
         const defCode = def && def.setting_value ? String(def.setting_value).trim() : '';
         CURR_DEFAULT = CURR_ENABLED.includes(defCode) ? defCode : CURR_ENABLED[0];
+        if (grn && grn.setting_value) {
+            try {
+                const parsed = JSON.parse(grn.setting_value);
+                if (parsed && typeof parsed === 'object') _CURRENCY_DEFAULTS = parsed;
+            } catch (_) { /* corrupt JSON — лишаємо порожній obj */ }
+        }
     } catch (e) {
         console.warn('[currency] load failed, using defaults:', e);
     }
