@@ -1,9 +1,14 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { X, UserPlus, Package, Send, Hash, Search } from 'lucide-react';
+import { X, UserPlus, Package, Send, Hash, Search, Camera, Image as ImageIcon } from 'lucide-react';
 import { useApp } from '../store/useAppStore';
 import { addRouteItem, fetchPackages, fetchShippingItems, searchArchive } from '../api';
 import type { ArchiveMatch } from '../api';
 import { parseSmsText, directionToNapryam } from '../utils/smsParser';
+import { supabase } from '../lib/supabase';
+import { readSession } from '../lib/session';
+
+const PHOTO_BUCKET = 'package-photos';
+const SUPABASE_URL = 'https://pgdhuezxkehpjlxoesoe.supabase.co';
 
 const CARGO_SUGGESTIONS = [
   'Крафтова коробка', 'Дві крафтові коробки', 'Три крафтові коробки',
@@ -89,6 +94,34 @@ export function AddItemModal({ onClose, onAdded, defaultType: dt, forceShipping 
   const [pkgDesc, setPkgDesc] = useState('');
   const [pkgWeight, setPkgWeight] = useState('');
   const [ttn] = useState('');
+  // Фото посилки (тільки для відправки) — URL після успішного upload в storage.
+  const [photoUrl, setPhotoUrl] = useState('');
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const photoCamRef = useRef<HTMLInputElement>(null);
+  const photoGalRef = useRef<HTMLInputElement>(null);
+
+  async function handlePhotoFile(file: File | null) {
+    if (!file) return;
+    setPhotoUploading(true);
+    try {
+      const sess = readSession();
+      const tenantId = sess?.tenant_id || 'tn';
+      let ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+      if (!['jpg', 'jpeg', 'png', 'webp'].includes(ext)) ext = 'jpg';
+      const path = `${tenantId}/_dispatch-${Date.now()}.${ext}`;
+      const { error } = await supabase.storage
+        .from(PHOTO_BUCKET)
+        .upload(path, file, { contentType: file.type || `image/${ext}`, upsert: true });
+      if (error) throw error;
+      const url = `${SUPABASE_URL}/storage/v1/object/public/${PHOTO_BUCKET}/${path}`;
+      setPhotoUrl(url);
+      showToast('📷 Фото додано');
+    } catch (err) {
+      showToast('Помилка фото: ' + (err as Error).message);
+    } finally {
+      setPhotoUploading(false);
+    }
+  }
 
   // Apply prefill once on mount
   useEffect(() => {
@@ -249,6 +282,7 @@ export function AddItemModal({ onClose, onAdded, defaultType: dt, forceShipping 
         data.recipientAddr = recipientAddr;
         data.pkgDesc = pkgDesc;
         data.pkgPieces = pkgPieces;
+        data.photoUrl = photoUrl;
         data.pkgWeight = pkgWeight;
         data.senderPhone = senderPhone;
         data.amount = amount;
@@ -604,6 +638,42 @@ export function AddItemModal({ onClose, onAdded, defaultType: dt, forceShipping 
                           }`}>{v}</button>
                       ))}
                     </div>
+                  </div>
+
+                  {/* 6.5 Фото посилки — дві кнопки: пряма камера + галерея.
+                       Заливаємо у package-photos bucket; URL зберігаємо у state
+                       і передаємо у addRouteItem → dispatches.photo_url. */}
+                  <div>
+                    <label className="block text-[11px] font-semibold text-muted uppercase mb-1">📷 Фото посилки</label>
+                    <div className="flex gap-2">
+                      <button type="button" onClick={() => photoCamRef.current?.click()} disabled={photoUploading}
+                        className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border-2 border-amber-300 bg-amber-50 text-amber-800 text-[12px] font-bold cursor-pointer active:scale-95 transition-all disabled:opacity-50">
+                        <Camera className="w-4 h-4" /> Сфотографувати
+                      </button>
+                      <button type="button" onClick={() => photoGalRef.current?.click()} disabled={photoUploading}
+                        className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border-2 border-blue-300 bg-blue-50 text-blue-700 text-[12px] font-bold cursor-pointer active:scale-95 transition-all disabled:opacity-50">
+                        <ImageIcon className="w-4 h-4" /> Галерея
+                      </button>
+                    </div>
+                    <input ref={photoCamRef} type="file" accept="image/*" capture="environment"
+                      style={{ display: 'none' }}
+                      onChange={(e) => { handlePhotoFile(e.target.files?.[0] || null); e.target.value = ''; }} />
+                    <input ref={photoGalRef} type="file" accept="image/*"
+                      style={{ display: 'none' }}
+                      onChange={(e) => { handlePhotoFile(e.target.files?.[0] || null); e.target.value = ''; }} />
+                    {photoUploading && (
+                      <div className="text-[11px] text-amber-700 mt-1.5">⏳ Завантаження…</div>
+                    )}
+                    {photoUrl && !photoUploading && (
+                      <div className="mt-2 relative">
+                        <img src={photoUrl} alt="Превʼю"
+                          className="max-h-44 w-full object-contain rounded-xl border border-gray-200 bg-gray-50" />
+                        <button type="button" onClick={() => setPhotoUrl('')}
+                          className="absolute top-1.5 right-1.5 px-2 py-1 rounded-lg bg-red-100 text-red-700 text-[10px] font-bold cursor-pointer">
+                          ✕ Очистити
+                        </button>
+                      </div>
+                    )}
                   </div>
 
                   {/* 7. Оплата */}

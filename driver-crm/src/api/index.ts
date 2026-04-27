@@ -476,6 +476,7 @@ export async function addRouteItem(data: Record<string, string>) {
       payment_status: 'pending',
       status: 'pending',
       notes: data.note || '',
+      photo_url: data.photoUrl || null,
     };
 
     const { error } = await supabase.from('dispatches').insert(dispRow);

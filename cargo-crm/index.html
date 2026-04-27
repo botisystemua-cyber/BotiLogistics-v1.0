@@ -510,15 +510,27 @@
       <!-- НП-оплата ведеться окремо через «💰 НП-оплата» кнопку на сканері
            (register_np_payment RPC). За замовчуванням np_status='paid'. -->
 
-      <!-- 📷 Фото посилки -->
-      <div class="fill-row">
+      <!-- 📷 Фото посилки. Для EU→UA весь блок ховається через JS
+           (fill_photoRow.style.display = 'none'), бо там фото додає клієнт у
+           своїй CRM. Дві кнопки — пряма камера + галерея. -->
+      <div class="fill-row" id="fill_photoRow">
         <label>📷 Фото посилки</label>
         <div id="fill_photoWrap" style="display:flex;flex-direction:column;gap:8px;">
-          <div style="display:flex;gap:8px;">
-            <input type="file" id="fill_photoInput" accept="image/*" capture="environment" style="flex:1;">
-            <button type="button" id="fill_photoClear" onclick="clearFillPhoto()" style="background:#fee2e2;color:#991b1b;border:none;border-radius:8px;padding:8px 12px;font-weight:700;cursor:pointer;display:none;">✕</button>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button type="button" onclick="_fillPhotoTrigger('cam')"
+                    style="flex:1 1 calc(50% - 4px);min-width:140px;padding:10px;border:1.5px solid #fbbf24;background:#fef3c7;color:#92400e;border-radius:8px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;">
+              📷 Сфотографувати
+            </button>
+            <button type="button" onclick="_fillPhotoTrigger('gal')"
+                    style="flex:1 1 calc(50% - 4px);min-width:140px;padding:10px;border:1.5px solid #93c5fd;background:#dbeafe;color:#1e40af;border-radius:8px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;">
+              🖼 Галерея
+            </button>
           </div>
+          <input type="file" id="fill_photoInputCam" accept="image/*" capture="environment" style="display:none;">
+          <input type="file" id="fill_photoInputGal" accept="image/*" style="display:none;">
           <img id="fill_photoPreview" style="display:none;max-width:100%;max-height:200px;border-radius:8px;border:1px solid #e5e7eb;object-fit:contain;" alt="Превʼю">
+          <button type="button" id="fill_photoClear" onclick="clearFillPhoto()"
+                  style="background:#fee2e2;color:#991b1b;border:none;border-radius:8px;padding:6px 12px;font-weight:700;cursor:pointer;display:none;align-self:flex-start;">✕ Очистити</button>
           <input type="hidden" id="fill_photoUrl">
         </div>
       </div>
@@ -781,6 +793,31 @@
               <div class="add-row" data-field-key="parcelQty">
                 <label>Кількість позицій</label>
                 <input type="number" id="fQty" placeholder="1" min="1" value="1">
+              </div>
+            </div>
+            <!-- 📷 Фото посилки — лише для UA→EU (для EU→UA фото клієнт додає
+                 сам через клієнтську CRM, тут блок ховаємо). Дві кнопки —
+                 пряма камера (capture) та галерея, той самий патерн що в
+                 inline-editor сканера. -->
+            <div class="add-row" data-field-key="parcelPhoto">
+              <label>📷 Фото посилки</label>
+              <div id="fAddPhotoWrap" style="display:flex;flex-direction:column;gap:8px;">
+                <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                  <button type="button" onclick="_addPhotoTrigger('cam')"
+                          style="flex:1 1 calc(50% - 4px);min-width:140px;padding:10px;border:1.5px solid #fbbf24;background:#fef3c7;color:#92400e;border-radius:8px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;">
+                    📷 Сфотографувати
+                  </button>
+                  <button type="button" onclick="_addPhotoTrigger('gal')"
+                          style="flex:1 1 calc(50% - 4px);min-width:140px;padding:10px;border:1.5px solid #93c5fd;background:#dbeafe;color:#1e40af;border-radius:8px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;">
+                    🖼 Галерея
+                  </button>
+                </div>
+                <input type="file" id="fAddPhotoCam" accept="image/*" capture="environment" style="display:none;" onchange="onAddPhotoPick(this)">
+                <input type="file" id="fAddPhotoGal" accept="image/*" style="display:none;" onchange="onAddPhotoPick(this)">
+                <img id="fAddPhotoPreview" style="display:none;max-width:100%;max-height:200px;border-radius:8px;border:1px solid #e5e7eb;object-fit:contain;" alt="Превʼю">
+                <button type="button" id="fAddPhotoClear" onclick="clearAddPhoto()"
+                        style="background:#fee2e2;color:#991b1b;border:none;border-radius:8px;padding:6px 12px;font-weight:700;cursor:pointer;display:none;align-self:flex-start;">✕ Очистити</button>
+                <input type="hidden" id="fAddPhotoUrl">
               </div>
             </div>
             <div class="add-row-grid">
