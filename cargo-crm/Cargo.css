@@ -489,6 +489,44 @@ body {
 .verify-search-hit-status.unknown  { color: #991b1b; }
 .verify-search-hit-status.in-route { color: #6d28d9; }
 
+/* 🔁 Бейдж кількості дублікатів у заголовку hit-карти. Помаранчевий — щоб
+   виділявся серед сірих метаданих. Hover/open — темніший фон. */
+.verify-search-hit-dup-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  margin-left: 8px;
+  background: #fef3c7; color: #92400e;
+  border: 1px solid #fbbf24; border-radius: 999px;
+  padding: 1px 8px; font-size: 10px; font-weight: 700;
+  cursor: pointer; line-height: 1.4;
+  transition: background 0.15s;
+}
+.verify-search-hit-dup-badge:hover,
+.verify-search-hit-dup-badge.open { background: #fde68a; }
+
+.verify-search-hit-duplist {
+  margin-top: 6px;
+  border-top: 1px dashed #fbbf24;
+  padding-top: 4px;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.verify-dup-row {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 11px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  background: rgba(251,191,36,0.08);
+}
+.verify-dup-row:hover { background: rgba(251,191,36,0.18); }
+.verify-dup-ttn   { font-weight: 700; color: #1f2937; min-width: 100px; }
+.verify-dup-meta  { color: #475569; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.verify-dup-status { font-size: 9px; text-transform: uppercase; letter-spacing: 0.3px; color: #64748b; }
+.verify-dup-status.checking { color: #b45309; }
+.verify-dup-status.ready    { color: #059669; }
+.verify-dup-status.rejected { color: #b91c1c; }
+.verify-dup-status.unknown  { color: #991b1b; }
+.verify-dup-status.in-route { color: #6d28d9; }
+
 /* Терминальний бейдж замість меню дій — клік відкриває картку ліда */
 .verify-search-hit-terminal {
   display: inline-flex; align-items: center;

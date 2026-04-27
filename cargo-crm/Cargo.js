@@ -2167,10 +2167,82 @@ function openScannerPage() {
 let isVerifyActive = false;
 let verifySearchDebounce = null;
 
+// Поля, по яких іде пошук у «Перевірці». Телефони важливі — клієнт може
+// бути збережений за різним ПІБ, але телефон зазвичай той самий. JSON-масив
+// «Ще телефони» обробляється окремо в renderVerifySearchResults (через
+// _verifyFieldMatches), бо includes() не працює на масивах.
 const VERIFY_SEARCH_FIELDS = [
   'Номер ТТН', 'Ід_смарт', 'Адреса в Європі',
   'Піб відправника', 'Піб отримувача',
+  'Телефон отримувача', 'Телефон відправника', 'Телефон реєстратора',
+  'Ще телефони',
 ];
+
+// Нормалізація телефону до digits-only — для матчингу ігноруємо «+», «-», пробіли,
+// дужки тощо. «+380 67 123-45-67» ↔ «380671234567» (12 цифр) → матчиться навіть
+// якщо ввели «067 123 45 67» (10 цифр) бо includes() поглине співпадіння.
+function _normPhoneDigits(s) {
+  return String(s || '').replace(/[^\d]/g, '');
+}
+
+// Чи містить значення поля query? Для звичайних рядків — case-insensitive
+// substring. Для масивів («Ще телефони») — кожен елемент перевіряється
+// окремо як рядок. Для телефонних полів додатково матчимо по digits-only,
+// щоб «067 123» знаходив «+380 067 123…».
+function _verifyFieldMatches(value, queryLower, queryDigits) {
+  if (value == null || value === '') return false;
+  if (Array.isArray(value)) {
+    for (const v of value) {
+      if (_verifyFieldMatches(v, queryLower, queryDigits)) return true;
+    }
+    return false;
+  }
+  const str = String(value).toLowerCase();
+  if (str.includes(queryLower)) return true;
+  // Digits-fallback: спрацьовує тільки коли в query є хоч 4 цифри
+  if (queryDigits && queryDigits.length >= 4) {
+    const valDigits = _normPhoneDigits(value);
+    if (valDigits && valDigits.includes(queryDigits)) return true;
+  }
+  return false;
+}
+
+// Знаходить у allData всі ПОВʼЯЗАНІ посилки для p (виключаючи його самого).
+// Матч: телефон отримувача / відправника / реєстратора / ще телефонів збігається,
+// АБО Ід_смарт збігається. БЕЗ ПІБ — щоб не плутати тезок. Працює in-memory
+// по вже завантаженому списку — тому миттєвий, без додаткових запитів.
+function findRelatedInMemory(p) {
+  if (!p || !Array.isArray(allData)) return [];
+  const norm = _normPhoneDigits;
+  const phoneNeedles = new Set();
+  [p['Телефон отримувача'], p['Телефон відправника'], p['Телефон реєстратора']]
+    .forEach(v => { const d = norm(v); if (d.length >= 6) phoneNeedles.add(d); });
+  const extras = Array.isArray(p['Ще телефони']) ? p['Ще телефони'] : [];
+  for (const x of extras) { const d = norm(x); if (d.length >= 6) phoneNeedles.add(d); }
+  const smart = String(p['Ід_смарт'] || '').trim().toLowerCase();
+  if (phoneNeedles.size === 0 && !smart) return [];
+
+  const out = [];
+  for (const q of allData) {
+    if (q === p) continue;
+    if (q['PKG_ID'] && p['PKG_ID'] && q['PKG_ID'] === p['PKG_ID']) continue;
+    // Phone-collect для q
+    let phoneHit = false;
+    const qPhones = [q['Телефон отримувача'], q['Телефон відправника'], q['Телефон реєстратора']];
+    const qExtras = Array.isArray(q['Ще телефони']) ? q['Ще телефони'] : [];
+    for (const v of qPhones.concat(qExtras)) {
+      const d = norm(v);
+      if (d.length >= 6 && phoneNeedles.has(d)) { phoneHit = true; break; }
+    }
+    let smartHit = false;
+    if (smart) {
+      const qSmart = String(q['Ід_смарт'] || '').trim().toLowerCase();
+      if (qSmart && qSmart === smart) smartHit = true;
+    }
+    if (phoneHit || smartHit) out.push(q);
+  }
+  return out;
+}
 
 function showVerifyPanel() {
   isVerifyActive = true;
@@ -2236,10 +2308,12 @@ function renderVerifySearchResults(q) {
   res.style.display = 'block';
 
   const ql = q.toLowerCase();
-  const hits = (allData || []).filter(p => VERIFY_SEARCH_FIELDS.some(f => {
-    const v = p[f];
-    return v != null && v !== '' && String(v).toLowerCase().includes(ql);
-  })).slice(0, 20); // cap to keep dropdown lightweight
+  // Digits-only варіант запиту — щоб «067 123» матчив «+380 67 123…».
+  // Telephone-fields у БД часто з пробілами/+/дужками, цей fallback покриває.
+  const qDigits = _normPhoneDigits(q);
+  const hits = (allData || []).filter(p =>
+    VERIFY_SEARCH_FIELDS.some(f => _verifyFieldMatches(p[f], ql, qDigits))
+  ).slice(0, 20); // cap to keep dropdown lightweight
 
   if (hits.length === 0) {
     res.innerHTML =
@@ -2307,9 +2381,33 @@ function renderVerifySearchResults(q) {
     const extraHtml = extraParts.length
       ? '<div class="verify-search-hit-extra">' + extraParts.join(' &nbsp;·&nbsp; ') + '</div>'
       : '';
+    // 🔁 Бейдж «Ще N посилок цього клієнта» — матч по телефонах/Ід_смарт.
+    // Інлайн-список розгортається кліком (toggleVerifyDuplicates).
+    const related = findRelatedInMemory(p);
+    const dupBadge = related.length > 0
+      ? '<button class="verify-search-hit-dup-badge" onclick="event.stopPropagation();toggleVerifyDuplicates(\'' + pkgEsc + '\', this)" title="Натисни щоб побачити інші ТТН цього клієнта">🔁 Ще ' + related.length + '</button>'
+      : '';
+    const dupListHtml = related.length > 0
+      ? '<div class="verify-search-hit-duplist" data-duplist="' + pkgEsc + '" style="display:none;">' +
+          related.map(r => {
+            const rPkg = escapeHtmlVerify(r['PKG_ID'] || '');
+            const rTtn = escapeHtmlVerify(r['Номер ТТН'] || '(без ТТН)');
+            const rSt  = verifyHitStatus(r);
+            const rRecv = escapeHtmlVerify(r['Піб отримувача'] || '—');
+            const rSnd  = escapeHtmlVerify(r['Піб відправника'] || '—');
+            return '<div class="verify-dup-row" onclick="openCardById(\'' + rPkg + '\')">' +
+                     '<span class="verify-dup-ttn">' + rTtn + '</span>' +
+                     '<span class="verify-dup-meta">' + rSnd + ' → ' + rRecv + '</span>' +
+                     (rSt.label
+                       ? '<span class="verify-dup-status ' + rSt.cls + '">' + escapeHtmlVerify(rSt.label) + '</span>'
+                       : '') +
+                   '</div>';
+          }).join('') +
+        '</div>'
+      : '';
     return '<div class="verify-search-hit" data-pkg="' + pkgEsc + '">' +
              '<div class="verify-search-hit-info">' +
-               '<div class="verify-search-hit-ttn">' + escapeHtmlVerify(ttn) + '</div>' +
+               '<div class="verify-search-hit-ttn">' + escapeHtmlVerify(ttn) + dupBadge + '</div>' +
                '<div class="verify-search-hit-meta">' +
                  escapeHtmlVerify(sender) + ' → ' + escapeHtmlVerify(recipient) +
                '</div>' +
@@ -2317,10 +2415,21 @@ function renderVerifySearchResults(q) {
                (st.label && !isTerminal && !isReady && !isInRoute
                  ? '<div class="verify-search-hit-status ' + st.cls + '">' + st.label + '</div>'
                  : '') +
+               dupListHtml +
              '</div>' +
              actions +
            '</div>';
   }).join('');
+}
+
+// Тогл inline-списка дублікатів у hit-карті пошуку. Просто показ/ховання,
+// дані вже зрендерені при першому запиті.
+function toggleVerifyDuplicates(pkgId, btn) {
+  const list = document.querySelector('.verify-search-hit-duplist[data-duplist="' + pkgId + '"]');
+  if (!list) return;
+  const open = list.style.display !== 'none';
+  list.style.display = open ? 'none' : '';
+  if (btn) btn.classList.toggle('open', !open);
 }
 
 // Відкрити картку ліда за PKG_ID (використовується у бейджах-статусах
@@ -3318,11 +3427,16 @@ function startVerification(pkgId) {
   apiPost('updateField', { pkg_id: pkgId, col: 'Дата переходу в перевірку', value: when });
   apiPost('updateField', { pkg_id: pkgId, col: 'Джерело перевірки', value: 'crm' });
 
-  // Автоматично шукати дублікати
+  // Автоматично шукати дублікати — матч по телефонах/Ід_смарт. Toast показує
+  // конкретні ТТН (до трьох), щоб менеджер одразу бачив на кого ще є посилки.
   apiPost('findDuplicatesByRecipient', { pkg_id: pkgId }).then(res => {
-    if (res.ok && res.count > 0) {
-      showToast(`⚠️ Знайдено ${res.count} дублікат(ів) по отримувачу`, 'info');
-    }
+    if (!res.ok || !res.count) return;
+    const sample = (res.duplicates || []).slice(0, 3)
+      .map(d => d['Номер ТТН'] || d['PKG_ID'] || '?')
+      .join(', ');
+    const more = res.count > 3 ? ` +${res.count - 3}` : '';
+    const recv = item['Піб отримувача'] || item['Телефон отримувача'] || 'клієнта';
+    showToast(`⚠️ На ${recv}: ще ${res.count} ТТН — ${sample}${more}`, 'info');
   });
 }
 

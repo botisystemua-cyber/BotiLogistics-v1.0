@@ -1462,6 +1462,31 @@
         <button class="topbar-btn" onclick="openHistory()" title="Історія сесії">≡</button>
     </div>
 
+    <!-- 🔁 DUPLICATES MODAL: попередження що на цього клієнта є ще ТТН.
+         Показується ПЕРЕД action-menu. Кнопки:
+           ▶ Продовжити — стандартні дії з цією ТТН (відкриваємо action-menu)
+           ⏭ Пропустити — закриваємо все, повертаємось до сканування -->
+    <div id="dupSheetBackdrop"
+         style="display:none;position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,0.65);align-items:center;justify-content:center;padding:16px;"
+         onclick="if(event.target===this)dupSheetSkip()">
+        <div style="width:100%;max-width:480px;background:#fff;border-radius:16px;padding:18px 16px;max-height:85vh;display:flex;flex-direction:column;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                <span style="font-size:24px;">⚠️</span>
+                <span style="font-weight:800;font-size:15px;color:#92400e;">На цього клієнта є ще ТТН</span>
+            </div>
+            <div id="dupSheetSummary" style="font-size:11px;color:#64748b;margin-bottom:12px;">—</div>
+            <div id="dupSheetList" style="overflow-y:auto;max-height:50vh;display:flex;flex-direction:column;gap:6px;margin-bottom:14px;"></div>
+            <button type="button" onclick="dupSheetContinue()"
+                    style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:14px;border-radius:12px;border:none;background:#10b981;color:#fff;font-weight:800;font-size:14px;cursor:pointer;margin-bottom:8px;">
+                ▶ Продовжити з цією ТТН
+            </button>
+            <button type="button" onclick="dupSheetSkip()"
+                    style="width:100%;padding:11px;border-radius:10px;border:1px solid #e5e7eb;background:#f9fafb;color:#475569;font-weight:600;font-size:13px;cursor:pointer;">
+                ⏭ Пропустити, сканувати далі
+            </button>
+        </div>
+    </div>
+
     <!-- 📷 PHOTO BOTTOM-SHEET: вибір між камерою та галереєю -->
     <div id="photoSheetBackdrop"
          style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.55);align-items:flex-end;justify-content:center;"
@@ -2149,7 +2174,9 @@
                 var prev = _sessionScans[ttn] || 0;
                 _sessionScans[ttn] = prev + 1;
                 setTimeout(function() {
-                    showCheckActionMenu({
+                    // Обгортка: спочатку перевірка дублікатів (телефон/Ід_смарт),
+                    // якщо є — модал-попередження, інакше одразу action-menu.
+                    _showActionMenuMaybeWithDups({
                         ttn: ttn,
                         pkg_id: res.pkg_id,
                         count: Math.max(1, parseInt(res.np_places, 10) || 1),
@@ -2179,6 +2206,163 @@
         // чи «→ Далі» (пропустити, без змін статусу).
         var _camState = { ttn: '', pkg_id: null, count: 1, baseline: 1,
                           isUnknown: false, sessionDup: false };
+
+        // ==== DUPLICATES SEARCH (для попередження «ще N посилок цього клієнта»)
+        // Викликається після успішного peek_ttn для відомої ТТН. Робить два
+        // PostgREST-запити: тягне базовий лід → витягує телефони/Ід_смарт →
+        // тягне всі активні packages і матчить у пам'яті. Без нового SQL RPC.
+        // Не використовуємо ПІБ — лише ідентифікатори (телефони, smart-id),
+        // щоб тезки не давали false positive.
+        function _scanNorm(s) { return String(s == null ? '' : s).replace(/[^\d]/g, ''); }
+        async function _findScannerDuplicates(pkgId) {
+            if (!pkgId || !TENANT_ID) return [];
+            try {
+                var headers = {
+                    apikey: SUPABASE_ANON_KEY,
+                    Authorization: 'Bearer ' + SUPABASE_ANON_KEY
+                };
+                // 1. База — поля ідентифікатори поточного ліда.
+                var base = await fetch(SUPABASE_URL + '/rest/v1/packages' +
+                    '?tenant_id=eq.' + encodeURIComponent(TENANT_ID) +
+                    '&pkg_id=eq.'    + encodeURIComponent(pkgId) +
+                    '&select=recipient_phone,sender_phone,registrar_phone,extra_phones,smart_sender_id,id_smart,recipient_name', {
+                    headers: headers,
+                }).then(function(r) { return r.json(); });
+                if (!Array.isArray(base) || !base.length) return [];
+                var b = base[0];
+
+                var phoneSet = new Set();
+                [b.recipient_phone, b.sender_phone, b.registrar_phone].forEach(function(p) {
+                    var d = _scanNorm(p); if (d.length >= 6) phoneSet.add(d);
+                });
+                if (Array.isArray(b.extra_phones)) {
+                    b.extra_phones.forEach(function(p) {
+                        var d = _scanNorm(p); if (d.length >= 6) phoneSet.add(d);
+                    });
+                }
+                var smart = String(b.smart_sender_id || b.id_smart || '').trim().toLowerCase();
+
+                if (phoneSet.size === 0 && !smart) return [];
+
+                // 2. Усі активні — простіше ніж робити OR-фільтр на PostgREST.
+                // Список зазвичай невеликий (архів виносимо), тому in-memory.
+                var all = await fetch(SUPABASE_URL + '/rest/v1/packages' +
+                    '?tenant_id=eq.' + encodeURIComponent(TENANT_ID) +
+                    '&is_archived=eq.false' +
+                    '&select=pkg_id,ttn_number,recipient_name,recipient_phone,sender_name,sender_phone,registrar_phone,extra_phones,smart_sender_id,id_smart,scan_status,lead_status,quality_check_required', {
+                    headers: headers,
+                }).then(function(r) { return r.json(); });
+                if (!Array.isArray(all)) return [];
+
+                var dups = [];
+                for (var i = 0; i < all.length; i++) {
+                    var row = all[i];
+                    if (row.pkg_id === pkgId) continue;
+                    var rowPhones = new Set();
+                    [row.recipient_phone, row.sender_phone, row.registrar_phone].forEach(function(p) {
+                        var d = _scanNorm(p); if (d.length >= 6) rowPhones.add(d);
+                    });
+                    if (Array.isArray(row.extra_phones)) {
+                        row.extra_phones.forEach(function(p) {
+                            var d = _scanNorm(p); if (d.length >= 6) rowPhones.add(d);
+                        });
+                    }
+                    var phoneHit = false;
+                    var iter = phoneSet.values();
+                    for (var step = iter.next(); !step.done; step = iter.next()) {
+                        if (rowPhones.has(step.value)) { phoneHit = true; break; }
+                    }
+                    var rowSmart = String(row.smart_sender_id || row.id_smart || '').trim().toLowerCase();
+                    var smartHit = !!(smart && rowSmart && smart === rowSmart);
+                    if (phoneHit || smartHit) dups.push(row);
+                }
+                return dups;
+            } catch (e) {
+                console.warn('[scanner duplicates] fetch failed:', e);
+                return [];
+            }
+        }
+
+        // Стан між моменом peek_ttn і кліком «Продовжити» — щоб після підтвердження
+        // викликати showCheckActionMenu з тими самими параметрами.
+        var _pendingActionCfg = null;
+
+        function _statusLabelForDup(row) {
+            // Маленькі бейджі в списку: 🔍 В перевірці / ✅ Готова / ❌ Відхилено / ❓ Невідомий / 🚖 В маршруті.
+            // Використовуємо ті самі дані, що cargo-crm показує.
+            var qc = row.quality_check_required || '';
+            var ls = row.lead_status || '';
+            if (qc === 'В перевірці')        return { l: '🔍 В перевірці',     c: '#b45309', bg: '#fef3c7' };
+            if (qc === 'Готова до маршруту') return { l: '✅ Готова',           c: '#059669', bg: '#d1fae5' };
+            if (qc === 'Відхилено')          return { l: '❌ Відхилено',        c: '#b91c1c', bg: '#fee2e2' };
+            if (ls === 'Невідомий')          return { l: '❓ Невідомий',        c: '#991b1b', bg: '#fecaca' };
+            return { l: '·', c: '#64748b', bg: '#f1f5f9' };
+        }
+
+        function _renderDupSheet(ttn, dups) {
+            var summary = document.getElementById('dupSheetSummary');
+            if (summary) summary.textContent = 'ТТН: ' + ttn + ' · знайдено ' + dups.length + ' інш' +
+                (dups.length === 1 ? 'у' : (dups.length < 5 ? 'і' : 'их')) + ' посил' +
+                (dups.length === 1 ? 'ку' : (dups.length < 5 ? 'ки' : 'ок')) + ' цього клієнта';
+            var list = document.getElementById('dupSheetList');
+            if (!list) return;
+            var esc = function(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) {
+                return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c];
+            }); };
+            list.innerHTML = dups.map(function(d) {
+                var st = _statusLabelForDup(d);
+                var rTtn  = esc(d.ttn_number || '(без ТТН)');
+                var rName = esc(d.recipient_name || '—');
+                var rPhone = esc(d.recipient_phone || '');
+                return '<div style="border:1px solid #e5e7eb;border-radius:10px;padding:8px 10px;background:#fafafa;">' +
+                         '<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;margin-bottom:2px;">' +
+                           '<span style="font-weight:700;font-size:13px;">' + rTtn + '</span>' +
+                           '<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:999px;color:' + st.c + ';background:' + st.bg + ';">' + esc(st.l) + '</span>' +
+                         '</div>' +
+                         '<div style="font-size:11px;color:#475569;">' +
+                           rName + (rPhone ? ' · ' + rPhone : '') +
+                         '</div>' +
+                       '</div>';
+            }).join('');
+        }
+
+        function _openDupSheet() {
+            document.getElementById('dupSheetBackdrop').style.display = 'flex';
+        }
+        function _closeDupSheet() {
+            document.getElementById('dupSheetBackdrop').style.display = 'none';
+        }
+        function dupSheetContinue() {
+            _closeDupSheet();
+            if (_pendingActionCfg) {
+                var cfg = _pendingActionCfg;
+                _pendingActionCfg = null;
+                showCheckActionMenu(cfg);
+            }
+        }
+        function dupSheetSkip() {
+            _closeDupSheet();
+            _pendingActionCfg = null;
+            // Повертаємось у режим сканування — менеджер ввімкне камеру наступним
+            // скан-сигналом. Тут не зупиняємо камеру явно, бо сканер уже у idle.
+        }
+
+        // Обгортка: якщо є дублікати — показати модал і відкласти action-menu.
+        // Інакше — одразу як було (showCheckActionMenu).
+        async function _showActionMenuMaybeWithDups(cfg) {
+            if (!cfg || !cfg.pkg_id || cfg.isUnknown) {
+                showCheckActionMenu(cfg);
+                return;
+            }
+            var dups = await _findScannerDuplicates(cfg.pkg_id);
+            if (!dups || !dups.length) {
+                showCheckActionMenu(cfg);
+                return;
+            }
+            _pendingActionCfg = cfg;
+            _renderDupSheet(cfg.ttn || '', dups);
+            _openDupSheet();
+        }
 
         function showCheckActionMenu(cfg) {
             _camState.ttn        = cfg.ttn || '';

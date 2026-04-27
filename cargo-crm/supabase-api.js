@@ -1337,13 +1337,37 @@ async function sbPeekTTN(ttn) {
 /**
  * Внутрішня функція пошуку дублікатів по отримувачу
  */
-async function _findDuplicatesInternal(excludePkgId, recipientName, recipientPhone) {
+async function _findDuplicatesInternal(excludePkgId, _recipientName, recipientPhone, opts) {
+    // _recipientName лишився у сигнатурі заради зворотньої сумісності зі
+    // старими викликами, але вже НЕ використовується — ПІБ давав false
+    // positives на тезках. Матчимо тільки за ідентифікаторами:
+    //   - телефон отримувача (точний digits-only матч)
+    //   - телефон відправника / реєстратора (точний)
+    //   - smart_sender_id / id_smart (точний, case-insensitive)
+    //   - кожен з extra_phones[] (JSONB-масив додаткових номерів)
+    //
+    // opts (опціонально):
+    //   senderPhone: точний матч по телефону відправника
+    //   smartId:     точний матч по smart-id
+    //   extraPhones: масив телефонів цього ліда — у БД шукаємо посилки де
+    //                будь-який з номерів = recipient_phone / sender_phone /
+    //                будь-який з extra_phones (повний крос-матч).
     try {
-        const name = (recipientName || '').toLowerCase().trim();
-        const phone = (recipientPhone || '').replace(/\s+/g, '').trim();
-        if (!name && !phone) return [];
+        const norm = (s) => String(s || '').replace(/[^\d]/g, '').trim();
+        const recipPhone     = norm(recipientPhone);
+        const senderPhone    = norm(opts && opts.senderPhone);
+        const smartIdRaw     = String((opts && opts.smartId) || '').trim().toLowerCase();
+        const extraPhonesArr = Array.isArray(opts && opts.extraPhones)
+            ? opts.extraPhones.map(norm).filter(p => p && p.length >= 6)
+            : [];
 
-        // Збираємо всі активні посилки цього тенанта
+        const phoneNeedles = new Set();
+        if (recipPhone.length  >= 6) phoneNeedles.add(recipPhone);
+        if (senderPhone.length >= 6) phoneNeedles.add(senderPhone);
+        for (const p of extraPhonesArr) phoneNeedles.add(p);
+
+        if (phoneNeedles.size === 0 && !smartIdRaw) return [];
+
         const { data, error } = await sb.from('packages')
             .select('*')
             .eq('tenant_id', TENANT_ID)
@@ -1355,14 +1379,35 @@ async function _findDuplicatesInternal(excludePkgId, recipientName, recipientPho
             if (row.pkg_id === excludePkgId) continue;
             if (row.crm_status === 'archived') continue;
 
-            const pName = (row.recipient_name || '').toLowerCase();
-            const pPhone = (row.recipient_phone || '').replace(/\s+/g, '');
-
-            if ((name && pName.includes(name)) || (phone && phone.length >= 6 && pPhone.includes(phone))) {
-                const obj = sbToGasObjPkg(row);
-                obj['Борг'] = calcDebtPkg(obj);
-                duplicates.push(obj);
+            // 1) Phone match: recipient_phone, sender_phone, registrar_phone +
+            // кожен з extra_phones цього рядка.
+            const rowPhones = new Set();
+            const rec = norm(row.recipient_phone);
+            const snd = norm(row.sender_phone);
+            const reg = norm(row.registrar_phone);
+            if (rec.length >= 6) rowPhones.add(rec);
+            if (snd.length >= 6) rowPhones.add(snd);
+            if (reg.length >= 6) rowPhones.add(reg);
+            const rowExtras = Array.isArray(row.extra_phones) ? row.extra_phones : [];
+            for (const p of rowExtras) {
+                const np = norm(p);
+                if (np.length >= 6) rowPhones.add(np);
             }
+            let phoneHit = false;
+            for (const needle of phoneNeedles) {
+                if (rowPhones.has(needle)) { phoneHit = true; break; }
+            }
+
+            // 2) Smart-ID match (точний). Підтримуємо обидва імені колонки.
+            const rowSmart = String(row.smart_sender_id || row.id_smart || '').trim().toLowerCase();
+            const smartHit = !!(smartIdRaw && rowSmart && smartIdRaw === rowSmart);
+
+            if (!phoneHit && !smartHit) continue;
+
+            const obj = sbToGasObjPkg(row);
+            obj['Борг'] = calcDebtPkg(obj);
+            obj._dupReason = phoneHit ? 'phone' : 'smart';
+            duplicates.push(obj);
         }
         return duplicates;
     } catch (e) {
@@ -1380,8 +1425,11 @@ async function sbFindDuplicatesByRecipient(params) {
         const pkgId = params.pkg_id;
         if (!pkgId) return { ok: false, error: 'pkg_id обов\'язковий' };
 
+        // Тягнемо всі ідентифікатори ліда — телефони + Ід_смарт + extra_phones.
+        // Колонка id_smart може називатись і так, і smart_sender_id (legacy).
+        // Беремо обидві, fallback в _findDuplicatesInternal.
         const { data, error } = await sb.from('packages')
-            .select('recipient_name, recipient_phone')
+            .select('recipient_name, recipient_phone, sender_phone, registrar_phone, smart_sender_id, id_smart, extra_phones')
             .eq('pkg_id', pkgId)
             .eq('tenant_id', TENANT_ID)
             .limit(1);
@@ -1390,7 +1438,11 @@ async function sbFindDuplicatesByRecipient(params) {
 
         const row = data[0];
         const duplicates = await _findDuplicatesInternal(
-            pkgId, row.recipient_name, row.recipient_phone
+            pkgId, row.recipient_name, row.recipient_phone, {
+                senderPhone: row.sender_phone || row.registrar_phone || '',
+                smartId: row.smart_sender_id || row.id_smart || '',
+                extraPhones: Array.isArray(row.extra_phones) ? row.extra_phones : [],
+            }
         );
 
         return { ok: true, duplicates, count: duplicates.length };
