@@ -256,6 +256,12 @@ let archiveDateTo = '';     // YYYY-MM-DD (тільки для mode='custom')
 // Shape: [{ city, addr }] where city=name_ua, addr=location_name.
 let SWISS_POINTS = [];
 
+// Owner-configurable parcel descriptions loaded from package_descriptions
+// table (managed by owner-crm's PackageDescriptionsPanel). Used as hint
+// dropdowns under fDescription (add form) and fill_description (fill form).
+// Shape: [{ text }].
+let PACKAGE_DESCRIPTIONS = [];
+
 // ===== [SECT-COLUMNS] COLUMN CONFIGURATOR =====
 const ALL_CARD_COLUMNS = [
   { key: 'sender',      label: '👤 ПІБ відправника' },
@@ -2519,6 +2525,10 @@ function openFillModal(pkgId) {
     if (photoUrl) { prev.src = photoUrl; prev.style.display = ''; if (clr) clr.style.display = ''; }
     else { prev.src = ''; prev.style.display = 'none'; if (clr) clr.style.display = 'none'; }
   }
+
+  // Перерендерити dropdown стандартних описів (на випадок якщо каталог
+  // підвантажився після першого рендеру форми).
+  try { initPackageDescriptions(); } catch (_) {}
 
   document.getElementById('fillOverlay').classList.add('open');
   setTimeout(() => {
@@ -6707,6 +6717,7 @@ function openAddForm() {
   clearAddForm();
   setAddDirection(addFormDirection);
   initSwissPoints();
+  initPackageDescriptions();
   // Застосовуємо owner-конфіг (system_settings.fill_form_cargo): ховаємо
   // [data-field-key=…] і блок SMS-парсера якщо власник їх вимкнув.
   applyFillFormConfig();
@@ -7056,6 +7067,45 @@ function selectSwissPoint(suffix, idx) {
   document.getElementById('swissList' + suffix).classList.remove('open');
 }
 
+// ===== [SECT-PKGDESCR] Package description hints =====
+// Owner-керований каталог описів посилок (напр. "Документи", "Одяг").
+// Показуються як випадаюче меню під полями fDescription (add-form) та
+// fill_description (fill-form). Клік підставляє текст у поле.
+
+function initPackageDescriptions() {
+  // Двa цільових поля: 'add' → fDescription (input), 'fill' → fill_description (textarea)
+  ['add', 'fill'].forEach(target => {
+    const list = document.getElementById('descrList' + (target === 'add' ? 'Add' : 'Fill'));
+    if (!list) return;
+    if (!PACKAGE_DESCRIPTIONS.length) {
+      list.innerHTML = '<div class="add-swiss-item" style="opacity:.6;cursor:default">Описи ще не додано — налаштуйте у Власницькій панелі</div>';
+      return;
+    }
+    list.innerHTML = PACKAGE_DESCRIPTIONS.map((d, i) => `
+      <div class="add-swiss-item" onclick="selectPackageDescription('${target}', ${i})">
+        <span class="add-swiss-city">${d.text}</span>
+      </div>
+    `).join('');
+  });
+}
+
+function togglePackageDescriptions(target) {
+  const id = 'descrList' + (target === 'add' ? 'Add' : 'Fill');
+  const el = document.getElementById(id);
+  if (el) el.classList.toggle('open');
+}
+
+function selectPackageDescription(target, idx) {
+  const d = PACKAGE_DESCRIPTIONS[idx];
+  if (!d) return;
+  const fieldId = target === 'add' ? 'fDescription' : 'fill_description';
+  const field = document.getElementById(fieldId);
+  if (field) field.value = d.text;
+  const listId = 'descrList' + (target === 'add' ? 'Add' : 'Fill');
+  const list = document.getElementById(listId);
+  if (list) list.classList.remove('open');
+}
+
 function toggleAddSection(titleEl) {
   const body = titleEl.nextElementSibling;
   const arrow = titleEl.querySelector('span:last-child');
@@ -7397,6 +7447,19 @@ async function loadRoutePointsCatalog() {
   }
 }
 
+async function loadPackageDescriptionsCatalog() {
+  try {
+    const res = await apiPost('getPackageDescriptions', {});
+    if (!res.ok || !Array.isArray(res.data)) return;
+    PACKAGE_DESCRIPTIONS = res.data
+      .filter(d => d && d.text)
+      .map(d => ({ text: d.text }));
+    try { initPackageDescriptions(); } catch (_) {}
+  } catch (e) {
+    console.warn('loadPackageDescriptionsCatalog failed:', e);
+  }
+}
+
 async function loadData() {
   if (isLoading) return;
   isLoading = true;
@@ -7407,7 +7470,8 @@ async function loadData() {
       apiPost('getAll', { sheet: 'all', filter: {} }),
       apiPost('getStats', {}),
       apiPost('getRoutesList', {}),
-      loadRoutePointsCatalog()
+      loadRoutePointsCatalog(),
+      loadPackageDescriptionsCatalog()
     ]);
 
     if (dataRes.ok) {
