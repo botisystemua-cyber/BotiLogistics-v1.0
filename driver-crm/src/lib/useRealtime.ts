@@ -18,7 +18,7 @@ type AnyRow = { [key: string]: unknown };
 export type RtPayload = RealtimePostgresChangesPayload<AnyRow>;
 
 export function useRealtimeTable(
-  table: 'packages' | 'routes' | 'passengers',
+  table: 'packages' | 'routes' | 'passengers' | 'dispatches',
   onChange: (payload: RtPayload) => void,
 ) {
   const cbRef = useRef(onChange);
