@@ -54,16 +54,12 @@ interface Props {
 export function AddItemModal({ onClose, onAdded, defaultType: dt, forceShipping = false, prefill }: Props) {
   const { currentSheet, isUnifiedView, routes, driverName, viewTab, shippingRoutes, showToast } = useApp();
 
-  // За замовчуванням «посилка» для всіх посилкових табів (включно з
-  // pkgUaEu/pkgEuUa/allPackages). defaultDirection нижче вже = 'відправка',
-  // тому водій тапнув «+» у будь-якому посилковому контексті → одразу
-  // готова форма «Оформити відправку».
-  const defaultType = dt || (
-    viewTab === 'packages' || viewTab === 'shipping' || viewTab === 'allPackages'
-      || viewTab === 'pkgUaEu' || viewTab === 'pkgEuUa'
-    ? 'посилка'
-    : 'пасажир'
-  );
+  // За замовчуванням «посилка → відправка». Виняток — явно пасажирські таби,
+  // там логічно одразу пасажирська форма. Раніше було навпаки (whitelist
+  // posyлкових), і таб «Усі» падав у пасажирську форму, хоча водій
+  // частіше додає саме відправки.
+  const isPaxTab = viewTab === 'passengers' || viewTab === 'paxUaEu' || viewTab === 'paxEuUa';
+  const defaultType = dt || (isPaxTab ? 'пасажир' : 'посилка');
   const [itemType, setItemType] = useState<'пасажир' | 'посилка'>(forceShipping ? 'посилка' : defaultType);
   const [selectedRoute, setSelectedRoute] = useState(isUnifiedView ? routes[0]?.name || '' : currentSheet);
   const [submitting, setSubmitting] = useState(false);
