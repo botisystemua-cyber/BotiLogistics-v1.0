@@ -1403,7 +1403,10 @@ function renderCard(p, routeCtx) {
     metaHtml += `<span class="meta-tag" style="background:#fef3c7;color:#92400e;">📅 Візит: ${escapeHtml(formatTripDate(p['Дата отримання']))}</span>`;
   }
   if (visCols.includes('statusPkg') && statusPkg) metaHtml += `<span class="meta-tag">${escapeHtml(statusPkg)}</span>`;
-  if (visCols.includes('smartId') && p['Ід_смарт']) metaHtml += `<span class="meta-tag">🆔 ${highlightMatch(String(p['Ід_смарт']))}</span>`;
+  if (visCols.includes('smartId') && p['Ід_смарт']) {
+    const _ss = String(p['Ід_смарт']).replace(/'/g, "\\'");
+    metaHtml += `<span class="meta-tag copyable" onclick="event.stopPropagation(); copyToClipboard('${_ss}', 'Ід_смарт скопійовано')" title="Клац — скопіювати Ід_смарт">🆔 ${highlightMatch(String(p['Ід_смарт']))}</span>`;
+  }
   // Внутрішній № винесено у card-top-row як .badge-inner-num — у meta-row не дублюємо.
   if (visCols.includes('phone') && phone) {
     const _sp = String(phone).replace(/'/g, "\\'");
