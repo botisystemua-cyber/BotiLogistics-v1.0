@@ -1427,9 +1427,41 @@
             <button class="topbar-btn history-db-btn" id="historyDbBtn"
                     onclick="openHistoryOverlay()" title="Історія сканувань"
                     style="display:none;">📋</button>
+            <!-- 📷 Фото для останньої сканованої ТТН. disabled доки нічого не сканували -->
+            <button class="topbar-btn photo-btn" id="photoBtn"
+                    onclick="openPhotoSheet()" title="Додати фото до останньої ТТН"
+                    style="display:none;">📷</button>
         </div>
         <button class="topbar-btn" onclick="openHistory()" title="Історія сесії">≡</button>
     </div>
+
+    <!-- 📷 PHOTO BOTTOM-SHEET: вибір між камерою та галереєю -->
+    <div id="photoSheetBackdrop"
+         style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.55);align-items:flex-end;justify-content:center;"
+         onclick="if(event.target===this)closePhotoSheet()">
+        <div style="width:100%;max-width:480px;background:#fff;border-radius:18px 18px 0 0;padding:18px 16px 26px;">
+            <div style="font-weight:800;font-size:15px;text-align:center;margin-bottom:4px;">
+                📷 Фото для ТТН
+            </div>
+            <div id="photoSheetTtn" style="font-size:11px;color:#64748b;text-align:center;margin-bottom:14px;">—</div>
+            <button type="button" onclick="pickPhoto('camera')"
+                    style="display:flex;align-items:center;gap:10px;width:100%;padding:14px;border-radius:12px;border:1.5px solid #d1d5db;background:#fef3c7;color:#92400e;font-weight:700;font-size:14px;cursor:pointer;margin-bottom:10px;">
+                <span style="font-size:22px;">📷</span> Сфотографувати зараз
+            </button>
+            <button type="button" onclick="pickPhoto('gallery')"
+                    style="display:flex;align-items:center;gap:10px;width:100%;padding:14px;border-radius:12px;border:1.5px solid #d1d5db;background:#dbeafe;color:#1e40af;font-weight:700;font-size:14px;cursor:pointer;margin-bottom:14px;">
+                <span style="font-size:22px;">🖼</span> Вибрати з галереї
+            </button>
+            <button type="button" onclick="closePhotoSheet()"
+                    style="width:100%;padding:11px;border-radius:10px;border:1px solid #e5e7eb;background:#f9fafb;color:#475569;font-weight:600;font-size:13px;cursor:pointer;">
+                Скасувати
+            </button>
+        </div>
+    </div>
+
+    <!-- Приховані input'и для двох режимів. capture=environment → пряма камера. -->
+    <input type="file" id="photoInputCamera"  accept="image/*" capture="environment" style="display:none;" onchange="onPhotoFilePicked(this)">
+    <input type="file" id="photoInputGallery" accept="image/*" style="display:none;" onchange="onPhotoFilePicked(this)">
 
     <!-- RESULT TOAST -->
     <div class="result-toast" id="resultToast">
@@ -2070,6 +2102,7 @@
             if (res && res.ok && res.pkg_id) {
                 lastScannedPkgId = res.pkg_id;
                 lastScannedTtn   = ttn;
+                _refreshPhotoBtn();
                 // editBtn видалено; НП-оплата тепер у cam-actions
             }
 
@@ -2197,6 +2230,7 @@
             if (_camState.pkg_id) {
                 lastScannedPkgId = _camState.pkg_id;
                 lastScannedTtn   = _camState.ttn;
+                _refreshPhotoBtn();
             }
 
             // Ховаємо mainBtn — меню саме вирішує, що далі
@@ -2463,6 +2497,7 @@
                         } else {
                             lastScannedPkgId = row.pkg_id;
                             lastScannedTtn   = ttn;
+                            _refreshPhotoBtn();
                             // editBtn видалено; НП-оплата тепер у cam-actions
                             // Додаємо в сесійний набір, щоб повторний скан розпізнав дубль
                             _sessionScans[ttn] = (_sessionScans[ttn] || 0) + 1;
@@ -2546,6 +2581,115 @@
             return SUPABASE_URL + '/storage/v1/object/public/' +
                    STORAGE_BUCKET + '/' + path;
         }
+
+        // Show/hide topbar 📷 button — лише коли є lastScannedPkgId, бо без
+        // ID нема до чого приєднати фото (orphan-файли у storage не лишаємо).
+        function _refreshPhotoBtn() {
+            var btn = document.getElementById('photoBtn');
+            if (!btn) return;
+            btn.style.display = lastScannedPkgId ? 'inline-flex' : 'none';
+        }
+
+        // Топбарна кнопка 📷 → відкриває bottom-sheet із вибором камера/галерея.
+        // Якщо ТТН ще не сканована — ховаємо взагалі (refresh робить це сам).
+        function openPhotoSheet() {
+            if (!lastScannedPkgId) {
+                showToast({ variant: 'warn', icon: 'ℹ️', label: 'Спочатку відскануй ТТН',
+                            value: '', status: 'фото приєднується до останньої посилки' });
+                setTimeout(function(){ document.getElementById('resultToast').classList.remove('show'); }, 2000);
+                return;
+            }
+            document.getElementById('photoSheetTtn').textContent =
+                (lastScannedTtn || '') + ' · ' + lastScannedPkgId;
+            document.getElementById('photoSheetBackdrop').style.display = 'flex';
+        }
+        function closePhotoSheet() {
+            document.getElementById('photoSheetBackdrop').style.display = 'none';
+        }
+
+        // Користувач натиснув одну з опцій → клікаємо відповідний прихований
+        // <input type=file>. iOS/Android самі відкриють камеру або галерею
+        // завдяки атрибуту capture (в одному з input'ів).
+        function pickPhoto(mode) {
+            closePhotoSheet();
+            var inp = document.getElementById(
+                mode === 'camera' ? 'photoInputCamera' : 'photoInputGallery'
+            );
+            if (!inp) return;
+            inp.value = ''; // дозволяємо повторний вибір того ж файлу
+            inp.click();
+        }
+
+        // Файл обрано (з камери або галереї). Завантажуємо у Storage,
+        // потім PATCH packages.photo_url для останньої сканованої посилки.
+        // Після успіху — toast і нічого більше не робимо: оператор лишається
+        // у сканері й продовжує сканувати.
+        function onPhotoFilePicked(inputEl) {
+            var file = inputEl.files && inputEl.files[0];
+            if (!file) return;
+            if (!lastScannedPkgId || !TENANT_ID) {
+                showToast({ variant: 'error', icon: '❌', label: 'Немає активної ТТН',
+                            value: file.name, status: '' });
+                setTimeout(function(){ document.getElementById('resultToast').classList.remove('show'); }, 2500);
+                return;
+            }
+            var pkgId = lastScannedPkgId;
+            var ttn   = lastScannedTtn || '';
+            var ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+            if (['jpg','jpeg','png','webp'].indexOf(ext) === -1) ext = 'jpg';
+            var path = (TENANT_ID || 'tn') + '/' + pkgId + '-' + Date.now() + '.' + ext;
+
+            showToast({ variant: 'created', icon: '⏳', label: 'Завантаження фото…',
+                        value: ttn || pkgId, status: '' });
+
+            sb.storage.from(STORAGE_BUCKET).upload(path, file, {
+                contentType: file.type || ('image/' + ext),
+                upsert: true,
+            }).then(function(res) {
+                if (res.error) {
+                    console.error('[scanner photo] upload error:', res.error);
+                    showToast({ variant: 'error', icon: '❌', label: 'Помилка фото',
+                                value: '', status: res.error.message || 'upload failed' });
+                    setTimeout(function(){ document.getElementById('resultToast').classList.remove('show'); }, 3000);
+                    return;
+                }
+                var url = _photoPublicUrl(path);
+                // PATCH packages.photo_url — щоб у CRM/водія одразу було видно фото.
+                fetch(SUPABASE_URL + '/rest/v1/packages' +
+                      '?tenant_id=eq.' + encodeURIComponent(TENANT_ID) +
+                      '&pkg_id=eq.'    + encodeURIComponent(pkgId), {
+                    method: 'PATCH',
+                    headers: {
+                        apikey: SUPABASE_ANON_KEY,
+                        Authorization: 'Bearer ' + SUPABASE_ANON_KEY,
+                        'Content-Type': 'application/json',
+                        Prefer: 'return=minimal',
+                    },
+                    body: JSON.stringify({ photo_url: url }),
+                }).then(function(r) {
+                    if (!r.ok) {
+                        showToast({ variant: 'error', icon: '⚠️', label: 'Фото залилось, але БД не оновилась',
+                                    value: ttn || pkgId, status: 'статус ' + r.status });
+                        setTimeout(function(){ document.getElementById('resultToast').classList.remove('show'); }, 3000);
+                        return;
+                    }
+                    showToast({ variant: 'success', icon: '📷', label: 'Фото додано',
+                                value: ttn || pkgId, status: 'продовжуй сканувати' });
+                    setTimeout(function(){ document.getElementById('resultToast').classList.remove('show'); }, 1800);
+                }).catch(function(err) {
+                    console.error('[scanner photo] patch:', err);
+                    showToast({ variant: 'error', icon: '❌', label: 'Мережа',
+                                value: '', status: String(err && err.message || err) });
+                    setTimeout(function(){ document.getElementById('resultToast').classList.remove('show'); }, 3000);
+                });
+            }).catch(function(err) {
+                console.error('[scanner photo] network:', err);
+                showToast({ variant: 'error', icon: '❌', label: 'Мережа',
+                            value: '', status: String(err && err.message || err) });
+                setTimeout(function(){ document.getElementById('resultToast').classList.remove('show'); }, 3000);
+            });
+        }
+
         function onInlinePhotoPick(inputEl) {
             var file = inputEl.files && inputEl.files[0];
             if (!file) return;
@@ -3925,6 +4069,7 @@
                     if (r && r.pkg_id) {
                         lastScannedPkgId = r.pkg_id;
                         lastScannedTtn   = ttn;
+                        _refreshPhotoBtn();
                         // editBtn видалено; НП-оплата тепер у cam-actions
                     }
                     showToast({
@@ -4166,6 +4311,7 @@
                 // editBtn видалено
                 lastScannedPkgId = null;
                 lastScannedTtn   = null;
+                _refreshPhotoBtn();
                 closeNpModal();
                 closeUnknownSheet();
                 closeCheckActionMenu();
