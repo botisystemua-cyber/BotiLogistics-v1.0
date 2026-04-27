@@ -6010,7 +6010,9 @@ function openSeatPicker(paxId, sheet) {
     seatPickerPaxId = paxId;
     seatPickerSheet = sheet;
     seatPickerSelected = new Set(parseSeats(p['Місце в авто']));
-    seatPickerFreeSeating = (p['Гнучке'] === true || p['Гнучке'] === 'true');
+    // Вільна розсадка ніколи не активна апріоре — користувач має явно натиснути,
+    // інакше save заблоковано (валідація в saveSeatPicker).
+    seatPickerFreeSeating = false;
 
     const calId = p['CAL_ID'] || '';
     if (!calId) { renderSeatPickerNoTrip(); return; }
@@ -6412,6 +6414,12 @@ async function saveSeatPicker() {
     const shName = seatPickerSheet || '';
     const p = passengers.find(x => x['PAX_ID'] === paxId);
     if (!p) return;
+    // Користувач має явно або обрати місця, або натиснути «Без місця».
+    // Порожній вибір без флагу — не зберігаємо.
+    if (seatPickerSelected.size === 0 && !seatPickerFreeSeating) {
+        showToast('⚠️ Оберіть місце або натисніть «Без місця»');
+        return;
+    }
 
     const colName = 'Місце в авто';
     const oldVal = p[colName] || '';
@@ -7966,8 +7974,10 @@ function renderTmSeatPicker(trip) {
         clickHandler: 'tmSelectAssignSeat',
         isSelected: function(name) { return tmSelectedSeats.has(name); }
     });
-    // Radio-style індикатор: ● коли активне, ○ коли ні. Активне = «Без місця» (вибрано).
-    var freeActive = tmFreeSeating || tmSelectedSeats.size === 0;
+    // Radio-style індикатор: ● коли активне, ○ коли ні. Активне тільки якщо
+    // користувач явно натиснув «Без місця» — порожній вибір НЕ трактується
+    // автоматично як вільна розсадка (валідація в confirmTripAssign).
+    var freeActive = tmFreeSeating;
     var freeBtnCls = freeActive ? 'tm-free-btn active' : 'tm-free-btn';
     var radioGlyph = freeActive ? '●' : '○';
     var pickedInfo = tmSelectedSeats.size > 0
@@ -8013,7 +8023,13 @@ async function confirmTripAssign() {
     var callback = tmFormCallback;
     // Збираємо вибір: масив обраних місць + прапор «вільна розсадка»
     var pickedSeats = Array.from(tmSelectedSeats);
-    var freeSeating = tmFreeSeating || pickedSeats.length === 0;
+    // Користувач має явно або обрати місця, або натиснути «Без місця».
+    // Порожній вибір без флагу — не призначаємо.
+    if (pickedSeats.length === 0 && !tmFreeSeating) {
+        showToast('⚠️ Оберіть місце або натисніть «Без місця»');
+        return;
+    }
+    var freeSeating = tmFreeSeating;
 
     // Якщо з форми додавання — callback і закриваємо
     if (mode === 'form' && callback) {
