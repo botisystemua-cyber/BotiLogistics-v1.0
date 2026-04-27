@@ -5484,6 +5484,15 @@ function renderRouteCard(r, idx, sheetName) {
     // backend сам мовчки пропустить їх при спробі редагування.
     const ttn = r['Номер ТТН'] || '';
     const desc = r['Опис'] || r['Опис посилки'] || '';
+    // Якщо в маршруті primary-лід обʼєднання — додатково показуємо ТТН
+    // дочок, щоб водій бачив усі коробки клієнта (рядок «🔗 + ТТН A, B»).
+    const _routePkg = (allData || []).find(p => p['PKG_ID'] === leadId);
+    const _routeMergedTtns = (_routePkg && typeof getMergedChildren === 'function')
+        ? getMergedChildren(leadId).map(c => c['Номер ТТН']).filter(Boolean)
+        : [];
+    const _routeMergedHtml = _routeMergedTtns.length > 0
+        ? `<div class="route-card-merged">🔗 + ${_routeMergedTtns.length} ТТН: ${_routeMergedTtns.map(t => escapeHtml(t)).join(', ')}</div>`
+        : '';
     const contactsFields = isPax ? [
         {label: 'ПІБ', key: 'Піб пасажира', value: name},
         {label: 'Телефон', key: 'Телефон пасажира', value: phone},
@@ -5560,6 +5569,7 @@ function renderRouteCard(r, idx, sheetName) {
                 ${lsBadge} ${payBadge}
                 ${_routeDebtUnpaid ? `<span class="badge badge-unpaid" title="Не повністю оплачено">🔴 Борг: ${_routeDebt}${curr ? ' ' + curr : ''}</span>` : ''}
             </div>
+            ${_routeMergedHtml}
             ${(from || to) ? `<div class="route-card-route">📍 ${from || '—'} → ${to || '—'}</div>` : ''}
             <div class="route-card-meta">
                 ${auto ? `<span>🚐 ${auto}</span>` : ''}

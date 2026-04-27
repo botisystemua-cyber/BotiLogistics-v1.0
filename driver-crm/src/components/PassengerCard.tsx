@@ -147,6 +147,13 @@ export function PassengerCard({ passenger: p, index, searchQuery = '', onEdit }:
           })()}
         </div>
 
+        {/* 🔗 Перелік об'єднаних ТТН (якщо це primary з дочками) */}
+        {p.mergedTtns && p.mergedTtns.length > 0 && (
+          <div className="mb-2 px-2 py-1 rounded-lg bg-violet-50 border border-violet-200 text-[11px] font-bold text-violet-700">
+            🔗 + {p.mergedTtns.length} ТТН: {p.mergedTtns.join(', ')}
+          </div>
+        )}
+
         <div className="flex gap-2 mb-2">
           <Btn icon={Phone} label="Дзвонити" color="bg-green-50 text-green-700" onClick={() => { if (p.phone) window.location.href = `tel:${p.phone}`; else showToast('Немає телефону'); }} />
           <Btn icon={MessageCircle} label="Написати" color="bg-purple-50 text-purple-700" onClick={() => { if (p.phone) setShowMessenger(true); else showToast('Немає телефону'); }} />

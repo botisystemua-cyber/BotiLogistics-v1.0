@@ -105,10 +105,42 @@ function buildCommon(r: any, sheetName: string) {
     tipsCurrency: s(r.tips_currency) || getCurrencyDefault(app, 'tips'),
     paymentCollectedBy: s(r.payment_collected_by),
     paymentCollectedAt: s(r.payment_collected_at),
+    mergedTtns: [] as string[],  // заповнюємо після основного запиту, в _enrichWithMergedTtns
     sheet: sheetName,
     _statusKey: '',
     _sourceRoute: undefined as string | undefined,
   };
+}
+
+// Збагачує масив маршрутних рядків переліком ТТН дочок-обʼєднаних посилок
+// (поле mergedTtns). Водій у PackageCard бачить «🔗 + ТТН A, B» — щоб не
+// пропустити коробки клієнта на пункті видачі. Один запит на все, групуємо
+// по merged_into_pkg_id у пам'яті.
+async function _enrichWithMergedTtns<T extends { itemId: string; mergedTtns: string[] }>(
+  rows: T[],
+): Promise<T[]> {
+  if (!rows || rows.length === 0) return rows;
+  const tenantId = getTenantId();
+  const primaryIds = rows.map((r) => r.itemId).filter(Boolean);
+  if (primaryIds.length === 0) return rows;
+  const { data, error } = await supabase
+    .from('packages')
+    .select('ttn_number, merged_into_pkg_id')
+    .eq('tenant_id', tenantId)
+    .in('merged_into_pkg_id', primaryIds);
+  if (error || !data) return rows;
+  const byPrimary: Record<string, string[]> = {};
+  for (const child of data) {
+    const pid = child.merged_into_pkg_id;
+    if (!pid) continue;
+    if (!byPrimary[pid]) byPrimary[pid] = [];
+    if (child.ttn_number) byPrimary[pid].push(String(child.ttn_number));
+  }
+  for (const row of rows) {
+    const list = byPrimary[row.itemId];
+    if (list && list.length > 0) row.mergedTtns = list;
+  }
+  return rows;
 }
 
 // ============================================
@@ -132,7 +164,7 @@ export async function fetchPassengers(sheetName: string): Promise<Passenger[]> {
   if (error) throw error;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (data ?? [] as any[])
+  const rows = (data ?? [] as any[])
     .filter((r: any) => r.pax_id_or_pkg_id)
     .map((r: any) => ({
       ...buildCommon(r, r.rte_id || sheetName),
@@ -144,6 +176,7 @@ export async function fetchPassengers(sheetName: string): Promise<Passenger[]> {
       baggageWeight: s(r.baggage_weight),
       seat: s(r.seat_number),
     } as Passenger));
+  return _enrichWithMergedTtns(rows);
 }
 
 // ============================================
@@ -167,7 +200,7 @@ export async function fetchPackages(sheetName: string): Promise<Package[]> {
   if (error) throw error;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (data ?? [] as any[])
+  const rows = (data ?? [] as any[])
     .filter((r: any) => r.pax_id_or_pkg_id)
     .map((r: any) => ({
       ...buildCommon(r, r.rte_id || sheetName),
@@ -182,6 +215,7 @@ export async function fetchPackages(sheetName: string): Promise<Package[]> {
       pkgDesc: s(r.package_description),
       pkgWeight: s(r.package_weight),
     } as Package));
+  return _enrichWithMergedTtns(rows);
 }
 
 // ============================================
