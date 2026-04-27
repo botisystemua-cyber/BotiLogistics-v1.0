@@ -6079,7 +6079,7 @@ function seatFlexHoverIn(seatName, occupantPaxId) {
         const me = passengers.find(x => x['PAX_ID'] === seatPickerPaxId);
         if (me) trip = trips.find(t => t.cal_id === me['CAL_ID']);
     } else if (typeof tmSelectedCalId !== 'undefined' && tmSelectedCalId
-            && typeof tmPaxIds !== 'undefined' && tmPaxIds.length === 1) {
+            && typeof tmPaxIds !== 'undefined' && tmPaxIds.length >= 1) {
         trip = trips.find(t => t.cal_id === tmSelectedCalId);
     }
     if (!trip) return;
@@ -8052,11 +8052,12 @@ async function doAssignTrip(calId, paxIds, pickedSeats, freeSeating) {
 
     // Phase 2 shuffle: для кожного picked місця, де сидить flexible-пасажир,
     // спершу посунути його на наступне вільне. Атомарно — якщо не зміг хоча
-    // б одного, скасовуємо все.
-    if (pickedSeats.length > 0 && paxIds.length === 1) {
+    // б одного, скасовуємо все. Працює і для multi-pax: paxIds — це нові ліди,
+    // їх ще немає в occupiedMap, тому виключати нікого з мапи не треба.
+    if (pickedSeats.length > 0) {
         var trip0 = trips.find(function(t) { return t.cal_id === calId; });
         if (trip0) {
-            var occMap = getOccupiedSeats(calId, paxIds[0]);
+            var occMap = getOccupiedSeats(calId, null);
             var reserved = new Set(pickedSeats);
             var shuffles = [];
             for (var i = 0; i < pickedSeats.length; i++) {
