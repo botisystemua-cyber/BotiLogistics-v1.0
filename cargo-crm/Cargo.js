@@ -1169,7 +1169,9 @@ function isNew24h(p) {
 }
 
 function filterData() {
-  let data = allData.filter(p => p['Статус CRM'] !== 'Архів');
+  // Дочки обʼєднаних лідів приховуємо зі списку — вони показуються як вкладені
+  // ТТН у primary-картці. Архів теж відсіваємо.
+  let data = allData.filter(p => p['Статус CRM'] !== 'Архів' && !isMergedChild(p));
 
   // Direction filter
   if (currentDirection === 'all') {
@@ -1309,10 +1311,22 @@ function renderCard(p, routeCtx) {
   const npPlaces = parseInt(p['Місця НП'], 10) || 0;
   const itemCount = parseInt(p['Кількість позицій'], 10) || 0;
   const photoUrl = p['Фото посилки'] || '';
-  const price = p['Сума'] || '';
+  // Якщо лід — primary обʼєднаного, фінанси й перелік ТТН агрегуємо з усіх
+  // дочок. Бейдж «🔗 N ТТН» показуємо при ≥2 ТТН.
+  const _mergedChildren = isMergedPrimary(p) ? getMergedChildren(p['PKG_ID']) : [];
+  const _isMergedHead   = _mergedChildren.length > 0;
+  const _mergedTtns     = _isMergedHead ? getMergedTtns(p) : [];
+  const _mergedFin      = _isMergedHead ? getMergedFinance(p) : null;
+  const price = _isMergedHead && _mergedFin
+    ? String(_mergedFin.sum)
+    : (p['Сума'] || '');
   const currency = p['Валюта оплати'] || '';
-  const deposit = parseFloat(p['Завдаток']) || 0;
-  const debt = parseFloat(p['Борг']) || 0;
+  const deposit = _isMergedHead && _mergedFin
+    ? _mergedFin.deposit
+    : (parseFloat(p['Завдаток']) || 0);
+  const debt = _isMergedHead && _mergedFin
+    ? _mergedFin.debt
+    : (parseFloat(p['Борг']) || 0);
   const payStatus = p['Статус оплати'] || '';
   const leadStatus = p['Статус ліда'] || '';
   const ttn = p['Номер ТТН'] || '';
@@ -1355,8 +1369,16 @@ function renderCard(p, routeCtx) {
     ? `<span class="badge ${controlCheck === 'Готова до маршруту' ? 'badge-confirmed' : 'badge-check'}">${controlCheck === 'Готова до маршруту' ? 'Готова' : controlCheck}</span>`
     : '';
 
-  // TTN display
-  const ttnHtml = (isUE && ttn) ? `<span class="card-ttn copyable" onclick="event.stopPropagation(); copyToClipboard('${String(ttn).replace(/'/g, "\\'")}', 'ТТН скопійовано')" title="Клац — скопіювати ТТН">TTH: ${highlightMatch(ttn)}</span>` : '';
+  // TTN display. Для merged-primary показуємо ВСІ ТТН через кому (не тільки
+  // основний), і додаємо бейдж «🔗 N ТТН» — клік розгортає картку.
+  let ttnHtml;
+  if (_isMergedHead && _mergedTtns.length > 0) {
+    const list = _mergedTtns.map(t => highlightMatch(t)).join(', ');
+    ttnHtml = `<span class="card-ttn merged" title="Об'єднано ${_mergedTtns.length} ТТН">TTH: ${list}</span>` +
+              `<span class="badge-merged" onclick="event.stopPropagation(); toggleCard('${pkgId}')" title="Натисни щоб розгорнути">🔗 ${_mergedTtns.length} ТТН</span>`;
+  } else {
+    ttnHtml = (isUE && ttn) ? `<span class="card-ttn copyable" onclick="event.stopPropagation(); copyToClipboard('${String(ttn).replace(/'/g, "\\'")}', 'ТТН скопійовано')" title="Клац — скопіювати ТТН">TTH: ${highlightMatch(ttn)}</span>` : '';
+  }
 
   // Route strip — завжди видимий. Зелений «✅ В маршруті» якщо призначено,
   // жовтий «⚠️ Без маршруту» якщо ще ні. Клік — відкриває модалку призначення
@@ -1628,6 +1650,36 @@ function renderCard(p, routeCtx) {
         <button class="btn-danger" onclick="event.stopPropagation(); deleteRecord('${pkgId}')">🗑️</button>
       </div>
       <div class="card-details ${isOpen ? 'open' : ''}" id="details-${pkgId}">
+        ${(_isMergedHead) ? (() => {
+          // Секція «Обʼєднані ТТН» — primary показує сам себе + усі дочки
+          // у списку, кожна з кнопкою «↩ Розʼєднати». Primary-рядок без
+          // кнопки розʼєднання (його не можна розʼєднати з самим собою).
+          const rows = [];
+          rows.push({ pkg: p, isPrimary: true });
+          for (const c of _mergedChildren) rows.push({ pkg: c, isPrimary: false });
+          const html = rows.map(r => {
+            const rPkg = r.pkg;
+            const rId  = String(rPkg['PKG_ID'] || '');
+            const rTtn = String(rPkg['Номер ТТН'] || '(без ТТН)');
+            const rSum = parseFloat(rPkg['Сума']) || 0;
+            const rCur = rPkg['Валюта оплати'] || '';
+            const rPay = rPkg['Статус оплати'] || '';
+            const safeId = rId.replace(/'/g, "\\'");
+            const unmergeBtn = r.isPrimary
+              ? '<span class="merge-row-primary-mark" title="Це головна ТТН обʼєднаного ліда">⭐ головна</span>'
+              : `<button class="merge-unmerge-btn" onclick="event.stopPropagation(); unmergePackage('${safeId}')" title="Зробити окремим лідом">↩ Розʼєднати</button>`;
+            return `<div class="merge-row">
+                      <span class="merge-row-ttn">${escapeHtml(rTtn)}</span>
+                      <span class="merge-row-sum">${rSum} ${escapeHtml(rCur)}</span>
+                      ${rPay ? `<span class="merge-row-pay">${escapeHtml(rPay)}</span>` : ''}
+                      ${unmergeBtn}
+                    </div>`;
+          }).join('');
+          return `<div class="merge-section">
+                    <div class="merge-section-title">🔗 Обʼєднані ТТН (${rows.length})</div>
+                    ${html}
+                  </div>`;
+        })() : ''}
         <div class="detail-tabs">
           <div class="detail-tab${_act('parcel')}" data-tab="parcel" onclick="event.stopPropagation(); switchTab('${pkgId}', 'parcel')">📦 Посилка</div>
           <div class="detail-tab${_act('basic')}" data-tab="basic" onclick="event.stopPropagation(); switchTab('${pkgId}', 'basic')">📄 Основне</div>
@@ -2244,6 +2296,290 @@ function findRelatedInMemory(p) {
   return out;
 }
 
+// ===== [SECT-MERGE] Об'єднання дублікатів у один лід =====
+// Структура: на дочірніх лідах поле «Обʼєднано з» = PKG_ID primary-ліда.
+// Primary не має цього поля заповненого. У UI primary показує бейдж
+// «🔗 N ТТН», у заголовку — перелік усіх ТТН (своя + дочок) через кому.
+// Дочки приховуються з основного списку (filter в renderCards).
+
+function isMergedChild(p) {
+  return !!(p && p['Обʼєднано з']);
+}
+
+function getMergedChildren(primaryPkgId) {
+  if (!primaryPkgId || !Array.isArray(allData)) return [];
+  return allData.filter(p => p['Обʼєднано з'] === primaryPkgId);
+}
+
+function isMergedPrimary(p) {
+  if (!p || !p['PKG_ID']) return false;
+  return getMergedChildren(p['PKG_ID']).length > 0;
+}
+
+// Список ТТН (включно з самим primary) у читабельному вигляді через кому.
+// Порожні / null значення «(без ТТН)».
+function getMergedTtns(primary) {
+  if (!primary) return [];
+  const out = [];
+  if (primary['Номер ТТН']) out.push(primary['Номер ТТН']);
+  for (const c of getMergedChildren(primary['PKG_ID'])) {
+    if (c['Номер ТТН']) out.push(c['Номер ТТН']);
+  }
+  return out;
+}
+
+// Агреговані фінанси: сума/завдаток/борг по primary + всім дочкам.
+// Усе вважаємо в одній валюті (валюту беремо з primary). Менеджер вирівнює
+// валюти у перевірці перед обʼєднанням, рідко інакше.
+function getMergedFinance(primary) {
+  if (!primary) return { sum: 0, deposit: 0, debt: 0, currency: '' };
+  const num = (v) => parseFloat(v) || 0;
+  let sum = num(primary['Сума']);
+  let dep = num(primary['Завдаток']);
+  let debt = num(primary['Борг']);
+  const cur = primary['Валюта оплати'] || '';
+  for (const c of getMergedChildren(primary['PKG_ID'])) {
+    sum  += num(c['Сума']);
+    dep  += num(c['Завдаток']);
+    debt += num(c['Борг']);
+  }
+  return { sum, deposit: dep, debt, currency: cur };
+}
+
+// ===== Modal обʼєднання =====
+// Стан між open і submit. anchorPkgId = той з якого тапнули «Обʼєднати» (за
+// замовчуванням primary). selected — Set вибраних PKG_ID для обʼєднання.
+// pickedAddr — якщо адреси різні, обрана адреса (PKG_ID, з якого взяти).
+let _mergeModalState = null;
+
+function openMergeModal(anchorPkgId) {
+  const anchor = (allData || []).find(p => p['PKG_ID'] === anchorPkgId);
+  if (!anchor) { showToast('Лід не знайдено', 'error'); return; }
+  // Якщо anchor уже primary обʼєднаного — додаємо ще нових кандидатів,
+  // інакше — стартуємо з anchor + дублікатів цього клієнта.
+  let candidates = [];
+  if (isMergedPrimary(anchor)) {
+    // Додаємо нових — тих, які не входять у поточне обʼєднання, але матчуть
+    // по телефону/Ід_смарт (новий дублікат після обʼєднання).
+    const existingChildren = getMergedChildren(anchor['PKG_ID']);
+    const existingIds = new Set([anchor['PKG_ID'], ...existingChildren.map(c => c['PKG_ID'])]);
+    const more = findRelatedInMemory(anchor).filter(r => !existingIds.has(r['PKG_ID']) && !isMergedChild(r));
+    candidates = [anchor, ...existingChildren, ...more];
+  } else {
+    const related = findRelatedInMemory(anchor).filter(r => !isMergedChild(r));
+    candidates = [anchor, ...related];
+  }
+  if (candidates.length < 2) {
+    showToast('Дублікатів для обʼєднання не знайдено', 'info');
+    return;
+  }
+  _mergeModalState = {
+    anchorPkgId,
+    candidates,
+    selectedIds: new Set(candidates.map(c => c['PKG_ID'])),
+    primaryId: anchorPkgId,
+    pickedAddrFromId: anchorPkgId,
+  };
+  _renderMergeModal();
+}
+
+function closeMergeModal() {
+  _mergeModalState = null;
+  const el = document.getElementById('mergeModalBackdrop');
+  if (el) el.remove();
+}
+
+function _renderMergeModal() {
+  const st = _mergeModalState;
+  if (!st) return;
+  const escape = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+  // Перевірка чи є серед вибраних в маршруті (RTE_ID не порожній) — обʼєднання
+  // блокується, бо лід уже їде, не можна підмінити склад під водієм.
+  const inRoute = st.candidates.filter(c => st.selectedIds.has(c['PKG_ID']) && c['RTE_ID']);
+  const hasInRoute = inRoute.length > 0;
+
+  // Зібрати унікальні непорожні адреси з вибраних — якщо їх >1, треба radio.
+  const addrCol = (c) => c['Адреса в Європі'] || c['Адреса отримувача'] || c['Місто Нова Пошта'] || '';
+  const distinctAddrs = [];
+  const seenAddrs = new Set();
+  for (const c of st.candidates) {
+    if (!st.selectedIds.has(c['PKG_ID'])) continue;
+    const a = (addrCol(c) || '').trim();
+    if (!a || seenAddrs.has(a)) continue;
+    seenAddrs.add(a);
+    distinctAddrs.push({ pkg: c, addr: a });
+  }
+  const needAddrPick = distinctAddrs.length > 1;
+
+  const itemsHtml = st.candidates.map(c => {
+    const id = String(c['PKG_ID'] || '');
+    const safe = id.replace(/'/g, "\\'");
+    const ttn = c['Номер ТТН'] || '(без ТТН)';
+    const recv = c['Піб отримувача'] || '—';
+    const phone = c['Телефон отримувача'] || '';
+    const sum = c['Сума'] || '';
+    const cur = c['Валюта оплати'] || '';
+    const inR = c['RTE_ID'] ? ' · 🚖 в маршруті ' + c['RTE_ID'] : '';
+    const isSel = st.selectedIds.has(id);
+    const isPrim = st.primaryId === id;
+    return `<div class="merge-modal-item${isPrim ? ' has-primary' : ''}">
+              <input type="checkbox" id="mrg-cb-${safe}" ${isSel ? 'checked' : ''}
+                onchange="toggleMergeSelect('${safe}', this.checked)">
+              <input type="radio" name="mrgPrimary" id="mrg-rd-${safe}" ${isPrim ? 'checked' : ''}
+                ${!isSel ? 'disabled' : ''}
+                onchange="setMergePrimary('${safe}')" title="Зробити основною">
+              <label for="mrg-cb-${safe}">
+                <div>
+                  <div class="ttn">${escape(ttn)}</div>
+                  <div class="meta">${escape(recv)}${phone ? ' · ' + escape(phone) : ''} · ${escape(String(sum))} ${escape(cur)}${escape(inR)}</div>
+                </div>
+              </label>
+            </div>`;
+  }).join('');
+
+  const addrHtml = needAddrPick ? `
+    <div class="merge-modal-addr-section">
+      <div class="merge-modal-addr-title">📍 Адреси відрізняються — оберіть, яку залишити:</div>
+      ${distinctAddrs.map(a => {
+        const id = String(a.pkg['PKG_ID']);
+        const safe = id.replace(/'/g, "\\'");
+        const checked = st.pickedAddrFromId === id ? 'checked' : '';
+        return `<label class="merge-modal-addr-option">
+                  <input type="radio" name="mrgAddr" ${checked}
+                    onchange="setMergeAddrFrom('${safe}')">
+                  <span><b>${escape(a.pkg['Номер ТТН'] || '?')}</b> · ${escape(a.addr)}</span>
+                </label>`;
+      }).join('')}
+    </div>
+  ` : '';
+
+  const inRouteWarn = hasInRoute ? `
+    <div class="merge-modal-error">
+      ⛔ Серед вибраних є лід у маршруті: ${inRoute.map(c => escape(c['Номер ТТН'] || c['PKG_ID'])).join(', ')}.
+      Спочатку зніми його з маршруту, потім обʼєднай.
+    </div>
+  ` : '';
+
+  const okToMerge = !hasInRoute && st.selectedIds.size >= 2 && st.selectedIds.has(st.primaryId);
+
+  const html = `
+    <div class="merge-modal-backdrop" id="mergeModalBackdrop"
+         onclick="if(event.target===this)closeMergeModal()">
+      <div class="merge-modal">
+        <div class="merge-modal-title">🔗 Обʼєднати дублікати</div>
+        <div class="merge-modal-subtitle">
+          Обери ТТН для обʼєднання. ⭐ радіо — головна (саме її ТТН іде в маршрут).
+        </div>
+        ${inRouteWarn}
+        <div class="merge-modal-list">${itemsHtml}</div>
+        ${addrHtml}
+        <div class="merge-modal-actions">
+          <button class="btn-cancel" onclick="closeMergeModal()">Скасувати</button>
+          <button class="btn-merge" ${okToMerge ? '' : 'disabled'} onclick="applyMerge()">
+            🔗 Обʼєднати (${st.selectedIds.size})
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+  let backdrop = document.getElementById('mergeModalBackdrop');
+  if (backdrop) backdrop.remove();
+  document.body.insertAdjacentHTML('beforeend', html);
+}
+
+function toggleMergeSelect(pkgId, checked) {
+  const st = _mergeModalState; if (!st) return;
+  if (checked) st.selectedIds.add(pkgId);
+  else st.selectedIds.delete(pkgId);
+  // Якщо primary знято — переключаємо на anchor (якщо anchor вибраний),
+  // інакше на перший вибраний.
+  if (!st.selectedIds.has(st.primaryId)) {
+    if (st.selectedIds.has(st.anchorPkgId)) st.primaryId = st.anchorPkgId;
+    else { const first = st.selectedIds.values().next().value; st.primaryId = first || st.anchorPkgId; }
+  }
+  _renderMergeModal();
+}
+
+function setMergePrimary(pkgId) {
+  const st = _mergeModalState; if (!st) return;
+  if (!st.selectedIds.has(pkgId)) return;
+  st.primaryId = pkgId;
+  _renderMergeModal();
+}
+
+function setMergeAddrFrom(pkgId) {
+  const st = _mergeModalState; if (!st) return;
+  st.pickedAddrFromId = pkgId;
+  // Адреса не змінює інші кнопки, лише запам'ятовуємо вибір.
+}
+
+async function applyMerge() {
+  const st = _mergeModalState;
+  if (!st) return;
+  const primaryId = st.primaryId;
+  const childIds = [...st.selectedIds].filter(id => id !== primaryId);
+  if (childIds.length === 0) { showToast('Виберіть мінімум 2 ТТН', 'warn'); return; }
+
+  // Якщо адреси різні — взяти з вибраного source ліда і записати в primary.
+  let addrUpdate = null;
+  const addrCol = (c) => c['Адреса в Європі'] || c['Адреса отримувача'] || c['Місто Нова Пошта'] || '';
+  const distinctSet = new Set();
+  for (const id of st.selectedIds) {
+    const c = allData.find(p => p['PKG_ID'] === id);
+    if (!c) continue;
+    const a = (addrCol(c) || '').trim();
+    if (a) distinctSet.add(a);
+  }
+  if (distinctSet.size > 1) {
+    const src = allData.find(p => p['PKG_ID'] === st.pickedAddrFromId);
+    if (src) addrUpdate = (addrCol(src) || '').trim();
+  }
+
+  showToast('⏳ Обʼєднання…', 'info');
+  try {
+    // Усім дочкам ставимо merged_into_pkg_id = primary.
+    for (const cid of childIds) {
+      const res = await apiPost('updateField', { pkg_id: cid, col: 'Обʼєднано з', value: primaryId });
+      if (!res || !res.ok) throw new Error((res && res.error) || 'Помилка PATCH ' + cid);
+      const item = allData.find(p => p['PKG_ID'] === cid);
+      if (item) item['Обʼєднано з'] = primaryId;
+    }
+    // Оновлення адреси primary якщо треба.
+    if (addrUpdate != null) {
+      const primary = allData.find(p => p['PKG_ID'] === primaryId);
+      // У UA→EU адреса в Європі; у EU→UA — Адреса отримувача / Місто НП.
+      const isUE = primary && primary['Напрям'] === 'УК→ЄВ';
+      const col = isUE ? 'Адреса в Європі' : 'Адреса отримувача';
+      const res = await apiPost('updateField', { pkg_id: primaryId, col, value: addrUpdate });
+      if (res && res.ok && primary) primary[col] = addrUpdate;
+    }
+    closeMergeModal();
+    renderCards();
+    updateCounters();
+    showToast(`🔗 Обʼєднано ${childIds.length + 1} ТТН`, 'success');
+  } catch (e) {
+    showToast('Помилка обʼєднання: ' + (e.message || e), 'error');
+  }
+}
+
+async function unmergePackage(childPkgId) {
+  if (!childPkgId) return;
+  if (!confirm('Розʼєднати ТТН ' + childPkgId + ' як окремий лід?')) return;
+  try {
+    const res = await apiPost('updateField', { pkg_id: childPkgId, col: 'Обʼєднано з', value: '' });
+    if (!res || !res.ok) throw new Error((res && res.error) || 'PATCH error');
+    const item = allData.find(p => p['PKG_ID'] === childPkgId);
+    if (item) item['Обʼєднано з'] = '';
+    renderCards();
+    updateCounters();
+    showToast('↩ Розʼєднано', 'success');
+  } catch (e) {
+    showToast('Помилка розʼєднання: ' + (e.message || e), 'error');
+  }
+}
+
 function showVerifyPanel() {
   isVerifyActive = true;
   const p = document.getElementById('verifySearchPanel');
@@ -2403,6 +2739,12 @@ function renderVerifySearchResults(q) {
                        : '') +
                    '</div>';
           }).join('') +
+          // Кнопка обʼєднання — відкриває модал з anchor=поточний hit.
+          // Менеджер у модалі вибирає чекбоксами які з дублікатів обʼєднати.
+          '<button class="verify-merge-btn" onclick="event.stopPropagation();openMergeModal(\'' + pkgEsc + '\')" ' +
+            'style="margin-top:6px;background:#ede9fe;color:#5b21b6;border:1px solid #c4b5fd;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:700;cursor:pointer;width:100%;">' +
+            '🔗 Обʼєднати дублікати' +
+          '</button>' +
         '</div>'
       : '';
     return '<div class="verify-search-hit" data-pkg="' + pkgEsc + '">' +

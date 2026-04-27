@@ -63,6 +63,7 @@ const SB_TO_GAS_PKG = {
     archived_by:        'ARCHIVED_BY',
     archive_reason:     'ARCHIVE_REASON',
     archived_from_routes: 'Був у маршрутах',
+    merged_into_pkg_id: 'Обʼєднано з',
 };
 
 // Reverse mapping: GAS Ukrainian → Supabase column
