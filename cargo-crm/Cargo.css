@@ -12,6 +12,11 @@
   --pink: #ec4899;
   --teal: #14b8a6;
   --bg-main: #f5f7fa;
+  /* Aliasи для модалки друку відправок (.disp-print-*) — раніше посилались
+     на ці змінні без визначення → фон прозорий, текст не читабельний. */
+  --bg-primary: #ffffff;
+  --bg-secondary: #f8fafc;
+  --bg-tertiary: #e2e8f0;
   --text-primary: #1e293b;
   --text-secondary: #64748b;
   --border: #e2e8f0;

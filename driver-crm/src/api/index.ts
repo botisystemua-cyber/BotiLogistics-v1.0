@@ -239,8 +239,12 @@ export async function fetchPackages(sheetName: string): Promise<Package[]> {
 
 export async function fetchShippingItems(sheetName: string): Promise<ShippingItem[]> {
   const tenantId = getTenantId();
-  // sheetName comes as "Відправка_1" — map back to rte_id "Маршрут_1"
-  const rteId = sheetName.replace('Відправка_', 'Маршрут_');
+  // sheetName приходить як «Відправка_<rte_id>» (Відправка_Женева,
+  // Відправка_Маршрут_1, тощо). Знімаємо префікс «Відправка_» — те що
+  // лишилось і є rte_id у БД. Раніше тут був replace('Відправка_','Маршрут_')
+  // що працювало лише для legacy-формату 'Маршрут_X' і ламало нові rte_id
+  // на кшталт 'Женева' — водій бачив пусто.
+  const rteId = sheetName.replace(/^Відправка_/, '');
 
   let query = supabase
     .from('dispatches')
