@@ -1627,14 +1627,45 @@ body.route-sort-active #rteTogglePay {
 .rseat-selected .rseat-check { position: absolute; top: 4px; right: 6px; font-size: 11px; }
 .rseat-occupied { background: #f3f4f6; border-style: solid; border-color: #cbd5e1; color: #64748b; cursor: not-allowed; opacity: 0.7; }
 .rseat-occupied .rseat-name { position: absolute; bottom: -16px; left: 0; right: 0; font-size: 9px; font-weight: 600; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 2px; }
-/* Flexible (вільна розсадка) — бліде, пунктир, можна посунути */
-.rseat-occupied.rseat-flex { background: #eff6ff; border-style: dashed; border-color: #93c5fd; color: #1e40af; opacity: 0.85; }
+/* Flexible (вільна розсадка) — пунктир, насичений колір, готове до переселення.
+   Курсор pointer бо клік реально працює (Phase 2 shuffle). */
+.rseat-occupied.rseat-flex { background: #eff6ff; border-style: dashed; border-color: #93c5fd; color: #1e40af; opacity: 1; cursor: pointer; }
+.rseat-occupied.rseat-flex:hover { background: #dbeafe; border-color: #2563eb; }
 .rseat-occupied.rseat-flex .rseat-name { color: #1e40af; }
-.seat-occupied.seat-flex { opacity: 0.6; filter: saturate(0.5); }
+.seat-occupied.seat-flex { opacity: 1; filter: none; cursor: pointer; }
+.seat-occupied.seat-flex .seat-chair { cursor: pointer; }
 .seat-occupied.seat-flex .seat-occ-name { color: #1e40af; font-style: italic; }
-.seat-pin.seat-occupied.seat-flex { background: rgba(147,197,253,0.4) !important; border: 1.5px dashed #2563eb !important; }
-.seat-flex-ico { font-size: 9px; opacity: 0.7; margin-left: 2px; }
-.sp-seat.sp-occupied.sp-flex { opacity: 0.55; border-style: dashed; }
+.seat-pin.seat-occupied.seat-flex { background: rgba(147,197,253,0.6) !important; border: 1.5px dashed #2563eb !important; cursor: pointer !important; }
+.seat-pin.seat-occupied.seat-flex:hover { background: rgba(147,197,253,0.85) !important; transform: translate(-50%, -50%) scale(1.05); }
+.seat-flex-ico { font-size: 9px; opacity: 0.85; margin-left: 2px; }
+.sp-seat.sp-occupied.sp-flex { opacity: 1; border-style: dashed; cursor: pointer; }
+/* Підсвічування цільового місця при hover на flex-зайнятому — показує куди
+   переїде його окупант. Активується JS-ом (seatFlexHoverIn). */
+.seat-shift-target {
+    outline: 3px solid #10b981 !important;
+    outline-offset: 2px;
+    animation: shiftTargetPulse 1.2s ease-in-out infinite;
+}
+@keyframes shiftTargetPulse {
+    0%, 100% { outline-color: #10b981; }
+    50%      { outline-color: #6ee7b7; }
+}
+.seat-shift-target[data-shift-label]::after {
+    content: attr(data-shift-label);
+    position: absolute;
+    top: -20px; left: 50%;
+    transform: translateX(-50%);
+    background: #065f46;
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 4px;
+    white-space: nowrap;
+    z-index: 10;
+    pointer-events: none;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
 /* Прев'ю в формі рейсу */
 .reserve-preview { margin-top: 6px; font-size: 11px; font-weight: 700; color: #9a3412; text-align: center; padding: 4px 8px; background: #fff7ed; border-radius: 6px; display: inline-block; }
 

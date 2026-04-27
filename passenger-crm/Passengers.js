@@ -5906,17 +5906,18 @@ function renderVan(opts) {
                 const flexCls = isFlex ? ' seat-flex' : '';
                 const flexIco = isFlex ? '<span class="seat-flex-ico">🔀</span>' : '';
                 // Flexible-occupied: clickable — shuffle логіка спрацює на save (Phase 2).
-                const occHandler = (interactive && isFlex) ? `onclick="${clickHandler}('${s.name}')"` : '';
-                const occTitle = isFlex ? `Гнучке: ${occLabel}. Можна обрати — пасажир переміститься.` : `Зайнято: ${occLabel}`;
-                return `<div class="seat-pin seat-occupied${flexCls}" style="${style}" ${occHandler} title="${occTitle}">${s.name}${flexIco}<div class="seat-occ-name">${occLabel}</div></div>`;
+                const occPaxId = (typeof occ === 'object' && occ.paxId) ? occ.paxId : '';
+                const occHandler = (interactive && isFlex) ? `onclick="${clickHandler}('${s.name}')" onmouseenter="seatFlexHoverIn('${s.name}','${occPaxId}')" onmouseleave="seatFlexHoverOut()"` : '';
+                const occTitle = isFlex ? `Гнучке: ${occLabel}. Клік — посадити сюди (пасажир переїде).` : `Зайнято: ${occLabel}`;
+                return `<div class="seat-pin seat-occupied${flexCls}" style="${style}" data-seat="${s.name}" ${occHandler} title="${occTitle}">${s.name}${flexIco}<div class="seat-occ-name">${occLabel}</div></div>`;
             }
             if (selected.has(s.name)) {
                 const handler = interactive ? `onclick="${clickHandler}('${s.name}')"` : '';
-                return `<div class="seat-pin seat-selected" style="${style}" ${handler}>${s.name}<div class="seat-check">✓</div></div>`;
+                return `<div class="seat-pin seat-selected" style="${style}" data-seat="${s.name}" ${handler}>${s.name}<div class="seat-check">✓</div></div>`;
             }
             const stateCls = s.type === 'reserve' ? 'seat-reserve' : 'seat-free';
             const handler = interactive ? `onclick="${clickHandler}('${s.name}')"` : '';
-            return `<div class="seat-pin ${stateCls}" style="${style}" ${handler}>${s.name}</div>`;
+            return `<div class="seat-pin ${stateCls}" style="${style}" data-seat="${s.name}" ${handler}>${s.name}</div>`;
         }
         // Legacy point-style seat (chair-top.png icon) — used for layouts without a dedicated van PNG yet:
         const style = `left:${s.x}%;top:${s.y}%`;
@@ -5929,9 +5930,10 @@ function renderVan(opts) {
             const isFlex2 = typeof occ2 === 'object' && occ2.flexible;
             const flexCls2 = isFlex2 ? ' seat-flex' : '';
             const flexIco2 = isFlex2 ? '<span class="seat-flex-ico">🔀</span>' : '';
-            const occHandler2 = (interactive && isFlex2) ? `onclick="${clickHandler}('${s.name}')"` : '';
-            const occTitle2 = isFlex2 ? `Гнучке: ${occLabel2}. Можна обрати — пасажир переміститься.` : `Зайнято: ${occLabel2}`;
-            return `<div class="seat seat-occupied${flexCls2}" style="${style}" ${occHandler2} title="${occTitle2}">
+            const occPaxId2 = (typeof occ2 === 'object' && occ2.paxId) ? occ2.paxId : '';
+            const occHandler2 = (interactive && isFlex2) ? `onclick="${clickHandler}('${s.name}')" onmouseenter="seatFlexHoverIn('${s.name}','${occPaxId2}')" onmouseleave="seatFlexHoverOut()"` : '';
+            const occTitle2 = isFlex2 ? `Гнучке: ${occLabel2}. Клік — посадити сюди (пасажир переїде).` : `Зайнято: ${occLabel2}`;
+            return `<div class="seat seat-occupied${flexCls2}" style="${style}" data-seat="${s.name}" ${occHandler2} title="${occTitle2}">
                 ${chairImg}
                 <div class="seat-num">${s.name}${flexIco2}</div>
                 <div class="seat-occ-name">${occLabel2}</div>
@@ -5939,7 +5941,7 @@ function renderVan(opts) {
         }
         if (selected.has(s.name)) {
             const handler = interactive ? `onclick="${clickHandler}('${s.name}')"` : '';
-            return `<div class="seat seat-selected" style="${style}" ${handler}>
+            return `<div class="seat seat-selected" style="${style}" data-seat="${s.name}" ${handler}>
                 ${chairImg}
                 <div class="seat-num">${s.name}</div>
                 <div class="seat-check">✓</div>
@@ -5947,7 +5949,7 @@ function renderVan(opts) {
         }
         const stateCls = s.type === 'reserve' ? 'seat-reserve' : 'seat-free';
         const handler = interactive ? `onclick="${clickHandler}('${s.name}')"` : '';
-        return `<div class="seat ${stateCls}" style="${style}" ${handler}>
+        return `<div class="seat ${stateCls}" style="${style}" data-seat="${s.name}" ${handler}>
             ${chairImg}
             <div class="seat-num">${s.name}</div>
         </div>`;
@@ -6060,6 +6062,47 @@ function findFirstFreeSeat(trip, excludePaxId, extraExcluded) {
         if (!occupied[r] && !extraExcluded.has(r)) return r;
     }
     return ''; // все зайняте
+}
+
+// ─────────────────────────────────────────────────────────────────
+// HOVER PREVIEW для flex-зайнятих місць.
+// При наведенні на flex-зайняте місце підсвічуємо вільне місце куди
+// переїде його окупант (Phase 2 shuffle, doAssignTrip / saveSeatPicker).
+// Контекст: seat-picker (один пасажир) АБО trip-modal з одним лідом.
+// Для multi-pax assign Phase 2 не виконується — preview не показуємо
+// щоб не вводити в оману.
+// ─────────────────────────────────────────────────────────────────
+function seatFlexHoverIn(seatName, occupantPaxId) {
+    if (!occupantPaxId) return;
+    let trip = null;
+    if (typeof seatPickerPaxId !== 'undefined' && seatPickerPaxId) {
+        const me = passengers.find(x => x['PAX_ID'] === seatPickerPaxId);
+        if (me) trip = trips.find(t => t.cal_id === me['CAL_ID']);
+    } else if (typeof tmSelectedCalId !== 'undefined' && tmSelectedCalId
+            && typeof tmPaxIds !== 'undefined' && tmPaxIds.length === 1) {
+        trip = trips.find(t => t.cal_id === tmSelectedCalId);
+    }
+    if (!trip) return;
+    const target = findFirstFreeSeat(trip, occupantPaxId);
+    if (!target) return;
+    const occ = passengers.find(x => x['PAX_ID'] === occupantPaxId);
+    let label = '';
+    if (occ) {
+        const parts = String(occ['Піб'] || '').trim().split(/\s+/);
+        label = parts.length > 1 ? parts[0] + ' ' + parts[1].charAt(0) + '.' : (parts[0] || '');
+    }
+    const escTarget = String(target).replace(/"/g, '\\"');
+    document.querySelectorAll('[data-seat="' + escTarget + '"]').forEach(el => {
+        el.classList.add('seat-shift-target');
+        if (label) el.setAttribute('data-shift-label', label + ' →');
+    });
+}
+
+function seatFlexHoverOut() {
+    document.querySelectorAll('.seat-shift-target').forEach(el => {
+        el.classList.remove('seat-shift-target');
+        el.removeAttribute('data-shift-label');
+    });
 }
 
 // Пакетний пошук — повертає до N вільних місць (числові за зростанням, потім R1..RN).
@@ -6278,16 +6321,17 @@ function buildReserveBlockHtml(count, occupiedMap, opts) {
         if (isOcc) {
             const occLabel = (typeof isOcc === 'object') ? isOcc.label : isOcc;
             const isFx = typeof isOcc === 'object' && isOcc.flexible;
+            const occPaxId = (typeof isOcc === 'object' && isOcc.paxId) ? isOcc.paxId : '';
             const flexC = isFx ? ' rseat-flex' : '';
             const flexI = isFx ? ' 🔀' : '';
             // Flexible — clickable, hard — disabled
-            const btnAttr = isFx ? `onclick="${clickHandler}('${name}')"` : 'disabled';
-            const btnTitle = isFx ? `Гнучке: ${occLabel}. Можна обрати — пасажир переміститься.` : `Зайнято: ${occLabel}`;
-            buttons += `<button type="button" class="rseat rseat-occupied${flexC}" ${btnAttr} title="${btnTitle}">${name}${flexI}<span class="rseat-name">${occLabel}</span></button>`;
+            const btnAttr = isFx ? `onclick="${clickHandler}('${name}')" onmouseenter="seatFlexHoverIn('${name}','${occPaxId}')" onmouseleave="seatFlexHoverOut()"` : 'disabled';
+            const btnTitle = isFx ? `Гнучке: ${occLabel}. Клік — посадити сюди (пасажир переїде).` : `Зайнято: ${occLabel}`;
+            buttons += `<button type="button" class="rseat rseat-occupied${flexC}" data-seat="${name}" ${btnAttr} title="${btnTitle}">${name}${flexI}<span class="rseat-name">${occLabel}</span></button>`;
         } else if (isSel) {
-            buttons += `<button type="button" class="rseat rseat-selected" onclick="${clickHandler}('${name}')">${name}<span class="rseat-check">✓</span></button>`;
+            buttons += `<button type="button" class="rseat rseat-selected" data-seat="${name}" onclick="${clickHandler}('${name}')">${name}<span class="rseat-check">✓</span></button>`;
         } else {
-            buttons += `<button type="button" class="rseat rseat-free" onclick="${clickHandler}('${name}')">${name}</button>`;
+            buttons += `<button type="button" class="rseat rseat-free" data-seat="${name}" onclick="${clickHandler}('${name}')">${name}</button>`;
         }
     }
     return `<div class="reserve-block">
