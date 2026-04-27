@@ -5748,10 +5748,10 @@ function getSeatLayout(layout, maxSeats, hasReserve) {
             w: w / 1408 * 100,
             h: h / 768 * 100,
         });
-        // Передня кабіна — D, 1, D2 у одному стовпці
-        seats.push(s('D',  'driver', 350, 180, W_FRONT, H_FRONT)); // водій верх
-        seats.push(s('1',  'seat',   350, 360, W_FRONT, H_FRONT)); // пасажир посередині
-        seats.push(s('D2', 'driver', 350, 540, W_FRONT, H_FRONT)); // співводій низ
+        // Передня кабіна — D, 1, D2 у одному стовпці (кучніша вертикаль)
+        seats.push(s('D',  'driver', 420, 230, W_FRONT, H_FRONT)); // водій верх (нижче ніж було)
+        seats.push(s('1',  'seat',   420, 360, W_FRONT, H_FRONT)); // пасажир посередині
+        seats.push(s('D2', 'driver', 420, 490, W_FRONT, H_FRONT)); // співводій низ (вище ніж було)
         // Середній ряд — 3 сидіння стопкою
         seats.push(s('2', 'seat', 720, 200, W_ROW, H_ROW));
         seats.push(s('3', 'seat', 720, 360, W_ROW, H_ROW));
