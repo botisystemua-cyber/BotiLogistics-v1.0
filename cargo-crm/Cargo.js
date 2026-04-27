@@ -5233,12 +5233,24 @@ function rteResetAll(btn) {
 // Helper: «Дата отримання» живе у таблиці `packages`, а не у `routes`
 // (route-row тримає тільки snapshot базових полів). Шукаємо оригінал
 // у allData за PKG_ID і читаємо дату звідти; якщо нема — порожньо.
+// Дата для фільтра в маршруті: для посилок — «Дата отримання» (день візиту
+// водія); для пасажирів — «Дата рейсу» (вони доставляються разом). Якщо
+// «Дата отримання» порожня в посилковому ліді — fallback на «Дата рейсу»,
+// бо це найпевніша дата доставки.
 function _getRouteRowReceivedDate(r) {
-    const leadId = (r && (r['PKG_ID'] || r['PAX_ID'])) || '';
-    if (!leadId) return '';
-    const p = allData.find(x => (x['PKG_ID'] || '') === leadId);
-    if (!p) return '';
-    return formatTripDate(p['Дата отримання'] || '');
+    if (!r) return '';
+    const isPax = (r['Тип запису'] || '').includes('Пасажир');
+    if (isPax) {
+        return formatTripDate(r['Дата рейсу'] || r['Дата отримання'] || '');
+    }
+    const pkgId = r['PKG_ID'] || '';
+    if (pkgId) {
+        const p = (allData || []).find(x => (x['PKG_ID'] || '') === pkgId);
+        if (p && p['Дата отримання']) return formatTripDate(p['Дата отримання']);
+    }
+    // Fallback: дата рейсу (з самого route-row) — корисно якщо «Дата отримання»
+    // у посилки ще не призначена менеджером.
+    return formatTripDate(r['Дата рейсу'] || '');
 }
 
 function getFilteredRouteRows(rows) {
@@ -5360,7 +5372,7 @@ function renderRoutes() {
 
     if (uniqueDates.length > 0) {
         html += '<div class="route-date-chips">';
-        html += '<span class="route-date-chips-label">📅 Дата візиту:</span>';
+        html += '<span class="route-date-chips-label">📅 Дата доставки:</span>';
         uniqueDates.forEach(d => {
             const active = (routeDateFilter === d);
             const cnt = rawRows.filter(r => _getRouteRowReceivedDate(r) === d).length;
