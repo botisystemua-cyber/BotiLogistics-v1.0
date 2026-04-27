@@ -5829,8 +5829,8 @@ function getSeatLayout(layout, maxSeats, hasReserve) {
                      hasReserve ? 'reserve' : 'driver',
                      175, 110, 245, 170));
 
-        const n = Math.max(8, parseInt(maxSeats) || 20);
-        const rowsNeeded = Math.ceil(n / 4);
+        const n = Math.max(1, parseInt(maxSeats) || 8);
+        const rowsNeeded = Math.max(1, Math.ceil(n / 4));
         const xStart = 310, xEnd = 960;
         const step = rowsNeeded === 1 ? 0 : (xEnd - xStart) / (rowsNeeded - 1);
         const seatW = Math.min(58, step - 6); // fits the number of rows we need
