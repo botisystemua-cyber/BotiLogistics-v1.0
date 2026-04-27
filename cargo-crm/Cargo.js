@@ -5796,7 +5796,11 @@ function renderSummaryView() {
 
   document.getElementById('routeFilters').innerHTML = '';
 
-  var html = '<table class="route-table"><thead><tr>' +
+  // Каса по водіях — агрегація фактично зібраних коштів за payment_collected_by.
+  // Контейнер монтуємо синхронно, дані тягне асинхронний loadCashByDriver().
+  var html = '<div id="cashByDriverBlock" style="margin-bottom:16px;"></div>';
+
+  html += '<table class="route-table"><thead><tr>' +
     '<th>RTE_ID</th><th>Дата</th><th>Місто</th><th>Водій</th><th>Авто</th><th>Статус</th><th>Примітка</th>' +
   '</tr></thead><tbody>';
 
@@ -5816,6 +5820,92 @@ function renderSummaryView() {
 
   html += '</tbody></table>';
   document.getElementById('routeTableWrap').innerHTML = html;
+
+  loadCashByDriver();
+}
+
+// Тягне з routes усе, що було реально прийнято кимось (payment_collected_by IS NOT NULL),
+// і групує по collected_by → form → currency. Менеджер бачить «Х грн готівки у водія Y».
+// Якщо менеджер сам ставив у CRM — виводимо окремою купкою «У касі / на картці компанії»
+// (collected_by != driver_name самого рейсу).
+async function loadCashByDriver() {
+  var box = document.getElementById('cashByDriverBlock');
+  if (!box || typeof sb === 'undefined' || !sb) return;
+
+  box.innerHTML = '<div style="padding:10px;color:var(--text-secondary);font-size:11px;">⏳ Завантаження каси по водіях…</div>';
+
+  try {
+    var resp = await sb.from('routes')
+      .select('amount, amount_currency, payment_status, payment_form, payment_collected_by, payment_collected_at, driver_name, rte_id')
+      .eq('tenant_id', TENANT_ID)
+      .not('payment_collected_by', 'is', null)
+      .eq('payment_status', 'Оплачено');
+    if (resp.error) throw resp.error;
+
+    // Групування: collector → form → currency → sum.
+    // Розрізняємо «зібрав водій рейсу» vs «зібрав менеджер у CRM» — по тому,
+    // чи collected_by збігається з driver_name рейсу.
+    var byCollector = {}; // login → { name, isDriver, byForm: {form: {curr: sum}} }
+    (resp.data || []).forEach(function(r) {
+      var by = r.payment_collected_by || '';
+      if (!by) return;
+      var amt = parseFloat(r.amount) || 0;
+      if (amt <= 0) return;
+      var form = r.payment_form || '—';
+      var cur  = r.amount_currency || '';
+      var isDriver = !!(r.driver_name && r.driver_name === by);
+      if (!byCollector[by]) byCollector[by] = { name: by, isDriver: isDriver, byForm: {} };
+      // Якщо хоч раз був driver_name === by — позначаємо «водій»
+      if (isDriver) byCollector[by].isDriver = true;
+      var f = byCollector[by].byForm;
+      if (!f[form]) f[form] = {};
+      f[form][cur] = (f[form][cur] || 0) + amt;
+    });
+
+    var collectors = Object.values(byCollector).sort(function(a, b) {
+      // Спочатку водії, потім менеджери; всередині — за іменем
+      if (a.isDriver !== b.isDriver) return a.isDriver ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
+
+    if (collectors.length === 0) {
+      box.innerHTML = '<div style="padding:10px;color:var(--text-secondary);font-size:11px;">' +
+        '💼 Зведення прийнятих оплат поки порожнє. Як водії почнуть тапати «✅ Оплачено» в driver-crm — тут зʼявляться суми.' +
+      '</div>';
+      return;
+    }
+
+    var html = '<div style="display:flex;flex-wrap:wrap;gap:12px;">';
+    collectors.forEach(function(c) {
+      var iconCls = c.isDriver ? '🧑 ' : '👔 ';
+      var subtitle = c.isDriver ? 'Готівка на руках водія' : 'Прийнято менеджером';
+      html += '<div style="flex:1 1 280px;min-width:260px;border:1px solid var(--border);border-radius:10px;padding:12px;background:#fff;">';
+      html += '<div style="font-weight:700;font-size:13px;margin-bottom:2px;">' + iconCls + c.name + '</div>';
+      html += '<div style="font-size:10px;color:var(--text-secondary);margin-bottom:8px;">' + subtitle + '</div>';
+      ['Готівка', 'Картка', 'Наложка', 'Частково'].forEach(function(form) {
+        var bucket = c.byForm[form];
+        if (!bucket) return;
+        var pieces = Object.keys(bucket).map(function(cur) {
+          return '<span style="font-weight:700;">' + bucket[cur].toFixed(2) + '</span> ' + cur;
+        });
+        if (!pieces.length) return;
+        var formIcon = form === 'Готівка' ? '💵'
+                     : form === 'Картка'  ? '💳'
+                     : form === 'Наложка' ? '🏦'
+                     : '🟡';
+        html += '<div style="display:flex;justify-content:space-between;font-size:11px;padding:3px 0;border-top:1px solid #f1f5f9;">' +
+                  '<span>' + formIcon + ' ' + form + '</span>' +
+                  '<span>' + pieces.join(' · ') + '</span>' +
+                '</div>';
+      });
+      html += '</div>';
+    });
+    html += '</div>';
+    box.innerHTML = html;
+  } catch (e) {
+    console.error('[summary] cash by driver:', e);
+    box.innerHTML = '<div style="padding:10px;color:var(--danger);font-size:11px;">Помилка завантаження каси: ' + (e.message || e) + '</div>';
+  }
 }
 
 // ===== OPEN ROUTE MODAL (from parcel card) =====
