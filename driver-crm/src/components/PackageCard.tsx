@@ -2,6 +2,7 @@ import { useState } from 'react';
 import {
   Phone, MapPin, RotateCw, CheckCircle2, XCircle, Undo2,
   CreditCard, Info, ChevronUp, Calendar, Pencil, MessageCircle,
+  AlertCircle,
 } from 'lucide-react';
 import type { Package, ItemStatus } from '../types';
 import { useApp } from '../store/useAppStore';
@@ -128,6 +129,15 @@ export function PackageCard({ pkg: p, index, searchQuery = '', onEdit, onConvert
           {show('payStatus') && (() => { const ps = derivePayStatus(p.payForm); return (
             <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${ps.cls}`}>{ps.label}</span>
           ); })()}
+          {(() => {
+            // Борг прямо у згорнутий вигляд — водій бачить червоний чіп без
+            // розгортання деталей. Показуємо коли форма оплати НЕ повна
+            // («Борг»/«Наложка»/«Частково») і числове значення > 0.
+            const ps = derivePayStatus(p.payForm).label;
+            const debtN = parseFloat(p.debt) || 0;
+            if (ps === 'Оплачено' || debtN <= 0) return null;
+            return <Chip icon={AlertCircle} c="red" b title="Не повністю оплачено">Борг: {debtN}{p.currency ? ' ' + p.currency : ''}</Chip>;
+          })()}
           {show('dateTrip') && p.dateTrip && <Chip icon={Calendar} c="gray">{p.dateTrip}</Chip>}
         </div>
 
@@ -177,7 +187,7 @@ export function PackageCard({ pkg: p, index, searchQuery = '', onEdit, onConvert
             <Cell label="Сума" value={p.amount ? p.amount + ' ' + p.currency : ''} bold accent="green" />
             <Cell label="Оплата" value={p.payForm} />
             <Cell label="Ст. оплати" value={derivePayStatus(p.payForm).label} bold accent={derivePayStatus(p.payForm).label === 'Оплачено' ? 'green' : derivePayStatus(p.payForm).label === 'Частково' ? 'amber' : 'red'} />
-            <Cell label="Борг" value={p.debt} accent="red" />
+            <Cell label="Борг" value={parseFloat(p.debt) > 0 ? p.debt + (p.currency ? ' ' + p.currency : '') : ''} bold accent="red" />
             <Cell label="Тег" value={p.tag} />
           </div>
           {p.note && <div className="mt-2 px-2.5 py-1.5 rounded-lg bg-amber-50 text-[11px] text-text"><span className="text-amber-700 font-bold">Примітка: </span>{p.note}</div>}
@@ -205,7 +215,7 @@ function Cell({ label, value, bold, accent, full }: { label: string; value?: str
   return (<div className={`py-1 min-w-0 ${full ? 'col-span-2' : ''}`}><div className="text-[9px] text-muted font-semibold uppercase tracking-wide">{label}</div><div className={`text-[11px] ${bold ? 'font-bold' : 'font-medium'} ${vc} truncate`}>{value}</div></div>);
 }
 function Chip({ icon: I, c, b, title, children }: { icon: typeof Phone; c: string; b?: boolean; title?: string; children: React.ReactNode }) {
-  const m: Record<string, string> = { green: 'bg-green-50 text-green-700', blue: 'bg-blue-50 text-blue-700', gray: 'bg-gray-100 text-gray-500' };
+  const m: Record<string, string> = { green: 'bg-green-50 text-green-700', blue: 'bg-blue-50 text-blue-700', gray: 'bg-gray-100 text-gray-500', red: 'bg-red-50 text-red-700' };
   return <span title={title} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] ${b ? 'font-bold' : 'font-medium'} ${m[c]}`}><I className="w-3 h-3" />{children}</span>;
 }
 function Btn({ icon: I, label, color, onClick }: { icon: typeof Phone; label: string; color: string; onClick: () => void }) {

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import {
   Phone, MapPin, RotateCw, CheckCircle2, XCircle, Undo2,
   Car, ArrowRight, Info, ChevronUp, CreditCard, Calendar, Clock, Users, User, Pencil, MessageCircle,
+  AlertCircle,
 } from 'lucide-react';
 import type { Passenger, ItemStatus } from '../types';
 import { useApp } from '../store/useAppStore';
@@ -110,6 +111,14 @@ export function PassengerCard({ passenger: p, index, searchQuery = '', onEdit }:
           {show('timing') && p.timing && <Chip icon={Clock} c="gray">{p.timing}</Chip>}
           {show('seatsCount') && p.seatsCount && <Chip icon={Users} c="blue">{p.seatsCount} місць</Chip>}
           {show('amount') && p.amount && <Chip icon={CreditCard} c="green" b>{p.amount} {p.currency}</Chip>}
+          {(() => {
+            // Червоний чіп «Борг» поруч із сумою — водій бачить недоплату
+            // одразу, без розгортання деталей. Показуємо при unpaid/partial.
+            const debtN = parseFloat(p.debt) || 0;
+            const isUnpaid = p.payStatus === 'Не оплачено' || p.payStatus === 'Частково';
+            if (!isUnpaid || debtN <= 0) return null;
+            return <Chip icon={AlertCircle} c="red" b title="Не повністю оплачено">Борг: {debtN}{p.currency ? ' ' + p.currency : ''}</Chip>;
+          })()}
         </div>
 
         <div className="flex gap-2 mb-2">
@@ -150,7 +159,7 @@ export function PassengerCard({ passenger: p, index, searchQuery = '', onEdit }:
             <Cell label="Сума" value={p.amount ? p.amount + ' ' + p.currency : ''} bold accent="green" />
             <Cell label="Оплата" value={p.payForm} />
             <Cell label="Ст. оплати" value={p.payStatus} />
-            <Cell label="Борг" value={p.debt} accent="red" />
+            <Cell label="Борг" value={parseFloat(p.debt) > 0 ? p.debt + (p.currency ? ' ' + p.currency : '') : ''} bold accent="red" />
             <Cell label="Напрям" value={p.direction} />
             <Cell label="Тег" value={p.tag} />
           </div>
@@ -178,9 +187,9 @@ function Cell({ label, value, bold, accent, full }: { label: string; value?: str
   const vc = accent === 'green' ? 'text-emerald-700' : accent === 'red' ? 'text-red-600' : 'text-text';
   return (<div className={`py-1 min-w-0 ${full ? 'col-span-2' : ''}`}><div className="text-[9px] text-muted font-semibold uppercase tracking-wide">{label}</div><div className={`text-[11px] ${bold ? 'font-bold' : 'font-medium'} ${vc} truncate`}>{value}</div></div>);
 }
-function Chip({ icon: I, c, b, children }: { icon: typeof Phone; c: string; b?: boolean; children: React.ReactNode }) {
-  const m: Record<string, string> = { green: 'bg-green-50 text-green-700', blue: 'bg-blue-50 text-blue-700', gray: 'bg-gray-100 text-gray-500' };
-  return <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] ${b ? 'font-bold' : 'font-medium'} ${m[c]}`}><I className="w-3 h-3" />{children}</span>;
+function Chip({ icon: I, c, b, title, children }: { icon: typeof Phone; c: string; b?: boolean; title?: string; children: React.ReactNode }) {
+  const m: Record<string, string> = { green: 'bg-green-50 text-green-700', blue: 'bg-blue-50 text-blue-700', gray: 'bg-gray-100 text-gray-500', red: 'bg-red-50 text-red-700' };
+  return <span title={title} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] ${b ? 'font-bold' : 'font-medium'} ${m[c]}`}><I className="w-3 h-3" />{children}</span>;
 }
 function Btn({ icon: I, label, color, onClick }: { icon: typeof Phone; label: string; color: string; onClick: () => void }) {
   return <button onClick={onClick} className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-semibold cursor-pointer active:scale-95 transition-transform ${color}`}><I className="w-4 h-4" />{label}</button>;

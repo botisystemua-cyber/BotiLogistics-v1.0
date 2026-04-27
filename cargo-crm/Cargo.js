@@ -1503,7 +1503,14 @@ function renderCard(p, routeCtx) {
           <div class="card-finance">
             ${visCols.includes('sum') && price ? `<span class="card-price ${priceColorClass}">${price} ${currency}</span>` : ''}
             ${visCols.includes('deposit') && deposit > 0 ? `<span class="card-deposit">завд:${deposit}</span>` : ''}
-            ${visCols.includes('debt') && debt > 0 ? `<span class="card-debt">борг:${debt}</span>` : ''}
+            ${(() => {
+              // Борг показуємо завжди, коли статус оплати неоплачено/частково
+              // (менеджер не повинен «втратити» цифру через приховану колонку).
+              // Інакше — як раніше: за бажаною колонкою у visCols.
+              const isUnpaid = payStatus === 'Не оплачено' || payStatus === 'Частково';
+              const showDebt = debt > 0 && (isUnpaid || visCols.includes('debt'));
+              return showDebt ? `<span class="card-debt">борг:${debt}${currency ? ' ' + currency : ''}</span>` : '';
+            })()}
             ${(() => {
               // Підсвічуємо НП-борг жовтим, коли ми оплатили Нову Пошту —
               // оператор одразу бачить «цей лід має нам повернути X за НП».
@@ -1910,7 +1917,11 @@ function updateCardHeader(pkgId) {
     var html = '';
     if (visCols.includes('sum') && price) html += '<span class="card-price ' + priceColorClass + '">' + price + ' ' + currency + '</span>';
     if (visCols.includes('deposit') && deposit > 0) html += '<span class="card-deposit">завд:' + deposit + '</span>';
-    if (visCols.includes('debt') && debt > 0) html += '<span class="card-debt">борг:' + debt + '</span>';
+    // Борг — завжди при unpaid/partial статусі (синхронно з повним renderCard вище)
+    var _isUnpaid = payStatus === 'Не оплачено' || payStatus === 'Частково';
+    if (debt > 0 && (_isUnpaid || visCols.includes('debt'))) {
+      html += '<span class="card-debt">борг:' + debt + (currency ? ' ' + currency : '') + '</span>';
+    }
     financeEl.innerHTML = html;
   }
 
@@ -4832,6 +4843,11 @@ function renderRouteCard(r, idx, sheetName) {
     const deposit = r['Завдаток'] || '';
     const depositCurr = r['Валюта завдатку'] || _ownerCur('deposit', '');
     const payStatus = r['Статус оплати'] || '';
+    // Борг показуємо у заголовку та вкладці «Фінанси» лише коли є чим боргувати
+    // (статус оплати «Не оплачено»/«Частково» І сума боргу > 0). У маршруті це
+    // критично — водій бачить статус і одразу знає чи питати грошей.
+    const _routeDebt = parseFloat(r['Борг']) || 0;
+    const _routeDebtUnpaid = (payStatus === 'Не оплачено' || payStatus === 'Частково') && _routeDebt > 0;
     const status = r['Статус'] || '';
     const driver = r['Водій'] || '';
     const weight = r['Вага багажу'] || '';
@@ -4902,6 +4918,7 @@ function renderRouteCard(r, idx, sheetName) {
         {label: 'Завдаток', key: 'Завдаток', value: deposit},
         {label: 'Валюта завдатку', key: 'Валюта завдатку', value: depositCurr},
         {label: 'Статус оплати', key: 'Статус оплати', value: payStatus},
+        ...(_routeDebtUnpaid ? [{label: 'Борг', key: 'Борг', value: `${_routeDebt}${curr ? ' ' + curr : ''}`}] : []),
         {label: 'Ціна багажу', key: 'Ціна багажу', value: weightPrice},
         {label: 'Валюта багажу', key: 'Валюта багажу', value: weightCurr},
     ];
@@ -4953,6 +4970,7 @@ function renderRouteCard(r, idx, sheetName) {
                 <span class="route-card-name">${headerName}</span>
                 <span style="color:var(--text-secondary);font-size:10px;">${rteId}</span>
                 ${lsBadge} ${payBadge}
+                ${_routeDebtUnpaid ? `<span class="badge badge-unpaid" title="Не повністю оплачено">🔴 Борг: ${_routeDebt}${curr ? ' ' + curr : ''}</span>` : ''}
             </div>
             ${(from || to) ? `<div class="route-card-route">📍 ${from || '—'} → ${to || '—'}</div>` : ''}
             <div class="route-card-meta">
