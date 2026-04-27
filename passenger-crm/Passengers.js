@@ -6335,7 +6335,7 @@ function renderSeatPickerModal(trip, occupiedMap) {
     const counterColor = seatPickerSelected.size === expected
         ? '#16a34a'
         : (seatPickerSelected.size > expected ? '#d97706' : '#dc2626');
-    const saveDisabled = !(seatPickerFreeSeating || seatPickerSelected.size >= expected);
+    const saveDisabled = !(seatPickerFreeSeating || seatPickerSelected.size >= 1);
 
     const html = `<div class="seat-picker-overlay" id="seatPickerOverlay" onclick="if(event.target===this)closeSeatPicker()">
         <div class="${modalCls}">
@@ -6412,18 +6412,22 @@ function buildReserveBlockHtml(count, occupiedMap, opts) {
     </div>`;
 }
 
-// Toggle режиму «Без місця» в card-pencil пікері.
-// Активація — очищує seatPickerSelected і pendingShifts.
+// Toggle режиму «Без місця» в card-pencil пікері. Активація одразу
+// розсаджує пасажира на N перших вільних місць (N = Кількість місць),
+// щоб юзер бачив де він буде сидіти. На save isFlex=true.
 function seatPickerToggleFreeSeating() {
     seatPickerFreeSeating = !seatPickerFreeSeating;
-    if (seatPickerFreeSeating) {
-        seatPickerSelected = new Set();
-        seatPickerPendingShifts = {};
-    }
     const p = passengers.find(x => x['PAX_ID'] === seatPickerPaxId);
     if (!p) return;
     const trip = trips.find(t => t.cal_id === (p['CAL_ID'] || ''));
     if (!trip) return;
+    if (seatPickerFreeSeating) {
+        seatPickerPendingShifts = {};
+        const n = Math.max(1, parseInt(p['Кількість місць']) || 1);
+        const auto = findFirstNFreeSeats(trip, seatPickerPaxId, n);
+        seatPickerSelected = new Set(auto);
+        if (auto.length < n) showToast('ℹ️ Знайдено ' + auto.length + ' з ' + n + ' вільних місць');
+    }
     rerenderSeatPicker(p, trip);
 }
 
@@ -6466,14 +6470,14 @@ function seatPickerSelect(seatName) {
     if (cascadingPaxId) {
         const sh = seatPickerPendingShifts[cascadingPaxId];
         const liveMap = effectiveOccupiedMap(baseMap, seatPickerPendingShifts);
-        // Шукаємо target: виключаємо мої picked, всі інші pending.to, і поточну позицію (вона звільниться).
-        const tempMap = Object.assign({}, liveMap);
-        delete tempMap[seatName];
-        const reserved = new Set([...seatPickerSelected]);
+        // Шукаємо нову домівку: reserved блокує мої picked, всі інші pending.to,
+        // ТА поточну позицію seatName (інакше пошук поверне той самий, бо
+        // після нашого зрушення вона стане «вільною»).
+        const reserved = new Set([...seatPickerSelected, seatName]);
         for (const pid in seatPickerPendingShifts) {
             if (pid !== cascadingPaxId) reserved.add(seatPickerPendingShifts[pid].to);
         }
-        const target = findFirstFreeSeatFromMap(trip, tempMap, reserved);
+        const target = findFirstFreeSeatFromMap(trip, liveMap, reserved);
         if (!target) {
             showToast('❌ Немає куди посунути ' + sh.label + ' далі');
             return;
@@ -6538,11 +6542,11 @@ function rerenderSeatPicker(p, trip) {
         const free = Math.max(0, effectiveMax + reserveCount - Object.keys(liveMap).length - seatPickerSelected.size);
         freeEl.textContent = String(free);
     }
-    // Кнопка save: disabled лише якщо обрано МЕНШЕ ніж кількість місць пасажира
-    // (без free-seating). N > M дозволено — на save буде confirm про збільшення.
+    // Кнопка save: enabled при будь-якому виборі (N >= 1) або «Без місця».
+    // Розбіжність N != M спрацьовує confirm на save (зменшити/збільшити кількість).
     const saveBtn = document.getElementById('seatPickerSaveBtn');
     if (saveBtn) {
-        const valid = seatPickerFreeSeating || seatPickerSelected.size >= expected;
+        const valid = seatPickerFreeSeating || seatPickerSelected.size >= 1;
         saveBtn.disabled = !valid;
     }
     const freeBtn = document.getElementById('seatPickerFreeBtn');
@@ -6566,14 +6570,15 @@ async function saveSeatPicker() {
         return;
     }
 
-    // Якщо обрано БІЛЬШЕ місць ніж у пасажира — питаємо чи збільшити кількість.
+    // Якщо обрано НЕ стільки місць скільки в пасажира — питаємо чи змінити кількість.
     const expectedSeats = Math.max(1, parseInt(p['Кількість місць']) || 1);
-    if (!seatPickerFreeSeating && seatPickerSelected.size > expectedSeats) {
+    if (!seatPickerFreeSeating && seatPickerSelected.size !== expectedSeats) {
         const newCount = seatPickerSelected.size;
+        const verb = newCount > expectedSeats ? 'Збільшити' : 'Зменшити';
         const ok = await new Promise(resolve => {
             showConfirm(
                 'За пасажиром ' + expectedSeats + ' місце(ь), а ви обрали ' + newCount + '. '
-                + 'Збільшити кількість місць пасажира до ' + newCount + '?',
+                + verb + ' кількість місць пасажира до ' + newCount + '?',
                 yes => resolve(yes)
             );
         });
@@ -7659,6 +7664,23 @@ function openTripModal(paxIds, mode, callback) {
     renderTripModalStep1();
     bindTmCalendarTouch();
     overlay.classList.add('show');
+
+    // Preload для re-open: якщо пасажир уже на рейсі, одразу пропускаємо
+    // кроки 1-2 і відкриваємо seat-picker з його обраними місцями.
+    if (tmPaxIds.length === 1 && mode !== 'form') {
+        var pxRe = passengers.find(function(x) { return x['PAX_ID'] === tmPaxIds[0]; });
+        if (pxRe && pxRe['CAL_ID']) {
+            var tripRe = trips.find(function(t) { return t.cal_id === pxRe['CAL_ID']; });
+            if (tripRe) {
+                setTimeout(function() {
+                    selectTripDate(formatTripDate(tripRe.date));
+                    selectTripVehicle(pxRe['CAL_ID']);
+                    tmSelectedSeats = new Set(parseSeats(pxRe['Місце в авто'] || ''));
+                    renderTmSeatPicker(tripRe);
+                }, 0);
+            }
+        }
+    }
 }
 
 function closeTripModal() {
@@ -8154,11 +8176,11 @@ function renderTmSeatPicker(trip) {
         '<div class="tm-or-label">або обрати конкретні місця:</div>' +
         vanHtml + reserveHtml;
 
-    // Save кнопка: disabled тільки коли обрано МЕНШЕ ніж треба (без free).
-    // N > M дозволено — для single-pax буде confirm про збільшення.
+    // Save кнопка: enabled при будь-якому виборі (N >= 1) або «Без місця».
+    // Розбіжність N != M спрацьовує confirm на save (зменшити/збільшити кількість).
     var saveBtn = document.getElementById('tmSaveBtn');
     if (saveBtn) {
-        var valid = tmFreeSeating || tmSelectedSeats.size >= expected;
+        var valid = tmFreeSeating || tmSelectedSeats.size >= 1;
         saveBtn.disabled = !valid;
     }
 }
@@ -8192,14 +8214,15 @@ function tmSelectAssignSeat(seatName) {
     if (cascadePid) {
         var sh = tmPendingShifts[cascadePid];
         var liveMap0 = effectiveOccupiedMap(baseMap, tmPendingShifts);
-        var tempMap = Object.assign({}, liveMap0);
-        delete tempMap[seatName];
+        // reserved блокує мої picked, інші pending.to, ТА поточну позицію
+        // seatName (інакше пошук поверне той самий).
         var reserved0 = new Set();
         tmSelectedSeats.forEach(function(s) { reserved0.add(s); });
+        reserved0.add(seatName);
         for (var p2 in tmPendingShifts) {
             if (p2 !== cascadePid) reserved0.add(tmPendingShifts[p2].to);
         }
-        var target0 = findFirstFreeSeatFromMap(trip, tempMap, reserved0);
+        var target0 = findFirstFreeSeatFromMap(trip, liveMap0, reserved0);
         if (!target0) { showToast('❌ Немає куди посунути ' + sh.label + ' далі'); return; }
         tmPendingShifts[cascadePid] = { from: sh.from, to: target0, label: sh.label };
         showToast('🔀 ' + sh.label + ': ' + seatName + ' → ' + target0);
@@ -8230,13 +8253,23 @@ function tmSelectAssignSeat(seatName) {
     renderTmSeatPicker(trip);
 }
 
-// Кнопка «Без місця» — очищує всі обрані + pendingShifts + позначає «явно вільна розсадка».
+// Кнопка «Без місця» — одразу розсаджує пасажира(-ів) на N перших вільних
+// місць (N = sum 'Кількість місць' усіх лідів). На save isFlex=true.
 function tmPickFreeSeating() {
-    tmSelectedSeats = new Set();
     tmPendingShifts = {};
     tmFreeSeating = true;
     var trip = trips.find(function(t) { return t.cal_id === tmSelectedCalId; });
-    if (trip) renderTmSeatPicker(trip);
+    if (!trip) return;
+    var total = 0;
+    tmPaxIds.forEach(function(id) {
+        var p = passengers.find(function(x) { return x['PAX_ID'] === id; });
+        total += Math.max(1, parseInt((p && p['Кількість місць']) || 1) || 1);
+    });
+    var firstPaxId = tmPaxIds.length === 1 ? tmPaxIds[0] : null;
+    var auto = findFirstNFreeSeats(trip, firstPaxId, total);
+    tmSelectedSeats = new Set(auto);
+    if (auto.length < total) showToast('ℹ️ Знайдено ' + auto.length + ' з ' + total + ' вільних місць');
+    renderTmSeatPicker(trip);
 }
 
 // Підтвердження — надсилаємо API
@@ -8266,17 +8299,18 @@ async function confirmTripAssign() {
         pendingShifts.push({ paxId: pid, oldSeat: sh.from, newSeat: sh.to, label: sh.label });
     }
 
-    // Single-pax: якщо обрано БІЛЬШЕ місць ніж в пасажира — питаємо чи збільшити.
+    // Single-pax: якщо обрано НЕ стільки місць скільки в пасажира — питаємо.
     // doAssignTrip далі сам перепише 'Кількість місць' = pickedSeats.length.
     if (paxIds.length === 1 && !freeSeating && pickedSeats.length > 0) {
         var pSingle = passengers.find(function(x) { return x['PAX_ID'] === paxIds[0]; });
         var expSingle = pSingle ? Math.max(1, parseInt(pSingle['Кількість місць']) || 1) : 1;
-        if (pickedSeats.length > expSingle) {
+        if (pickedSeats.length !== expSingle) {
             var n = pickedSeats.length;
+            var verb = n > expSingle ? 'Збільшити' : 'Зменшити';
             var ok = await new Promise(function(resolve) {
                 showConfirm(
                     'За пасажиром ' + expSingle + ' місце(ь), а ви обрали ' + n + '. '
-                    + 'Збільшити кількість місць пасажира до ' + n + '?',
+                    + verb + ' кількість місць пасажира до ' + n + '?',
                     function(yes) { resolve(yes); }
                 );
             });
