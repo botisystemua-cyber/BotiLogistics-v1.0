@@ -6016,12 +6016,18 @@ function renderDispatchView(disp) {
     totalSum += parseFloat(r['Сума']) || 0;
   });
 
+  var selectedCount = (_dispSelectedIds && _dispSelectedIds.size) || 0;
+  var bulkActions = selectedCount > 0
+    ? '<button onclick="dispBulkDelete()" style="background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;">🗑️ Видалити (' + selectedCount + ')</button>'
+    : '';
+
   document.getElementById('routeHeader').innerHTML =
     '<div class="route-header-left">' +
       '<div class="route-header-title">📥 Відправка — ' + cityName + '</div>' +
       '<div class="route-header-stats">📦 ' + routeData.length + ' записів · ⚖️ ' + totalWeight.toFixed(1) + ' кг · 💰 ' + totalSum + '</div>' +
     '</div>' +
     '<div class="route-header-actions">' +
+      bulkActions +
       '<button onclick="openDispatchPrintDialog()">🖨️ Друк списку</button>' +
       '<button onclick="refreshDispatchView()">🔄 Оновити</button>' +
       '<button onclick="backToParcels()">← Назад</button>' +
@@ -6029,10 +6035,13 @@ function renderDispatchView(disp) {
 
   document.getElementById('routeFilters').innerHTML = '';
 
+  // ☑ — bulk-checkbox column. «Передати» = пакет готівки (раніше «Завдаток»,
+  // що плутало менеджера: насправді це сума яку відправник передає клієнту).
   var html = '<table class="route-table"><thead><tr>' +
-    '<th>Дата оформлення</th><th>Внутрішній №</th><th>Відправник</th><th>Тел. відправника</th>' +
+    '<th style="width:30px;"><input type="checkbox" id="dispSelectAllCb" onchange="dispToggleSelectAll(this.checked)"></th>' +
+    '<th>Дата оформлення</th><th>Хто оформляв</th><th>Внутр. №</th><th>Відправник</th><th>Тел. відправника</th>' +
     '<th>Отримувач</th><th>Тел. отримувача</th><th>Адреса</th>' +
-    '<th>Опис</th><th>Вага</th><th>Сума</th><th>Завдаток</th><th>Борг</th><th>Оплата</th><th>Статус</th>' +
+    '<th>Опис</th><th>Вага</th><th>Сума</th><th>Передати</th><th>Борг</th><th>Оплата</th><th>Статус</th>' +
   '</tr></thead><tbody>';
 
   routeData.forEach(function(r, i) {
@@ -6041,27 +6050,84 @@ function renderDispatchView(disp) {
     var status = r['Статус'] || '';
     var statusColor = status === 'Доставлено' ? '#22c55e' : status === 'В дорозі' ? '#3b82f6' : '#94a3b8';
     var desc = r['Опис посилки'] || '';
+    var dispId = r['DISPATCH_ID'] || '';
+    var safeDisp = String(dispId).replace(/'/g, "\\'");
+    var checked = (_dispSelectedIds && _dispSelectedIds.has(dispId)) ? 'checked' : '';
 
-    html += '<tr onclick="openDispatchDetail(' + i + ')">' +
-      '<td style="white-space:nowrap;font-size:11px;">' + (r['Дата створення'] || '—') + '</td>' +
-      '<td style="font-weight:600;">' + (r['Внутрішній №'] || '—') + '</td>' +
-      '<td>' + (r['Піб відправника'] || '—') + '</td>' +
-      '<td style="font-size:11px;">' + (r['Телефон відправника'] || '—') + '</td>' +
-      '<td>' + (r['Піб отримувача'] || '—') + '</td>' +
-      '<td style="font-size:11px;">' + (r['Телефон отримувача'] || '—') + '</td>' +
-      '<td title="' + (r['Адреса отримувача'] || '') + '">' + ((r['Адреса отримувача'] || '').substring(0, 20) || '—') + '</td>' +
-      '<td title="' + desc + '">' + (desc.substring(0, 20) || '—') + (desc.length > 20 ? '...' : '') + '</td>' +
-      '<td>' + (r['Вага'] || '—') + '</td>' +
-      '<td>' + (r['Сума'] || '—') + ' ' + (r['Валюта'] || '') + '</td>' +
-      '<td>' + (r['Завдаток'] || '—') + '</td>' +
-      '<td style="font-weight:600;color:#ef4444;">' + (r['Борг'] || '—') + '</td>' +
-      '<td><span class="route-status-badge" style="background:' + payColor + '20;color:' + payColor + '">' + (pay || '—') + '</span></td>' +
-      '<td><span class="route-status-badge" style="background:' + statusColor + '20;color:' + statusColor + '">' + (status || '—') + '</span></td>' +
+    html += '<tr>' +
+      '<td onclick="event.stopPropagation()"><input type="checkbox" ' + checked + ' onclick="event.stopPropagation(); dispToggleSelect(\'' + safeDisp + '\', this.checked)"></td>' +
+      '<td onclick="openDispatchDetail(' + i + ')" style="white-space:nowrap;font-size:11px;cursor:pointer;">' + (r['Дата створення'] || '—') + '</td>' +
+      '<td onclick="openDispatchDetail(' + i + ')" style="cursor:pointer;font-size:11px;">' + (r['Водій'] || '—') + '</td>' +
+      '<td onclick="openDispatchDetail(' + i + ')" style="font-weight:600;cursor:pointer;">' + (r['Внутрішній №'] || '—') + '</td>' +
+      '<td onclick="openDispatchDetail(' + i + ')" style="cursor:pointer;">' + (r['Піб відправника'] || '—') + '</td>' +
+      '<td onclick="openDispatchDetail(' + i + ')" style="font-size:11px;cursor:pointer;">' + (r['Телефон відправника'] || '—') + '</td>' +
+      '<td onclick="openDispatchDetail(' + i + ')" style="cursor:pointer;">' + (r['Піб отримувача'] || '—') + '</td>' +
+      '<td onclick="openDispatchDetail(' + i + ')" style="font-size:11px;cursor:pointer;">' + (r['Телефон отримувача'] || '—') + '</td>' +
+      '<td onclick="openDispatchDetail(' + i + ')" title="' + (r['Адреса отримувача'] || '') + '" style="cursor:pointer;">' + ((r['Адреса отримувача'] || '').substring(0, 20) || '—') + '</td>' +
+      '<td onclick="openDispatchDetail(' + i + ')" title="' + desc + '" style="cursor:pointer;">' + (desc.substring(0, 20) || '—') + (desc.length > 20 ? '...' : '') + '</td>' +
+      '<td onclick="openDispatchDetail(' + i + ')" style="cursor:pointer;">' + (r['Вага'] || '—') + '</td>' +
+      '<td onclick="openDispatchDetail(' + i + ')" style="cursor:pointer;">' + (r['Сума'] || '—') + ' ' + (r['Валюта'] || '') + '</td>' +
+      '<td onclick="openDispatchDetail(' + i + ')" style="cursor:pointer;">' + (r['Завдаток'] || '—') + '</td>' +
+      '<td onclick="openDispatchDetail(' + i + ')" style="font-weight:600;color:#ef4444;cursor:pointer;">' + (r['Борг'] || '—') + '</td>' +
+      '<td onclick="openDispatchDetail(' + i + ')" style="cursor:pointer;"><span class="route-status-badge" style="background:' + payColor + '20;color:' + payColor + '">' + (pay || '—') + '</span></td>' +
+      '<td onclick="openDispatchDetail(' + i + ')" style="cursor:pointer;"><span class="route-status-badge" style="background:' + statusColor + '20;color:' + statusColor + '">' + (status || '—') + '</span></td>' +
     '</tr>';
   });
 
   html += '</tbody></table>';
   document.getElementById('routeTableWrap').innerHTML = html;
+}
+
+// ===== Bulk-actions для відправок =====
+// _dispSelectedIds — DISPATCH_ID вибраних рядків. Зберігається у пам'яті,
+// перезавантажується при refreshDispatchView (бо deleteFromBulk робить refresh).
+var _dispSelectedIds = new Set();
+
+function dispToggleSelect(dispId, checked) {
+  if (!dispId) return;
+  if (checked) _dispSelectedIds.add(dispId);
+  else _dispSelectedIds.delete(dispId);
+  // Перерендерити лише header, щоб оновити лічильник «Видалити (N)»
+  var d = dispatches[activeRouteIdx];
+  if (d) renderDispatchView(d);
+}
+
+function dispToggleSelectAll(checked) {
+  _dispSelectedIds = new Set();
+  if (checked) {
+    routeData.forEach(function(r) {
+      if (r['DISPATCH_ID']) _dispSelectedIds.add(r['DISPATCH_ID']);
+    });
+  }
+  var d = dispatches[activeRouteIdx];
+  if (d) renderDispatchView(d);
+}
+
+async function dispBulkDelete() {
+  if (_dispSelectedIds.size === 0) return;
+  if (!confirm('Видалити ' + _dispSelectedIds.size + ' відправок? Дію не можна відмінити.')) return;
+  try {
+    showToast('Видалення…', 'info');
+    var ids = Array.from(_dispSelectedIds);
+    var url = SUPABASE_URL + '/rest/v1/dispatches?tenant_id=eq.' + encodeURIComponent(TENANT_ID) +
+      '&dispatch_id=in.(' + ids.map(encodeURIComponent).join(',') + ')';
+    var res = await fetch(url, {
+      method: 'DELETE',
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: 'Bearer ' + SUPABASE_ANON_KEY,
+        Prefer: 'return=minimal',
+      },
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    _dispSelectedIds.clear();
+    showToast('🗑️ Видалено', 'success');
+    refreshDispatchView();
+    // Перерахувати лічильники у sidebar
+    if (typeof loadRoutes === 'function') loadRoutes(true);
+  } catch (e) {
+    showToast('Помилка: ' + (e.message || e), 'error');
+  }
 }
 
 var currentDispatchIdx = null;
@@ -6140,7 +6206,7 @@ var dispPrintCols = [
   { key: 'DISPATCH_ID',        label: 'DISPATCH_ID', on: false },
   { key: 'Дата створення',     label: 'Створено (дата+час)', on: true  },
   { key: 'Дата рейсу',         label: 'Дата рейсу',   on: false },
-  { key: 'Водій',              label: 'Водій (хто зберіг)', on: true },
+  { key: 'Водій',              label: 'Хто оформляв', on: true },
   { key: 'Номер авто',         label: 'Авто',         on: false },
   { key: 'Піб відправника',    label: 'Відправник',   on: true  },
   { key: 'Телефон відправника', label: 'Тел. відпр.',  on: true  },
@@ -6151,13 +6217,18 @@ var dispPrintCols = [
   { key: 'Вага',                label: 'Вага',         on: true  },
   { key: 'Сума',                label: 'Сума',         on: true  },
   { key: 'Валюта',              label: 'Валюта',       on: false },
-  { key: 'Завдаток',            label: 'Завдаток',     on: false },
-  { key: 'Валюта завдатку',     label: 'Вал. завд.',   on: false },
+  // «Передати» = пакет готівки що клієнт передає отримувачу. Раніше називався
+  // «Завдаток» (плутало менеджера: це не завдаток за послугу, а пересилка кешу).
+  { key: 'Завдаток',            label: 'Передати',     on: true  },
+  { key: 'Валюта завдатку',     label: 'Вал. передачі', on: false },
   { key: 'Борг',                label: 'Борг',         on: false },
   { key: 'Форма оплати',        label: 'Оплата',       on: false },
   { key: 'Статус оплати',       label: 'Статус опл.',  on: false },
   { key: 'Статус',              label: 'Статус',       on: false },
-  { key: 'Примітка',            label: 'Примітка',     on: true  }
+  { key: 'Примітка',            label: 'Примітка',     on: true  },
+  // Порожня колонка — заповнюється від руки на роздруку. Використовується
+  // для запису ТТН Нової Пошти, який видається при оформленні в офісі НП.
+  { key: '__empty_np_ttn',      label: 'ТТН НП',       on: true,  getter: function() { return ''; } }
 ];
 
 function openDispatchPrintDialog() {
@@ -6249,49 +6320,96 @@ function executeDispatchPrint() {
   var cityName = d ? (d.city || d.sheetName) : '';
   var dateNow = new Date().toLocaleDateString('uk-UA');
 
-  var printWin = window.open('', '_blank', 'width=1000,height=700');
-  var html = '<!DOCTYPE html><html><head><meta charset="UTF-8">' +
-    '<title>Список відправок — ' + cityName + '</title>' +
+  var printWin = window.open('', '_blank', 'width=1200,height=800');
+  var esc = function(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) {
+      return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c];
+    });
+  };
+
+  // Сучасний layout — A4 landscape, маленькі поля, авто-розтягування таблиці
+  // на всю ширину сторінки. Header градієнтом, дата у мета-блоці.
+  // Альтернативні рядки сірим, заголовки colored.
+  var html = '<!DOCTYPE html><html lang="uk"><head><meta charset="UTF-8">' +
+    '<title>Відправка — ' + esc(cityName) + '</title>' +
     '<style>' +
-      'body{font-family:Arial,sans-serif;padding:12px;color:#333;font-size:11px;margin:0;}' +
-      'h1{font-size:16px;margin:0 0 2px;}' +
-      '.sub{color:#666;font-size:11px;margin-bottom:10px;}' +
-      'table{width:100%;border-collapse:collapse;}' +
-      'th,td{border:1px solid #999;padding:3px 5px;text-align:left;font-size:10px;vertical-align:top;}' +
-      'th{background:#e8e8e8;font-weight:700;white-space:nowrap;}' +
-      'tr:nth-child(even){background:#f9f9f9;}' +
-      '.totals{margin-top:8px;font-size:11px;font-weight:600;}' +
-      '.no-print{margin-bottom:10px;}' +
-      '@media print{.no-print{display:none!important;} body{padding:6px;} @page{size:landscape;margin:8mm;}}' +
+      '*{box-sizing:border-box;}' +
+      'body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;padding:14px 18px;color:#1f2937;font-size:11px;margin:0;background:#fff;}' +
+      '.head{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid #1a3a5e;padding-bottom:8px;margin-bottom:10px;}' +
+      '.head-l h1{font-size:20px;margin:0;color:#1a3a5e;font-weight:800;letter-spacing:-0.3px;}' +
+      '.head-l .city{font-size:13px;color:#475569;margin-top:2px;font-weight:600;}' +
+      '.head-r{text-align:right;font-size:10px;color:#64748b;line-height:1.5;}' +
+      '.head-r b{color:#1f2937;}' +
+      'table{width:100%;border-collapse:collapse;table-layout:auto;font-size:10px;}' +
+      'th{background:#1a3a5e;color:#fff;font-weight:700;padding:6px 5px;text-align:left;white-space:nowrap;border:1px solid #1a3a5e;}' +
+      'td{border:1px solid #d1d5db;padding:5px 5px;vertical-align:top;line-height:1.35;}' +
+      'tbody tr:nth-child(even) td{background:#f9fafb;}' +
+      'tbody tr:hover td{background:#fef3c7;}' +
+      '.empty-cell{min-width:90px;background:#fffef0!important;}' +
+      '.totals{margin-top:10px;display:flex;gap:14px;font-size:11px;}' +
+      '.totals span{padding:6px 12px;background:#f1f5f9;border-radius:6px;font-weight:600;color:#1f2937;}' +
+      '.totals span b{color:#1a3a5e;}' +
+      '.foot{margin-top:18px;display:flex;justify-content:space-between;font-size:10px;color:#64748b;}' +
+      '.sign{border-top:1px solid #1f2937;width:200px;padding-top:4px;text-align:center;font-size:10px;}' +
+      '.no-print{display:flex;gap:8px;margin-bottom:14px;padding:10px 12px;background:#1a3a5e;border-radius:8px;}' +
+      '.no-print button{padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer;border:none;border-radius:6px;}' +
+      '.no-print button.print{background:#10b981;color:#fff;}' +
+      '.no-print button.close{background:#fff;color:#1f2937;}' +
+      '.no-print button:hover{filter:brightness(1.08);}' +
+      '@media print{' +
+        '.no-print{display:none!important;}' +
+        'body{padding:0;}' +
+        '@page{size:A4 landscape;margin:8mm;}' +
+        'thead{display:table-header-group;}' +
+        'tr{page-break-inside:avoid;}' +
+        '.totals span{background:#f3f4f6!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}' +
+        'th{background:#1a3a5e!important;color:#fff!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}' +
+        'tbody tr:nth-child(even) td{background:#f9fafb!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}' +
+      '}' +
     '</style></head><body>' +
     '<div class="no-print">' +
-      '<button onclick="window.print()" style="padding:6px 16px;font-size:13px;cursor:pointer;">🖨️ Друкувати</button>' +
-      '<button onclick="window.close()" style="padding:6px 16px;font-size:13px;cursor:pointer;margin-left:6px;">✕ Закрити</button>' +
+      '<button class="print" onclick="window.print()">🖨️ Друкувати</button>' +
+      '<button class="close" onclick="window.close()">✕ Закрити</button>' +
     '</div>' +
-    '<h1>Список відправок — ' + cityName + '</h1>' +
-    '<div class="sub">Дата друку: ' + dateNow + ' | Кількість: ' + routeData.length + '</div>';
+    '<div class="head">' +
+      '<div class="head-l">' +
+        '<h1>📥 Список відправок</h1>' +
+        '<div class="city">' + esc(cityName) + '</div>' +
+      '</div>' +
+      '<div class="head-r">Дата друку: <b>' + esc(dateNow) + '</b><br>Записів: <b>' + routeData.length + '</b></div>' +
+    '</div>';
 
-  // Table header
   html += '<table><thead><tr>';
-  activeCols.forEach(function(c) { html += '<th>' + c.label + '</th>'; });
+  activeCols.forEach(function(c) {
+    html += '<th>' + esc(c.label) + '</th>';
+  });
   html += '</tr></thead><tbody>';
 
-  // Table rows
   var totalW = 0, totalS = 0;
   routeData.forEach(function(r, i) {
     html += '<tr>';
     activeCols.forEach(function(c) {
       var val = c.getter ? c.getter(r, i) : (r[c.key] || '');
-      html += '<td>' + val + '</td>';
+      // Спеціально-порожні клітинки (ТТН НП) ширші — щоб менеджер мав куди писати
+      var cls = (c.key && String(c.key).startsWith('__empty_')) ? 'empty-cell' : '';
+      html += '<td' + (cls ? ' class="' + cls + '"' : '') + '>' + esc(val) + '</td>';
     });
     html += '</tr>';
     totalW += parseFloat(r['Вага']) || 0;
     totalS += parseFloat(r['Сума']) || 0;
   });
 
-  html += '</tbody></table>';
-  html += '<div class="totals">Всього: ' + routeData.length + ' посилок · Вага: ' + totalW.toFixed(1) + ' кг · Сума: ' + totalS.toFixed(0) + '</div>';
-  html += '</body></html>';
+  html += '</tbody></table>' +
+    '<div class="totals">' +
+      '<span>📦 Записів: <b>' + routeData.length + '</b></span>' +
+      '<span>⚖️ Вага: <b>' + totalW.toFixed(1) + ' кг</b></span>' +
+      '<span>💰 Сума: <b>' + totalS.toFixed(0) + '</b></span>' +
+    '</div>' +
+    '<div class="foot">' +
+      '<div class="sign">Здав ___________________</div>' +
+      '<div class="sign">Прийняв ________________</div>' +
+    '</div>' +
+    '</body></html>';
 
   printWin.document.write(html);
   printWin.document.close();

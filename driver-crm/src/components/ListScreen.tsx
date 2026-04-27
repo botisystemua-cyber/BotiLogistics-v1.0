@@ -162,6 +162,15 @@ export function ListScreen() {
     refresh();
   });
 
+  // Dispatches: коли менеджер видалив відправку у cargo-crm — водій одразу
+  // бачить що вона зникає (без F5). UPDATE/INSERT теж триггерять refresh.
+  useRealtimeTable('dispatches', (payload) => {
+    if (payload.eventType === 'DELETE') {
+      showToast('🗑️ Менеджер видалив відправку');
+    }
+    refresh();
+  });
+
   // Filter
   const filterItems = <T extends { _statusKey: string; _sourceRoute?: string }>(items: T[]): T[] => {
     let filtered = items;

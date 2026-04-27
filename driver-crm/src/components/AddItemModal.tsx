@@ -150,6 +150,10 @@ export function AddItemModal({ onClose, onAdded, defaultType: dt, forceShipping 
   const [internalNum, setInternalNum] = useState('');
   const [lastInternalNum, setLastInternalNum] = useState('');
   const [loadingNum, setLoadingNum] = useState(false);
+  // Set усіх вже зайнятих внутрішніх номерів (з посилок + dispatches) — для
+  // live-попередження при введенні дубля. Раніше перевірявся лише останній,
+  // тому повтор будь-якого старого номера проходив без попередження.
+  const [usedInternalNums, setUsedInternalNums] = useState<Set<string>>(new Set());
   const [pkgPieces, setPkgPieces] = useState('1');
   const [paymentAmount, setPaymentAmount] = useState('');
   const [depositAmount, setDepositAmount] = useState('');
@@ -181,10 +185,20 @@ export function AddItemModal({ onClose, onAdded, defaultType: dt, forceShipping 
         fetchShippingItems(shipSheetName),
       ]);
       const nums: number[] = [];
-      if (pkgs.status === 'fulfilled') pkgs.value.forEach((p) => { const n = parseInt(p.internalNum); if (!isNaN(n)) nums.push(n); });
-      if (shipItems.status === 'fulfilled') shipItems.value.forEach((s) => { const n = parseInt(s.internalNum); if (!isNaN(n)) nums.push(n); });
+      const all = new Set<string>();
+      if (pkgs.status === 'fulfilled') pkgs.value.forEach((p) => {
+        const raw = String(p.internalNum || '').trim();
+        if (raw) all.add(raw);
+        const n = parseInt(raw); if (!isNaN(n)) nums.push(n);
+      });
+      if (shipItems.status === 'fulfilled') shipItems.value.forEach((s) => {
+        const raw = String(s.internalNum || '').trim();
+        if (raw) all.add(raw);
+        const n = parseInt(raw); if (!isNaN(n)) nums.push(n);
+      });
       const maxNum = nums.length > 0 ? Math.max(...nums) : 0;
       setLastInternalNum(String(maxNum));
+      setUsedInternalNums(all);
       setInternalNum(String(maxNum + 1));
     } catch { /* ignore */ }
     finally { setLoadingNum(false); }
@@ -239,8 +253,9 @@ export function AddItemModal({ onClose, onAdded, defaultType: dt, forceShipping 
       if (!recipientPhone.trim()) { showToast('Введи тел. отримувача'); return; }
       if (!senderPhone.trim()) { showToast('Введи тел./ІД відправника'); return; }
       if (!amount.trim()) { showToast('Введи оціночну вартість'); return; }
-      if (lastInternalNum && internalNum.trim() === lastInternalNum) {
-        showToast('Цей номер вже існує! Попередній: ' + lastInternalNum); return;
+      if (usedInternalNums.has(internalNum.trim())) {
+        showToast('⚠️ Внутрішній № ' + internalNum.trim() + ' вже існує — введіть інший');
+        return;
       }
     } else if (isPickup) {
       if (!senderPhone.trim()) { showToast('Введи телефон клієнта'); return; }
@@ -524,9 +539,25 @@ export function AddItemModal({ onClose, onAdded, defaultType: dt, forceShipping 
                         {loadingNum ? 'Завантаження...' : lastInternalNum ? `Попередній: ${lastInternalNum}` : 'Немає записів'}
                       </span>
                     </div>
-                    <input type="text" value={internalNum} onChange={(e) => setInternalNum(e.target.value)}
-                      placeholder={lastInternalNum ? String(Number(lastInternalNum) + 1) : '1'}
-                      className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-text placeholder:text-gray-300 focus:outline-none focus:border-brand font-bold text-center text-lg" />
+                    {(() => {
+                      const isDup = !!internalNum.trim() && usedInternalNums.has(internalNum.trim());
+                      return (
+                        <>
+                          <input type="text" value={internalNum} onChange={(e) => setInternalNum(e.target.value)}
+                            placeholder={lastInternalNum ? String(Number(lastInternalNum) + 1) : '1'}
+                            className={`w-full px-3 py-2.5 border rounded-xl text-sm placeholder:text-gray-300 focus:outline-none font-bold text-center text-lg ${
+                              isDup
+                                ? 'bg-red-50 border-red-400 text-red-700 focus:border-red-500'
+                                : 'bg-gray-50 border-gray-200 text-text focus:border-brand'
+                            }`} />
+                          {isDup && (
+                            <div className="mt-1 text-[11px] font-bold text-red-600">
+                              ⚠️ № {internalNum.trim()} вже існує — обери інший, інакше буде дубль
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
 
                   {/* 2. Відправник */}
