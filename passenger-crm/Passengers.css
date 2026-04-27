@@ -1639,6 +1639,26 @@ body.route-sort-active #rteTogglePay {
 .seat-pin.seat-occupied.seat-flex:hover { background: rgba(147,197,253,0.85) !important; transform: translate(-50%, -50%) scale(1.05); }
 .seat-flex-ico { font-size: 9px; opacity: 0.85; margin-left: 2px; }
 .sp-seat.sp-occupied.sp-flex { opacity: 1; border-style: dashed; cursor: pointer; }
+/* Selected у режимі «вільна розсадка» — те саме блідо-блакитне з dashed border,
+   але з зеленою галочкою, щоб видно було що це обране, а не зайняте чужим. */
+.seat-pin.seat-selected.seat-selected-flex {
+    background: rgba(147,197,253,0.6) !important;
+    border: 1.5px dashed #2563eb !important;
+    color: #1e40af !important;
+}
+.seat-pin.seat-selected.seat-selected-flex .seat-check {
+    background: #16a34a; color: #fff;
+}
+.seat.seat-selected.seat-selected-flex .seat-chair {
+    filter: brightness(1.05) sepia(0.5) hue-rotate(180deg) saturate(2);
+}
+.seat.seat-selected.seat-selected-flex .seat-num { color: #1e40af; }
+.rseat.rseat-selected.rseat-selected-flex {
+    background: #eff6ff;
+    border: 1.5px dashed #93c5fd;
+    color: #1e40af;
+    box-shadow: none;
+}
 /* Підсвічування цільового місця при hover на flex-зайнятому — показує куди
    переїде його окупант. Активується JS-ом (seatFlexHoverIn). */
 .seat-shift-target {
