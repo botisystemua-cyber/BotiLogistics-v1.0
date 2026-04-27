@@ -2,15 +2,17 @@ import { useState } from 'react';
 import {
   Phone, MapPin, RotateCw, CheckCircle2, XCircle, Undo2,
   Car, ArrowRight, Info, ChevronUp, CreditCard, Calendar, Clock, Users, User, Pencil, MessageCircle,
-  AlertCircle,
+  AlertCircle, Lock,
 } from 'lucide-react';
 import type { Passenger, ItemStatus } from '../types';
 import { useApp } from '../store/useAppStore';
 import { updateItemStatus } from '../api';
+import { readSession } from '../lib/session';
 import { Highlight } from './Highlight';
 import { isUaEu, isEuUa } from '../utils/smsParser';
 import { MessengerPopup } from './MessengerPopup';
 import { AddressPicker } from './AddressPicker';
+import { PaymentSheet } from './PaymentSheet';
 import { TipsButton } from './TipsButton';
 
 interface Props { passenger: Passenger; index: number; searchQuery?: string; onEdit?: (p: Passenger) => void; }
@@ -34,6 +36,11 @@ export function PassengerCard({ passenger: p, index, searchQuery = '', onEdit }:
   const [expanded, setExpanded] = useState(false);
   const [showMessenger, setShowMessenger] = useState(false);
   const [showAddrPicker, setShowAddrPicker] = useState(false);
+  const [showPayment, setShowPayment] = useState(false);
+  const [localPayStatus, setLocalPayStatus] = useState(p.payStatus);
+  const [localPayForm, setLocalPayForm] = useState(p.payForm);
+  const [localDebt, setLocalDebt] = useState(p.debt);
+  const [localCollectedBy, setLocalCollectedBy] = useState(p.paymentCollectedBy);
   const [localTips, setLocalTips] = useState(p.tips);
   const [localTipsCur, setLocalTipsCur] = useState(p.tipsCurrency);
 
@@ -112,10 +119,29 @@ export function PassengerCard({ passenger: p, index, searchQuery = '', onEdit }:
           {show('seatsCount') && p.seatsCount && <Chip icon={Users} c="blue">{p.seatsCount} місць</Chip>}
           {show('amount') && p.amount && <Chip icon={CreditCard} c="green" b>{p.amount} {p.currency}</Chip>}
           {(() => {
-            // Червоний чіп «Борг» поруч із сумою — водій бачить недоплату
-            // одразу, без розгортання деталей. Показуємо при unpaid/partial.
-            const debtN = parseFloat(p.debt) || 0;
-            const isUnpaid = p.payStatus === 'Не оплачено' || p.payStatus === 'Частково';
+            // Тапабельний чіп оплати: тап → bottom-sheet з 5 опцій. Замочок,
+            // якщо менеджер уже відмітив (collected_by != мене).
+            const sess = readSession();
+            const myLogin = sess?.user_login || '';
+            const isLockedForMe = localPayStatus === 'Оплачено'
+              && localCollectedBy !== '' && localCollectedBy !== myLogin;
+            const label = paxFormLabel(localPayStatus, localPayForm);
+            const cls = paxFormClass(localPayStatus);
+            return (
+              <button
+                onClick={(e) => { e.stopPropagation(); setShowPayment(true); }}
+                className={`text-[10px] font-bold px-2 py-0.5 rounded-full inline-flex items-center gap-1 cursor-pointer active:scale-95 transition-transform ${cls}`}
+                title={isLockedForMe ? 'Уже оплачено: ' + (localCollectedBy || 'менеджер') : 'Натисніть щоб змінити'}
+              >
+                {isLockedForMe && <Lock className="w-3 h-3" />}
+                {label}
+              </button>
+            );
+          })()}
+          {(() => {
+            // Червоний чіп «Борг» — показуємо лише при unpaid/partial і debt > 0.
+            const debtN = parseFloat(localDebt) || 0;
+            const isUnpaid = localPayStatus === 'Не оплачено' || localPayStatus === 'Частково';
             if (!isUnpaid || debtN <= 0) return null;
             return <Chip icon={AlertCircle} c="red" b title="Не повністю оплачено">Борг: {debtN}{p.currency ? ' ' + p.currency : ''}</Chip>;
           })()}
@@ -157,9 +183,10 @@ export function PassengerCard({ passenger: p, index, searchQuery = '', onEdit }:
             <Cell label="Місце" value={p.seat} />
             <Cell label="Місто" value={p.city} />
             <Cell label="Сума" value={p.amount ? p.amount + ' ' + p.currency : ''} bold accent="green" />
-            <Cell label="Оплата" value={p.payForm} />
-            <Cell label="Ст. оплати" value={p.payStatus} />
-            <Cell label="Борг" value={parseFloat(p.debt) > 0 ? p.debt + (p.currency ? ' ' + p.currency : '') : ''} bold accent="red" />
+            <Cell label="Оплата" value={localPayForm} />
+            <Cell label="Ст. оплати" value={localPayStatus} />
+            <Cell label="Хто прийняв" value={localCollectedBy ? (localCollectedBy + (localCollectedBy === (readSession()?.user_login || '') ? ' (я)' : '')) : ''} />
+            <Cell label="Борг" value={parseFloat(localDebt) > 0 ? localDebt + (p.currency ? ' ' + p.currency : '') : ''} bold accent="red" />
             <Cell label="Напрям" value={p.direction} />
             <Cell label="Тег" value={p.tag} />
           </div>
@@ -170,6 +197,24 @@ export function PassengerCard({ passenger: p, index, searchQuery = '', onEdit }:
 
       {showMessenger && <MessengerPopup phone={p.phone} onClose={() => setShowMessenger(false)} />}
       {showAddrPicker && <AddressPicker addrFrom={p.addrFrom} addrTo={p.addrTo} onClose={() => setShowAddrPicker(false)} />}
+      {showPayment && (
+        <PaymentSheet
+          routeRowUuid={p._uuid}
+          currentStatus={localPayStatus}
+          currentForm={localPayForm}
+          collectedBy={localCollectedBy}
+          amount={p.amount}
+          currency={p.currency}
+          onClose={() => setShowPayment(false)}
+          showToast={showToast}
+          onApplied={(r) => {
+            setLocalPayStatus(r.status);
+            setLocalPayForm(r.form);
+            setLocalDebt(String(r.debt));
+            setLocalCollectedBy(r.collectedBy);
+          }}
+        />
+      )}
 
       {showCancel && (
         <div className="border-t border-red-100 bg-red-50/60 p-3.5">
@@ -180,6 +225,32 @@ export function PassengerCard({ passenger: p, index, searchQuery = '', onEdit }:
       )}
     </div>
   );
+}
+
+// Лейбл і колір тапабельного чіпа оплати — точно по тих самих правилах
+// що в PackageCard'і (символи й стан). Дублюємо локально, бо PackageCard
+// використовує свою копію (formLabel/formClass) — спільний хелпер додасть
+// імпорт-зайв на 8 рядків коду.
+function paxFormLabel(payStatus: string, payForm: string): string {
+  if (payStatus === 'Оплачено') {
+    if (payForm === 'Готівка') return '💵 Готівка';
+    if (payForm === 'Картка')  return '💳 Картка';
+    if (payForm === 'Наложка') return '🏦 Наложка';
+    return '✅ Оплачено';
+  }
+  if (payStatus === 'Частково')    return '🟡 Частково';
+  if (payStatus === 'Не оплачено') return '⚠️ Не оплачено';
+  const f = (payForm || '').toLowerCase().trim();
+  if (f === 'готівка' || f === 'картка') return '✅ Оплачено';
+  if (f === 'частково') return '🟡 Частково';
+  if (f === 'наложка')  return '🏦 Наложка';
+  return '⚠️ Борг';
+}
+function paxFormClass(payStatus: string): string {
+  if (payStatus === 'Оплачено')    return 'text-emerald-700 bg-emerald-50';
+  if (payStatus === 'Частково')    return 'text-amber-700 bg-amber-50';
+  if (payStatus === 'Не оплачено') return 'text-red-700 bg-red-50';
+  return 'text-gray-600 bg-gray-100';
 }
 
 function Cell({ label, value, bold, accent, full }: { label: string; value?: string; bold?: boolean; accent?: 'green' | 'red'; full?: boolean }) {

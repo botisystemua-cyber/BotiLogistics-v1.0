@@ -978,6 +978,8 @@ document.addEventListener('DOMContentLoaded', () => {
         render();
         // Підтягуємо маршрути для сайдбару
         loadRoutes();
+        // Realtime — після першого завантаження, щоб подія не прийшла на порожній stage
+        startPaxRealtime();
     }).catch(() => { hideLoader(); render(); });
 
     setInterval(silentSync, 30000);
@@ -1124,6 +1126,65 @@ function checkAndUpdateApp() {
         console.warn('checkAndUpdateApp failed:', e);
         return false;
     });
+}
+
+// ===== [SECT-REALTIME] Live updates через Supabase WebSocket =====
+// Підписка на passengers (нові/змінені пасажири) і routes (зміни рейсу від
+// водія або менеджера). Без цього менеджер бачить нового пасажира лише після
+// 30-секундного silentSync — реалтайм скорочує лаг до ~500мс.
+//
+// При INSERT у passengers — toast «📡 Новий пасажир: …» + debounced reload.
+// При UPDATE — мовчазний reload (буває часто, не варто спамити).
+// Канал створюється раз; Supabase Realtime сам перепідключається.
+
+var _paxRtTimer = null;
+function _paxRtDebouncedReload() {
+    clearTimeout(_paxRtTimer);
+    _paxRtTimer = setTimeout(function() {
+        // Тихий reload без loader-екрана; render() сам перерендерить картки
+        Promise.all([
+            apiPost('getAll', { sheet: 'all' }),
+            apiPost('getTrips', { filter: {} }),
+        ]).then(function(arr) {
+            var paxRes = arr[0], tripRes = arr[1];
+            if (paxRes && paxRes.ok) { passengers = paxRes.data; if (typeof applyOptimizedOrder === 'function') applyOptimizedOrder(); }
+            if (tripRes && tripRes.ok) trips = tripRes.data;
+            updateAllCounts();
+            if (typeof render === 'function') render();
+        }).catch(function() { /* silent */ });
+    }, 800);
+}
+
+function startPaxRealtime() {
+    if (typeof sb === 'undefined' || !sb || !TENANT_ID) return;
+    if (window._paxRealtimeChannel) return;
+
+    var ch = sb.channel('pax-' + TENANT_ID)
+        .on('postgres_changes',
+            { event: 'INSERT', schema: 'public', table: 'passengers',
+              filter: 'tenant_id=eq.' + TENANT_ID },
+            function(payload) {
+                var name = (payload.new && payload.new.passenger_name) || '(новий)';
+                showToast('📡 Новий пасажир: ' + name);
+                _paxRtDebouncedReload();
+            })
+        .on('postgres_changes',
+            { event: 'UPDATE', schema: 'public', table: 'passengers',
+              filter: 'tenant_id=eq.' + TENANT_ID },
+            function() { _paxRtDebouncedReload(); })
+        .on('postgres_changes',
+            { event: '*', schema: 'public', table: 'routes',
+              filter: 'tenant_id=eq.' + TENANT_ID },
+            function() { _paxRtDebouncedReload(); })
+        .subscribe(function(status) {
+            if (status === 'SUBSCRIBED') {
+                console.log('[realtime] passenger-crm channel ready');
+            } else if (status === 'CHANNEL_ERROR') {
+                console.warn('[realtime] passenger channel error — fallback на 30с silentSync');
+            }
+        });
+
+    window._paxRealtimeChannel = ch;
 }
 
 function silentSync(manual, force) {

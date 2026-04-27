@@ -7,6 +7,7 @@ import { useApp } from '../store/useAppStore';
 import type { Theme } from '../store/useAppStore';
 import { isUaEu, isEuUa } from '../utils/smsParser';
 import { fetchPassengers, fetchPackages, fetchShippingItems, updateItemStatus } from '../api';
+import { useRealtimeTable } from '../lib/useRealtime';
 import { PassengerCard } from './PassengerCard';
 import { PackageCard } from './PackageCard';
 import { ShippingCard } from './ShippingCard';
@@ -147,6 +148,19 @@ export function ListScreen() {
     setLoadedTabs(new Set());
     loadCurrentTab(viewTab, true);
   };
+
+  // Realtime: підписка на routes — менеджер у CRM щось змінив (відмінив рейс,
+  // переніс лід, оновив оплату), водій бачить це за ~800мс без F5. Дополнительно
+  // ловимо «status → cancelled» і кидаємо toast — щоб водій точно помітив.
+  useRealtimeTable('routes', (payload) => {
+    const newRow = payload.new as { status?: string; rte_id?: string } | null;
+    const oldRow = payload.old as { status?: string } | null;
+    const justCancelled = !!(newRow && oldRow && oldRow.status !== 'cancelled' && newRow.status === 'cancelled');
+    if (justCancelled) {
+      showToast('❌ Менеджер відмінив рейс ' + (newRow?.rte_id || ''));
+    }
+    refresh();
+  });
 
   // Filter
   const filterItems = <T extends { _statusKey: string; _sourceRoute?: string }>(items: T[]): T[] => {

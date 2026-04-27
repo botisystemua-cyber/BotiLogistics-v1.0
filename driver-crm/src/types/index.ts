@@ -39,6 +39,13 @@ interface RouteItemBase {
   smsNote: string;
   tips: string;
   tipsCurrency: string;
+  // Аудит «хто проставив оплату» — вирішує чи готівка падає водію в зведення.
+  // Якщо менеджер уже проставив до рейсу — водій бачить замочок і не бере у звіт.
+  paymentCollectedBy: string;
+  paymentCollectedAt: string;
+  // routes.id — UUID, потрібен RPC driver_set_payment'у. itemId/PAX_ID/PKG_ID
+  // не годяться, бо для пасажирського рейсу-плейсхолдера itemId порожній.
+  _uuid: string;
   sheet: string;
   _statusKey: string;
   _sourceRoute?: string;

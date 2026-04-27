@@ -103,6 +103,8 @@ function buildCommon(r: any, sheetName: string) {
     smsNote: s(r.sms_notes),
     tips: s(r.tips),
     tipsCurrency: s(r.tips_currency) || getCurrencyDefault(app, 'tips'),
+    paymentCollectedBy: s(r.payment_collected_by),
+    paymentCollectedAt: s(r.payment_collected_at),
     sheet: sheetName,
     _statusKey: '',
     _sourceRoute: undefined as string | undefined,
@@ -361,6 +363,49 @@ export async function updateItemStatus(
 
   if (error) throw error;
   return { success: true };
+}
+
+// ============================================
+// WRITE: Driver payment (cash collection audit)
+// ============================================
+
+export type PayStatus = 'Оплачено' | 'Частково' | 'Не оплачено';
+export type PayForm = 'Готівка' | 'Картка' | 'Наложка' | 'Частково' | 'Борг';
+
+export interface SetPaymentResult {
+  ok: boolean;
+  error?: string;
+  rte_id?: string;
+  pkg_id?: string;
+  status?: PayStatus;
+  form?: PayForm;
+  debt?: number;
+  collected_by?: string;
+  collected_at?: string;
+}
+
+// Викликає driver_set_payment RPC — атомарно проставляє status+form+debt
+// у routes (за UUID рядка) і дзеркалить у packages (за pkg_id).
+// `collectedBy` = логін водія з сесії; передаємо null коли менеджер
+// ставить оплату з cargo-crm (там окремий шлях через PATCH packages).
+export async function setPayment(
+  routeRowUuid: string,
+  status: PayStatus,
+  form: PayForm,
+  collectedBy: string | null,
+): Promise<SetPaymentResult> {
+  const tenantId = getTenantId();
+  const { data, error } = await supabase.rpc('driver_set_payment', {
+    p_tenant_id:    tenantId,
+    p_rte_id:       routeRowUuid,
+    p_status:       status,
+    p_form:         form,
+    p_collected_by: collectedBy,
+  });
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+  return (data || { ok: false, error: 'empty response' }) as SetPaymentResult;
 }
 
 // ============================================

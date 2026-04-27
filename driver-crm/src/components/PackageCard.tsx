@@ -2,8 +2,10 @@ import { useState } from 'react';
 import {
   Phone, MapPin, RotateCw, CheckCircle2, XCircle, Undo2,
   CreditCard, Info, ChevronUp, Calendar, Pencil, MessageCircle,
-  AlertCircle,
+  AlertCircle, Lock,
 } from 'lucide-react';
+import { readSession } from '../lib/session';
+import { PaymentSheet } from './PaymentSheet';
 import type { Package, ItemStatus } from '../types';
 import { useApp } from '../store/useAppStore';
 import { updateItemStatus } from '../api';
@@ -26,12 +28,30 @@ const stLabel: Record<ItemStatus, { t: string; c: string }> = {
   cancelled: { t: 'Скасов.', c: 'text-red-700 bg-red-50' },
 };
 
-function derivePayStatus(payForm?: string): { label: string; cls: string } {
+// Лейбл чіпа збираємо зі справжнього payStatus + payForm (точно як у БД після
+// driver_set_payment). Якщо в БД пусто — fallback по payForm для legacy-записів.
+function formLabel(payStatus: string, payForm: string): string {
+  if (payStatus === 'Оплачено') {
+    if (payForm === 'Готівка') return '💵 Готівка';
+    if (payForm === 'Картка')  return '💳 Картка';
+    if (payForm === 'Наложка') return '🏦 Наложка';
+    return '✅ Оплачено';
+  }
+  if (payStatus === 'Частково')    return '🟡 Частково';
+  if (payStatus === 'Не оплачено') return '⚠️ Не оплачено';
+  // Legacy-fallback: якщо payStatus пустий, виводимо з payForm (як було раніше)
   const f = (payForm || '').toLowerCase().trim();
-  if (f === 'готівка' || f === 'картка') return { label: 'Оплачено', cls: 'text-emerald-700 bg-emerald-50' };
-  if (f === 'частково') return { label: 'Частково', cls: 'text-amber-700 bg-amber-50' };
-  if (f === 'наложка') return { label: 'Наложка', cls: 'text-red-600 bg-red-50' };
-  return { label: 'Борг', cls: 'text-red-600 bg-red-50' };
+  if (f === 'готівка' || f === 'картка') return '✅ Оплачено';
+  if (f === 'частково') return '🟡 Частково';
+  if (f === 'наложка')  return '🏦 Наложка';
+  return '⚠️ Борг';
+}
+
+function formClass(payStatus: string): string {
+  if (payStatus === 'Оплачено')    return 'text-emerald-700 bg-emerald-50';
+  if (payStatus === 'Частково')    return 'text-amber-700 bg-amber-50';
+  if (payStatus === 'Не оплачено') return 'text-red-700 bg-red-50';
+  return 'text-gray-600 bg-gray-100';
 }
 
 export function PackageCard({ pkg: p, index, searchQuery = '', onEdit, onConvertPickup }: Props) {
@@ -42,6 +62,14 @@ export function PackageCard({ pkg: p, index, searchQuery = '', onEdit, onConvert
   const [expanded, setExpanded] = useState(false);
   const [showMessenger, setShowMessenger] = useState(false);
   const [showAddrPicker, setShowAddrPicker] = useState(false);
+  const [showPayment, setShowPayment] = useState(false);
+  // Локальний стан оплати — щоб після тапу sheet'а картка одразу оновилась
+  // без перезавантаження маршруту. Source of truth — БД, але між refetch'ами
+  // довіряємо local-state.
+  const [localPayStatus, setLocalPayStatus] = useState(p.payStatus);
+  const [localPayForm, setLocalPayForm] = useState(p.payForm);
+  const [localDebt, setLocalDebt] = useState(p.debt);
+  const [localCollectedBy, setLocalCollectedBy] = useState(p.paymentCollectedBy);
   const [localTips, setLocalTips] = useState(p.tips);
   const [localTipsCur, setLocalTipsCur] = useState(p.tipsCurrency);
 
@@ -126,16 +154,32 @@ export function PackageCard({ pkg: p, index, searchQuery = '', onEdit, onConvert
             <Chip icon={Phone} c="gray" title={secondaryLabel}>{hl(secondaryPhone)}</Chip>
           )}
           {show('amount') && p.amount && <Chip icon={CreditCard} c="green" b>{p.amount} {p.currency}</Chip>}
-          {show('payStatus') && (() => { const ps = derivePayStatus(p.payForm); return (
-            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${ps.cls}`}>{ps.label}</span>
-          ); })()}
+          {show('payStatus') && (() => {
+            // Тапабельний чіп оплати: тап → bottom-sheet з 5 опцій. Лейбл збираємо
+            // зі справжніх payStatus + payForm (а не derivePayStatus з payForm),
+            // щоб водій бачив точно що в БД. Замочок — коли менеджер уже оплатив.
+            const sess = readSession();
+            const myLogin = sess?.user_login || '';
+            const isLockedForMe = localPayStatus === 'Оплачено'
+              && localCollectedBy !== '' && localCollectedBy !== myLogin;
+            const label = formLabel(localPayStatus, localPayForm);
+            const cls = formClass(localPayStatus);
+            return (
+              <button
+                onClick={(e) => { e.stopPropagation(); setShowPayment(true); }}
+                className={`text-[10px] font-bold px-2 py-0.5 rounded-full inline-flex items-center gap-1 cursor-pointer active:scale-95 transition-transform ${cls}`}
+                title={isLockedForMe ? 'Уже оплачено: ' + (localCollectedBy || 'менеджер') : 'Натисніть щоб змінити'}
+              >
+                {isLockedForMe && <Lock className="w-3 h-3" />}
+                {label}
+              </button>
+            );
+          })()}
           {(() => {
             // Борг прямо у згорнутий вигляд — водій бачить червоний чіп без
-            // розгортання деталей. Показуємо коли форма оплати НЕ повна
-            // («Борг»/«Наложка»/«Частково») і числове значення > 0.
-            const ps = derivePayStatus(p.payForm).label;
-            const debtN = parseFloat(p.debt) || 0;
-            if (ps === 'Оплачено' || debtN <= 0) return null;
+            // розгортання деталей. Показуємо коли НЕ Оплачено і debt > 0.
+            const debtN = parseFloat(localDebt) || 0;
+            if (localPayStatus === 'Оплачено' || debtN <= 0) return null;
             return <Chip icon={AlertCircle} c="red" b title="Не повністю оплачено">Борг: {debtN}{p.currency ? ' ' + p.currency : ''}</Chip>;
           })()}
           {show('dateTrip') && p.dateTrip && <Chip icon={Calendar} c="gray">{p.dateTrip}</Chip>}
@@ -185,9 +229,10 @@ export function PackageCard({ pkg: p, index, searchQuery = '', onEdit, onConvert
             <Cell label="Місто" value={p.city} />
             <Cell label="Напрям" value={p.direction} />
             <Cell label="Сума" value={p.amount ? p.amount + ' ' + p.currency : ''} bold accent="green" />
-            <Cell label="Оплата" value={p.payForm} />
-            <Cell label="Ст. оплати" value={derivePayStatus(p.payForm).label} bold accent={derivePayStatus(p.payForm).label === 'Оплачено' ? 'green' : derivePayStatus(p.payForm).label === 'Частково' ? 'amber' : 'red'} />
-            <Cell label="Борг" value={parseFloat(p.debt) > 0 ? p.debt + (p.currency ? ' ' + p.currency : '') : ''} bold accent="red" />
+            <Cell label="Оплата" value={localPayForm} />
+            <Cell label="Ст. оплати" value={localPayStatus} bold accent={localPayStatus === 'Оплачено' ? 'green' : localPayStatus === 'Частково' ? 'amber' : 'red'} />
+            <Cell label="Хто прийняв" value={localCollectedBy ? (localCollectedBy + (localCollectedBy === (readSession()?.user_login || '') ? ' (я)' : '')) : ''} />
+            <Cell label="Борг" value={parseFloat(localDebt) > 0 ? localDebt + (p.currency ? ' ' + p.currency : '') : ''} bold accent="red" />
             <Cell label="Тег" value={p.tag} />
           </div>
           {p.note && <div className="mt-2 px-2.5 py-1.5 rounded-lg bg-amber-50 text-[11px] text-text"><span className="text-amber-700 font-bold">Примітка: </span>{p.note}</div>}
@@ -197,6 +242,24 @@ export function PackageCard({ pkg: p, index, searchQuery = '', onEdit, onConvert
 
       {showMessenger && <MessengerPopup phone={primaryPhone} onClose={() => setShowMessenger(false)} />}
       {showAddrPicker && <AddressPicker addrFrom={p.addrFrom} addrTo={p.recipientAddr} onClose={() => setShowAddrPicker(false)} />}
+      {showPayment && (
+        <PaymentSheet
+          routeRowUuid={p._uuid}
+          currentStatus={localPayStatus}
+          currentForm={localPayForm}
+          collectedBy={localCollectedBy}
+          amount={p.amount}
+          currency={p.currency}
+          onClose={() => setShowPayment(false)}
+          showToast={showToast}
+          onApplied={(r) => {
+            setLocalPayStatus(r.status);
+            setLocalPayForm(r.form);
+            setLocalDebt(String(r.debt));
+            setLocalCollectedBy(r.collectedBy);
+          }}
+        />
+      )}
 
       {showCancel && (
         <div className="border-t border-red-100 bg-red-50/60 p-3.5">
