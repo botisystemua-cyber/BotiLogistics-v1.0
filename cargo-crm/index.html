@@ -367,6 +367,11 @@
       <div id="routesLoading" style="display:none;text-align:center;padding:40px;color:var(--text-secondary);font-size:13px;">⏳ Завантаження маршрутів...</div>
       <div id="routesError" style="display:none;text-align:center;padding:40px;color:#dc2626;font-size:13px;"></div>
       <div id="routesList"></div>
+      <!-- ── DISPATCH/EXPENSES/SUMMARY view (окремі контейнери, бо їх render-
+           функції пишуть саме у ці id, а маршрутний UI вище — у *Bar). -->
+      <div id="routeHeader" style="display:none;"></div>
+      <div id="routeFilters" style="display:none;"></div>
+      <div id="routeTableWrap" style="display:none;"></div>
       <!-- Sort Mode: фіксована панель внизу з кнопками Зберегти / Скасувати -->
       <div id="routeSortActionBar" style="display:none;">
         <button type="button" class="sort-cancel-btn" onclick="cancelRouteSortChanges()">❌ Скасувати</button>

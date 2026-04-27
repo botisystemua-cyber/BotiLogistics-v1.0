@@ -4369,6 +4369,30 @@ function switchMainView(view) {
   currentView = view;
   document.getElementById('cardsList').style.display = view === 'parcels' ? '' : 'none';
   document.getElementById('routeView').style.display = view !== 'parcels' ? '' : 'none';
+
+  // Маршрутні контейнери (картки маршруту з фільтрами) видимі тільки для
+  // 'route'. Для dispatch/expenses/summary працюють окремі #routeHeader,
+  // #routeFilters, #routeTableWrap — їх render-функції наповнюють.
+  // Без цього перемикача стара маршрутна шапка лишається поверх dispatch-view,
+  // а render-функції dispatch/expenses/summary падали з NPE на неіснуючих id.
+  const isRouteCards = view === 'route';
+  const isAuxView    = (view === 'dispatch' || view === 'expenses' || view === 'summary');
+  const _toggle = (id, on) => { const el = document.getElementById(id); if (el) el.style.display = on ? '' : 'none'; };
+  _toggle('routeHeaderBar',   isRouteCards);
+  _toggle('routeHeaderEmpty', false);  // empty-state ховаємо завжди при не-parcels
+  _toggle('routeFiltersBar',  isRouteCards);
+  _toggle('routesList',       isRouteCards);
+  _toggle('routeHeader',      isAuxView);
+  _toggle('routeFilters',     isAuxView);
+  _toggle('routeTableWrap',   isAuxView);
+  // Очищаємо aux-контейнери коли повертаємось на маршрути — щоб не видно
+  // було залишків попереднього dispatch/summary.
+  if (isRouteCards || view === 'parcels') {
+    ['routeHeader','routeFilters','routeTableWrap'].forEach(id => {
+      const el = document.getElementById(id); if (el) el.innerHTML = '';
+    });
+  }
+
   // Verify search panel only makes sense inside the parcels list; hide it
   // when switching to route/dispatch/etc., re-show on return if user was in
   // Перевірка before.
