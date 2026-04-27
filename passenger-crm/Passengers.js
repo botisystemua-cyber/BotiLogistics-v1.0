@@ -5735,8 +5735,8 @@ function getSeatLayout(layout, maxSeats, hasReserve) {
     //   minivan-top.png → (19, 50)   bus-top.png → (15, 51)
     // Seat height (aspect 1/1): 8.5% × 3.02 ≈ 25.7% for van. Rows touch when Δy ≈ 25.
     // 1-3-3 layout: фото Mercedes Sprinter Ultra Long top-down (1408×768).
-    // Layout: D (front-left) + 1 (середній пасажир, поряд з D) + 3 у середньому ряду + 3 у задньому.
-    // Координати — приблизні, вирівняти точно при потребі за зворотнім зв'язком.
+    // Передня кабіна — 3 cells: D (водій верх) + 1 (пасажир посередині) + D2 (співводій низ).
+    // Середній і задній ряди — 3 сидіння стопкою, кучніше (менший вертикальний крок).
     if (layout === '1-3-3') {
         const s = (name, type, px0, py0, px1, py1) => ({
             name, type,
@@ -5746,17 +5746,18 @@ function getSeatLayout(layout, maxSeats, hasReserve) {
             w: (px1 - px0) / 1408 * 100,
             h: (py1 - py0) / 768 * 100,
         });
-        // Front column (driver area on the left)
-        seats.push(s('D', 'driver',  60, 110,  240, 290));   // driver, top-left with steering wheel
-        seats.push(s('1', 'seat',   260, 110,  430, 290));   // front passenger / co-driver
-        // Middle row — 3 seats stacked top→bottom
-        seats.push(s('2', 'seat',   480, 110,  680, 290));
-        seats.push(s('3', 'seat',   480, 305,  680, 480));
-        seats.push(s('4', 'seat',   480, 495,  680, 660));
-        // Rear row — 3 seats stacked
-        seats.push(s('5', 'seat',   810, 110, 1010, 290));
-        seats.push(s('6', 'seat',   810, 305, 1010, 480));
-        seats.push(s('7', 'seat',   810, 495, 1010, 660));
+        // Передня кабіна — стопкою у лівій частині (D зверху, 1 посередині, D2 знизу)
+        seats.push(s('D',  'driver',  80,  70, 260, 240));   // водій верх (з кермом)
+        seats.push(s('1',  'seat',    90, 290, 270, 470));   // пасажир посередині передньої колонки
+        seats.push(s('D2', 'driver',  80, 520, 260, 690));   // співводій низ
+        // Середній ряд — посунуто вправо і кучніше (менші вертикальні зазори)
+        seats.push(s('2', 'seat',   560, 200, 740, 350));
+        seats.push(s('3', 'seat',   560, 360, 740, 510));
+        seats.push(s('4', 'seat',   560, 520, 740, 670));
+        // Задній ряд — ще далі вправо, та сама кучна вертикаль
+        seats.push(s('5', 'seat',   990, 200, 1170, 350));
+        seats.push(s('6', 'seat',   990, 360, 1170, 510));
+        seats.push(s('7', 'seat',   990, 520, 1170, 670));
         return seats;
     }
 
